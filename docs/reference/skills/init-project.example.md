@@ -1,6 +1,6 @@
 ---
 title: "init-project worked example"
-description: "Condensed transcript of an init-project run - shows placeholder fills and the re-run warning"
+description: "Condensed transcript of an init-project run - shows mode default, placeholder fills, and the re-run delta check"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "init", "example"]
@@ -8,7 +8,7 @@ tags: ["skill", "init", "example"]
 
 # init-project - worked example
 
-This is a condensed transcript of a complete `init-project` run. It shows the blank-scaffold path, the placeholder fills in the state files, and a second run that triggers the re-init warning.
+This is a condensed transcript of a complete `init-project` run. It shows the blank-scaffold path including the non-interactive mode default, the project-init.md copy, the placeholder fills in the state files, and a second run that triggers the re-init delta check.
 
 ---
 
@@ -18,30 +18,31 @@ This is a condensed transcript of a complete `init-project` run. It shows the bl
 
 **Studio:**
 
-> Initializing a new book project for "The Quiet Ledger" (blank scaffold mode).
+> No mode argument supplied; defaulting to blank mode in non-interactive context.
 >
 > No existing book/ directory found. Proceeding.
 >
 > Finding the plugin root... found at <repo-root>.
 >
-> Stamping book/ tree from templates/book-scaffold/:
+> Stamping book/ tree from templates/book-scaffold/ and copying project-init template:
 
 ```
-book/context/brief.md          created
-book/context/audience.md       created
-book/context/style-profile.md  created
-book/context/decisions.md      created
-book/structure/thesis.md       created
-book/structure/outline.md      created
-book/structure/comps.md        created
-book/chapters/.gitkeep         created
-book/research/evidence-log.md  created
-book/research/sources.md       created
-book/research/open-questions.md created
-book/production/exports/.gitkeep created
-book/production/README.md      created
-book/production/front-matter.md created
-book/production/back-matter.md  created
+book/context/brief.md              created
+book/context/audience.md           created
+book/context/style-profile.md      created
+book/context/decisions.md          created
+book/context/project-init.md       created (blank template)
+book/structure/thesis.md           created
+book/structure/outline.md          created
+book/structure/comps.md            created
+book/chapters/.gitkeep             created
+book/research/evidence-log.md      created
+book/research/sources.md           created
+book/research/open-questions.md    created
+book/production/exports/.gitkeep   created
+book/production/README.md          created
+book/production/front-matter.md    created
+book/production/back-matter.md     created
 ```
 
 > Writing .studio/ state files:
@@ -76,7 +77,7 @@ book/production/back-matter.md  created
 }
 ```
 
-Note: no `{{` placeholders remain.
+Note: `created` is an RFC 3339 UTC timestamp (`{{DATETIME}}`), not a calendar date. No `{{` placeholders remain.
 
 ### .studio/progress.json (empty chapter list, zero counters)
 
@@ -96,27 +97,25 @@ Note: no `{{` placeholders remain.
 
 ---
 
-## Second run on the same directory (re-init warning path)
+## Second run on the same directory (re-init delta check)
 
 **Author:** `/nonfiction-studio:init-project The Quiet Ledger`
 
 **Studio:**
 
-> Warning: A book/ directory already exists here. Re-running init-project will only add missing pieces; it will not overwrite existing files.
+> Warning: A book/ directory already exists in this location. Scanning for missing scaffold files...
 >
-> Checking for missing scaffold files...
+> All 24 expected scaffold files are present. No files were written.
 >
-> All expected files are present. No missing pieces to stamp.
->
-> No files were written. Your existing project is unchanged.
->
-> If you intended to start a new project in a different directory, navigate there first and invoke init-project again.
+> Run /nonfiction-studio:intake-interview to continue setting up your project.
 
 ---
 
 ## Key assertions from this transcript
 
-- All `{{BOOK_TITLE}}`, `{{DATE}}`, and `{{PLUGIN_VERSION}}` placeholders are replaced; none remain in any written file.
+- The mode default ("blank") is stated explicitly in non-interactive context; no silent assumption.
+- `book/context/project-init.md` is created as a copy of the blank template.
+- All `{{BOOK_TITLE}}`, `{{DATETIME}}`, and `{{PLUGIN_VERSION}}` placeholders are replaced in state files; `{{DATE}}` is replaced with YYYY-MM-DD in prose files. None remain in any written file.
 - `progress.json` has `"version": 2`, `"chapters": []`, and all zero counters.
-- The second invocation does not modify any existing file. The author's project is safe.
+- The second invocation runs a Bash scan and reports the result honestly. When all files are present it states so; when files are missing it lists exactly which ones.
 - `.studio/` is at the project root (same level as `book/`), not nested inside `book/`.
