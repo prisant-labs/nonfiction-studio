@@ -1,0 +1,26 @@
+{
+  "description": "REPLACE-brief-description-of-what-these-hooks-do",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/REPLACE-script-name.mjs"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "REPLACE-judgment-question",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
