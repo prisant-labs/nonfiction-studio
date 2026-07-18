@@ -14,7 +14,7 @@ There are exactly three marker forms. All appear inline within chapter prose, wr
 
 Links the preceding factual sentence or sentence cluster to a specific evidence ledger entry. `NNNN` is a four-digit zero-padded EV ID that must match an entry in `research/evidence-log.md` (for example, `[claim: EV-0012]`).
 
-A marker pointing to a missing EV entry, or to an entry whose `status` is anything other than `verified`, counts as one open claim in `open_claim_count`.
+A marker pointing to a missing EV entry, or to an entry whose `status` is `pending`, `unverified`, or `source-unverifiable`, counts as one open claim in `open_claim_count`. Entries with status `verified` or `interpretation` are resolved.
 
 ### Form 2: unverified placeholder
 
@@ -67,7 +67,9 @@ In this example:
 `bin/ns-claims` resolves every `[claim: EV-NNNN]` marker against `research/evidence-log.md`. A marker is counted as an open claim when:
 
 - The referenced EV entry does not exist in the ledger.
-- The referenced EV entry exists but has a `status` other than `verified`.
+- The referenced EV entry exists but has a `status` of `pending`, `unverified`, or `source-unverifiable`.
+
+Entries with status `verified` or `interpretation` are resolved (open_claim_count contribution: 0). A recorded interpretation judgment is a resolution, not an unresolved claim; an opinion can never become verified, so counting it open would make blocking mode unusable for any book containing judged opinion. (Corrected 2026-07-18 per TSK-019 (golden sample book) adjudication.)
 
 Every `[UNVERIFIED]` tag is also counted as one open claim. A `[SOURCE-UNVERIFIABLE]` tag with no paired `[claim: EV-NNNN]` marker on the same sentence is also counted as one open claim (fail-safe; see Placement Rule 5).
 

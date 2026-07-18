@@ -161,7 +161,7 @@ for (const f of chapterFiles) {
       openMarkers++;
     } else {
       const { status } = ledgerEntries.get(evId);
-      // verified and interpretation are both "resolved" in the golden fixture
+      // resolved statuses per docs/formats/claim-markers.md Coverage Computation, corrected 2026-07-18
       if (status === "verified" || status === "interpretation") {
         pass(`${f}: [claim: ${evId}] -> status: ${status}`);
       } else {
