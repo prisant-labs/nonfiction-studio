@@ -79,6 +79,8 @@ Steps at a glance:
 
 ## Decision rule (pre-committed)
 
+> **Original text preserved; superseded in scope by the "Decision rule clarification (2026-07-18)" section below.**
+
 **This rule is binding. It does not change based on partial results.**
 
 - **All three positive (O1, O2, O3):** Cowork column in AR-05 (surface matrix) stays verified full. Hook-driven quality gates are confirmed viable on this surface. Update this ADR to "accepted."
@@ -90,6 +92,26 @@ Steps at a glance:
   - Update this ADR to "superseded" and create ADR-0002b or an addendum documenting the fail-branch consequence.
 
 The fail branch fires regardless of whether the subagent works if hook observations are negative. Hooks and subagents are independent capabilities; a partial result (hooks fire, subagent does not, or vice versa) is not the success path.
+
+---
+
+## Decision rule clarification (2026-07-18)
+
+**The pre-committed binding character of the rule is unchanged. This clarification maps each observation to the correct remediation scope and does not soften any trigger.**
+
+Handle distinction: PF-12 (surface support fact) is the A-02 (platform baseline) evidence entry recording the current confirmed evidence state. AR-05 (surface compatibility matrix) is the requirements document whose cells the outcome updates. They are distinct artifacts.
+
+O1 (context marker) and O2 (log evidence) are the HOOK observations. O3 (subagent spawn) is the SUBAGENT observation.
+
+- **O1 and O2 both positive:** Hooks verified on Cowork. Hook conclusions are sound regardless of O3.
+- **O1 or O2 negative (either hook observation fails):** The hooks fail branch fires exactly as originally stated above:
+  - AR-05 (surface compatibility matrix) Cowork hook rows downgrade to skills-plus-verify.
+  - `run-quality-gate` becomes the primary Cowork gate.
+  - Messaging strategy becomes chat-first.
+  - The downgrade is logged in X-04 (open questions).
+  - This ADR updates to "superseded"; create ADR-0002b or an addendum documenting the fail-branch consequence.
+- **O3 negative with O1 and O2 both positive:** Subagent rows only downgrade in AR-05 (surface compatibility matrix). Orchestration falls back to the single-model degraded flow already specified in S-06 (skills and invocation surface) surface notes. Hook conclusions are unaffected.
+- **All three negative (O1, O2, and O3):** Both branches fire.
 
 ---
 

@@ -65,10 +65,12 @@ Note: A file absent at BOTH the repo checkout path and the installed plugin root
 
 ## Decision outcome
 
-Apply the decision rule from docs/adr/ADR-0002-cowork-hook-execution.md:
+Apply the decision rule from docs/adr/ADR-0002-cowork-hook-execution.md (see Decision rule clarification 2026-07-18):
 
 - O1, O2, and O3 all positive (PRESENT/YES/YES): **SUCCESS PATH** - Cowork column verified full.
-- Any observation negative: **FAIL BRANCH** - Cowork column downgrades per ADR-0002.
+- O1 or O2 negative (either hook observation fails): **FAIL BRANCH (hooks)** - AR-05 (surface compatibility matrix) Cowork hook rows downgrade; `run-quality-gate` primary gate; chat-first messaging; X-04 (open questions) log entry.
+- O3 negative with O1 and O2 positive: **FAIL BRANCH (subagent only)** - Subagent rows only downgrade in AR-05 (surface compatibility matrix); orchestration falls back to single-model degraded flow per S-06 (skills and invocation surface). Hook conclusions unaffected.
+- All three negative: Both fail branches fire.
 
 **Outcome:** <!-- SUCCESS PATH or FAIL BRANCH -->
 
