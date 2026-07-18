@@ -198,5 +198,7 @@ Because the validator does not currently check hooks.json, validation result alo
 ## References
 
 - Reference that created PA-1 (hooks.json format ambiguity): `~/.claude/plugins/cache/claude-plugins-official/plugin-dev/unknown/skills/hook-development/SKILL.md`
-- Official docs consulted: https://code.claude.com/docs/en/hooks
+- Official docs consulted: https://code.claude.com/docs/en/hooks - fetched 2026-07-17 (decision evidence); re-verified 2026-07-18, both quoted examples still present and wrapper-object format is the only shape shown on the page (Example 1 now also includes `"if"` and `"args"` inner fields not present at decision time; wrapper structure unchanged).
+  - Example 1 (general hooks, block-rm.sh): appears under the "How a hook resolves" heading.
+  - Example 2 (plugin hooks.json, Automatic code formatting): appears under the "Reference scripts by path" heading (Plugin scripts tab).
 - Spike files: `examples/spikes/spk-01/hooks.form-a-wrapper.json`, `examples/spikes/spk-01/hooks.form-b-flat.json`, `examples/spikes/spk-01/probe.mjs`
