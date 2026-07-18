@@ -1,0 +1,13 @@
+{
+  "name": "nonfiction-studio",
+  "description": "Self-marketplace for the nonfiction-studio plugin.",
+  "owner": {
+    "name": "JP Prisant"
+  },
+  "plugins": [
+    {
+      "name": "nonfiction-studio",
+      "source": "./"
+    }
+  ]
+}
