@@ -1,0 +1,515 @@
+// tests/engines/gate.test.mjs
+// what-it-is:   integration tests for hooks/lib/gate-engine.mjs and bin/ns-gate
+// what-it-does: verifies the 14-test enumeration from the TSK-029 (ns-gate orchestrator) brief:
+//   T01: golden book warn defaults: exit 0; report written; schema-exact key sets; session_write_flag skip
+//   T02: golden book block-mode clone: exit 0 (no findings on clean content)
+//   T03: unsourced-claim warn AND block clones: exit 0; claim_coverage pass (OQ-13: unmarked invisible)
+//   T04: continuity-error block clone: exit 1; continuity block; name-mismatch; chapter 2 evidence
+//   T05: voice-drift block clone: exit 1; stylometry block; drift-threshold detail
+//   T06: ai-injection block clone: exit 1; prompt_scrub block; injection.pattern-match; file+line evidence
+//   T07: three broken fixtures warn mode: exit 0 with top-level verdict warn
+//   T08: config-coercion: D-03 notice on stderr; exit 0; thesis_alignment absent from checks
+//   T09: --check=claims subset: report has claim_coverage and session_write_flag only
+//   T10: session-write flag present: session_write_flag verdict pass
+//   T11: bad --project: exit 2
+//   T12: engine error (missing stylometry baseline): exit 2; stylometry verdict skip
+//   T13: prune: 11 stale + 1 new = 12 total; prune to 10; newest survives
+//   T14: report filename matches <slug>.<YYYYMMDDTHHMMSSZ>.json pattern
+// runner:       node --test "tests/engines/*.test.mjs"
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  readFileSync, writeFileSync, mkdirSync,
+  readdirSync, existsSync, cpSync, mkdtempSync, rmSync,
+} from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+import os from 'node:os';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const EXAMPLES = join(__dirname, '..', '..', 'examples');
+const BIN      = join(__dirname, '..', '..', 'bin', 'ns-gate');
+const GOLDEN   = join(EXAMPLES, 'sample-book');
+
+// ---- helpers -------------------------------------------------------------------
+
+/** Creates a temporary clone of a source book directory; caller must clean up. */
+function makeTempClone(sourceDir) {
+  const base = join(os.tmpdir(), 'ns-gate-test');
+  mkdirSync(base, { recursive: true });
+  const tmpDir = mkdtempSync(base + '/clone-');
+  cpSync(sourceDir, tmpDir, { recursive: true });
+  return tmpDir;
+}
+
+/**
+ * Writes a block-mode gate config to the clone's .studio/config.json.
+ * Sets gate.mode=block and all four deterministic checks to mode=block,
+ * preserving the source config's thresholds and baseline per the brief.
+ */
+function writeBlockConfig(tmpDir) {
+  const configPath = join(tmpDir, '.studio', 'config.json');
+  const config = JSON.parse(readFileSync(configPath, 'utf8'));
+  config.gate = config.gate || {};
+  config.gate.mode = 'block';
+  config.gate.checks = config.gate.checks || {};
+  for (const check of ['claim_coverage', 'prompt_scrub', 'stylometry', 'continuity']) {
+    config.gate.checks[check] = Object.assign(
+      {}, config.gate.checks[check] || {}, { enabled: true, mode: 'block' }
+    );
+  }
+  writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+}
+
+/** Spawns ns-gate with the given extra args in the given cwd. */
+function spawnGate(cwd, args) {
+  return spawnSync(process.execPath, [BIN, ...args], {
+    cwd,
+    encoding: 'utf8',
+    env: process.env,
+  });
+}
+
+/**
+ * Reads the most recently written gate report for a slug from .studio/gate/.
+ * Filenames are sorted lexicographically; YYYYMMDDTHHMMSSZ is chronological.
+ */
+function readLatestReport(tmpDir, slug) {
+  slug = slug || 'all';
+  const gateDir = join(tmpDir, '.studio', 'gate');
+  const prefix = slug + '.';
+  const files = readdirSync(gateDir)
+    .filter(f => f.startsWith(prefix) && f.endsWith('.json') && !f.startsWith('.'))
+    .sort();
+  if (files.length === 0) throw new Error('No gate report found for slug: ' + slug);
+  return JSON.parse(readFileSync(join(gateDir, files[files.length - 1]), 'utf8'));
+}
+
+// ---- T01: golden book warn defaults -------------------------------------------
+
+test('T01: golden book warn mode: exit 0; report written; exact schema keys; session_write_flag skip gate.no-write', () => {
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    const result = spawnGate(tmp, ['--json']);
+    assert.strictEqual(result.status, 0,
+      'golden book warn mode must exit 0; stderr: ' + result.stderr);
+
+    // Report file must be written
+    const report = readLatestReport(tmp, 'all');
+
+    // Schema-exact top-level keys per S-08 section 11: version, chapter, ts, verdict, checks
+    const topKeys = Object.keys(report).sort();
+    assert.deepStrictEqual(
+      topKeys, ['chapter', 'checks', 'ts', 'verdict', 'version'],
+      'top-level keys must be exactly: version, chapter, ts, verdict, checks; got: ' + JSON.stringify(topKeys)
+    );
+
+    // Schema-exact per-check keys: check, verdict, detail, evidence, next
+    for (const entry of report.checks) {
+      const ck = Object.keys(entry).sort();
+      assert.deepStrictEqual(
+        ck, ['check', 'detail', 'evidence', 'next', 'verdict'],
+        'per-check keys must be exactly: check, verdict, detail, evidence, next on "' + entry.check + '"'
+      );
+    }
+
+    // All four deterministic checks plus session_write_flag are present
+    const names = report.checks.map(c => c.check);
+    for (const n of ['claim_coverage', 'stylometry', 'prompt_scrub', 'continuity', 'session_write_flag']) {
+      assert.ok(names.includes(n), '"' + n + '" must appear in checks');
+    }
+
+    // thesis_alignment is never evaluated
+    assert.ok(!names.includes('thesis_alignment'), 'thesis_alignment must be absent from checks');
+
+    // Deterministic checks pass on the golden book
+    const claimsEntry = report.checks.find(c => c.check === 'claim_coverage');
+    assert.strictEqual(claimsEntry.verdict, 'pass', 'claim_coverage passes on golden book');
+
+    // session_write_flag: skip with gate.no-write detail (flag file absent)
+    const swfEntry = report.checks.find(c => c.check === 'session_write_flag');
+    assert.strictEqual(swfEntry.verdict, 'skip', 'session_write_flag verdict is skip');
+    assert.ok(
+      swfEntry.detail.includes('gate.no-write'),
+      'session_write_flag detail contains gate.no-write; got: ' + swfEntry.detail
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---- T02: golden book block-mode clone ----------------------------------------
+
+test('T02: golden book block-mode clone: exit 0 (clean content has no findings)', () => {
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    writeBlockConfig(tmp);
+    const result = spawnGate(tmp, ['--json']);
+    assert.strictEqual(result.status, 0,
+      'golden book block mode must exit 0 (no findings to block on); stderr: ' + result.stderr);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---- T03: unsourced-claim warn AND block clones --------------------------------
+
+// OQ-13 (gate coherence check): the deterministic set (claims, stylometry, scrub, continuity-quick)
+// cannot see an unmarked factual sentence; claim_coverage counts only PRESENT markers, so an
+// unmarked sentence is invisible. Both modes exit 0 for this fixture.
+test('T03-warn: unsourced-claim warn mode: exit 0; claim_coverage pass (OQ-13: unmarked sentence invisible)', () => {
+  const tmp = makeTempClone(join(EXAMPLES, 'fixtures', 'unsourced-claim'));
+  try {
+    const result = spawnGate(tmp, ['--json']);
+    assert.strictEqual(result.status, 0,
+      'unsourced-claim warn mode must exit 0; stderr: ' + result.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    const claimsEntry = report.checks.find(c => c.check === 'claim_coverage');
+    assert.strictEqual(claimsEntry.verdict, 'pass',
+      'claim_coverage passes: unmarked sentence is invisible to the deterministic engine');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('T03-block: unsourced-claim block-mode clone: exit 0; claim_coverage pass (OQ-13)', () => {
+  const tmp = makeTempClone(join(EXAMPLES, 'fixtures', 'unsourced-claim'));
+  try {
+    writeBlockConfig(tmp);
+    const result = spawnGate(tmp, ['--json']);
+    assert.strictEqual(result.status, 0,
+      'unsourced-claim block mode must also exit 0; stderr: ' + result.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    const claimsEntry = report.checks.find(c => c.check === 'claim_coverage');
+    assert.strictEqual(claimsEntry.verdict, 'pass',
+      'claim_coverage passes in block mode: unmarked sentence stays invisible');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---- T04: continuity-error block clone ----------------------------------------
+
+test('T04: continuity-error block clone: exit 1; continuity block; name-mismatch detail; chapter 2 evidence', () => {
+  const tmp = makeTempClone(join(EXAMPLES, 'fixtures', 'continuity-error'));
+  try {
+    writeBlockConfig(tmp);
+    const result = spawnGate(tmp, ['--json']);
+    assert.strictEqual(result.status, 1,
+      'continuity-error block mode must exit 1; stderr: ' + result.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    const contEntry = report.checks.find(c => c.check === 'continuity');
+    assert.ok(contEntry, 'continuity check must be present in report');
+    assert.strictEqual(contEntry.verdict, 'block', 'continuity verdict must be block');
+
+    // detail must contain the signal token
+    assert.ok(
+      contEntry.detail.includes('continuity.name-mismatch'),
+      'detail must include signal token "continuity.name-mismatch"; got: ' + contEntry.detail
+    );
+    // detail must contain both surface forms (engine finding names both)
+    assert.ok(
+      contEntry.detail.toLowerCase().includes('personal learning network'),
+      'detail must mention the mismatched term; got: ' + contEntry.detail
+    );
+
+    // evidence must point into chapter 2 with a line anchor
+    assert.ok(contEntry.evidence.length > 0, 'evidence must be non-empty');
+    const ch2Ptr = contEntry.evidence.find(e => e.includes('02-finding-your-network'));
+    assert.ok(ch2Ptr, 'evidence must include a pointer into chapter 2; got: ' + JSON.stringify(contEntry.evidence));
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---- T05: voice-drift block clone ---------------------------------------------
+
+test('T05: voice-drift block clone: exit 1; stylometry block; drift-threshold in detail with score and threshold', () => {
+  const tmp = makeTempClone(join(EXAMPLES, 'fixtures', 'voice-drift'));
+  try {
+    writeBlockConfig(tmp);
+    const result = spawnGate(tmp, ['--json']);
+    assert.strictEqual(result.status, 1,
+      'voice-drift block mode must exit 1; stderr: ' + result.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    const styloEntry = report.checks.find(c => c.check === 'stylometry');
+    assert.ok(styloEntry, 'stylometry check must be present in report');
+    assert.strictEqual(styloEntry.verdict, 'block', 'stylometry verdict must be block');
+
+    // detail must contain the gate-coined token
+    assert.ok(
+      styloEntry.detail.includes('stylometry.drift-threshold'),
+      'detail must include gate-coined token "stylometry.drift-threshold"; got: ' + styloEntry.detail
+    );
+    // detail must contain a numeric score and threshold
+    assert.ok(
+      /\d+\.?\d*\s+exceeds\s+threshold\s+\d/.test(styloEntry.detail),
+      'detail must show "score exceeds threshold N"; got: ' + styloEntry.detail
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---- T06: ai-injection block clone --------------------------------------------
+
+test('T06: ai-injection block clone: exit 1; prompt_scrub block; injection.pattern-match; file+line evidence', () => {
+  const tmp = makeTempClone(join(EXAMPLES, 'fixtures', 'ai-injection'));
+  try {
+    writeBlockConfig(tmp);
+    const result = spawnGate(tmp, ['--json']);
+    assert.strictEqual(result.status, 1,
+      'ai-injection block mode must exit 1; stderr: ' + result.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    const scrubEntry = report.checks.find(c => c.check === 'prompt_scrub');
+    assert.ok(scrubEntry, 'prompt_scrub check must be present in report');
+    assert.strictEqual(scrubEntry.verdict, 'block', 'prompt_scrub verdict must be block');
+
+    // detail must contain the signal token (engine-emitted type string)
+    assert.ok(
+      scrubEntry.detail.includes('injection.pattern-match'),
+      'detail must include "injection.pattern-match"; got: ' + scrubEntry.detail
+    );
+
+    // evidence must name the planted file (chapter 1) with a line anchor
+    assert.ok(scrubEntry.evidence.length > 0, 'evidence must be non-empty');
+    const planted = scrubEntry.evidence.find(e =>
+      e.includes('01-listening-before-speaking') && e.includes('#L')
+    );
+    assert.ok(
+      planted,
+      'evidence must name the planted chapter file with a line anchor; got: ' + JSON.stringify(scrubEntry.evidence)
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---- T07: three visible broken fixtures in warn mode --------------------------
+
+const BROKEN_WARN_FIXTURES = [
+  ['continuity-error', join(EXAMPLES, 'fixtures', 'continuity-error')],
+  ['voice-drift',      join(EXAMPLES, 'fixtures', 'voice-drift')],
+  ['ai-injection',     join(EXAMPLES, 'fixtures', 'ai-injection')],
+];
+
+for (const [label, fixtureDir] of BROKEN_WARN_FIXTURES) {
+  test('T07: ' + label + ' warn mode: exit 0 with top-level verdict warn', () => {
+    const tmp = makeTempClone(fixtureDir);
+    try {
+      const result = spawnGate(tmp, ['--json']);
+      assert.strictEqual(result.status, 0,
+        label + ' warn mode must exit 0; stderr: ' + result.stderr);
+
+      const report = readLatestReport(tmp, 'all');
+      assert.strictEqual(report.verdict, 'warn',
+        label + ' top-level verdict must be "warn"; got: ' + report.verdict);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+}
+
+// ---- T08: config-coercion fixture ---------------------------------------------
+
+test('T08: config-coercion: D-03 coercion notice on stderr; exit 0; thesis_alignment absent from checks', () => {
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    // Apply the config from examples/fixtures/config-coercion/ (thesis_alignment.mode=block)
+    // over the sample-book config (which has a valid stylometry baseline).
+    // This proves D-03 Invariant 1 without breaking the stylometry check.
+    const coercionConfigPath = join(EXAMPLES, 'fixtures', 'config-coercion', 'config.json');
+    const coercionConfig = JSON.parse(readFileSync(coercionConfigPath, 'utf8'));
+    const baseConfigPath = join(tmp, '.studio', 'config.json');
+    const baseConfig = JSON.parse(readFileSync(baseConfigPath, 'utf8'));
+
+    // Overlay only the gate block (preserves sample-book's stylometry baseline)
+    baseConfig.gate = coercionConfig.gate;
+    writeFileSync(baseConfigPath, JSON.stringify(baseConfig, null, 2), 'utf8');
+
+    const result = spawnGate(tmp, ['--json']);
+    assert.strictEqual(result.status, 0,
+      'config-coercion must exit 0 (coercion is a notice, not a failure); stderr: ' + result.stderr);
+
+    // Coercion notice must appear on stderr
+    assert.ok(
+      result.stderr.includes('coercion'),
+      'stderr must contain the coercion notice; got: ' + result.stderr
+    );
+
+    // thesis_alignment must not appear in the checks array (not evaluated by ns-gate)
+    const report = readLatestReport(tmp, 'all');
+    const thesisEntry = report.checks.find(c => c.check === 'thesis_alignment');
+    assert.strictEqual(thesisEntry, undefined,
+      'thesis_alignment must be absent from the checks array per the brief');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---- T09: --check=claims subset -----------------------------------------------
+
+test('T09: --check=claims subset: report contains claim_coverage and session_write_flag only', () => {
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    const result = spawnGate(tmp, ['--check=claims', '--json']);
+    assert.strictEqual(result.status, 0,
+      '--check=claims must exit 0 on golden book; stderr: ' + result.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    const names = report.checks.map(c => c.check);
+    assert.ok(names.includes('claim_coverage'), 'claim_coverage must be present');
+    assert.ok(names.includes('session_write_flag'), 'session_write_flag must always be present');
+    assert.strictEqual(
+      names.length, 2,
+      'exactly 2 checks for --check=claims: claim_coverage and session_write_flag; got: ' + JSON.stringify(names)
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---- T10: session-write flag present ------------------------------------------
+
+test('T10: session-write flag present in temp clone: session_write_flag verdict pass', () => {
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    // Create the session-write flag that stop-gate.mjs would normally create
+    const gateDir = join(tmp, '.studio', 'gate');
+    mkdirSync(gateDir, { recursive: true });
+    writeFileSync(join(gateDir, '.session-write-flag'), '', 'utf8');
+
+    const result = spawnGate(tmp, ['--json']);
+    assert.strictEqual(result.status, 0,
+      'session-write flag present: exit 0; stderr: ' + result.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    const swfEntry = report.checks.find(c => c.check === 'session_write_flag');
+    assert.ok(swfEntry, 'session_write_flag must be in report');
+    assert.strictEqual(swfEntry.verdict, 'pass',
+      'session_write_flag verdict must be pass when flag file is present');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---- T11: bad --project or missing config ------------------------------------
+
+test('T11: bad --project (nonexistent path): exit 2', () => {
+  const result = spawnGate(process.cwd(), ['--project=/nonexistent/path/xyz123', '--json']);
+  assert.strictEqual(result.status, 2, 'bad --project must exit 2');
+});
+
+// ---- T12: engine error path (missing stylometry baseline) ---------------------
+
+test('T12: missing stylometry baseline: exit 2; stylometry check verdict skip with error in detail', () => {
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    // Remove the stylometry baseline from config
+    const configPath = join(tmp, '.studio', 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    if (config.stylometry) config.stylometry.baseline = null;
+    writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+
+    const result = spawnGate(tmp, ['--json']);
+    assert.strictEqual(result.status, 2,
+      'missing baseline must cause exit 2; stderr: ' + result.stderr);
+
+    // The report is still written (gate-engine emits report even on partial error)
+    const report = readLatestReport(tmp, 'all');
+    const styloEntry = report.checks.find(c => c.check === 'stylometry');
+    assert.ok(styloEntry, 'stylometry entry must be present even when engine errors');
+    assert.strictEqual(styloEntry.verdict, 'skip',
+      'stylometry verdict must be skip on engine error');
+    assert.ok(
+      styloEntry.detail.includes('engine error') || styloEntry.detail.includes('baseline'),
+      'detail must contain the error message; got: ' + styloEntry.detail
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---- T13: prune policy --------------------------------------------------------
+
+test('T13: prune: 11 stale reports + 1 new = 12 total; pruned to 10; newest survives', () => {
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    const gateDir = join(tmp, '.studio', 'gate');
+    mkdirSync(gateDir, { recursive: true });
+
+    // Seed 11 stale report files for slug 'all' with 2025 timestamps
+    for (let i = 0; i < 11; i++) {
+      const day = String(i + 1).padStart(2, '0');
+      const filename = 'all.202501' + day + 'T000000Z.json';
+      writeFileSync(
+        join(gateDir, filename),
+        JSON.stringify({
+          version: 2,
+          chapter: 'all',
+          ts: '2025-01-' + day + 'T00:00:00Z',
+          verdict: 'pass',
+          checks: [],
+        }),
+        'utf8'
+      );
+    }
+
+    // Run the gate; it writes a new report (2026 timestamp) then prunes
+    const result = spawnGate(tmp, ['--json']);
+    assert.strictEqual(result.status, 0,
+      'prune test gate run must exit 0; stderr: ' + result.stderr);
+
+    // After prune: 10 reports remain for slug 'all'
+    const remaining = readdirSync(gateDir)
+      .filter(f => f.startsWith('all.') && f.endsWith('.json'));
+    assert.strictEqual(remaining.length, 10,
+      'exactly 10 reports must remain after prune; got ' + remaining.length + ': ' + JSON.stringify(remaining));
+
+    // The newest report (2026, just written) must survive
+    const sorted = remaining.sort();
+    const newestFile = sorted[sorted.length - 1];
+    const newest = JSON.parse(readFileSync(join(gateDir, newestFile), 'utf8'));
+    assert.ok(
+      newest.ts.includes('2026'),
+      'newest surviving report must be the one just written (2026 timestamp); got ts: ' + newest.ts
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---- T14: report filename pattern ---------------------------------------------
+
+test('T14: report filename matches <slug>.<YYYYMMDDTHHMMSSZ>.json pattern', () => {
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    const result = spawnGate(tmp, ['--json']);
+    assert.strictEqual(result.status, 0,
+      'filename pattern test must exit 0; stderr: ' + result.stderr);
+
+    const gateDir = join(tmp, '.studio', 'gate');
+    // Filter specifically for slug 'all' reports written by this run
+    const PATTERN = /^all\.\d{8}T\d{6}Z\.json$/;
+    const files = readdirSync(gateDir).filter(f => PATTERN.test(f));
+    assert.ok(files.length > 0, 'at least one all.* report file must be written');
+
+    for (const filename of files) {
+      assert.ok(
+        PATTERN.test(filename),
+        'filename must match pattern <slug>.<YYYYMMDDTHHMMSSZ>.json; got: ' + filename
+      );
+    }
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
