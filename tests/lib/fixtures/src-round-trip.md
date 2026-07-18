@@ -1,0 +1,12 @@
+### SRC-0001 (Make It Stick)
+- type: book
+- nature: secondary
+- author: Brown, Peter C.; Roediger, Henry L.; McDaniel, Mark A.
+- title: Make It Stick: The Science of Successful Learning
+- year: 2014
+- publisher: Belknap Press
+- identifier: ISBN 978-0674729018
+- url:
+- accessed:
+- retrieval-status: stable
+- custom-field: kept
