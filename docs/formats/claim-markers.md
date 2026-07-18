@@ -77,7 +77,7 @@ The per-chapter `open_claim_count` in `.studio/progress.json` is this total. Cov
 
 ## Consumed by
 
-- `bin/ns-claims` (TSK-025 (ns-claims engine)): scans chapter files for the three marker forms and resolves them against `research/evidence-log.md`. Does not detect unmarked sentences; that judgment belongs to the fact-checker agent and the gate's judgment layer. State-coherence drift is caught by bin/ns-doctor per `docs/formats/gate-report.md`. Writes the per-chapter `open_claim_count` to `.studio/progress.json`.
+- `bin/ns-claims` (TSK-025 (ns-claims engine)): scans chapter files for the three marker forms and resolves them against `research/evidence-log.md`. Does not detect unmarked sentences; that judgment belongs to the fact-checker agent and the gate's judgment layer. State-coherence drift is caught by bin/ns-doctor per `docs/formats/gate-report.md`. Computes the per-chapter `open_claim_count`; the PostToolBatch hook persists it to `.studio/progress.json` per D-06 (single-writer state discipline).
 - `bin/ns-doctor` (TSK-028 (ns-doctor engine)): validates that every `[claim: EV-NNNN]` references an existing EV entry; reports broken markers and orphan `[SOURCE-UNVERIFIABLE]` tags (tags with no paired `[claim: EV-NNNN]` on the same sentence).
 - `fact-checker`: writes `[UNVERIFIED]` and `[SOURCE-UNVERIFIABLE]` tags, and replaces `[UNVERIFIED]` with `[claim: EV-NNNN]` once a claim is sourced and verified; never removes `[claim: EV-NNNN]` markers.
 - `Stop` gate: reads the `open_claim_count` derived from marker resolution to compute the `claim_coverage` gate verdict.

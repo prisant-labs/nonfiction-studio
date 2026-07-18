@@ -1,0 +1,180 @@
+#!/usr/bin/env node
+// what-it-is:   the ns-claims coverage CLI (thin shell over hooks/lib/claims-engine.mjs)
+// what-it-does: parses arguments, locates the book root, reads the evidence ledger,
+//               scans chapter files for claim markers, computes coverage, and emits a gate report
+// why:          the CLI is the public surface; all logic lives in claims-engine.mjs so hooks
+//               and CI can share the same computation path per S-07 section 4
+// usage:        ns-claims [--chapter=<slug>|--all] [--online] [--project=<dir>] [--json]
+
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
+import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
+import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
+import { parseEvidenceLog } from '../hooks/lib/ledger.mjs';
+import { makeReport, addFinding, finalize } from '../hooks/lib/report.mjs';
+import { scanChapter, computeCoverage } from '../hooks/lib/claims-engine.mjs';
+
+// ---- arg parsing ---------------------------------------------------------------
+
+let opts;
+try {
+  opts = parseArgs(process.argv.slice(2), ['chapter', 'all', 'online', 'project', 'json']);
+} catch (err) {
+  if (err.name === 'ArgsError') {
+    process.stderr.write('ns-claims: ' + err.message + '\n');
+    process.exit(2);
+  }
+  throw err;
+}
+
+// --online is deferred: the DOI/URL resolution pass is out of scope for this task.
+if (opts.online) {
+  process.stderr.write('ns-claims: --online is not yet implemented (online pass deferred per TSK-025)\n');
+  process.exit(2);
+}
+
+// ---- book root discovery -------------------------------------------------------
+
+const startDir = opts.project ? resolve(opts.project) : process.cwd();
+
+let root;
+try {
+  ({ root } = findBookRoot(startDir));
+} catch (err) {
+  if (err.name === 'BibleError') {
+    process.stderr.write('ns-claims: ' + err.message + '\n');
+    process.exit(2);
+  }
+  throw err;
+}
+
+// ---- evidence ledger -----------------------------------------------------------
+
+const ledgerPath = join(root, 'research', 'evidence-log.md');
+if (!existsSync(ledgerPath)) {
+  process.stderr.write('ns-claims: evidence log not found at ' + ledgerPath + '\n');
+  process.exit(2);
+}
+
+let ledgerEntries;
+try {
+  const ledgerText = readFileSync(ledgerPath, 'utf8');
+  ledgerEntries = parseEvidenceLog(ledgerText);
+} catch (err) {
+  process.stderr.write('ns-claims: cannot read evidence log: ' + err.message + '\n');
+  process.exit(2);
+}
+
+// ---- chapter discovery ---------------------------------------------------------
+
+const chapterDir = join(root, 'chapters');
+if (!existsSync(chapterDir)) {
+  process.stderr.write('ns-claims: chapters/ directory not found at ' + chapterDir + '\n');
+  process.exit(2);
+}
+
+let chapterPaths;
+if (opts.chapter) {
+  // Single chapter by slug: look for chapters/<slug>.md
+  const p = join(chapterDir, opts.chapter + '.md');
+  if (!existsSync(p)) {
+    process.stderr.write('ns-claims: chapter not found: ' + p + '\n');
+    process.exit(2);
+  }
+  chapterPaths = [p];
+} else {
+  // All chapters (--all or no scope flag): every .md file in chapters/, sorted by name
+  chapterPaths = readdirSync(chapterDir)
+    .filter(f => f.endsWith('.md'))
+    .sort()
+    .map(f => join(chapterDir, f));
+}
+
+if (chapterPaths.length === 0) {
+  // No chapters to scan: coverage is 100% by definition
+  const report = makeReport('claim_coverage');
+  const { exitCode, json } = finalize(report);
+  const fullJson = Object.assign({}, json, {
+    totalMarkers: 0,
+    resolvedCount: 0,
+    coveragePct: 100.0,
+    chapters: []
+  });
+  if (opts.json) {
+    process.stdout.write(JSON.stringify(fullJson, null, 2) + '\n');
+  } else {
+    process.stdout.write('[claim_coverage] pass: no chapters to scan\n');
+  }
+  process.exit(exitCode);
+}
+
+// ---- scan chapters -------------------------------------------------------------
+
+const scannedChapters = [];
+for (const absPath of chapterPaths) {
+  let text;
+  try {
+    text = readFileSync(absPath, 'utf8');
+  } catch (err) {
+    process.stderr.write('ns-claims: cannot read chapter ' + absPath + ': ' + err.message + '\n');
+    process.exit(2);
+  }
+
+  // Bible-relative path with forward slashes for portability across OS
+  const relFile = relative(root, absPath).replace(/\\/g, '/');
+  const markers = scanChapter(text, ledgerEntries);
+  scannedChapters.push({ file: relFile, markers });
+}
+
+// ---- coverage computation ------------------------------------------------------
+
+const coverage = computeCoverage(scannedChapters, ledgerEntries);
+
+// ---- report building -----------------------------------------------------------
+
+const report = makeReport('claim_coverage');
+
+for (const finding of coverage.findings) {
+  addFinding(report, {
+    file: finding.file,
+    line: finding.line,
+    type: finding.type,
+    excerpt: finding.excerpt,
+    detail: finding.detail
+  });
+}
+
+const { exitCode, json } = finalize(report);
+
+// Extend the gate-report shape with claims-specific fields per S-07 stdout description
+const fullJson = Object.assign({}, json, {
+  totalMarkers: coverage.totalMarkers,
+  resolvedCount: coverage.resolvedCount,
+  coveragePct: coverage.coveragePct,
+  chapters: coverage.chapters
+});
+
+// ---- emit ----------------------------------------------------------------------
+
+if (opts.json) {
+  process.stdout.write(JSON.stringify(fullJson, null, 2) + '\n');
+} else {
+  const prefix = '[claim_coverage]';
+  const pctStr = coverage.coveragePct.toFixed(1) + '%';
+  if (coverage.openClaims === 0) {
+    process.stdout.write(
+      prefix + ' pass: coverage ' + pctStr +
+      ' (' + coverage.resolvedCount + '/' + coverage.totalMarkers + ' markers resolved)\n'
+    );
+  } else {
+    process.stdout.write(
+      prefix + ' ' + coverage.openClaims + ' open claim(s): coverage ' + pctStr + '\n'
+    );
+    for (const f of coverage.findings) {
+      const loc = f.file + ':' + f.line;
+      process.stdout.write('  ' + loc + ' [' + f.type + ']: ' + f.detail + '\n');
+    }
+  }
+}
+
+process.exit(exitCode);
