@@ -41,6 +41,12 @@ Fill in this template during or immediately after executing the protocol in exam
 <!-- paste log file contents here, or "file not found" if absent -->
 ```
 
+**Actual log path where the file was found (repo checkout or installed plugin root):**
+
+<!-- fill in the path where spk02-evidence.log was found -->
+
+Note: A file absent at BOTH the repo checkout path and the installed plugin root is the true ABSENT observation for O2.
+
 ---
 
 ## O3: Subagent execution

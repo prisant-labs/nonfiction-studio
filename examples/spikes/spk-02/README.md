@@ -54,13 +54,13 @@ Launch the Cowork desktop application.
 
 **Step 5 - Add the repo as a plugin marketplace.**
 
-In Cowork's plugin panel (Settings or Plugin Manager):
+In Cowork's plugin panel (Settings or Plugin Manager; panel names vary by Cowork version):
 - Add a local marketplace pointing to: `<repo-root>`
 - The marketplace name should appear as `nonfiction-studio`.
 
 **Step 6 - Install the nonfiction-studio plugin.**
 
-In the plugin panel, find `nonfiction-studio` in the marketplace you just added and install it.
+In the plugin panel (panel names vary by Cowork version), find `nonfiction-studio` in the marketplace you just added and install it.
 
 **Step 7 - Open a new Cowork session on any folder.**
 
@@ -98,6 +98,8 @@ Back in your terminal (do not close the Cowork session yet):
 cat examples/spikes/spk-02/spk02-evidence.log
 ```
 
+If the file is not found at that path, the hook may have written to the installed plugin root instead (a versioned cache directory, not the repo checkout). To find that root, run `claude plugin list` or check the Cowork plugin panel for the installed path of `nonfiction-studio`, then look for `examples/spikes/spk-02/spk02-evidence.log` beneath it. Record whichever path held the file when filling in O2.
+
 **Step 13 - Record O2 (hook command execution).**
 
 Note in RESULTS-TEMPLATE.md:
@@ -106,7 +108,7 @@ Note in RESULTS-TEMPLATE.md:
 
 **Step 14 - Cleanup: uninstall the plugin.**
 
-In Cowork:
+In Cowork (panel names vary by Cowork version):
 - Uninstall the `nonfiction-studio` plugin.
 - Remove the local marketplace (the `<repo-root>` entry).
 
