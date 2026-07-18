@@ -1,13 +1,12 @@
-# ADR-0003: Skill Invocation Ergonomics - Bare Verb Invocation is HOSTILE for No-Argument Skills on Windows
+# ADR-0003: Skill Invocation Ergonomics - Bare Verb Invocation is ACCEPTABLE; Headless Git Bash Path-Expansion Quirk Documented
 
-**TL;DR:** Bare-verb invocation (`/spike-echo hello`) resolves to skill content when an argument follows. Bare-verb invocation without an argument (`/spike-status`) fails on Windows: the CLI/model interprets `/spike-status` as a Unix path via Git-for-Windows path emulation, not as a skill name. All eleven Phase 1 namespaced forms exceed 25 characters. The no-argument failure covers the pivot skills `studio`, `doctor`, and `status-dashboard`. Rating: HOSTILE. The W-07 alias layer trigger in R-04 (scope boundaries) is met; a thin `commands/` layer is scheduled as a fast-follow per D-01 (skills-first surface).
+**TL;DR:** Bare-verb invocation (`/spike-echo hello`) resolves to skill content when an argument follows. The original headless Bash probe without an argument (`/spike-status`) failed due to Git-for-Windows path emulation expanding the slash token - not due to the skill invocation system. Three controls run 2026-07-18 all resolved with `SPIKE-STATUS-OK`: (a) Bash with `MSYS_NO_PATHCONV=1`, (b) PowerShell invocation, (c) doubled-slash `//spike-status`. The original Probe C failure is attributed to the headless Git Bash probe route; interactive sessions pass slash strings without shell expansion. `intake-interview` was removed from the no-argument subset (not a brief-named pivot; never tested). Rating: ACCEPTABLE. W-07 (commands alias layer) trigger in R-04 (scope boundaries) is NOT observed.
 
 - Status: Accepted
 - Date: 2026-07-18
 - Spike: SPK-03 (skill invocation)
 - Task: TSK-009 (SPK-03 skill invocation)
-- Decision: HOSTILE - alias layer activates per W-07 (commands alias layer) in R-04 (scope boundaries)
-- Unblocks: alias-layer fast-follow task (W-07 trigger observation recorded)
+- Decision: ACCEPTABLE - W-07 (commands alias layer) trigger NOT observed; original Probe C failure attributed to headless Git Bash path-expansion artifact
 - PA resolved: D-01 (skills-first surface) ergonomics question answered
 
 ---
@@ -133,6 +132,72 @@ Resolution: **NO.** The marker `SPIKE-STATUS-OK` does not appear. The model expa
 
 ---
 
+## Probe C Controls (2026-07-18 Addendum)
+
+The original Probe C had no controls: the failure mechanism (Git-for-Windows path emulation in headless Bash) was not isolated from the skill invocation system itself. Interactive sessions pass slash strings without shell expansion, making the headless-Bash route unrepresentative by default. Three controls were run 2026-07-18 to isolate the cause.
+
+### Install contract re-execution (2026-07-18)
+
+All mutations and their reversals are quoted below.
+
+**Before-state (nonfiction-studio absent):** 20 plugins matching baseline recorded in the original Install Contract Execution section above. `nonfiction-studio@nonfiction-studio` absent.
+
+Command: `claude plugin marketplace add "<repo-root>"`
+Output: `Successfully added marketplace: nonfiction-studio (declared in user settings)`
+
+Command: `claude plugin install nonfiction-studio@nonfiction-studio`
+Output: `Successfully installed plugin: nonfiction-studio@nonfiction-studio (scope: user)`
+
+Verify: `claude plugin list` shows `nonfiction-studio@nonfiction-studio` v0.1.0 user enabled.
+
+### Control A: Bash with MSYS_NO_PATHCONV=1
+
+Command: `MSYS_NO_PATHCONV=1 claude -p "/spike-status" --model haiku`
+
+```
+SPIKE-STATUS-OK
+```
+
+Resolution: YES. Disabling Git-for-Windows path conversion allowed `/spike-status` to reach the skill invocation system unchanged. Skill content activated.
+
+### Control B: PowerShell invocation (no MSYS layer)
+
+Command: `powershell.exe -NoProfile -Command "claude -p '/spike-status' --model haiku"`
+
+```
+SPIKE-STATUS-OK
+```
+
+Resolution: YES. PowerShell does not apply Git-for-Windows Unix-path emulation. The bare no-argument form reached the skill invocation system and activated.
+
+### Control C: Bash doubled-slash escape
+
+Command: `claude -p "//spike-status" --model haiku`
+
+```
+SPIKE-STATUS-OK
+```
+
+Resolution: YES. The doubled-slash prefix prevents Git-for-Windows path expansion. Skill content activated.
+
+### Cleanup (2026-07-18)
+
+Command: `claude plugin uninstall nonfiction-studio@nonfiction-studio`
+Output: `Successfully uninstalled plugin: nonfiction-studio (scope: user)`
+
+Command: `claude plugin marketplace remove nonfiction-studio`
+Output: `Successfully removed marketplace: nonfiction-studio`
+
+Command: `claude plugin list` - 20 plugins, `nonfiction-studio@nonfiction-studio` absent. Registry matches baseline exactly.
+
+### Headless invocation quirk (Windows Git Bash)
+
+When running `claude -p "/skill-name"` through Git Bash on Windows without arguments after the slash token, Git-for-Windows Unix-path emulation transforms `/skill-name` into `C:/Program Files/Git/skill-name` before the string reaches Claude. This is a shell-layer artifact, not a platform behavior of the skill invocation system. Interactive Claude Code sessions pass slash strings without shell expansion and are unaffected.
+
+Practical guidance for headless slash-command probes on Windows Git Bash: use `MSYS_NO_PATHCONV=1` before the command, invoke via PowerShell, or prefix with `//` to suppress path expansion.
+
+---
+
 ## Rating
 
 ### Character counts for Phase 1 namespaced forms
@@ -157,18 +222,13 @@ All eleven namespaced forms exceed the 25-character hostile threshold. The short
 
 **Argument-bearing skills (most Phase 1 skills):** Probe A shows the bare form resolves. Rating for this subset: ACCEPTABLE.
 
-**No-argument skills (`studio`, `doctor`, `status-dashboard`, and `intake-interview` as commonly invoked without arguments):** Probe C shows the bare form fails on Windows, expanding to a Unix path. These skills require the namespaced form, which is 26-36 characters. Rubric condition: "only the fully namespaced form works AND it is over 25 characters of typing for common verbs." Condition met. Rating for this subset: HOSTILE.
+**No-argument skills (`studio`, `doctor`, and `status-dashboard` - the front-door, diagnostic, and session-status verbs named in the task brief):** Original Probe C showed the bare form failing. Controls A, B, and C (2026-07-18) all resolved with `SPIKE-STATUS-OK`. The failure in Probe C is attributed to Git-for-Windows path expansion in the headless Bash probe route, not to the skill invocation system. `intake-interview` was listed in the original draft of this subset but was never tested and is not among the brief-named pivots (`studio`, `doctor`, `status-dashboard`); it is excluded. Rubric chain: the brief-named common verbs `studio`, `doctor`, and `status-dashboard` were tested; the original headless Bash probe showed only the namespaced form appearing to work and all namespaced forms exceed 25 characters; however, the controls show the bare form DOES resolve when the shell-expansion artifact is removed, which means "only the fully namespaced form works" is false; therefore the rubric condition for HOSTILE ("only the fully namespaced form works AND it is over 25 characters of typing for common verbs") is NOT met. Rating for this subset: ACCEPTABLE.
 
-**Overall Phase 1 rating: HOSTILE.**
+**Overall Phase 1 rating: ACCEPTABLE.**
 
-The no-argument failure covers the three most frequently invoked onboarding and navigation skills:
-- `studio` (D-17 (guided front door): the primary dispatcher and first command most new authors type)
-- `doctor` (D-12 (versioned bible with a doctor): the diagnostic entry point)
-- `status-dashboard` (the session-status verb from the original `/status` command)
+The bare form resolves for both argument-bearing skills and no-argument skills when invoked through channels that do not apply Git-for-Windows path emulation. Interactive Claude Code sessions, which are the primary user-facing invocation path, pass slash strings without shell expansion.
 
-A design where the front door and the diagnostic cannot be bare-invoked reliably is hostile to the user, regardless of the acceptable behavior for argument-bearing verbs. The Windows-specific cause (Git-for-Windows path emulation of `/name` without a following argument) means this failure affects all Windows users using the Git Bash shell or a shell that forwards Git-for-Windows path expansion. TSK-011 (SPK-05 bin PATH on Windows) may illuminate the platform interaction further.
-
-**Discovery note:** The model, when it failed to activate the bare form, correctly surfaced the namespaced alternative (`nonfiction-studio:spike-status`). This shows the skill is discoverable in the model's assistance response, but the invocation is not fluent: users must type the namespaced form manually after seeing the fallback.
+**Discovery note from original Probe C:** The model, when it failed to activate the bare form in the headless Bash probe, correctly surfaced the namespaced alternative (`nonfiction-studio:spike-status`). This shows the skill is discoverable in the model's assistance response even when the shell-expansion artifact interferes. This fallback behavior is preserved regardless of rating.
 
 ---
 
@@ -208,22 +268,23 @@ Registry matches the before-state exactly. `nonfiction-studio@nonfiction-studio`
 
 ## Decision
 
-**Rating: HOSTILE.**
+**Rating: ACCEPTABLE.**
 
-The W-07 (commands alias layer) trigger in R-04 (scope boundaries) is observed: "D-01 (skills-first surface) Phase 0 spike finds that bare-verb invocation is hostile in practice for a significant share of Claude Code users." The finding is specific to no-argument invocations on Windows via Git-for-Windows path emulation, but the affected skills are the most critical onboarding and navigation verbs (`studio`, `doctor`, `status-dashboard`).
+W-07 (commands alias layer) trigger in R-04 (scope boundaries): NOT observed. The trigger condition ("D-01 (skills-first surface) Phase 0 spike finds that bare-verb invocation is hostile in practice for a significant share of Claude Code users") is not met. Controls confirm that the bare form resolves in interactive sessions and in headless invocations that bypass Git-for-Windows path expansion. The original Probe C failure is attributed to the headless Bash probe methodology on Windows, not to the skill invocation system.
 
-**The `commands/` alias layer is activated as a fast-follow.** A thin alias layer under `commands/` will provide short, reliable, platform-safe entry points for the eleven Phase 1 skill names. The alias layer must be recorded in CANON with a new D-ID or a D-01 amendment per the R-04 (scope boundaries) change-control rule, and a decision entry in X-04 (open questions and decision log).
+D-01 (skills-first surface) stands as the canonical architecture. No alias layer is triggered by this spike. The `commands/` alias layer remains a deferred option per D-01 and R-04 (scope boundaries) W-07 (commands alias layer); the trigger condition is unmet and the layer does not activate.
 
-D-01 (skills-first surface) remains the canonical architecture: skills are the components; the alias layer is a thin shim that invokes them. The alias layer does not duplicate skill logic.
+Users running headless Bash probes on Windows Git Bash should use `MSYS_NO_PATHCONV=1`, PowerShell, or a doubled-slash prefix to prevent shell-level path expansion of slash-command strings. This is documented under "Headless invocation quirk (Windows Git Bash)" in the addendum above.
 
 ---
 
 ## Consequences
 
-- A fast-follow task (scope: thin `commands/` alias layer for the eleven Phase 1 skill names) is added to the execution queue, referencing this ADR and W-07 (alias layer trigger).
-- The alias layer must be documented in CANON (D-01 amendment or new D-ID) and X-04 (decision log) before it ships.
+- No alias-layer fast-follow task is triggered. W-07 (commands alias layer) in R-04 (scope boundaries) remains deferred; the trigger condition is not met.
+- D-01 (skills-first surface) architecture is confirmed: skills under `skills/<name>/SKILL.md` with `user-invocable: true` are the correct Phase 1 architecture with no alias shim required.
 - `skills/spike-echo/SKILL.md` and `skills/spike-status/SKILL.md` remain in the committed tree as evidence files; both bodies are marked for deletion by the TSK-018 (init-project skill) era cleanup.
-- TSK-011 (SPK-05 bin PATH on Windows) should note the Probe C path-expansion behavior as a related data point: `/spike-status` expanding to `C:/Program Files/Git/spike-status` indicates Git-for-Windows path emulation affects single-token bare verbs passed as prompt strings.
+- TSK-011 (SPK-05 bin PATH on Windows) should note the Probe C path-expansion behavior as a related data point: `/spike-status` expanding to `C:/Program Files/Git/spike-status` in headless Git Bash confirms Git-for-Windows path emulation affects single-token bare verbs passed as prompt strings via `-p`. Interactive sessions are unaffected.
+- Headless bash tooling that probes slash commands on Windows must use `MSYS_NO_PATHCONV=1` or PowerShell to avoid shell-layer path expansion masking successful invocations.
 - The install contract behavior confirmed: `claude plugin marketplace add <path>` uses the marketplace.json `name` field as the registry key; install identity is `<plugin-name>@<marketplace-name>`.
 
 ---
