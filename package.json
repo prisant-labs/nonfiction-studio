@@ -1,0 +1,12 @@
+{
+  "name": "nonfiction-studio",
+  "version": "0.1.0",
+  "description": "An open-source Claude Code and Cowork plugin that turns Claude into a governed non-fiction book studio.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "dependencies": {
+    "yaml": "^2.5.0"
+  }
+}

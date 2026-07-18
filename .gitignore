@@ -3,3 +3,19 @@ _local/
 .memsearch/
 .superpowers/
 *.log
+
+# Node
+npm-debug.log*
+.npm
+.env
+.env.local
+.env.*.local
+dist/
+coverage/
+.nyc_output/
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
