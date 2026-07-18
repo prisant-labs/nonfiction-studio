@@ -271,6 +271,20 @@ export function measureBook(chapters) {
 }
 
 /**
+ * Returns the word count for a chapter text using the canonical tokenizer.
+ * This is the SINGLE word-counting authority for the doctor-engine word-count
+ * coherence check (TSK-028 banked adjudication 2).
+ * Preprocessing: headings and [claim: EV-NNNN] markers are stripped first,
+ * matching the tokenization path used by measureChapter.
+ *
+ * @param {string} rawText - full chapter file content
+ * @returns {number} integer word count
+ */
+export function countWords(rawText) {
+  return extractCounts(rawText).totalWords;
+}
+
+/**
  * Computes the drift score and per-marker analysis by comparing a measured
  * vector against the stored baseline.
  *

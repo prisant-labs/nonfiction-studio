@@ -1,0 +1,3 @@
+# Brief
+
+Minimal fixture brief.
