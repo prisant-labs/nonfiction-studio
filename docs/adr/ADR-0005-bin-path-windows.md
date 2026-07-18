@@ -23,6 +23,18 @@ Cross-reference note from TSK-009 (SPK-03 skill invocation): TSK-009 documented 
 
 ---
 
+## Contradiction of A-02 EF-07 (bin PATH fact)
+
+A-02 (platform baseline), supplementary fact EF-07, states: "A plugin's `bin/` directory adds its contents to the Bash tool's PATH for any session where the plugin is enabled."
+
+This experiment falsifies that claim for Windows CLI sessions. The plugin loaded and its skills were available in-session (confirmed by the load-proven re-probe in the addendum below), yet bare invocation of `ns-probe` from the Bash tool returned `command not found` (exit 127). The `bin/` directory is NOT added to PATH when the plugin is enabled on Windows.
+
+Empirical probe results outrank documentation for this design decision. The outcome (absolute-path fallback required) is grounded in measured behavior, not in the A-02 EF-07 claim.
+
+Action: EF-07 in A-02 (platform baseline) must be corrected to qualify the claim as "unverified on Windows CLI sessions" or updated to note that `bin/` PATH injection does not occur on Windows. EF-07 is added to the A-02 correction queue and watch list. The relevant file is `(local working notes, not published)`, section 12 (Watch list).
+
+---
+
 ## Outcome Taxonomy (from task brief)
 
 - "confirmed extensionless": bare name resolves without any shim
@@ -181,7 +193,7 @@ The `.cmd` shim (`bin/ns-probe.cmd`) ships alongside `bin/ns-probe` as a stub fo
 
 ### TSK-030 (hooks.json Phase 1 wiring)
 
-All hook command entries that invoke a CLI under `bin/` must use the form `node ${CLAUDE_PLUGIN_ROOT}/bin/<cli-name>`. Bare invocation is not valid on Windows in the Bash tool. This applies to every hook in Phase 1 wiring.
+All hook command entries that invoke a CLI under `bin/` must use the form `node ${CLAUDE_PLUGIN_ROOT}/bin/<cli-name>`. Bare invocation is not valid on Windows in the Bash tool. This applies to every hook in Phase 1 wiring. Live proof that the plugin system interpolates the `${CLAUDE_PLUGIN_ROOT}` placeholder in hook command entries is deferred to TSK-030's first live hook test.
 
 ### TSK-024 (engine lib core) through TSK-029 (ns-gate orchestrator)
 
@@ -218,6 +230,65 @@ Command: `claude plugin marketplace remove nonfiction-studio`
 Output: `Successfully removed marketplace: nonfiction-studio`
 
 Post-cleanup check: `claude plugin list | grep nonfiction` - no output (ABSENT). Plugin count: 17 enabled, matching baseline exactly.
+
+**Cleanup: PROVEN.**
+
+---
+
+## Addendum: Load-Proven Re-Probe (2026-07-18)
+
+Re-probe executed in response to TSK-011 (SPK-05 bin PATH on Windows) review finding (Needs-fixes, Important 2: enablement gap in original Rung 1 measurement - no in-session proof the plugin loaded in the headless session).
+
+### Install contract (re-probe)
+
+Baseline: `claude plugin list` - nonfiction-studio absent; 20 plugins listed (matching original baseline).
+
+Command: `claude plugin marketplace add "<repo-root>"`
+
+Output: `Successfully added marketplace: nonfiction-studio (declared in user settings)`
+
+Command: `claude plugin install nonfiction-studio@nonfiction-studio`
+
+Output: `Successfully installed plugin: nonfiction-studio@nonfiction-studio (scope: user)`
+
+Verify: `claude plugin list | grep nonfiction` - Status: enabled.
+
+### Combined load-proof and bare invocation probe
+
+Single headless session run from PowerShell (no MSYS_NO_PATHCONV needed from PowerShell; slash-prefix passes cleanly):
+
+```
+claude -p "You must output two things... (1) the bare output of running 'ns-probe' in the Bash tool... and (2) the result of /nonfiction-studio:spike-status..." --model haiku --dangerously-skip-permissions
+```
+
+Full stdout:
+
+```
+BASH_OUTPUT: /usr/bin/bash: line 5: ns-probe: command not found --- SKILL_OUTPUT: SPIKE-STATUS-OK
+```
+
+- SPIKE-STATUS-OK appeared: YES. The plugin loaded in this session; `nonfiction-studio:spike-status` was available and invoked.
+- Bare `ns-probe` result: `/usr/bin/bash: line 5: ns-probe: command not found` - FAIL (exit 127).
+
+### Re-probe outcome
+
+The negative is now load-proven. The plugin was confirmed active in-session (SPIKE-STATUS-OK), yet bare `ns-probe` invocation still failed with exit 127. The original Rung 1 conclusion stands: the plugin system does not add `bin/` to PATH on Windows.
+
+**Outcome classification unchanged: `absolute-path fallback required`**
+
+Confidence update: the Rung 1 negative is load-proven as of this re-probe (2026-07-18). Plugin enablement was confirmed in-session; the bare invocation failure cannot be attributed to the plugin not loading in the headless session.
+
+### Cleanup (re-probe)
+
+Command: `claude plugin uninstall nonfiction-studio@nonfiction-studio`
+
+Output: `Successfully uninstalled plugin: nonfiction-studio (scope: user)`
+
+Command: `claude plugin marketplace remove nonfiction-studio`
+
+Output: `Successfully removed marketplace: nonfiction-studio`
+
+After-state: `claude plugin list` - nonfiction-studio absent; 20 plugins listed. Matches baseline exactly.
 
 **Cleanup: PROVEN.**
 
