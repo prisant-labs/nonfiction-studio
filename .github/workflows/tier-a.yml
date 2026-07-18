@@ -1,0 +1,79 @@
+name: Tier A
+
+# Runs on every pull request targeting main.
+# Both OS legs must be green; a failure on one is a real cross-platform bug.
+# Zero validation logic lives in this file. Every step is exactly one node or claude call.
+# See Q-02 (CI pipeline) sections 1.1 and 6 for the contract and local parity rules.
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  tier-a:
+    name: Tier A (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+
+    steps:
+      # Inert scaffolding: required by GitHub Actions; no local equivalent.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Inert scaffolding: pins Node.js to the engines floor declared in package.json.
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+          cache: npm
+
+      # Live step 1: clean install from lockfile per D-04 (Node everywhere).
+      - name: Install dependencies
+        run: npm ci
+
+      # Live step 2: Bronze spine conformance check, plain-plugin profile (Standard 0.12).
+      - name: Spine conformance
+        run: node scripts/check.mjs --profile plain-plugin
+
+      # Platform validation via claude CLI.
+      # Commented out: claude CLI is not available on standard GitHub Actions runners.
+      # Enable once runner availability is confirmed. Record decision in X-04 (open questions).
+      # Local verification still runs this step (see (local working notes, not published)).
+      #
+      # - name: Platform validation
+      #   run: claude plugin validate --strict .
+      # enabled when CLI availability on runners is confirmed (record in X-04 (open questions))
+
+      # The six steps below require check scripts that do not exist yet (TSK-055 territory).
+      # They are commented out so the skeleton runs only real checks.
+      # A no-op placeholder would fake coverage; see task brief for TSK-012.
+
+      # - name: Hooks schema
+      #   run: node scripts/check-hooks-schema.mjs
+      # enabled by TSK-055 (Tier A check scripts)
+
+      # - name: Frontmatter completeness
+      #   run: node scripts/check-frontmatter.mjs
+      # enabled by TSK-055 (Tier A check scripts)
+
+      # - name: Docs completeness
+      #   run: node scripts/check-docs-completeness.mjs
+      # enabled by TSK-055 (Tier A check scripts)
+
+      # - name: Link check
+      #   run: node scripts/check-links.mjs
+      # enabled by TSK-055 (Tier A check scripts)
+
+      # - name: Engine unit tests
+      #   run: node scripts/test-engines.mjs
+      # enabled by TSK-055 (Tier A check scripts)
+
+      # - name: Fixture tests
+      #   run: node scripts/test-fixtures.mjs
+      # enabled by TSK-055 (Tier A check scripts)
