@@ -24,7 +24,7 @@
     {
       "check": "stylometry",
       "verdict": "pass",
-      "detail": "drift_score 0 is within threshold 35; chapter prose matches the baseline voice profile.",
+      "detail": "drift_score 0 is within threshold 20; chapter prose matches the baseline voice profile.",
       "evidence": [".studio/progress.json#/chapters/0/drift_score"],
       "next": null
     },

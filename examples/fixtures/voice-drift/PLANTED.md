@@ -71,3 +71,14 @@ Pinned threshold (`thresholds.drift_score_max` in `.studio/config.json`): **20**
 - `bin/ns-stylometry` exits 1. The drift score computed from the rewritten chapter 2 exceeds `thresholds.drift_score_max` (20). Per-marker flags include `function_word_rate` (measured 0.4710 vs baseline 0.4501, +4.64% outside 2% tolerance band) and `first_person_rate` (measured 0.0000 vs baseline 0.2268, outside any reasonable tolerance). The stylometry check is configured in `block` mode in this fixture's `.studio/config.json`.
 
 - All other CLIs exit 0. The claim markers are intact and resolve correctly (ns-claims exits 0). No continuity name mismatches were introduced (ns-scrub exits 0). No doctor anomalies beyond what the rewrite itself introduces (ns-doctor exits 0). No prompt-scrub violations (ns-probe exits 0).
+
+## Changed-file Footprint
+
+This fixture differs from the golden book in exactly four locations:
+
+1. **chapters/02-finding-your-network.md** - Register rewrite from golden baseline (second-person active) to passive third-person impersonal.
+2. **.studio/config.json** - `thresholds.drift_score_max` pinned to 20 only; `gate.checks.stylometry.mode` and `dod.require_drift_under_threshold` restored to their golden values. Mode toggles have no effect on exit codes: the ns-stylometry engine exits 1 on threshold exceedance per the S-07 (hooks and scripts) contract, regardless of gate mode. Gate mode governs only the gate's pass/fail decision.
+3. **.studio/progress.json** - Word counts updated to 493 (chapter 2) and 913 (total) to match the rewritten chapter and maintain state coherence. The ns-doctor coherence check exits 0 here; the coherence anomaly detector lives in the unsourced-claim fixture.
+4. **structure/chapter-list.md** - Chapter 2 word count (462 to 493) and total (882 to 913) kept coherent with progress.json.
+
+(Footprint documented 2026-07-18 per the TSK-022 (voice-drift fixture) review adjudication.)
