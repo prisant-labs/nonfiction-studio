@@ -1,4 +1,5 @@
 ---
+# Remove all guidance comments before committing a stamped agent.
 name: REPLACE-with-kebab-case-name-matching-this-file
 description: REPLACE - Use this agent when [conditions]. Typical triggers include [scenario-A in prose], [scenario-B in prose], and [scenario-C in prose]. See "When to invoke" in the agent body for worked scenarios.
 model: REPLACE-model
@@ -11,6 +12,15 @@ color: REPLACE-color
 #   Intake: blue | Structure: purple | Research: cyan | Drafting/Voice: orange
 #   Production: green | Governance: yellow | safety agents: red
 # pink is available for agents without a clear pillar alignment.
+memory: REPLACE-or-delete
+# Use `project` only for the D-09 (learning checker agents) roster: fact-checker,
+# voice-guardian, continuity-checker; delete this line for all other agents. The
+# platform creates .claude/agent-memory/nonfiction-studio-<agent-name>/ and the
+# frontmatter field, never body text, controls the directory.
+skills: REPLACE-or-delete
+# Preloads FULL skill content at startup, namespaced nonfiction-studio:<skill-name>;
+# delete when no preload is needed; skills with disable-model-invocation cannot be
+# preloaded.
 tools:
   - Read
 metadata:
