@@ -11,12 +11,15 @@ Line: 31
 
 ## Expected Engine Behavior
 
-The ns-claims engine should detect this sentence as an unmarked factual claim lacking verification markers. Per Q-01 (testing and evals) section 2.1, the engine should:
+This fixture exercises two distinct engine behaviors:
 
-- Exit with code 1
-- Name the file location: `chapters/02-finding-your-network.md`
-- Identify the line range: line 31
-- Flag this as a missing claim marker defect
+- `bin/ns-claims` (TSK-025 (ns-claims engine)) exits 0. All three marker forms present in the chapter resolve successfully; the unmarked sentence is invisible to marker resolution (the engine scans only for markers, not for semantic factuality).
+
+- `bin/ns-doctor` (TSK-028 (ns-doctor engine)) exits 1. The chapter file word count no longer matches the recorded count in `.studio/progress.json`, naming chapter 2 and the two mismatched counts.
+
+- The semantic catch (an unmarked factual assertion present in the file) is exercised warn-tier by the gate's judgment prompt layer and the fact-checker agent, not by a deterministic engine.
+
+(Expected behavior corrected 2026-07-18 per the TSK-020 (unsourced-claim fixture) adjudication.)
 
 ## Detection Criteria
 
