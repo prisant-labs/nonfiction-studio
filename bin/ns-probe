@@ -1,0 +1,3 @@
+#!/usr/bin/env node
+// Spike stub for SPK-05 (bin PATH on Windows); superseded by the real CLIs in Phase 1.
+console.log('NS-PROBE-OK ' + process.version + ' ' + process.platform);
