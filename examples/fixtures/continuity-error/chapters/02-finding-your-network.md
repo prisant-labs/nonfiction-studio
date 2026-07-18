@@ -1,6 +1,6 @@
 # Chapter 2: Finding Your Network
 
-The phrase "personal learning netwrok" can sound like a vague ambition. In practice, it is a specific list of people, publications, and communities that you return to with intention.
+The phrase "Personal Learning Network" can sound like a vague ambition. In practice, it is a specific list of people, publications, and communities that you return to with intention.
 
 Most professionals already have something like this. There is the colleague they email when they are stuck, the newsletter they actually read, the podcast they listen to on Monday mornings. The goal of this chapter is to make that list deliberate.
 
