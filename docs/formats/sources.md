@@ -7,22 +7,23 @@
 Source record headings follow this pattern:
 
 ```
-### SRC-NNN (handle)
+### SRC-NNNN (handle)
 ```
 
-`NNN` is a zero-padded three-digit decimal integer, starting at `001` and incrementing monotonically. IDs are never reused. The parenthesized handle is required and must be a short, unique human-readable label for the record (for example, `SRC-004 (Make It Stick)`).
+`NNNN` is a zero-padded four-digit decimal integer, starting at `0001` and incrementing monotonically. IDs are never reused. The parenthesized handle is required and must be a short, unique human-readable label for the record (for example, `SRC-0004 (Make It Stick)`).
 
 `research-librarian` is the sole allocator of SRC IDs per the ledger interaction protocol in S-03 (agents: research and evidence) section 1.2. Before allocating a new record, the allocator checks whether the source is already registered to avoid duplicates.
 
-**ID-width note.** S-08 (schemas and file formats) section 7 prose says `SRC-nnnn` (four digits) but the normative examples throughout S-08 use three digits (for example, `SRC-004`). Three digits is authoritative here, per the controller ruling for TSK-015 (ledger grammar and claim markers). The four-digit form in the S-08 section text is a drafting slip and is noted in the TSK-015 (ledger grammar and claim markers) task report.
+**ID-width note.** Both EV IDs and SRC IDs are zero-padded four-digit integers: `EV-nnnn` (for example, `EV-0012`) and `SRC-nnnn` (for example, `SRC-0004`). The three-digit form that appeared in earlier examples is superseded. Four digits is authoritative per the TSK-015 (ledger grammar) adjudication (2026-07-18), which supersedes the prior controller ruling for this task.
 
 ## Field grammar
 
-Each record is a Markdown bullet list directly under its heading. The parser reads each line as `- key: value`. The nine fields below are the complete set.
+Each record is a Markdown bullet list directly under its heading. The parser reads each line as `- key: value`. The ten fields below are the complete set.
 
 | Field | Type | Required | Allowed values and notes |
 |---|---|---|---|
 | `type` | enum | required | One of `book`, `article`, `web`, `interview`, `dataset`, `report`, `other` |
+| `nature` | enum | required | One of `primary`, `secondary`; `type` records the medium while `nature` records the evidentiary standing the S-03 (research and evidence) protocol mandates so `drafting-partner` can signal it |
 | `author` | string | required | Author name(s); multiple authors separated by semicolons |
 | `title` | string | required | Full title of the work |
 | `year` | integer | required | Publication year as a four-digit integer |
@@ -44,6 +45,13 @@ Each record is a Markdown bullet list directly under its heading. The parser rea
 | `report` | Government, institutional, or industry report |
 | `other` | Any source that does not fit the above categories |
 
+### Nature values
+
+| Value | Use for |
+|---|---|
+| `primary` | Original study, dataset, interview, legal text, or first-person account |
+| `secondary` | Synthesis, commentary, or a report citing another source |
+
 ### Retrieval-status values
 
 | Value | Meaning |
@@ -63,8 +71,9 @@ Each record is a Markdown bullet list directly under its heading. The parser rea
 ## Example
 
 ```markdown
-### SRC-004 (Make It Stick)
+### SRC-0004 (Make It Stick)
 - type: book
+- nature: secondary
 - author: Brown, Peter C.; Roediger, Henry L.; McDaniel, Mark A.
 - title: Make It Stick: The Science of Successful Learning
 - year: 2014

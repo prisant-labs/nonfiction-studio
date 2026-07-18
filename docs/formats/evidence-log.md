@@ -21,10 +21,10 @@ Each entry is a Markdown bullet list directly under its heading. The parser read
 | Field | Type | Required | Allowed values and notes |
 |---|---|---|---|
 | `claim` | string | required | The factual assertion in the author's own words, as a single line |
-| `source` | SRC-NNN ID or literal `none` | required | A registered source ID (for example, `SRC-004`) or the literal `none` when no source is yet identified |
+| `source` | SRC-NNNN ID or literal `none` | required | A registered source ID (for example, `SRC-0004`) or the literal `none` when no source is yet identified |
 | `locator` | string | optional | Page, section, timestamp, or paragraph pointer within the cited source; may be left blank |
 | `confidence` | enum | required | One of `high`, `medium`, `low` |
-| `status` | enum | required | One of `pending`, `verified`, `unverified`, `source-unverifiable`, `refuted` |
+| `status` | enum | required | One of `pending`, `verified`, `unverified`, `source-unverifiable`, `interpretation` |
 | `added-by` | roster slug | required | The agent slug or `author` that logged this entry |
 | `date` | YYYY-MM-DD | required | Calendar date the entry was added |
 
@@ -36,7 +36,7 @@ Each entry is a Markdown bullet list directly under its heading. The parser read
 | `verified` | Claim confirmed against the cited source | `fact-checker` |
 | `unverified` | `fact-checker` could not confirm the claim against the cited source | `fact-checker` |
 | `source-unverifiable` | Online resolution pass failed to resolve the DOI or URL for the linked source | `fact-checker` (online pass only) |
-| `refuted` | `fact-checker` found that the cited source actively contradicts the claim | `fact-checker` |
+| `interpretation` | `fact-checker` judges the assertion to be opinion or interpretation rather than a falsifiable claim, per the S-03 (research and evidence) transition table | `fact-checker` |
 
 ### Confidence values
 
@@ -63,7 +63,7 @@ A sourced and verified entry:
 ```markdown
 ### EV-0012 (retention study)
 - claim: Spaced repetition raises thirty-day recall by roughly forty percent over massed practice.
-- source: SRC-004
+- source: SRC-0004
 - locator: pp. 112-114
 - confidence: high
 - status: verified
