@@ -1,0 +1,15 @@
+{
+  "description": "SPK-02 Cowork execution probe - temporary; lives only under examples/spikes/spk-02/; do NOT copy to hooks/hooks.json in commits (TSK-030 owns production wiring)",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const fs=require('fs');const ts=new Date().toISOString();fs.appendFileSync('${CLAUDE_PLUGIN_ROOT}/examples/spikes/spk-02/spk02-evidence.log',ts+' SPK02-SESSIONSTART-FIRED\\n');process.stdout.write(JSON.stringify({additionalContext:'SPK02-CONTEXT-INJECTED'})+'\\n');\""
+          }
+        ]
+      }
+    ]
+  }
+}
