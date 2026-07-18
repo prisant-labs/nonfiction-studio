@@ -117,9 +117,10 @@ test('T01: golden book warn mode: exit 0; report written; exact schema keys; ses
       );
     }
 
-    // All four deterministic checks plus session_write_flag are present
+    // All five deterministic checks plus session_write_flag are present
+    // [TSK-029b (state-coherence gate check) 2026-07-18: state_coherence added to the set]
     const names = report.checks.map(c => c.check);
-    for (const n of ['claim_coverage', 'stylometry', 'prompt_scrub', 'continuity', 'session_write_flag']) {
+    for (const n of ['claim_coverage', 'stylometry', 'prompt_scrub', 'continuity', 'state_coherence', 'session_write_flag']) {
       assert.ok(names.includes(n), '"' + n + '" must appear in checks');
     }
 
@@ -509,6 +510,132 @@ test('T14: report filename matches <slug>.<YYYYMMDDTHHMMSSZ>.json pattern', () =
         'filename must match pattern <slug>.<YYYYMMDDTHHMMSSZ>.json; got: ' + filename
       );
     }
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ============================================================================
+// TSK-029b (state-coherence gate check) tests
+// [Added 2026-07-18 per OQ-13 (gate coherence check) decision]
+// T15: golden --check=coherence; T16: unsourced-claim coherence warn; T17: coherence block exit 1
+// ============================================================================
+
+/**
+ * Writes a gate config that opts state_coherence into block mode.
+ * Sets gate.mode=block and state_coherence.mode=block so a word-count mismatch
+ * blocks the gate. Used by T17.
+ */
+function writeCoherenceBlockConfig(tmpDir) {
+  const configPath = join(tmpDir, '.studio', 'config.json');
+  const config = JSON.parse(readFileSync(configPath, 'utf8'));
+  config.gate = config.gate || {};
+  config.gate.mode = 'block';
+  config.gate.checks = config.gate.checks || {};
+  config.gate.checks.state_coherence = { enabled: true, mode: 'block' };
+  writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+}
+
+// ---- T15: --check=coherence on golden book ------------------------------------
+
+test('T15: golden book --check=coherence: exit 0; report has state_coherence pass and session_write_flag only', () => {
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    const result = spawnGate(tmp, ['--check=coherence', '--json']);
+    assert.strictEqual(result.status, 0,
+      '--check=coherence on golden book must exit 0; stderr: ' + result.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    const names = report.checks.map(c => c.check);
+
+    // Exactly state_coherence and session_write_flag
+    assert.ok(names.includes('state_coherence'), 'state_coherence must be present');
+    assert.ok(names.includes('session_write_flag'), 'session_write_flag must always be present');
+    assert.strictEqual(
+      names.length, 2,
+      'exactly 2 checks for --check=coherence: state_coherence and session_write_flag; got: ' +
+        JSON.stringify(names)
+    );
+
+    // state_coherence verdict pass on the golden book (word counts match)
+    const cohEntry = report.checks.find(c => c.check === 'state_coherence');
+    assert.strictEqual(cohEntry.verdict, 'pass',
+      'state_coherence must pass on the golden book; got: ' + cohEntry.verdict);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---- T16: unsourced-claim warn mode: state_coherence fires as warn -----------
+
+test('T16: unsourced-claim warn mode: exit 0; state_coherence verdict warn; detail has type, chapter 2, both counts', () => {
+  const tmp = makeTempClone(join(EXAMPLES, 'fixtures', 'unsourced-claim'));
+  try {
+    const result = spawnGate(tmp, ['--json']);
+    assert.strictEqual(result.status, 0,
+      'unsourced-claim warn mode must exit 0; stderr: ' + result.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    const cohEntry = report.checks.find(c => c.check === 'state_coherence');
+    assert.ok(cohEntry, 'state_coherence must appear in checks');
+    assert.strictEqual(cohEntry.verdict, 'warn',
+      'state_coherence verdict must be warn in default warn mode; got: ' + cohEntry.verdict);
+
+    // detail must carry the finding type string verbatim
+    assert.ok(
+      cohEntry.detail.includes('coherence.word-count-mismatch'),
+      'detail must include "coherence.word-count-mismatch"; got: ' + cohEntry.detail
+    );
+    // detail must name chapter 2
+    assert.ok(
+      cohEntry.detail.includes('02-finding-your-network'),
+      'detail must reference chapter 02-finding-your-network; got: ' + cohEntry.detail
+    );
+    // detail must include the recorded count and the actual count (both word counts)
+    assert.ok(
+      /records \d+ words/.test(cohEntry.detail),
+      'detail must include "records N words" (recorded count); got: ' + cohEntry.detail
+    );
+    assert.ok(
+      /contains \d+ words/.test(cohEntry.detail),
+      'detail must include "contains N words" (actual count); got: ' + cohEntry.detail
+    );
+
+    // evidence must include the chapter file and progress.json (the two sides of the incoherence)
+    assert.ok(cohEntry.evidence.length >= 2,
+      'evidence must have at least 2 pointers (chapter + progress.json); got: ' +
+        JSON.stringify(cohEntry.evidence));
+    assert.ok(
+      cohEntry.evidence.some(e => e.includes('02-finding-your-network')),
+      'evidence must include a pointer to chapter 02; got: ' + JSON.stringify(cohEntry.evidence)
+    );
+    assert.ok(
+      cohEntry.evidence.includes('.studio/progress.json'),
+      'evidence must include .studio/progress.json; got: ' + JSON.stringify(cohEntry.evidence)
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---- T17: unsourced-claim block-mode (state_coherence opted to block): exit 1 --
+
+test('T17: unsourced-claim block-mode (state_coherence block): exit 1; top-level verdict block', () => {
+  const tmp = makeTempClone(join(EXAMPLES, 'fixtures', 'unsourced-claim'));
+  try {
+    writeCoherenceBlockConfig(tmp);
+    const result = spawnGate(tmp, ['--json']);
+    assert.strictEqual(result.status, 1,
+      'unsourced-claim with state_coherence in block mode must exit 1; stderr: ' + result.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    assert.strictEqual(report.verdict, 'block',
+      'top-level verdict must be "block"; got: ' + report.verdict);
+
+    const cohEntry = report.checks.find(c => c.check === 'state_coherence');
+    assert.ok(cohEntry, 'state_coherence must appear in checks');
+    assert.strictEqual(cohEntry.verdict, 'block',
+      'state_coherence verdict must be block when opted in; got: ' + cohEntry.verdict);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

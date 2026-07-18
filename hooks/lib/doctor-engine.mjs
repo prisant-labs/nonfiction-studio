@@ -207,6 +207,62 @@ export function checkSchemaVersion(meta) {
 }
 
 /**
+ * Checks word-count coherence between chapter files and progress.json.
+ * The stylometry engine's tokenizer (countWords) is the SINGLE word-counting
+ * authority (banked adjudication 2). Compares the recorded word_count in
+ * progress.json against each chapter file's actual count. Tolerance: zero.
+ *
+ * Used by runChecks (section 8) and imported by gate-engine.mjs (state_coherence
+ * check): one implementation, two callers, per TSK-029b (state-coherence gate check).
+ *
+ * [Extracted 2026-07-18 by TSK-029b (state-coherence gate check) per OQ-13
+ *  (gate coherence check) decision: adding the check to the gate's deterministic
+ *  set required an exported function so runChecks and the gate share one implementation.]
+ *
+ * @param {string} root - absolute path to the bible root
+ * @returns {{ type: string, path: string, message: string }[]} findings array
+ */
+export function checkWordCountCoherence(root) {
+  const findings = [];
+  const progressPath = join(root, '.studio', 'progress.json');
+  if (!existsSync(progressPath)) return findings;
+
+  let progress;
+  try {
+    progress = JSON.parse(readFileSync(progressPath, 'utf8'));
+  } catch {
+    return findings;
+  }
+
+  if (!progress || !Array.isArray(progress.chapters)) return findings;
+
+  const chaptersDir = join(root, 'chapters');
+  for (const chEntry of progress.chapters) {
+    if (!chEntry.slug || typeof chEntry.word_count !== 'number') continue;
+    const chFile = join(chaptersDir, chEntry.slug + '.md');
+    if (!existsSync(chFile)) continue;
+    let chText;
+    try {
+      chText = readFileSync(chFile, 'utf8');
+    } catch {
+      continue;
+    }
+    const actualCount = countWords(chText);
+    if (actualCount !== chEntry.word_count) {
+      findings.push({
+        type: 'coherence.word-count-mismatch',
+        path: 'chapters/' + chEntry.slug + '.md',
+        message:
+          'chapter ' + chEntry.slug + ': progress.json records ' + chEntry.word_count +
+          ' words but the file contains ' + actualCount + ' words (by stylometry tokenizer)'
+      });
+    }
+  }
+
+  return findings;
+}
+
+/**
  * Runs all checks in the TSK-028 check inventory against the given bible root.
  *
  * Returns { findings, notices } where:
@@ -222,7 +278,7 @@ export function checkSchemaVersion(meta) {
  *   5. SRC grammar (required fields, enum validation)
  *   6. Orphan claim markers (chapter markers referencing absent EV IDs)
  *   7. Orphan SRC references (SRC IDs in EV entries absent from sources.md, and vice versa)
- *   8. Word-count coherence (chapter file count vs. progress.json using stylometry tokenizer)
+ *   8. Word-count coherence (via checkWordCountCoherence; one implementation shared with gate)
  *   9. Config coercion notice (thesis_alignment mode block; REPORT only, not a finding)
  *  10. Snapshot naming conformance
  *
@@ -529,31 +585,11 @@ export function runChecks(root) {
     }
   }
 
-  // ---- 8. Word-count coherence ---------------------------------------------
-  // The stylometry engine's tokenizer (countWords) is the SINGLE word-counting
-  // authority (banked adjudication 2). Compares progress.json's recorded word_count
-  // per chapter against the file's actual word count. Tolerance: zero.
-  if (progress && Array.isArray(progress.chapters)) {
-    for (const chEntry of progress.chapters) {
-      if (!chEntry.slug || typeof chEntry.word_count !== 'number') continue;
-      const chFile = join(chaptersDir, chEntry.slug + '.md');
-      if (!existsSync(chFile)) continue;
-      let chText;
-      try {
-        chText = readFileSync(chFile, 'utf8');
-      } catch {
-        continue;
-      }
-      const actualCount = countWords(chText);
-      if (actualCount !== chEntry.word_count) {
-        findings.push({
-          type: 'coherence.word-count-mismatch',
-          path: 'chapters/' + chEntry.slug + '.md',
-          message: 'chapter ' + chEntry.slug + ': progress.json records ' + chEntry.word_count +
-                   ' words but the file contains ' + actualCount + ' words (by stylometry tokenizer)'
-        });
-      }
-    }
+  // ---- 8. Word-count coherence (shared with gate-engine.mjs via export) ----
+  // [TSK-029b (state-coherence gate check) 2026-07-18: extracted to checkWordCountCoherence
+  //  above; gate-engine.mjs imports and calls the same export. One implementation, two callers.]
+  for (const f of checkWordCountCoherence(root)) {
+    findings.push(f);
   }
 
   // ---- 10. Snapshot naming conformance ------------------------------------

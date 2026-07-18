@@ -28,18 +28,25 @@ import { computeCoverage, scanChapter } from './claims-engine.mjs';
 import { measureBook, computeDrift } from './stylometry-engine.mjs';
 import { scrub } from './scrub-engine.mjs';
 import { parseEvidenceLog } from './ledger.mjs';
+// [TSK-029b (state-coherence gate check) 2026-07-18 per OQ-13 (gate coherence check) decision:
+//  reuses the exported checkWordCountCoherence from doctor-engine.mjs; one implementation,
+//  two callers (runChecks and the gate). No word-count comparison logic is duplicated here.]
+import { checkWordCountCoherence } from './doctor-engine.mjs';
 
 // Check registry: CLI flag -> report check name
 // 'claims'           -> 'claim_coverage'  -> computeCoverage
 // 'stylometry'       -> 'stylometry'      -> measureBook + computeDrift
 // 'scrub'            -> 'prompt_scrub'    -> scrub(chapters, 'injection')
 // 'continuity-quick' -> 'continuity'      -> scrub(chapters, 'continuity')
+// 'coherence'        -> 'state_coherence' -> checkWordCountCoherence(root)
+//   [TSK-029b (state-coherence gate check) 2026-07-18 per OQ-13 (gate coherence check) decision]
 // 'session_write_flag' is always evaluated (not in --check list)
 export const CHECK_REGISTRY = [
   { flag: 'claims',           reportName: 'claim_coverage' },
   { flag: 'stylometry',       reportName: 'stylometry' },
   { flag: 'scrub',            reportName: 'prompt_scrub' },
   { flag: 'continuity-quick', reportName: 'continuity' },
+  { flag: 'coherence',        reportName: 'state_coherence' },
 ];
 
 // All valid --check flag values
@@ -60,6 +67,10 @@ const DEFAULT_GATE = {
     prompt_scrub:       { enabled: true, mode: 'block' },
     stylometry:         { enabled: true, mode: 'warn' },
     continuity:         { enabled: true, mode: 'warn' },
+    // [TSK-029b (state-coherence gate check) 2026-07-18 per OQ-13 (gate coherence check) decision:
+    //  default mode is warn because out-of-session edits produce benign mismatches until the
+    //  PostToolBatch hook refreshes progress.json; authors opt it to block per normal D-03 opt-in.]
+    state_coherence:    { enabled: true, mode: 'warn' },
     thesis_alignment:   { enabled: true, mode: 'warn' },
     session_write_flag: { enabled: true, mode: 'block' },
   },
@@ -436,6 +447,55 @@ export function runGate(root, opts = {}) {
             .filter(f => f.file && f.line != null)
             .map(f => f.file + '#L' + f.line);
           next = 'Reconcile the inconsistent term forms across chapters.';
+        }
+
+        checkEntries.push(makeEntry(reportName, verdict, detail, evidence, next));
+      } catch (err) {
+        checkEntries.push(makeEntry(reportName, 'skip', 'engine error: ' + err.message, [], null));
+        hasEngineError = true;
+      }
+    }
+  }
+
+  // ---- STATE COHERENCE ----
+  // [TSK-029b (state-coherence gate check) 2026-07-18 per OQ-13 (gate coherence check) decision:
+  //  reuses checkWordCountCoherence imported from doctor-engine.mjs. One implementation,
+  //  two callers. Default mode warn per OQ-13 rationale (benign mismatches from out-of-session
+  //  edits before PostToolBatch refreshes progress.json); authors opt to block per D-03 opt-in.]
+  if (requestedReportNames.has('state_coherence')) {
+    const reportName = 'state_coherence';
+    const cohConfig = gate.checks[reportName];
+
+    if (!cohConfig || cohConfig.enabled === false) {
+      checkEntries.push(makeEntry(reportName, 'skip', 'check disabled in config', [], null));
+    } else if ((cohConfig.mode || 'warn') === 'off') {
+      checkEntries.push(makeEntry(reportName, 'skip', 'check mode is off in config', [], null));
+    } else {
+      try {
+        const coherenceFindings = checkWordCountCoherence(root);
+        const hasFindings = coherenceFindings.length > 0;
+        const verdict = deriveVerdict(cohConfig, hasFindings);
+
+        let detail, evidence, next;
+        if (!hasFindings) {
+          detail = 'word-count coherence pass; no mismatch between chapters and progress.json';
+          evidence = [];
+          next = null;
+        } else {
+          const first = coherenceFindings[0];
+          // detail carries the finding type string verbatim plus the chapter and both counts
+          // (reuses the finding's own message which already names the chapter and both counts)
+          detail =
+            coherenceFindings.length + ' word-count mismatch(es); ' +
+            first.type + '; ' + first.message;
+          // evidence: the chapter file paths (from finding.path) plus .studio/progress.json
+          // (the two sides of the incoherence: chapter file has actual count, progress.json
+          // has the recorded count)
+          evidence = coherenceFindings
+            .filter(f => f.path)
+            .map(f => f.path);
+          evidence.push('.studio/progress.json');
+          next = 'Run ns-doctor to diagnose the word-count incoherence and update progress.json.';
         }
 
         checkEntries.push(makeEntry(reportName, verdict, detail, evidence, next));
