@@ -15,7 +15,14 @@
 //       continuity.name-mismatch finding at chapters/02-finding-your-network.md line 3,
 //       with both surface forms and both chapters named in the detail;
 //   (7) CLI --all --json produces the correct exit codes and JSON shapes for all
-//       three committed-tree fixture directories.
+//       three committed-tree fixture directories;
+//   (8) symmetric cross-chapter mismatch detection fires when one chapter contains a
+//       titlecase form among otherwise-lowercase occurrences (the one-direction check
+//       missed this case; the reverse direction must also be evaluated);
+//   (9) sub-phrase dedupe reduces the continuity-error fixture output to exactly ONE
+//       finding (Personal Learning Network; sub-phrases suppressed);
+//   (10) scrub.agent-self-reference fires on lexicon phrases from S-07 section 4;
+//        golden book produces 0 self-reference findings.
 // runner:       node --test "tests/engines/*.test.mjs"
 
 import { test } from 'node:test';
@@ -170,6 +177,50 @@ test('continuity: same-chapter-only variance does NOT fire', () => {
   );
 });
 
+// ---- CONTINUITY MODE: symmetric cross-chapter mismatch detection ---------------
+
+// This test proves the symmetric cross-chapter mismatch rule added in the TSK-027
+// review: when ch2 contains BOTH the majority lowercase form AND a minority titlecase
+// form, the one-direction check (formsI missing from formsJ) does not fire because
+// ch1's form IS present in ch2. The reverse direction (formsJ missing from formsI)
+// must also be evaluated to catch the minority variant. After sub-phrase dedupe, the
+// surviving finding must name the titlecase line.
+test('continuity: symmetric detection fires when ch2 has a titlecase form among lowercase occurrences', () => {
+  // ch1: uniformly lowercase throughout
+  const ch1 = {
+    file: 'chapters/ch-1.md',
+    text: [
+      'A personal learning network is useful for growth.',
+      'Build your personal learning network over time.',
+    ].join('\n') + '\n',
+  };
+  // ch2: mostly lowercase but ONE mid-sentence titlecase occurrence (line 2)
+  const ch2 = {
+    file: 'chapters/ch-2.md',
+    text: [
+      'You need a personal learning network.',            // lowercase, line 1
+      'The Personal Learning Network is described here.', // titlecase mid-sentence, line 2
+      'A personal learning network helps growth.',        // lowercase, line 3
+    ].join('\n') + '\n',
+  };
+  const findings = scanContinuity([ch1, ch2]);
+  const mismatch = findings.find(f => f.type === 'continuity.name-mismatch');
+  assert.ok(
+    mismatch,
+    'symmetric mismatch detection must fire when ch2 contains a titlecase form among lowercase ones; ' +
+    'findings: ' + JSON.stringify(findings)
+  );
+  assert.strictEqual(
+    mismatch.file, 'chapters/ch-2.md',
+    'finding must point to ch2 (where the minority variant lives)'
+  );
+  const combined = (mismatch.excerpt || '') + ' ' + (mismatch.detail || '');
+  assert.ok(
+    combined.includes('Personal Learning Network'),
+    'finding must name the titlecase variant "Personal Learning Network"; combined: ' + combined
+  );
+});
+
 // ---- CONTINUITY MODE: golden sample book (exit 0) -----------------------------
 
 test('golden book continuity: scanContinuity returns 0 findings', () => {
@@ -284,9 +335,55 @@ test('continuity-error fixture: mismatch finding names both chapters', () => {
   );
 });
 
-// ---- SCRUB (combined): scrub.agent-self-reference stub NEVER fires -------------
+// ---- CONTINUITY MODE: sub-phrase dedupe (exactly one finding after dedup) -------
 
-test('agent-self-reference stub: never fires on golden book', () => {
+// TSK-027 review fix: sub-phrase findings at the same file+line are suppressed when
+// dominated by a longer phrase finding. The continuity-error fixture previously emitted
+// two findings at ch2 line 3 ("Personal Learning" and "Personal Learning Network").
+// After dedup the 2-gram is suppressed and exactly ONE finding survives.
+test('continuity-error fixture: sub-phrase dedupe leaves exactly ONE finding', () => {
+  const root = join(EXAMPLES, 'fixtures', 'continuity-error');
+  const ch1Text = readChapter(root, '01-listening-before-speaking.md');
+  const ch2Text = readChapter(root, '02-finding-your-network.md');
+
+  const chapters = [
+    { file: 'chapters/01-listening-before-speaking.md', text: ch1Text },
+    { file: 'chapters/02-finding-your-network.md', text: ch2Text },
+  ];
+
+  const findings = scanContinuity(chapters).filter(f => f.type === 'continuity.name-mismatch');
+  assert.strictEqual(
+    findings.length,
+    1,
+    'sub-phrase dedupe must leave exactly 1 finding (Personal Learning Network); got: ' +
+    JSON.stringify(findings.map(f => ({ excerpt: f.excerpt, line: f.line })))
+  );
+  assert.strictEqual(
+    findings[0].excerpt,
+    'Personal Learning Network',
+    'surviving finding must be the 3-gram "Personal Learning Network"; got: ' + findings[0].excerpt
+  );
+});
+
+// ---- SCRUB (combined): scrub.agent-self-reference lexicon ----------------------
+
+test('agent-self-reference: fires on a phrase from the S-07 lexicon', () => {
+  // The phrase "as an AI language model" is in the fixed SELF_REF_PHRASES lexicon.
+  const text = 'As an AI language model, I cannot verify this claim.\n';
+  const findings = scanInjection(text);
+  const match = findings.find(f => f.type === 'scrub.agent-self-reference');
+  assert.ok(
+    match,
+    'scrub.agent-self-reference must fire on "As an AI language model"'
+  );
+  assert.strictEqual(match.line, 1, 'finding must be at line 1');
+  assert.ok(
+    match.excerpt.length > 0,
+    'excerpt must be non-empty; got: ' + match.excerpt
+  );
+});
+
+test('agent-self-reference: golden book produces zero findings (no self-framing phrases in text)', () => {
   const root = join(EXAMPLES, 'sample-book');
   const ch1Text = readChapter(root, '01-listening-before-speaking.md');
   const ch2Text = readChapter(root, '02-finding-your-network.md');
@@ -301,7 +398,7 @@ test('agent-self-reference stub: never fires on golden book', () => {
   assert.equal(
     agentFindings.length,
     0,
-    'scrub.agent-self-reference is a registered stub and must NEVER fire (no deterministic signal)'
+    'golden book must produce 0 scrub.agent-self-reference findings (no AI self-framing phrases)'
   );
 });
 

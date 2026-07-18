@@ -1,10 +1,11 @@
 // what-it-is:   AI-injection and continuity quick-scan engine
 // what-it-does: exports scanInjection(text), scanContinuity(chapters), and scrub(chapters, modes);
-//               scanInjection detects two finding types: the compound sentence-initial
-//               verb + editorial object pattern (injection.pattern-match) and unclosed
-//               template markers (scrub.template-marker); scanContinuity detects case-folded
-//               term identity mismatches across chapters (continuity.name-mismatch);
-//               scrub combines both passes under a modes parameter
+//               scanInjection detects three finding types: injection.pattern-match (compound
+//               sentence-initial verb + editorial object), scrub.template-marker (unclosed
+//               draft markers), and scrub.agent-self-reference (fixed case-insensitive
+//               phrase lexicon from S-07); scanContinuity detects continuity.name-mismatch
+//               (symmetric cross-chapter case-folded identity mismatches, with sub-phrase
+//               deduplication); scrub combines both passes under a modes parameter
 // why:          the engine logic lives in a lib module so both bin/ns-scrub (CLI) and the Stop
 //               gate hook share the same computation path per S-07 section 4
 // used-by:      bin/ns-scrub, hooks/stop-gate.mjs
@@ -76,19 +77,34 @@ const EDITORIAL_OBJ_RE = new RegExp(
 // (ns-claims) which resolves [UNVERIFIED] anchors against the evidence ledger.
 const TEMPLATE_MARKERS = ['[DRAFT]', '[VERIFY]', '[INSERT CITATION]', '[TODO]'];
 
-// ---- AGENT SELF-REFERENCE STUB ------------------------------------------------
+// ---- AGENT SELF-REFERENCE MECHANISM -------------------------------------------
 //
-// S-07 section 4 ns-scrub finding type 3: agent self-references (text that reads
-// as an agent addressing itself or the user about its own output).
-// DEFERRED: S-07 provides no deterministic signal for this finding type. The
-// description ("text that reads as an agent addressing itself or the user about
-// its own output") requires semantic interpretation that cannot be expressed as a
-// fixed pattern or lexicon. This engine does NOT implement a mechanism for
-// scrub.agent-self-reference; the finding type is registered here as a named stub
-// that NEVER fires. Deferral recorded in TSK-027 report; S-07 gap: no deterministic
-// signal or lexicon is defined for this finding type.
+// S-07 section 4 ns-scrub finding type 3: agent self-references. Mechanism: a fixed
+// case-insensitive phrase lexicon transcribed exactly from S-07 section 4 as adjudicated
+// on 2026-07-18. Any occurrence of any lexicon phrase in prose fires a
+// scrub.agent-self-reference finding. Block-quoted content is in scope (same Darkhollow
+// failure class as injection.pattern-match). One finding per line.
+// Lexicon is FIXED by S-07 adjudication. Do not expand without a new adjudication
+// and S-07 amendment.
 //
-// Finding type (reserved, never fired): scrub.agent-self-reference
+// Finding type: scrub.agent-self-reference
+const SELF_REF_PHRASES = [
+  'as an AI',
+  'as a language model',
+  'as an AI language model',
+  'as an assistant',
+  'I cannot generate',
+  'I cannot browse',
+  'I do not have access',
+  'my training data',
+  'my knowledge cutoff',
+  'here is a draft',
+  'here is the revised',
+  'I hope this helps',
+];
+
+// Pre-built lowercase forms for case-insensitive matching
+const SELF_REF_PHRASES_LOWER = SELF_REF_PHRASES.map(p => p.toLowerCase());
 
 // ---- CONTINUITY MECHANISM -----------------------------------------------------
 //
@@ -203,6 +219,49 @@ function extractWordTokens(text) {
   return tokens;
 }
 
+// ---- INTERNAL: sub-phrase deduplication ----------------------------------------
+
+/**
+ * Returns true when `sub` (a word array) appears as a strict contiguous sub-array
+ * inside `sup` (also a word array). Strict means sub.length < sup.length.
+ *
+ * @param {string[]} sub
+ * @param {string[]} sup
+ * @returns {boolean}
+ */
+function isContiguousSubsequence(sub, sup) {
+  if (sub.length >= sup.length) return false;
+  for (let i = 0; i <= sup.length - sub.length; i++) {
+    let match = true;
+    for (let j = 0; j < sub.length; j++) {
+      if (sup[i + j] !== sub[j]) { match = false; break; }
+    }
+    if (match) return true;
+  }
+  return false;
+}
+
+/**
+ * Suppresses any finding whose excerpt is a strict word-wise contiguous sub-sequence
+ * of another finding's excerpt when both share the same file and line.
+ *
+ * This collapses sub-phrase n-gram findings (for example "Personal Learning") that
+ * are dominated by a longer phrase finding ("Personal Learning Network") at the same
+ * file and line. The result is the minimal non-redundant finding set.
+ *
+ * @param {{file: string, line: number, type: string, excerpt: string}[]} findings
+ * @returns {{file: string, line: number, type: string, excerpt: string}[]}
+ */
+function dedupeBySubphrase(findings) {
+  return findings.filter(f => {
+    const fWords = f.excerpt.split(' ');
+    return !findings.some(other => {
+      if (other === f || other.file !== f.file || other.line !== f.line) return false;
+      return isContiguousSubsequence(fWords, other.excerpt.split(' '));
+    });
+  });
+}
+
 // ---- PUBLIC API ---------------------------------------------------------------
 
 /**
@@ -218,8 +277,8 @@ function extractWordTokens(text) {
  * scrub.template-marker: exact string match for any of the four markers in
  *   TEMPLATE_MARKERS ([DRAFT], [VERIFY], [INSERT CITATION], [TODO]).
  *
- * scrub.agent-self-reference: registered stub; NEVER fires in v1. See comment
- *   above the stub section for the deferral rationale.
+ * scrub.agent-self-reference: case-insensitive phrase scan against the SELF_REF_PHRASES
+ *   lexicon defined above. Block-quoted content is in scope. One finding per line.
  *
  * @param {string} text - raw chapter file content
  * @returns {{line: number, type: string, excerpt: string}[]} findings
@@ -257,6 +316,22 @@ export function scanInjection(text) {
         // Only one finding per line for template markers (avoid duplicates
         // when multiple markers appear on the same line)
         break;
+      }
+    }
+
+    // ---- Agent self-reference check ----
+    // Case-insensitive scan for any phrase from SELF_REF_PHRASES. Scans the
+    // already-stripped line (block-quote prefix removed above) so that self-framing
+    // text inside block quotes is also caught.
+    const lowerLine = trimmed.toLowerCase();
+    for (const phrase of SELF_REF_PHRASES_LOWER) {
+      if (lowerLine.includes(phrase)) {
+        findings.push({
+          line: lineNum,
+          type: 'scrub.agent-self-reference',
+          excerpt: makeExcerpt(trimmed),
+        });
+        break; // one finding per line per type
       }
     }
 
@@ -326,9 +401,17 @@ export function scanInjection(text) {
  *      sentence-initial, lowercase that first word before comparison (positional
  *      capitalization is not intentional casing).
  *   5. For each case-folded identity with 2+ total occurrences: collect the set
- *      of normalized surface forms per chapter. When two different chapters have
- *      different form-sets, emit continuity.name-mismatch pointing to the
- *      minority (variant) occurrence with detail naming both forms and chapters.
+ *      of normalized surface forms per chapter. When any two chapters have form-sets
+ *      that differ in either direction (symmetric check), emit continuity.name-mismatch
+ *      pointing to the minority (variant) occurrence with detail naming both forms
+ *      and chapters.
+ *   6. Apply sub-phrase dedupe: suppress any finding whose excerpt is a strict
+ *      word-wise contiguous sub-sequence of another finding at the same file+line.
+ *
+ * Symmetric cross-chapter detection: the check runs in both directions. A chapter
+ * containing both the majority form and a minority variant correctly fires even
+ * though the majority form is shared with the other chapter (the one-direction
+ * check would miss this case).
  *
  * Same-chapter casing variance never fires: a mismatch is only recorded when the
  * differing surface forms are found in DIFFERENT chapters.
@@ -409,7 +492,15 @@ export function scanContinuity(chapters) {
     if (allForms.size < 2) continue;
 
     // Verify that the mismatch is cross-chapter: at least one chapter has a form
-    // that at least one other chapter does not have
+    // that at least one other chapter does not have.
+    //
+    // Symmetric check: the one-direction loop (does formsI contain anything missing
+    // from formsJ?) fails to detect the case where ch2 contains BOTH the majority
+    // form AND a minority variant while ch1 contains only the majority form.
+    // In that case ch1's single form IS present in ch2, so the one-direction check
+    // returns false. The reverse direction (does formsJ contain anything missing from
+    // formsI?) correctly fires on the minority variant. Both directions must be
+    // evaluated for every pair of chapters.
     const chapterList = [...chapterForms.entries()];
     let hasCrossChapterMismatch = false;
 
@@ -420,6 +511,12 @@ export function scanContinuity(chapters) {
         const [, formsJ] = chapterList[j];
         for (const f of formsI) {
           if (!formsJ.has(f)) {
+            hasCrossChapterMismatch = true;
+            break outer;
+          }
+        }
+        for (const f of formsJ) {
+          if (!formsI.has(f)) {
             hasCrossChapterMismatch = true;
             break outer;
           }
@@ -471,7 +568,7 @@ export function scanContinuity(chapters) {
     }
   }
 
-  return findings;
+  return dedupeBySubphrase(findings);
 }
 
 /**
