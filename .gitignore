@@ -14,6 +14,10 @@ dist/
 coverage/
 .nyc_output/
 
+# Claude agent memory (ephemeral spike and session caches)
+.claude/agent-memory/
+.claude/agent-memory-local/
+
 # OS
 .DS_Store
 Thumbs.db
