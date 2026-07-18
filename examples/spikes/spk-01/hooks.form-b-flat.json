@@ -1,0 +1,5 @@
+{
+  "SessionStart": [
+    { "hooks": [ { "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/examples/spikes/spk-01/probe.mjs" } ] }
+  ]
+}
