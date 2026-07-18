@@ -55,8 +55,10 @@ printf "SCAN_DONE\n"
 > Warning: A book/ directory already exists. The following scaffold files are missing: [list each MISSING path from the tool output, one per line]. Re-stamping only the missing files.
 
 Then:
-- **Non-interactive context (headless -p session):** State "Proceeding automatically in non-interactive context." Then follow Steps 4-6 below, but write ONLY the paths that appeared in the MISSING list. Do not read or write any other file. For `book/context/project-init.md` if it is in the missing list, use blank mode. After writing, report which files were stamped and STOP.
-- **Interactive context:** Ask "May I stamp only these missing files? (yes/no)" and wait for author confirmation before writing anything. On confirmation, follow Steps 4-6, writing ONLY the missing paths. After writing, report which files were stamped and STOP.
+- **Non-interactive context (headless -p session):** State "Proceeding automatically in non-interactive context." Then resolve the plugin root (Step 4, plugin root resolution), stamp the missing files (Step 5, scaffold stamping), and fill state placeholders (Step 6, state files) below, but write ONLY the paths that appeared in the MISSING list. Do not read or write any other file. For `book/context/project-init.md` if it is in the missing list, use blank mode. After writing, report which files were stamped and STOP.
+- **Interactive context:** Ask "May I stamp only these missing files? (yes/no)" and wait for author confirmation before writing anything. On confirmation, resolve the plugin root (Step 4, plugin root resolution), stamp the missing files (Step 5, scaffold stamping), and fill state placeholders (Step 6, state files), writing ONLY the missing paths. After writing, report which files were stamped and STOP.
+
+**Note on .studio/meta.json:** If .studio/meta.json is in the missing list, first acquire the book title (from the argument, or by asking the author; in non-interactive contexts reuse the title recorded in book/context/brief.md if present, otherwise report that the title is required) before filling its placeholders.
 
 ### Step 1b - If the output is NEWINIT
 
