@@ -233,9 +233,13 @@ output contains. If the chapter carries `[UNVERIFIED]` tags: invoke
 `research-librarian` to supply the missing sources and log the underlying claims,
 then re-run `draft-chapter` or `fact-check-pass` to resolve the tags. Once all
 tags resolve, the chapter is ready for `line-editor` for sentence-level polish and
-`fact-checker` for adversarial verification before the quality gate clears. In
-Phase 2, structural critique by `developmental-editor` should precede `line-editor`
-work because line edits can be invalidated by structural revision.
+`fact-checker` for adversarial verification before the quality gate clears. The
+claim anchors written here survive that polish pass: the cross-agent contract in
+S-04 (drafting and voice agents) forbids `line-editor` from altering or removing
+`[claim: EV-nnnn]` or `[UNVERIFIED]` markers, so drafting-time anchoring is never
+lost downstream. In Phase 2, structural critique by `developmental-editor` should
+precede `line-editor` work because line edits can be invalidated by structural
+revision.
 
 ## Worked example
 

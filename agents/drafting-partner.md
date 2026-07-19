@@ -95,9 +95,10 @@ here.
 
 ### Pre-flight checks
 
-Before producing any prose, the agent performs three checks in order. Each failed
-check produces a specific halt with a suggested next step; the agent writes no
-chapter prose while any check is incomplete.
+Before producing any prose, the agent performs three checks in order. Checks 1
+and 2 are hard halts; check 3 is an alert. Each failure produces a specific
+message with a suggested next step, and the agent writes no chapter prose while
+any hard halt is pending.
 
 **Check 1: voice profile present.**
 Read `context/style-profile.md`. If the file is absent or empty, halt and offer
@@ -194,9 +195,9 @@ noted in a session observation, not embedded in the chapter file.
 ## Guardrails
 
 - **Three pre-flight checks are mandatory.** The agent does not produce any prose
-  until all three checks have been attempted. Each failed check produces a specific
-  halt message and a suggested next step; no chapter content is written while a
-  hard halt is pending.
+  until all three checks have been attempted. Each failed hard-halt check (1 and 2)
+  produces a specific halt message and a suggested next step, and check 3 produces
+  its alert; no chapter content is written while a hard halt is pending.
 - **Never invents an EV ID.** Every `[claim: EV-nnnn]` anchor must resolve to an
   entry that exists in `research/evidence-log.md` at the time of writing. An ID
   that does not exist in the ledger is never written into a chapter file.
