@@ -1,0 +1,14 @@
+{
+  "covers": { "hook": "PostToolBatch" },
+  "description": "The PostToolBatch hook updates progress.json atomically and appends an entry to .studio/ai-use-log.jsonl after each tool batch completes.",
+  "cases": [
+    {
+      "given": "PostToolBatch fires after a Write tool call to chapters/01-listening-before-speaking.md",
+      "expect": "post-tool-batch.mjs writes progress.json atomically via temp file and appends a line with an agent field to ai-use-log.jsonl; exits 0"
+    },
+    {
+      "given": "PostToolBatch fires with a batch containing two concurrent writes",
+      "expect": "post-tool-batch.mjs produces a coherent progress.json where neither write is lost; exits 0"
+    }
+  ]
+}

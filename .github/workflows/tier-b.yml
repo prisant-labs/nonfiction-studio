@@ -1,0 +1,52 @@
+name: Tier B
+
+# Runs on merge to main and on a nightly cron schedule.
+# Requires ANTHROPIC_API_KEY; advisory to the merge queue but hard-blocks a release.
+# Zero validation logic lives in this file. Every step is exactly one node call.
+# See Q-02 (CI pipeline) section 2 for the contract and failure taxonomy.
+#
+# Local proof: node scripts/run-integration.mjs --dry-run runs green locally
+# per TSK-056 (Tier B integration and eval files). Live run deferred to first CI
+# execution where ANTHROPIC_API_KEY is available.
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '0 2 * * *'
+
+jobs:
+  tier-b:
+    name: Tier B (model integration)
+    runs-on: ubuntu-latest
+
+    steps:
+      # Inert scaffolding: required by GitHub Actions; no local equivalent.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Inert scaffolding: pins Node.js to the engines floor declared in package.json.
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+          cache: npm
+
+      # Live step 1: clean install from lockfile.
+      - name: Install dependencies
+        run: npm ci
+
+      # Live step 2: model integration smoke test against examples/sample-book/
+      # with the haiku model; exits BUDGET_EXCEEDED (code 3) if spend > $0.10.
+      - name: Model integration
+        run: node scripts/run-integration.mjs
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      # Live step 3: eval dispatch-accuracy batch runner (advisory; always exits 0
+      # after grading all cases so a routing failure does not block CI).
+      - name: Eval dispatch accuracy
+        run: node scripts/run-evals.mjs
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
