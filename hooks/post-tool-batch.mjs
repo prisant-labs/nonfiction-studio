@@ -145,7 +145,13 @@ const WRITE_TOOLS = new Set(['Write', 'Edit']);
 const DISPATCH_TOOLS = new Set(['Task', 'Agent']);
 
 // Map: resolved abs path -> { scope: 'generated' | 'assisted' }
+// Used for per-file dedup: each unique file is recounted exactly once.
 const chapterWrites = new Map();
+// Array: per-call chapter write descriptors in tool_calls order.
+// Kept separate from the Map so that two calls to the same file (e.g. Write
+// then Edit) each produce their own ai-use-log record per S-08 section 5
+// ("one JSONL line each") while the Map still deduplicates the recount.
+const chapterCallLog = [];
 // Array of dispatch descriptors
 const dispatches = [];
 
@@ -169,6 +175,7 @@ for (const call of toolCalls) {
     if (isChapterPath(absPath)) {
       const scope = toolName === 'Write' ? 'generated' : 'assisted';
       chapterWrites.set(absPath, { scope });
+      chapterCallLog.push({ absPath, scope });
     }
   } else if (DISPATCH_TOOLS.has(toolName)) {
     dispatches.push({ toolName, toolInput });
@@ -287,19 +294,38 @@ if (chapterWrites.size > 0) {
 }
 
 // ---------------------------------------------------------------------------
-// Append one ai-use-log record per chapter write, per S-08 section 5 schema exactly.
-// Also build the summaryParts for the output additionalContext line.
+// Build summaryParts for the additionalContext output line.
+// One entry per unique chapter file (chapterDetails is keyed by abs path).
 //
 // surface is the constant "claude-code" with the following deferred resolution note:
 //   surface detection for Cowork is unresolved until SPK-02 (Cowork production probe);
 //   richer per-agent write attribution is deferred behind OQ-14 (agent identity in hook
 //   events) and the Phase 2 SubagentStop hook.
 // ---------------------------------------------------------------------------
-for (const { slug, newCount, scope, relPath } of chapterDetails.values()) {
+for (const { slug, newCount, relPath } of chapterDetails.values()) {
   const prev = prevCounts.get(slug) ?? 0;
   const delta = newCount - prev;
   const deltaStr = delta >= 0 ? '+' + delta : String(delta);
+  summaryParts.push(slug + ' ' + newCount + ' words (' + deltaStr + ')');
+}
 
+// ---------------------------------------------------------------------------
+// Append one ai-use-log record per chapter tool call, in tool_calls order,
+// per S-08 section 5 schema exactly.
+//
+// chapterCallLog preserves the per-call sequence so that two calls targeting
+// the same file (e.g. Write then Edit) each produce their own record
+// ("generated" then "assisted") rather than a single deduplicated entry.
+// The recount/progress update above uses chapterWrites (the Map) and is
+// unaffected: each unique file is still recounted exactly once.
+// ---------------------------------------------------------------------------
+for (const { absPath, scope } of chapterCallLog) {
+  const detail = chapterDetails.get(absPath);
+  if (!detail) continue;
+  const { slug, newCount, relPath } = detail;
+  const prev = prevCounts.get(slug) ?? 0;
+  const delta = newCount - prev;
+  const deltaStr = delta >= 0 ? '+' + delta : String(delta);
   const verb = scope === 'generated' ? 'Wrote' : 'Edited';
   const summary = verb + ' ' + relPath + ': ' + newCount + ' words (delta ' + deltaStr + ').';
 
@@ -311,8 +337,6 @@ for (const { slug, newCount, scope, relPath } of chapterDetails.values()) {
     targets: [relPath],
     summary
   });
-
-  summaryParts.push(slug + ' ' + newCount + ' words (' + deltaStr + ')');
 }
 
 // ---------------------------------------------------------------------------

@@ -243,6 +243,84 @@ test('(c) Edit call: scope is "assisted" in ai-use-log', () => {
 });
 
 // ---------------------------------------------------------------------------
+// (c2) Write then Edit same chapter in one batch: two log records in tool_calls
+//      order (generated then assisted), one recount, one chapter update.
+//      Covers the per-call log requirement from the TSK-033 review (Risk 3 /
+//      brief resolution 4): "two records" for Write+Edit to the same file.
+// ---------------------------------------------------------------------------
+test('(c2) Write then Edit same chapter: two log records in order, one recount, one progress update', () => {
+  const book = cloneSampleBook('c2-same-file');
+  const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
+  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
+
+  const ch1Content = 'New content written then edited in same batch.\n';
+  writeFileSync(ch1Path, ch1Content, 'utf8');
+  const expectedCount = countWords(ch1Content);
+
+  const logLinesBefore = readJsonlLines(logPath).length;
+
+  const result = runHook(makeBatchEvent(book, [
+    {
+      tool_name: 'Write',
+      tool_input: { file_path: ch1Path, content: ch1Content },
+      tool_use_id: 'toolu_c2a',
+      tool_response: 'Written.'
+    },
+    {
+      tool_name: 'Edit',
+      tool_input: {
+        file_path: ch1Path,
+        old_string: 'written',
+        new_string: 'written and edited'
+      },
+      tool_use_id: 'toolu_c2b',
+      tool_response: 'Edited.'
+    }
+  ]));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+
+  // Exactly two new log records.
+  const logLinesAfter = readJsonlLines(logPath);
+  assert.equal(logLinesAfter.length, logLinesBefore + 2, 'exactly two new log records for Write+Edit same file');
+
+  // Records appear in tool_calls order: generated (Write) then assisted (Edit).
+  const rec1 = JSON.parse(logLinesAfter[logLinesBefore]);
+  const rec2 = JSON.parse(logLinesAfter[logLinesBefore + 1]);
+
+  assert.equal(rec1.scope, 'generated', 'first record scope is "generated" (Write)');
+  assert.equal(rec2.scope, 'assisted', 'second record scope is "assisted" (Edit)');
+
+  // Both records target the same chapter.
+  assert.ok(rec1.targets[0].includes('01-listening-before-speaking'), 'first record targets ch1');
+  assert.ok(rec2.targets[0].includes('01-listening-before-speaking'), 'second record targets ch1');
+
+  // Both records have the required S-08 section 5 fields.
+  for (const rec of [rec1, rec2]) {
+    assert.ok(typeof rec.ts === 'string', 'ts present');
+    assert.equal(rec.agent, 'hook:PostToolBatch', 'agent is hook:PostToolBatch');
+    assert.equal(rec.surface, 'claude-code', 'surface is claude-code');
+    assert.ok(Array.isArray(rec.targets) && rec.targets.length === 1, 'targets has one entry');
+    assert.ok(typeof rec.summary === 'string' && rec.summary.length > 0, 'summary is non-empty');
+  }
+
+  // One recount: progress.json word_count updated to the expected value exactly once.
+  const progressAfter = JSON.parse(readFileSync(join(book, '.studio', 'progress.json'), 'utf8'));
+  const ch1After = progressAfter.chapters.find(ch => ch.slug === '01-listening-before-speaking');
+  assert.ok(ch1After, 'chapter 01 entry exists in progress.json');
+  assert.equal(ch1After.word_count, expectedCount, 'word_count updated once to expected count');
+
+  // additionalContext present (chapter write was processed).
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.equal(out.hookSpecificOutput.hookEventName, 'PostToolBatch', 'hookEventName is PostToolBatch');
+  assert.ok(
+    out.hookSpecificOutput.additionalContext.includes('01-listening-before-speaking'),
+    'additionalContext names the touched chapter'
+  );
+});
+
+// ---------------------------------------------------------------------------
 // (d) dispatch (Agent) call: one "mechanical" log line, dispatched slug as agent,
 //     empty targets, description as summary, empty stdout
 // ---------------------------------------------------------------------------
