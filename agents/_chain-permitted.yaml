@@ -1,0 +1,73 @@
+# agents/_chain-permitted.yaml
+# Phase 1 chain contract per TSK-044 (chain contract, Phase 1).
+#
+# Schema: caller-component-name to yaml-sequence of callee-component-names.
+# The vendored check (S4, chain-contract.mjs) validates this file when chaining is
+# in use. Under --profile plain-plugin, S4 is provenance "house" and is turned off
+# (HOUSE_REQIDS). Phantom errors for skill callers not yet on disk (intake-interview,
+# capture-voice, outline-book, research-pass, draft-chapter, fact-check-pass) are
+# suppressed in that profile. Enforcement of those edges is pending TSK-055 (Tier A
+# check scripts). See X-02 (task catalog) TSK-044 acceptance note, dated 2026-07-18.
+#
+# Every edge is derived from a spec sentence; the per-edge comment cites the source.
+# No Phase 2 or Phase 3 agents appear here (developmental-editor, voice-guardian,
+# continuity-checker, citation-manager, comps-analyst, compliance-auditor, etc.).
+# No speculative or invented edges.
+
+# =============================================================================
+# Agent-to-skill edge
+# =============================================================================
+
+# S-01 (agents: intake and context), Process step 2 (scaffold-first rule):
+# "Before asking any interview question, check whether the book tree exists.
+# If not, invoke the init-project skill so the directory structure appears
+# before the interview begins."
+interviewer:
+  - init-project
+
+# =============================================================================
+# Agent-to-agent edge
+# =============================================================================
+
+# S-03 (agents: research and evidence), section 2 (research-librarian, When to
+# invoke): "May be dispatched by drafting-partner when evidence is needed before
+# a drafting run begins."
+drafting-partner:
+  - research-librarian
+
+# =============================================================================
+# Skill-to-agent edges, Phase 1 only (S-06, sections 3.2 through 3.7)
+# =============================================================================
+
+# S-06 (skills and invocation surface), section 3.2 (intake-interview):
+# "Agents invoked: interviewer"
+intake-interview:
+  - interviewer
+
+# S-06 (skills and invocation surface), section 3.3 (capture-voice):
+# "Agents invoked: voice-capture"
+capture-voice:
+  - voice-capture
+
+# S-06 (skills and invocation surface), section 3.4 (outline-book):
+# "Agents invoked: thesis-architect (conditional on missing thesis);
+# structure-architect"
+outline-book:
+  - thesis-architect
+  - structure-architect
+
+# S-06 (skills and invocation surface), section 3.5 (research-pass):
+# "Agents invoked: research-librarian"
+research-pass:
+  - research-librarian
+
+# S-06 (skills and invocation surface), section 3.6 (draft-chapter):
+# "Agents invoked: drafting-partner; line-editor"
+draft-chapter:
+  - drafting-partner
+  - line-editor
+
+# S-06 (skills and invocation surface), section 3.7 (fact-check-pass):
+# "Agents invoked: fact-checker"
+fact-check-pass:
+  - fact-checker

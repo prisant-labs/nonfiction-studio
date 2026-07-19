@@ -17,6 +17,8 @@ color: blue
 tools:
   - Read
   - Write
+chain:
+  - init-project
 metadata:
   version: 0.1.0
   tier: convergent

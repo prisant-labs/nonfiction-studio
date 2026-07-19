@@ -11,6 +11,8 @@ color: orange
 tools:
   - Read
   - Write
+chain:
+  - research-librarian
 metadata:
   version: 0.1.0
   tier: convergent
