@@ -36,10 +36,25 @@ ns-gate [--check=<checks>] [--chapter=<slug>] [--project=<dir>] [--json]
 
 | Flag | Type | Description |
 |---|---|---|
-| `--check=<checks>` | string (comma-separated) | Run only the named checks. Valid values: `claim_coverage`, `prompt_scrub`, `stylometry`, `continuity`, `thesis_alignment`, `state_coherence`, `session_write_flag`. |
+| `--check=<checks>` | string (comma-separated) | Run only the named checks. Valid flag values: `claims`, `stylometry`, `scrub`, `continuity-quick`, `coherence`. See the flag-to-report mapping table below. |
 | `--chapter=<slug>` | string | Limit chapter-scoped checks to `chapters/<slug>.md`. |
 | `--project=<dir>` | string | Override the book root to `<dir>`. If omitted, walks up from the current directory looking for `.studio/meta.json`. |
 | `--json` | boolean | Emit the full gate report as JSON to stdout. |
+
+### --check flag values
+
+The `--check` flag accepts CLI flag names, not REPORT check names. The five valid flag values and their corresponding report check names are:
+
+| `--check` value | Report check name |
+|---|---|
+| `claims` | `claim_coverage` |
+| `stylometry` | `stylometry` |
+| `scrub` | `prompt_scrub` |
+| `continuity-quick` | `continuity` |
+| `coherence` | `state_coherence` |
+
+`session_write_flag` is always evaluated and is not selectable via `--check` (it is not a flag).
+`thesis_alignment` is the judgment layer and is never a gate check; it is not a valid `--check` value.
 
 ## Exit taxonomy
 
@@ -103,7 +118,7 @@ ns-gate --project=examples/sample-book --json
 Run only the claim coverage and scrub checks:
 
 ```
-ns-gate --check=claim_coverage,prompt_scrub
+ns-gate --check=claims,scrub
 ```
 
 ## Relationship to other CLIs

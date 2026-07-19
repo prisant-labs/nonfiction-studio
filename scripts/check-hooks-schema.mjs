@@ -27,6 +27,10 @@ const KNOWN_EVENTS = new Set([
   'PreCompact',
 ]);
 
+// Required command pattern per the platform hook contract.
+// Every command entry in hooks.json must match this pattern exactly.
+const COMMAND_PATTERN = /^node \$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/[a-z-]+\.mjs$/;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -98,6 +102,18 @@ for (const name of eventNames) {
   }
 }
 
+// Step 4b: five-event completeness - all Phase 1 events must be present.
+// A missing event silently disables the entire handler for that lifecycle point;
+// without this check, losing an event passes every downstream test undetected.
+for (const expected of KNOWN_EVENTS) {
+  if (!Object.prototype.hasOwnProperty.call(hooks, expected)) {
+    findings.push(
+      'FIVE-EVENT COMPLETENESS: Phase 1 event "' + expected + '" is absent from hooks.json; ' +
+      'a missing event silently disables the entire hook handler for that event'
+    );
+  }
+}
+
 // Step 5: per-event structure checks
 for (const event of eventNames) {
   if (!KNOWN_EVENTS.has(event)) continue; // already reported above
@@ -163,6 +179,22 @@ for (const event of eventNames) {
           findings.push(event + ': command entry "command" field must be a string');
           continue;
         }
+        // Command-string pattern: must be ^node ${CLAUDE_PLUGIN_ROOT}/hooks/[a-z-]+\.mjs$
+        // This is in addition to the script-existence stat below.
+        if (!COMMAND_PATTERN.test(entry.command)) {
+          findings.push(
+            event + ': command "' + entry.command + '" does not match required pattern ' +
+            '^node ${CLAUDE_PLUGIN_ROOT}/hooks/[a-z-]+\\.mjs$'
+          );
+        }
+        // SessionStart timeout pin: command entry timeout must be exactly 60.
+        if (event === 'SessionStart') {
+          if (entry.timeout === undefined || entry.timeout === null) {
+            findings.push('SessionStart: command entry is missing required "timeout" field (must be 60)');
+          } else if (entry.timeout !== 60) {
+            findings.push('SessionStart: command entry "timeout" must be exactly 60; got: ' + entry.timeout);
+          }
+        }
         // Interpolate ${CLAUDE_PLUGIN_ROOT} to repo root and stat the script
         const interpolated = entry.command.replace('${CLAUDE_PLUGIN_ROOT}', REPO_ROOT);
         // Extract the node script path (command is: node <path>)
@@ -186,10 +218,17 @@ for (const event of eventNames) {
   }
 }
 
-// Step 6: Stop-specific contract - must have a prompt handler with a timeout
+// Step 6: Stop-specific contract - must have exactly two handler entries (one command, one prompt)
+//         with the prompt carrying a timeout pinned to exactly 30.
 const stopGroups = hooks['Stop'];
 if (stopGroups && Array.isArray(stopGroups) && stopGroups.length > 0) {
   const stopEntries = stopGroups[0] && Array.isArray(stopGroups[0].hooks) ? stopGroups[0].hooks : [];
+  // Stop must have exactly two entries: one command and one prompt.
+  if (stopEntries.length !== 2) {
+    findings.push(
+      'Stop: must have exactly 2 handler entries (one command, one prompt); found ' + stopEntries.length
+    );
+  }
   const promptEntries = stopEntries.filter(e => e && e.type === 'prompt');
   if (promptEntries.length === 0) {
     findings.push('Stop: no prompt handler found; Stop must carry a prompt entry with a timeout per Q-01 section 3');
@@ -197,8 +236,8 @@ if (stopGroups && Array.isArray(stopGroups) && stopGroups.length > 0) {
     for (const pe of promptEntries) {
       if (pe.timeout === undefined || pe.timeout === null) {
         findings.push('Stop: prompt entry is missing "timeout" field');
-      } else if (typeof pe.timeout !== 'number' || !Number.isFinite(pe.timeout) || pe.timeout <= 0) {
-        findings.push('Stop: prompt entry "timeout" must be a positive number; got: ' + pe.timeout);
+      } else if (pe.timeout !== 30) {
+        findings.push('Stop: prompt entry "timeout" must be exactly 30; got: ' + pe.timeout);
       }
     }
   }
