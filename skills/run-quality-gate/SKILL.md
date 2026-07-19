@@ -108,12 +108,12 @@ Use the Bash tool to run the gate. This is the ONE Bash call that wraps the gate
 
 When a check subset was set in Step 3:
 ```
-node bin/ns-gate --chapter=<slug> --check=<subset> --json
+node bin/ns-gate --project=. --chapter=<slug> --check=<subset> --json
 ```
 
 When no subset was set (full gate):
 ```
-node bin/ns-gate --chapter=<slug> --json
+node bin/ns-gate --project=. --chapter=<slug> --json
 ```
 
 Capture the exit code and the stdout (the JSON report) and the stderr.

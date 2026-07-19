@@ -197,7 +197,7 @@ The following is explicitly a synthetic illustration and does NOT reflect the co
 >
 > To address the stylometry warn: revise the chapter with `/nonfiction-studio:revise-pass 02-finding-your-network`, then re-run the quality gate. To opt stylometry into blocking mode once the baseline is calibrated, set `gate.checks.stylometry.mode` to `block` in `.studio/config.json`.
 
-The drift score of 222.38 in this synthetic illustration reflects what the live run actually produces when the full gate runs over the committed Chapter 2 fixture with its current voice baseline. The committed Chapter 2 is a teaching fixture; the high drift score reflects the fact that the sample-book baseline was set for illustrative purposes, not for a calibrated voice capture. The primary provenance-honest example above (four-check pass with baseline absent) is the grounded transcript.
+The drift score of 222.38 in this synthetic illustration is consistent with a verified fresh run: `node bin/ns-gate --project=. --chapter=02-finding-your-network --json` over a clean clone of the committed sample book yields exactly this score, because a single chapter's marker vector naturally deviates from the book-aggregate baseline. The committed Chapter 2 is a teaching fixture; the high drift score reflects the fact that the sample-book baseline was set for illustrative purposes, not for a calibrated voice capture. The primary provenance-honest example above (four-check pass with baseline absent) is the grounded transcript.
 
 ---
 
