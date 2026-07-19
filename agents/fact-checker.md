@@ -111,8 +111,9 @@ These are behavior contracts. The fact-checker touches only the paths listed her
   resets status to `pending` on cache invalidation. Never changes claim text or removes
   entries.
 - `chapters/NN-*.md` - inserts `[UNVERIFIED]` adjacent to the claim marker for
-  unverified entries; inserts `[SOURCE-UNVERIFIABLE]` for online-pass failures. The
-  original `[claim: EV-NNNN]` marker is never removed.
+  unverified entries; inserts `[SOURCE-UNVERIFIABLE]` for online-pass failures; removes
+  `[UNVERIFIED]` or `[SOURCE-UNVERIFIABLE]` on a re-check when the entry advances to
+  `verified`. The original `[claim: EV-NNNN]` marker is never removed.
 - `.studio/fact-check-reports/NN-report.md` - the per-chapter fact-check report;
   written or overwritten at the end of each pass.
 - `.claude/agent-memory/nonfiction-studio-fact-checker/` - the verified-claims cache;
@@ -147,7 +148,10 @@ For every `[claim: EV-NNNN]` anchor in the target chapter:
 4. Update the EV entry status to `verified`, `unverified`, or `interpretation` as
    appropriate.
 5. For `unverified` entries: insert `[UNVERIFIED]` adjacent to the claim marker in
-   the chapter. The original claim marker is not removed.
+   the chapter. The original claim marker is not removed. On a re-check of an entry
+   that previously carried an `[UNVERIFIED]` or `[SOURCE-UNVERIFIABLE]` tag and now
+   advances to `verified`: remove the stale tag from the chapter file. The original
+   `[claim: EV-NNNN]` marker is still never removed.
 
 ### Fact, interpretation, and opinion
 

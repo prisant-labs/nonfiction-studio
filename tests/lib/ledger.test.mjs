@@ -260,9 +260,10 @@ test('parseSources handles the committed sample book sources.md', () => {
   const samplePath = join(__dirname, '..', '..', 'examples', 'sample-book', 'research', 'sources.md');
   const text = readFileSync(samplePath, 'utf8');
   const entries = parseSources(text);
-  assert.equal(entries.length, 4, 'four SRC entries in the sample book');
+  assert.equal(entries.length, 5, 'five SRC entries in the sample book (SRC-0005 added 2026-07-19 per the TSK-041 review fixture correction)');
   assert.equal(entries[0].id, 'SRC-0001');
   assert.equal(entries[3].id, 'SRC-0004');
+  assert.equal(entries[4].id, 'SRC-0005');
   // Spot-check: year is parsed as integer.
   assert.equal(typeof entries[0].year, 'number', 'year is a number');
   assert.equal(entries[0].year, 2015);

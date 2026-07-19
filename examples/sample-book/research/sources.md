@@ -53,3 +53,15 @@
 - url: https://www.pewresearch.org/internet/2016/03/22/lifelong-learning-and-technology/
 - accessed: 2026-07-18
 - retrieval-status: stable
+
+### SRC-0005 (Dunbar 1992)
+- type: article
+- nature: primary
+- author: Dunbar, R. I. M.
+- title: Neocortex size as a constraint on group size in primates
+- year: 1992
+- publisher: Journal of Human Evolution
+- identifier: DOI 10.1016/0047-2484(92)90081-J
+- url: https://doi.org/10.1016/0047-2484(92)90081-J
+- accessed: 2026-07-18
+- retrieval-status: stable

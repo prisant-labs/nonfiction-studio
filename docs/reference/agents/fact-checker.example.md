@@ -15,6 +15,9 @@ fact/interpretation/opinion trichotomy in action, the per-chapter fact-check rep
 and the cache update. It follows the contracts specified in S-03 (research and evidence
 agents).
 
+A synthetic section at the end illustrates the `unverified` disposition using a
+hypothetical EV entry not part of the committed fixture.
+
 ---
 
 ## Setup: what was already in place
@@ -34,7 +37,7 @@ five entries from that pass:
 The ledger at session start:
 
 - `research/evidence-log.md`: 10 entries, highest is EV-0010 (pacing recommendation)
-- `research/sources.md`: 4 records (SRC-0001 through SRC-0004); no `changed: true`
+- `research/sources.md`: 5 records (SRC-0001 through SRC-0005); no `changed: true`
   flags present
 
 Chapter 2 (`chapters/02-finding-your-network.md`) has five claim markers:
@@ -81,31 +84,28 @@ The `fact-check-pass` skill routes to `fact-checker`.
 EV-0006 states: "Research on social cognition suggests that people can maintain stable
 relationships with roughly 150 individuals at one time."
 
-Source: SRC-0002 (Granovetter 1973), locator p. 1371. Nature: primary.
+Source: SRC-0005 (Dunbar 1992), locator pp. 469-493. Nature: primary.
 
 **fact-checker (adversarial questions):**
 
-> - Does the cited source actually state what the EV entry asserts? Granovetter 1973
->   (The Strength of Weak Ties) discusses network ties and social structure. The 150-
->   individual figure is associated with Dunbar's research on social cognition, not
->   with Granovetter 1973. The source and the claim do not match.
+> - Does SRC-0005 (Dunbar 1992) actually state what EV-0006 asserts? "Neocortex size
+>   as a constraint on group size in primates" (Journal of Human Evolution, 1992) is
+>   the paper that formalized the 150-individual cognitive limit for stable human social
+>   groups. Pages 469-493 span the full paper. The claim text - "people can maintain
+>   stable relationships with roughly 150 individuals at one time" - accurately
+>   characterizes Dunbar's finding from the neocortex size analysis.
 >
-> - Is the source authoritative for this claim? Granovetter 1973 is a primary source
->   on network tie strength. It is not the locus of the 150-individual finding.
+> - Is SRC-0005 authoritative for this claim? Yes. SRC-0005 is a primary source
+>   (nature: primary) and the original empirical locus of what became known as Dunbar's
+>   number. It is authoritative for the 150-individual estimate.
 >
-> - Does a reasonable alternative explanation exist? Yes: the claim should cite Dunbar
->   1992, not Granovetter 1973. The locator p. 1371 references Granovetter's page
->   range, not a page in a Dunbar work.
+> - Does a reasonable alternative explanation exist? Subsequent literature has placed
+>   the range between roughly 100 and 230 depending on population; the 150-individual
+>   figure in the EV entry faithfully represents the central estimate in Dunbar 1992.
+>   No alternative explanation undercuts the claim as stated.
 >
-> **Resolution: `unverified`.** The chapter text accurately describes the Dunbar limit
-> concept but cites the wrong SRC record. EV-0006 status is updated to `unverified`.
-> `[UNVERIFIED]` is inserted adjacent to `[claim: EV-0006]` in the chapter.
->
-> Note for the report: the author should verify the correct source for this claim. The
-> Dunbar limit is associated with Dunbar 1992 (Neocortex size as a constraint on group
-> size in primates), not Granovetter 1973. If the correct source is located and
-> registered, `research-librarian` should register it as a new SRC record and update
-> EV-0006 before re-running this pass.
+> **Resolution: `verified`.** The claim is accurately traced to SRC-0005 (Dunbar 1992)
+> at the stated locator. EV-0006 status is confirmed as `verified`.
 
 **EV-0007 (curation satisfaction)**
 
@@ -218,14 +218,8 @@ Source: SRC-0001 (Hart 2015), locator p. 78. Confidence: low. Nature: secondary.
 
 ## Chapter file state after the pass
 
-The chapter now contains:
-
-```
-Research on social cognition suggests that people can maintain stable relationships
-with roughly 150 individuals at one time. [claim: EV-0006][UNVERIFIED]
-```
-
-The four other claim markers are unchanged (verified entries do not receive a tag).
+All five claim markers are verified. No `[UNVERIFIED]` tags are inserted. The chapter
+text is unchanged.
 
 ---
 
@@ -240,22 +234,10 @@ Date: 2026-07-18
 ## Summary
 
 Total claim markers: 5
-- verified: 4 (EV-0007, EV-0008, EV-0009, EV-0010)
-- unverified: 1 (EV-0006)
+- verified: 5 (EV-0006, EV-0007, EV-0008, EV-0009, EV-0010)
+- unverified: 0
 - interpretation: 0
 - source-unverifiable: 0
-
-## Unverified entries
-
-**EV-0006 (dunbar limit) - unverified**
-The claim cites SRC-0002 (Granovetter 1973). Granovetter 1973 is the source
-for EV-0008 (weak-ties novelty); the 150-individual finding is associated with
-Dunbar 1992, not Granovetter. The EV entry's source field points to the wrong
-SRC record.
-
-Recommended action: locate Dunbar 1992 and register it with research-librarian
-as a new SRC record; update EV-0006's source field; re-run this pass. [UNVERIFIED]
-has been inserted in the chapter adjacent to [claim: EV-0006].
 
 ## Author decisions (framing flags)
 
@@ -269,25 +251,70 @@ Suggested revision: "One practitioner framework recommends..." or "Hart suggests
 
 ## Recommended actions before re-running the coverage gate
 
-1. Fix EV-0006: register the correct Dunbar source, update the EV entry, re-run.
-2. Review the EV-0010 framing flag and revise the chapter sentence if appropriate.
-3. Re-run fact-check-pass after addressing item 1 to clear the unverified entry.
+All five entries are verified. The coverage gate will clear on re-run. The framing
+flag on EV-0010 is an author decision; address or accept it before re-running if
+desired.
 ```
 
 ---
 
 ## Cache update
 
-The agent writes four new entries to
+The agent writes five new entries to
 `.claude/agent-memory/nonfiction-studio-fact-checker/`:
 
+- EV-0006 (dunbar limit): verified, session 2026-07-18
 - EV-0007 (curation satisfaction): verified, session 2026-07-18
 - EV-0008 (weak-ties novelty): verified, session 2026-07-18
 - EV-0009 (source diversity retention): verified, session 2026-07-18
 - EV-0010 (pacing recommendation): verified, session 2026-07-18
 
-EV-0006 is not cached (unverified entries are not stored; they will be re-checked on
-the next pass after the source is corrected).
+---
+
+## Synthetic example: the unverified disposition
+
+The following illustrates how the `fact-checker` handles a claim that cannot be traced
+to its cited source. This entry is not part of the committed sample-book fixture; it
+represents a draft addition the author is testing before deciding whether to include it.
+
+**Hypothetical EV entry (not in committed fixture):**
+
+```
+### EV-0011 (network-size satisfaction)
+- claim: Professionals with a maintained personal learning network of at least twenty
+  connections report measurably higher job satisfaction than those without a deliberate
+  network.
+- source: SRC-0003
+- locator:
+- confidence: low
+- status: pending
+- added-by: research-librarian
+- date: 2026-07-18
+```
+
+**fact-checker (adversarial questions):**
+
+> - Does SRC-0003 (Jarche 2014) state what the EV entry asserts? SRC-0003 is Harold
+>   Jarche's personal knowledge mastery web page. It discusses the seek-sense-share
+>   framework for managing professional knowledge. It does not present quantitative
+>   survey data on job satisfaction or on the specific threshold of twenty connections.
+>   The "measurably higher job satisfaction" framing implies a controlled study; no such
+>   study is described at this source.
+>
+> - Is SRC-0003 authoritative for a quantitative satisfaction claim? No. SRC-0003 is a
+>   web resource (type: web, nature: secondary) that synthesizes practitioner experience.
+>   It does not cite or embed a primary dataset that would support the specific numerical
+>   threshold or the satisfaction outcome.
+>
+> - Does a reasonable alternative explanation exist? The claim is likely inspired by
+>   practitioner intuition rather than being directly traceable to SRC-0003 at any
+>   locator.
+>
+> **Resolution: `unverified`.** The cited source does not support the specific claim as
+> stated. `[UNVERIFIED]` is inserted adjacent to `[claim: EV-0011]` in the draft
+> chapter. The author should locate a primary or secondary source that states the
+> satisfaction finding explicitly, register it with `research-librarian`, and update the
+> EV entry before re-running the pass.
 
 ---
 
@@ -296,15 +323,22 @@ the next pass after the source is corrected).
 - **Session-start scan first.** Before examining any claim marker, the agent reads
   `research/sources.md` for `changed: true` flags. When none are found, the cache
   from the Chapter 1 pass is loaded as-is and the five cached entries are skipped.
-- **Adversarial questions applied to every entry.** Even EV-0007 (which passes)
-  receives the full three-question test. The agent does not assume a source supports
-  a claim because the locator looks plausible.
-- **Wrong source fails verification.** EV-0006 cites SRC-0002 (Granovetter 1973) for
-  a finding that belongs to a different researcher. The adversarial check catches the
-  mismatch; the status is `unverified`, not `verified`. The claim text in the chapter
-  is not altered; `[UNVERIFIED]` is added adjacent to the marker.
-- **Original marker preserved.** The `[claim: EV-0006]` anchor remains in the chapter.
-  `[UNVERIFIED]` is added next to it, not instead of it.
+- **Adversarial questions applied to every entry.** Every entry receives the full
+  three-question test. The agent does not assume a source supports a claim because
+  the locator looks plausible.
+- **Affirmative trace confirms verification.** EV-0006 (dunbar limit) cites
+  SRC-0005 (Dunbar 1992) at pp. 469-493 - the primary source that formalized the
+  150-individual cognitive limit. The adversarial check affirms the match; the status
+  is `verified`.
+- **Wrong source fails verification.** The synthetic example shows that when a claim
+  cannot be traced to its cited source (a quantitative satisfaction finding cited to a
+  practitioner web page that contains no such data), the resolution is `unverified` and
+  `[UNVERIFIED]` is inserted. The claim text in the chapter is not altered; the tag is
+  added adjacent to the marker.
+- **Original marker preserved.** The `[claim: EV-NNNN]` anchor remains in the chapter
+  in all cases. `[UNVERIFIED]` is added next to it, not instead of it. When a
+  previously failed entry advances to `verified` on re-check, the stale tag is removed
+  but the original marker is kept.
 - **Low confidence does not mean unverified.** EV-0010 carries `confidence: low` and
   a secondary source. It still passes verification because the source does support the
   claim at the stated locator. The framing issue is a separate author decision flagged
@@ -312,9 +346,8 @@ the next pass after the source is corrected).
 - **Interpretation is a distinct outcome.** EV-0005 (pln compounding) was resolved to
   `interpretation` in the prior Chapter 1 session. The current pass does not revisit
   it (it is in cache and its SRC dependency has not changed).
-- **No ID allocation.** The `fact-checker` identifies that EV-0006 cites the wrong
-  source, but it does not register a new SRC record for Dunbar 1992. It reports the
-  gap and recommends the author return to `research-librarian` to register the correct
-  source and update the EV entry.
-- **Report written regardless of outcome.** `02-report.md` is written even though four
-  of five entries are verified. The report is the artifact the Stop gate reads.
+- **No ID allocation.** The `fact-checker` does not allocate new EV or SRC identifiers.
+  When a claim requires a new or corrected source, the agent reports the gap and
+  recommends the author return to `research-librarian`.
+- **Report written regardless of outcome.** `02-report.md` is written even when all
+  five entries are verified. The report is the artifact the Stop gate reads.

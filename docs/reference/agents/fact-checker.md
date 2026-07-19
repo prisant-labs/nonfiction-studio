@@ -88,7 +88,7 @@ at least one claim is being reviewed.
 | Path | Written when | Contents |
 |---|---|---|
 | `research/evidence-log.md` | After each EV entry is resolved | `status` field updated to `verified`, `unverified`, `interpretation`, or `source-unverifiable`; reset to `pending` on cache invalidation. Claim text is never changed. |
-| `chapters/NN-*.md` | When an entry is unverified or source-unverifiable | `[UNVERIFIED]` or `[SOURCE-UNVERIFIABLE]` inserted adjacent to the claim marker. The original `[claim: EV-NNNN]` marker is never removed. |
+| `chapters/NN-*.md` | When an entry is unverified or source-unverifiable; when a previously failed entry advances to `verified` on re-check | `[UNVERIFIED]` or `[SOURCE-UNVERIFIABLE]` inserted adjacent to the claim marker when the entry fails; the stale tag is removed when the entry advances to `verified` on re-check. The original `[claim: EV-NNNN]` marker is never removed. |
 | `.studio/fact-check-reports/NN-report.md` | End of every pass | Per-chapter summary of findings and recommended actions |
 | `.claude/agent-memory/nonfiction-studio-fact-checker/` | End of every pass | Cache updated with newly confirmed entries and session timestamps |
 
@@ -116,7 +116,10 @@ five-step sequence:
 4. Update the EV entry status to `verified`, `unverified`, or `interpretation` as
    appropriate.
 5. For `unverified` entries: insert `[UNVERIFIED]` adjacent to the claim marker in
-   the chapter. The original claim marker is not removed.
+   the chapter. The original claim marker is not removed. On a re-check of an entry
+   that previously carried an `[UNVERIFIED]` or `[SOURCE-UNVERIFIABLE]` tag and now
+   advances to `verified`: remove the now-stale tag from the chapter file. The original
+   `[claim: EV-NNNN]` marker is still never removed.
 
 ## Fact, interpretation, and opinion
 
