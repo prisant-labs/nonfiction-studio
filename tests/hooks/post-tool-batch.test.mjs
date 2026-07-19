@@ -20,6 +20,7 @@ import {
   writeFileSync,
   existsSync,
   readFileSync,
+  unlinkSync,
   cpSync
 } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -546,4 +547,240 @@ test('(j) malformed stdin: exit 0, empty stdout', () => {
 
   assert.equal(result.status, 0, 'exit code is 0 for malformed stdin (fail-open)');
   assert.equal(result.stdout.trim(), '', 'empty stdout for malformed stdin');
+});
+
+// ---------------------------------------------------------------------------
+// TSK-050b-(a) create-if-absent with registry: new entry has five fields,
+//   title resolved from structure/chapter-list.md, status 'drafting', correct
+//   word_count, open_claim_count 0 (no open markers in content).
+// ---------------------------------------------------------------------------
+test('TSK-050b-(a) create-if-absent: new entry has five fields, title from registry, status drafting, correct count', () => {
+  const book = cloneSampleBook('050b-a-create');
+  const progressPath = join(book, '.studio', 'progress.json');
+  const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
+
+  // Empty the chapters array to force create-if-absent.
+  const progress = JSON.parse(readFileSync(progressPath, 'utf8'));
+  progress.chapters = [];
+  progress.totals = { word_count: 0, open_claim_count: 0, chapters_final: 0 };
+  writeFileSync(progressPath, JSON.stringify(progress, null, 2) + '\n', 'utf8');
+
+  const content = 'Fresh chapter one content for the create-if-absent path test.\n';
+  writeFileSync(ch1Path, content, 'utf8');
+  const expectedCount = countWords(content);
+
+  const result = runHook(makeBatchEvent(book, [{
+    tool_name: 'Write',
+    tool_input: { file_path: ch1Path, content },
+    tool_use_id: 'toolu_050ba',
+    tool_response: 'Written.'
+  }]));
+
+  assert.equal(result.status, 0, 'exit 0');
+
+  const after = JSON.parse(readFileSync(progressPath, 'utf8'));
+  const ch1 = after.chapters.find(ch => ch.slug === '01-listening-before-speaking');
+  assert.ok(ch1, 'entry created for slug 01-listening-before-speaking');
+  assert.equal(ch1.slug, '01-listening-before-speaking', 'slug field set correctly');
+  assert.equal(ch1.title, 'Listening Before Speaking', 'title resolved from registry');
+  assert.equal(ch1.status, 'drafting', 'status is drafting on creation');
+  assert.equal(ch1.word_count, expectedCount, 'word_count matches recount');
+  assert.equal(ch1.open_claim_count, 0, 'open_claim_count is 0 (content has no open markers)');
+});
+
+// ---------------------------------------------------------------------------
+// TSK-050b-(b) create-if-absent without registry: title derived from slug
+//   when structure/chapter-list.md is absent.
+// ---------------------------------------------------------------------------
+test('TSK-050b-(b) create-if-absent: derived title when registry absent', () => {
+  const book = cloneSampleBook('050b-b-no-registry');
+  const progressPath = join(book, '.studio', 'progress.json');
+  const registryPath = join(book, 'structure', 'chapter-list.md');
+  const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
+
+  // Remove registry so the fallback derivation path runs.
+  unlinkSync(registryPath);
+
+  // Empty chapters to force create-if-absent.
+  const progress = JSON.parse(readFileSync(progressPath, 'utf8'));
+  progress.chapters = [];
+  writeFileSync(progressPath, JSON.stringify(progress, null, 2) + '\n', 'utf8');
+
+  const content = 'Content for the derived-title test.\n';
+  writeFileSync(ch1Path, content, 'utf8');
+
+  const result = runHook(makeBatchEvent(book, [{
+    tool_name: 'Write',
+    tool_input: { file_path: ch1Path, content },
+    tool_use_id: 'toolu_050bb',
+    tool_response: 'Written.'
+  }]));
+
+  assert.equal(result.status, 0, 'exit 0');
+
+  const after = JSON.parse(readFileSync(progressPath, 'utf8'));
+  const ch1 = after.chapters.find(ch => ch.slug === '01-listening-before-speaking');
+  assert.ok(ch1, 'entry created when registry is absent');
+  // Derived from slug: strip leading ordinal, hyphens to spaces, title case.
+  assert.equal(ch1.title, 'Listening Before Speaking', 'title derived from slug (hyphens to spaces, title case)');
+  assert.equal(ch1.status, 'drafting', 'status is drafting on creation');
+});
+
+// ---------------------------------------------------------------------------
+// TSK-050b-(c) existing-entry regression pin: word_count updated, status
+//   unchanged. Proves the create-if-absent extension left the existing-entry
+//   path byte-for-byte equivalent to pre-TSK-050b behavior.
+// ---------------------------------------------------------------------------
+test('TSK-050b-(c) existing-entry: word_count updated, status NOT changed by hook (regression pin)', () => {
+  const book = cloneSampleBook('050b-c-regression');
+  const progressPath = join(book, '.studio', 'progress.json');
+  const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
+
+  // Confirm the sample-book entry has 'drafted' status (not 'drafting').
+  const before = JSON.parse(readFileSync(progressPath, 'utf8'));
+  const ch1Before = before.chapters.find(ch => ch.slug === '01-listening-before-speaking');
+  assert.ok(ch1Before, 'sample-book has ch1 entry');
+  const originalStatus = ch1Before.status;
+  assert.equal(originalStatus, 'drafted', 'sample-book ch1 starts with status drafted');
+
+  const newContent = 'Updated content for the regression-pin test.\n';
+  writeFileSync(ch1Path, newContent, 'utf8');
+  const expectedCount = countWords(newContent);
+
+  const result = runHook(makeBatchEvent(book, [{
+    tool_name: 'Write',
+    tool_input: { file_path: ch1Path, content: newContent },
+    tool_use_id: 'toolu_050bc',
+    tool_response: 'Written.'
+  }]));
+
+  assert.equal(result.status, 0, 'exit 0');
+
+  const after = JSON.parse(readFileSync(progressPath, 'utf8'));
+  const ch1After = after.chapters.find(ch => ch.slug === '01-listening-before-speaking');
+  assert.ok(ch1After, 'ch1 entry still present');
+  assert.equal(ch1After.word_count, expectedCount, 'word_count updated to new count');
+  assert.equal(ch1After.status, 'drafted', 'status unchanged (hook never transitions existing status)');
+});
+
+// ---------------------------------------------------------------------------
+// TSK-050b-(d) open-marker counting: 2 [UNVERIFIED] + 1 [SOURCE-UNVERIFIABLE]
+//   in the written file yields open_claim_count 3 on the chapter entry and
+//   that count flows into totals.open_claim_count.
+// ---------------------------------------------------------------------------
+test('TSK-050b-(d) open-marker counting: 2 UNVERIFIED + 1 SOURCE-UNVERIFIABLE = 3 flows to totals', () => {
+  const book = cloneSampleBook('050b-d-markers');
+  const progressPath = join(book, '.studio', 'progress.json');
+  const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
+
+  // Content with exactly 2 [UNVERIFIED] and 1 [SOURCE-UNVERIFIABLE].
+  const markedContent = [
+    'First factual claim awaiting a source. [UNVERIFIED]',
+    'Second factual claim also unverified. [UNVERIFIED]',
+    'Third claim linked but source failed. [claim: EV-0001] [SOURCE-UNVERIFIABLE]',
+    ''
+  ].join('\n');
+  writeFileSync(ch1Path, markedContent, 'utf8');
+  const expectedCount = countWords(markedContent);
+
+  const result = runHook(makeBatchEvent(book, [{
+    tool_name: 'Write',
+    tool_input: { file_path: ch1Path, content: markedContent },
+    tool_use_id: 'toolu_050bd',
+    tool_response: 'Written.'
+  }]));
+
+  assert.equal(result.status, 0, 'exit 0');
+
+  const after = JSON.parse(readFileSync(progressPath, 'utf8'));
+  const ch1 = after.chapters.find(ch => ch.slug === '01-listening-before-speaking');
+  assert.ok(ch1, 'ch1 entry present');
+  assert.equal(ch1.word_count, expectedCount, 'word_count updated');
+  assert.equal(ch1.open_claim_count, 3, 'open_claim_count is 3 (2 UNVERIFIED + 1 SOURCE-UNVERIFIABLE)');
+
+  // ch2 is untouched; its open_claim_count stays at 0.
+  const ch2 = after.chapters.find(ch => ch.slug === '02-finding-your-network');
+  const ch2OpenCount = ch2 ? (ch2.open_claim_count || 0) : 0;
+  assert.equal(after.totals.open_claim_count, 3 + ch2OpenCount,
+    'totals.open_claim_count sums ch1 (3) and ch2 (0 untouched)');
+});
+
+// ---------------------------------------------------------------------------
+// TSK-050b-(e) golden clone recount: no open markers in the sample-book
+//   chapters yields totals.open_claim_count 0.
+// ---------------------------------------------------------------------------
+test('TSK-050b-(e) golden clone recount: totals.open_claim_count is 0', () => {
+  const book = cloneSampleBook('050b-e-golden');
+  const progressPath = join(book, '.studio', 'progress.json');
+  const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
+
+  // Write clean content (no claim markers) to ch1 to trigger a recount.
+  const cleanContent = 'Clean prose with no factual markers in this test pass.\n';
+  writeFileSync(ch1Path, cleanContent, 'utf8');
+
+  const result = runHook(makeBatchEvent(book, [{
+    tool_name: 'Write',
+    tool_input: { file_path: ch1Path, content: cleanContent },
+    tool_use_id: 'toolu_050be',
+    tool_response: 'Written.'
+  }]));
+
+  assert.equal(result.status, 0, 'exit 0');
+
+  const after = JSON.parse(readFileSync(progressPath, 'utf8'));
+  // ch1: recounted, no markers -> open_claim_count 0.
+  const ch1 = after.chapters.find(ch => ch.slug === '01-listening-before-speaking');
+  assert.ok(ch1, 'ch1 entry present');
+  assert.equal(ch1.open_claim_count, 0, 'ch1.open_claim_count is 0 (clean content)');
+  // totals: sum over all entries, all have open_claim_count 0 in the golden book.
+  assert.equal(after.totals.open_claim_count, 0, 'totals.open_claim_count is 0 for golden book');
+});
+
+// ---------------------------------------------------------------------------
+// TSK-050b-(f) unknown fields survive the create-if-absent path: when a new
+//   entry is created, unknown fields on other entries (and at top level and
+//   totals) are preserved unmodified.
+// ---------------------------------------------------------------------------
+test('TSK-050b-(f) unknown fields survive when create-if-absent path runs', () => {
+  const book = cloneSampleBook('050b-f-unknown');
+  const progressPath = join(book, '.studio', 'progress.json');
+  const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
+
+  // Inject unknown fields at every level.
+  const progress = JSON.parse(readFileSync(progressPath, 'utf8'));
+  progress.unknownTopField = 'top-level-unknown-050b';
+  // Add an unknown field to ch2 entry (ch2 will NOT be recounted; its unknown
+  // field must survive as-is after ch1 create-if-absent runs).
+  const ch2Idx = progress.chapters.findIndex(c => c.slug === '02-finding-your-network');
+  if (ch2Idx >= 0) progress.chapters[ch2Idx].unknownChField = 'ch2-unknown-050b';
+  progress.totals.unknownTotalsField = 99;
+  // Remove ch1 entry to force create-if-absent.
+  progress.chapters = progress.chapters.filter(c => c.slug !== '01-listening-before-speaking');
+  writeFileSync(progressPath, JSON.stringify(progress, null, 2) + '\n', 'utf8');
+
+  const content = 'Content for the unknown-field round-trip test.\n';
+  writeFileSync(ch1Path, content, 'utf8');
+
+  const result = runHook(makeBatchEvent(book, [{
+    tool_name: 'Write',
+    tool_input: { file_path: ch1Path, content },
+    tool_use_id: 'toolu_050bf',
+    tool_response: 'Written.'
+  }]));
+
+  assert.equal(result.status, 0, 'exit 0');
+
+  const after = JSON.parse(readFileSync(progressPath, 'utf8'));
+
+  // ch1 entry must be created.
+  const ch1 = after.chapters.find(ch => ch.slug === '01-listening-before-speaking');
+  assert.ok(ch1, 'ch1 entry created by create-if-absent');
+
+  // Unknown fields at all levels survive round-trip.
+  assert.equal(after.unknownTopField, 'top-level-unknown-050b', 'top-level unknown field survived');
+  assert.equal(after.totals.unknownTotalsField, 99, 'totals unknown field survived');
+
+  const ch2After = after.chapters.find(c => c.slug === '02-finding-your-network');
+  assert.ok(ch2After, 'ch2 entry survived');
+  assert.equal(ch2After.unknownChField, 'ch2-unknown-050b', 'ch2 per-chapter unknown field survived');
 });

@@ -131,6 +131,81 @@ function isChapterPath(absPath) {
 }
 
 // ---------------------------------------------------------------------------
+// Chapter-list registry helpers (TSK-050b create-if-absent).
+//
+// The registry at structure/chapter-list.md provides ordered slug/title
+// mappings used when creating new chapter entries. All three helpers below
+// are used only inside the progress-write block (chapterWrites.size > 0).
+// ---------------------------------------------------------------------------
+
+/** Parse structure/chapter-list.md into an ordered [{slug, title}] array.
+ *  Returns null when the file is absent, unreadable, or has no data rows. */
+function loadRegistryOrder(rootDir) {
+  try {
+    const text = readFileSync(join(rootDir, 'structure', 'chapter-list.md'), 'utf8');
+    const rows = [];
+    for (const line of text.split('\n')) {
+      // Match table data rows: | N | 01-slug-here | Title Here | ... |
+      const m = line.match(/^\|\s*\d+\s*\|\s*([0-9]{2}-[a-z0-9-]+)\s*\|\s*([^|]+?)\s*\|/);
+      if (m) rows.push({ slug: m[1], title: m[2].trim() });
+    }
+    return rows.length > 0 ? rows : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Derive a human-readable title from a slug when the registry is absent.
+ *  Strips the two-digit ordinal prefix, replaces hyphens with spaces,
+ *  and applies title case.
+ *  Example: '03-your-curation-practice' -> 'Your Curation Practice'. */
+function slugToTitle(slug) {
+  return slug
+    .replace(/^[0-9]+-/, '')
+    .split('-')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+/** Count open claim markers ([UNVERIFIED] and [SOURCE-UNVERIFIABLE]) in text.
+ *  These are the two open forms per docs/formats/claim-markers.md.
+ *
+ *  Mechanism for open_claim_count maintenance: the schema (progress.schema.json)
+ *  defines open_claim_count as a required field on every chapter entry, so
+ *  per-entry storage exists. During each recount the count for the recounted
+ *  file is stored on its chapter entry. totals.open_claim_count is then derived
+ *  as the sum over ALL chapter entries, so entries not touched this batch retain
+ *  their stored counts and still contribute correctly to the total. */
+function countOpenMarkers(text) {
+  return (text.match(/\[UNVERIFIED\]/g) || []).length
+    + (text.match(/\[SOURCE-UNVERIFIABLE\]/g) || []).length;
+}
+
+/** Insert newEntry into chapters maintaining registry order.
+ *  Finds the first existing entry whose registry index exceeds newEntry's and
+ *  inserts before it; falls back to appending when no such entry exists or
+ *  when registry is null or does not contain the slug. */
+function insertAtRegistryPosition(chapters, newEntry, registry) {
+  if (!registry) {
+    chapters.push(newEntry);
+    return;
+  }
+  const regIdx = registry.findIndex(r => r.slug === newEntry.slug);
+  if (regIdx === -1) {
+    chapters.push(newEntry);
+    return;
+  }
+  for (let i = 0; i < chapters.length; i++) {
+    const existingRegIdx = registry.findIndex(r => r.slug === chapters[i].slug);
+    if (existingRegIdx > regIdx) {
+      chapters.splice(i, 0, newEntry);
+      return;
+    }
+  }
+  chapters.push(newEntry);
+}
+
+// ---------------------------------------------------------------------------
 // Scan tool_calls for chapter writes and agent dispatches.
 //
 // Chapter writes (Write or Edit with file_path inside chapters/):
@@ -201,7 +276,7 @@ if (chapterWrites.size === 0 && dispatches.length === 0) {
 // Single UTC timestamp for all records emitted by this batch run.
 const ts = new Date().toISOString();
 
-// Map: absPath -> { slug, newCount, scope, relPath }
+// Map: absPath -> { slug, newCount, markerCount, scope, relPath }
 const chapterDetails = new Map();
 
 for (const [absPath, { scope }] of chapterWrites.entries()) {
@@ -211,14 +286,16 @@ for (const [absPath, { scope }] of chapterWrites.entries()) {
   const relPath = relative(bookRoot, absPath).replace(/\\/g, '/');
 
   let newCount = 0;
+  let markerCount = 0;
   try {
     const text = readFileSync(absPath, 'utf8');
     newCount = countWords(text);
+    markerCount = countOpenMarkers(text);
   } catch (err) {
     logError('word count failed for ' + relPath, err);
   }
 
-  chapterDetails.set(absPath, { slug, newCount, scope, relPath });
+  chapterDetails.set(absPath, { slug, newCount, markerCount, scope, relPath });
 }
 
 // ---------------------------------------------------------------------------
@@ -253,19 +330,50 @@ if (chapterWrites.size > 0) {
   if (progress !== null) {
     const chapters = Array.isArray(progress.chapters) ? progress.chapters : [];
 
+    // Load the chapter registry for title resolution and insertion order.
+    // Returns null when structure/chapter-list.md is absent or empty.
+    const registry = loadRegistryOrder(bookRoot);
+
     // Record previous word counts before mutation so deltas can be computed.
     for (const { slug } of chapterDetails.values()) {
       const ch = chapters.find(c => c.slug === slug);
       prevCounts.set(slug, ch && typeof ch.word_count === 'number' ? ch.word_count : 0);
     }
 
-    // Mutate chapter entries in-place; unknown per-chapter fields are untouched.
-    for (const { slug, newCount } of chapterDetails.values()) {
+    // Mutate existing chapter entries in-place; create new entries when absent
+    // (TSK-050b create-if-absent per D-06 single-writer state discipline).
+    //
+    // open_claim_count mechanism: per-entry storage exists in the schema (required
+    // field), so each recounted file's count is written to its entry. The totals
+    // recompute below sums ALL entries, so untouched entries retain their stored
+    // counts. See countOpenMarkers above for the open-marker definition.
+    //
+    // Status boundary: status is set ONLY when CREATING a new entry; the hook
+    // never transitions an existing status (e.g. drafting -> drafted). Final-pass
+    // transitions remain future authorial scope outside this hook.
+    for (const { slug, newCount, markerCount } of chapterDetails.values()) {
       const ch = chapters.find(c => c.slug === slug);
       if (ch) {
+        // Existing entry: update word_count and open_claim_count from this recount.
+        // All other fields including status are untouched (unknown-field round-trip
+        // per S-08 Rule 2; status boundary per the comment above).
         ch.word_count = newCount;
+        ch.open_claim_count = markerCount;
+      } else {
+        // Create-if-absent: build a new chapter entry with the required schema
+        // fields (slug, status, word_count, open_claim_count) plus title.
+        // title: from the registry when the slug is listed, else slug-derived.
+        // status: 'drafting' (schema-valid initial for a chapter being written;
+        //   note: the controller brief uses the shorthand 'draft' which is not
+        //   in the schema enum; 'drafting' is the closest schema-valid value).
+        const registryEntry = registry ? registry.find(r => r.slug === slug) : null;
+        const title = registryEntry ? registryEntry.title : slugToTitle(slug);
+        const newEntry = { slug, title, status: 'drafting', word_count: newCount, open_claim_count: markerCount };
+        insertAtRegistryPosition(chapters, newEntry, registry);
       }
     }
+    // Ensure progress.chapters always points to the (possibly extended) array.
+    progress.chapters = chapters;
 
     // Recompute derived totals in-place; unknown totals fields are untouched.
     const totals = (progress.totals && typeof progress.totals === 'object')
