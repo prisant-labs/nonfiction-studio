@@ -64,7 +64,7 @@ interviewer's draft exists but has no argument spine. The skill routes to
 > and that curation overhead undermines focus and slows expertise growth. The
 > opposite is arguable, so the claim is a genuine thesis, not a topic statement.
 >
-> Now let's build the argument spine. I need the subsidiary claims that must be
+> Now I will build the argument spine. I need the subsidiary claims that must be
 > true for this thesis to hold. Let me propose a starting set and you can correct
 > or extend it.
 >
