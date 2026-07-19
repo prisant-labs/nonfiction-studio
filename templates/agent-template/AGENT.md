@@ -62,7 +62,26 @@ Why each tool in `tools` is needed (narrowest set; Standard sec 9). Add a `chain
 only when this subagent invokes another component, and mirror it in
 `agents/_chain-permitted.yaml`.
 
-## Steps
+## Reads and writes
+
+The bible paths this agent reads and the paths it writes, each with one line on why.
+Writes outside this list are contract violations; keep it exact.
+
+## Process
 
 1. First step.
 2. Second step.
+
+## Guardrails
+
+The behavior limits that bind this agent, transcribed from its spec section. Include
+the platform note where relevant: hooks, mcpServers, and permissionMode are ignored in
+plugin agent frontmatter, so every behavioral contract lives here in the prompt.
+
+<!-- Template shape note: amended 2026-07-18 at TSK-036 (interviewer agent) review close.
+     The original four-section shape (Role / When to invoke / Tools / Steps) grew to six:
+     Reads and writes plus Guardrails became first-class sections because every roster
+     agent carries both contracts, and Steps was renamed Process to match the S-01
+     through S-04 spec heading. The first stamped agent (interviewer) established this
+     shape and the amendment standardizes it for the rest of the roster. -->
+
