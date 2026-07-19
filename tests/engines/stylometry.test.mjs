@@ -11,7 +11,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, mkdtempSync, writeFileSync, statSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -328,4 +329,104 @@ test('CLI exits 2 when --project points to non-existent directory', () => {
     { encoding: 'utf8' }
   );
   assert.strictEqual(result.status, 2, 'bad project path exits 2');
+});
+
+// ---------------------------------------------------------------------------
+// --measure mode (TSK-037: voice-capture agent)
+// ---------------------------------------------------------------------------
+
+test('measure mode: single chapter output equals measureChapter direct result', () => {
+  const chFile = join(EXAMPLES, 'sample-book', 'chapters', '01-listening-before-speaking.md');
+  const result = spawnSync(
+    process.execPath, [BIN, '--measure=' + chFile],
+    { encoding: 'utf8' }
+  );
+  assert.strictEqual(result.status, 0, 'exits 0; stderr: ' + result.stderr);
+  const out = JSON.parse(result.stdout);
+  const text = readFileSync(chFile, 'utf8');
+  const expected = measureChapter(text);
+  for (const [k, v] of Object.entries(expected)) {
+    assert.ok(
+      Math.abs(out.markers[k] - v) < 1e-10,
+      'marker ' + k + ': expected ' + v + ' got ' + out.markers[k]
+    );
+  }
+});
+
+test('measure mode: two chapters output equals measureBook aggregate', () => {
+  const ch1 = join(EXAMPLES, 'sample-book', 'chapters', '01-listening-before-speaking.md');
+  const ch2 = join(EXAMPLES, 'sample-book', 'chapters', '02-finding-your-network.md');
+  const result = spawnSync(
+    process.execPath, [BIN, '--measure=' + ch1 + ',' + ch2],
+    { encoding: 'utf8' }
+  );
+  assert.strictEqual(result.status, 0, 'exits 0; stderr: ' + result.stderr);
+  const out = JSON.parse(result.stdout);
+  const text1 = readFileSync(ch1, 'utf8');
+  const text2 = readFileSync(ch2, 'utf8');
+  const expected = measureBook([text1, text2]);
+  for (const [k, v] of Object.entries(expected)) {
+    assert.ok(
+      Math.abs(out.markers[k] - v) < 1e-10,
+      'marker ' + k + ': expected ' + v + ' got ' + out.markers[k]
+    );
+  }
+});
+
+test('measure mode: missing file exits 2 naming the file', () => {
+  const missing = '/nonexistent-ns-measure-xyz/no-such-chapter.md';
+  const result = spawnSync(
+    process.execPath, [BIN, '--measure=' + missing],
+    { encoding: 'utf8' }
+  );
+  assert.strictEqual(result.status, 2, 'missing file exits 2; stderr: ' + result.stderr);
+  assert.ok(
+    result.stderr.includes('no-such-chapter.md'),
+    'stderr names the missing file: ' + result.stderr
+  );
+});
+
+test('measure mode: markers key set equals golden config baseline.markers key set', () => {
+  const chFile = join(EXAMPLES, 'sample-book', 'chapters', '01-listening-before-speaking.md');
+  const result = spawnSync(
+    process.execPath, [BIN, '--measure=' + chFile],
+    { encoding: 'utf8' }
+  );
+  assert.strictEqual(result.status, 0, 'exits 0; stderr: ' + result.stderr);
+  const out = JSON.parse(result.stdout);
+  const config = JSON.parse(readFileSync(
+    join(EXAMPLES, 'sample-book', '.studio', 'config.json'), 'utf8'
+  ));
+  const goldenKeys = Object.keys(config.stylometry.baseline.markers).sort();
+  const measureKeys = Object.keys(out.markers).sort();
+  assert.deepStrictEqual(
+    measureKeys, goldenKeys,
+    'measure markers keys must equal golden config baseline.markers keys exactly'
+  );
+});
+
+test('measure mode: writes nothing to disk', () => {
+  const tmpDir = mkdtempSync(join(tmpdir(), 'ns-measure-test-'));
+  const tmpFile = join(tmpDir, 'test-sample.md');
+  const srcText = readFileSync(
+    join(EXAMPLES, 'sample-book', 'chapters', '01-listening-before-speaking.md'), 'utf8'
+  );
+  writeFileSync(tmpFile, srcText, 'utf8');
+
+  const beforeMtime = statSync(tmpFile).mtimeMs;
+  const beforeCount = readdirSync(tmpDir).length;
+
+  const result = spawnSync(
+    process.execPath, [BIN, '--measure=' + tmpFile],
+    { cwd: tmpDir, encoding: 'utf8' }
+  );
+  assert.strictEqual(result.status, 0, 'exits 0; stderr: ' + result.stderr);
+
+  const afterCount = readdirSync(tmpDir).length;
+  const afterMtime = statSync(tmpFile).mtimeMs;
+
+  assert.strictEqual(afterCount, beforeCount, 'no new files written in temp dir');
+  assert.strictEqual(afterMtime, beforeMtime, 'sample file mtime unchanged');
+
+  rmSync(tmpDir, { recursive: true });
 });

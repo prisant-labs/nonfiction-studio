@@ -11,19 +11,57 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
 import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
-import { measureBook, computeDrift } from '../hooks/lib/stylometry-engine.mjs';
+import { measureChapter, measureBook, computeDrift, countWords } from '../hooks/lib/stylometry-engine.mjs';
 
 // ---- arg parsing ---------------------------------------------------------------
 
 let opts;
 try {
-  opts = parseArgs(process.argv.slice(2), ['chapter', 'all', 'baseline', 'project', 'json']);
+  opts = parseArgs(process.argv.slice(2), [
+    'chapter', 'all', 'baseline', 'project', 'json',
+    { name: 'measure', type: 'list' },
+  ]);
 } catch (err) {
   if (err.name === 'ArgsError') {
     process.stderr.write('ns-stylometry: ' + err.message + '\n');
     process.exit(2);
   }
   throw err;
+}
+
+// ---- measure mode (read files, compute vector, print JSON; reads no config, writes nothing) -----
+// usage: ns-stylometry --measure=<path>[,<path>...]
+// single file: measureChapter; multiple files: measureBook (aggregated counts before ratios).
+// JSON implied; exit 0 on success, exit 2 on missing or unreadable file.
+
+if (opts.measure !== null) {
+  if (opts.measure.length === 0) {
+    process.stderr.write('ns-stylometry: --measure requires at least one file path\n');
+    process.exit(2);
+  }
+
+  const texts = [];
+  const resolvedPaths = [];
+  let totalWords = 0;
+
+  for (const rawPath of opts.measure) {
+    const absPath = resolve(rawPath);
+    let text;
+    try {
+      text = readFileSync(absPath, 'utf8');
+    } catch (err) {
+      process.stderr.write('ns-stylometry: cannot read file: ' + absPath + '\n');
+      process.exit(2);
+    }
+    texts.push(text);
+    resolvedPaths.push(absPath.replace(/\\/g, '/'));
+    totalWords += countWords(text);
+  }
+
+  const markers = texts.length === 1 ? measureChapter(texts[0]) : measureBook(texts);
+  const out = { markers, files: resolvedPaths, totalWords };
+  process.stdout.write(JSON.stringify(out, null, 2) + '\n');
+  process.exit(0);
 }
 
 // ---- book root discovery -------------------------------------------------------
