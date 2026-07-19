@@ -33,7 +33,6 @@ const FLAG_DEFS = {
   'project':        { type: 'string' },
   'baseline':       { type: 'string' },
   'check':          { type: 'list' },
-  'measure':        { type: 'list' },
 };
 
 /**
