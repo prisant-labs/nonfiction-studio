@@ -4,6 +4,9 @@ user-invocable: true
 argument-hint: "<chapter: slug or number>"
 description: "Produces a voice-matched, evidence-grounded chapter draft using drafting-partner and line-editor. Resolves the chapter argument against structure/chapter-list.md, checks EV entries and alerts on an empty ledger, delegates new-chapter writing or diff proposals to drafting-partner, passes the accepted output to line-editor for proposal-only polish, confirms the chapter file via a Read check, and on chat appends compliance records that the PostToolBatch hook writes automatically on CLI and Cowork."
 when_to_use: "Use when the author types the legacy /draft <ch> verb, says 'write chapter N,' or studio routes here from Path 2. Do not invoke when the chapter argument is missing (the skill halts if the chapter is not found in structure/chapter-list.md), or for unrelated queries."
+chain:
+  - drafting-partner
+  - line-editor
 ---
 
 This skill is the drafting front door. It resolves the chapter argument against the slug registry, loads the chapter's outline entry and evidence set, alerts on an empty ledger and waits for explicit author confirmation before proceeding, orchestrates `drafting-partner` then `line-editor`, and confirms the final file via a Read check. The agents are the sole writers of `chapters/<slug>.md`; the skill orchestrates, confirms, and reports.

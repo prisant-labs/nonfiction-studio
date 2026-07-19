@@ -4,6 +4,8 @@ user-invocable: true
 argument-hint: ""
 description: "Conducts the adaptive intake interview to produce a confirmed context/brief.md. The first-session success criterion is a confirmed brief, not a drafted chapter. The interview typically takes 45-90 minutes per D-16 (honest, resumable interview)."
 when_to_use: "Use when the author types the legacy /interview verb, says 'set up my book' or 'continue my interview', or follows init-project's closing prompt. Do not invoke for authors who already have a confirmed context/brief.md and are not resuming an interrupted intake, or for unrelated queries."
+chain:
+  - interviewer
 ---
 
 This skill is the interview front door. It checks for an interrupted intake, delegates the conversational interview to the `interviewer` agent, oversees the per-section DRAFT flush to `context/brief.md`, presents the draft brief for review, and closes with conditional next-step suggestions.

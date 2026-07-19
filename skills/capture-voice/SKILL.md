@@ -4,6 +4,8 @@ user-invocable: true
 argument-hint: ""
 description: "Builds the author's stylometric voice baseline from writing samples, producing context/style-profile.md and the vector that bin/ns-stylometry uses for drift scoring per D-08 (hybrid voice scoring). When no samples are available, delegates to the voice-capture agent's three-candidate bootstrap path per D-16 (collaborative voice bootstrap)."
 when_to_use: "Use when the author says 'capture my voice', 'set my writing style', or 'I have samples to share'; accepts the capture-voice suggestion from intake-interview; re-invokes to refresh a stale baseline after a voice-change decision is logged in context/decisions.md; or reports context/style-profile.md missing. Do not invoke for unrelated queries or when the author has a current, confirmed style profile and no intent to update it."
+chain:
+  - voice-capture
 ---
 
 This skill is the voice-capture front door. It orients the author to the profile's purpose, collects writing samples, assesses their word count, delegates all computation and file writes to the `voice-capture` agent, confirms the two output files via Read checks, and previews selected baseline marker values in plain language. The `voice-capture` agent performs all computation and all writes.

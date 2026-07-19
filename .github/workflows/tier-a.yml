@@ -4,6 +4,11 @@ name: Tier A
 # Both OS legs must be green; a failure on one is a real cross-platform bug.
 # Zero validation logic lives in this file. Every step is exactly one node or claude call.
 # See Q-02 (CI pipeline) sections 1.1 and 6 for the contract and local parity rules.
+#
+# Local proof: all nine steps run green on Windows per TSK-055 (Tier A check scripts).
+# The ubuntu leg proves on first push. The claude CLI step requires the claude binary
+# to be installed on the runner; on standard GitHub Actions runners this is not available
+# by default -- record in X-04 (open questions) and install via a setup step if needed.
 
 on:
   pull_request:
@@ -41,39 +46,32 @@ jobs:
       - name: Spine conformance
         run: node scripts/check.mjs --profile plain-plugin
 
-      # Platform validation via claude CLI.
-      # Commented out: claude CLI is not available on standard GitHub Actions runners.
-      # Enable once runner availability is confirmed. Record decision in X-04 (open questions).
-      # Local verification still runs this step (see (local working notes, not published)).
-      #
-      # - name: Platform validation
-      #   run: claude plugin validate --strict .
-      # enabled when CLI availability on runners is confirmed (record in X-04 (open questions))
+      # Live step 3: platform schema validation via claude CLI.
+      # Note: claude CLI availability on standard GitHub Actions runners must be confirmed
+      # and a setup step added (see X-04 open questions). Local verification runs this step.
+      - name: Platform validation
+        run: claude plugin validate --strict .
 
-      # The six steps below require check scripts that do not exist yet (TSK-055 territory).
-      # They are commented out so the skeleton runs only real checks.
-      # A no-op placeholder would fake coverage; see task brief for TSK-012.
+      # Live step 4: hooks.json schema and script-existence check.
+      - name: Hooks schema
+        run: node scripts/check-hooks-schema.mjs
 
-      # - name: Hooks schema
-      #   run: node scripts/check-hooks-schema.mjs
-      # enabled by TSK-055 (Tier A check scripts)
+      # Live step 5: agent and skill frontmatter validation with S4 chain enforcement.
+      - name: Frontmatter completeness
+        run: node scripts/check-frontmatter.mjs
 
-      # - name: Frontmatter completeness
-      #   run: node scripts/check-frontmatter.mjs
-      # enabled by TSK-055 (Tier A check scripts)
+      # Live step 6: docs/reference/ coverage gate (D-24 docs release gate).
+      - name: Docs completeness
+        run: node scripts/check-docs-completeness.mjs
 
-      # - name: Docs completeness
-      #   run: node scripts/check-docs-completeness.mjs
-      # enabled by TSK-055 (Tier A check scripts)
+      # Live step 7: relative link check across docs/ and repo root .md files.
+      - name: Link check
+        run: node scripts/check-links.mjs
 
-      # - name: Link check
-      #   run: node scripts/check-links.mjs
-      # enabled by TSK-055 (Tier A check scripts)
+      # Live step 8: engine, lib, hook, and schema unit test suites (no API key required).
+      - name: Engine unit tests
+        run: node scripts/test-engines.mjs
 
-      # - name: Engine unit tests
-      #   run: node scripts/test-engines.mjs
-      # enabled by TSK-055 (Tier A check scripts)
-
-      # - name: Fixture tests
-      #   run: node scripts/test-fixtures.mjs
-      # enabled by TSK-055 (Tier A check scripts)
+      # Live step 9: bidirectional fixture matrix with temp-clone discipline.
+      - name: Fixture tests
+        run: node scripts/test-fixtures.mjs

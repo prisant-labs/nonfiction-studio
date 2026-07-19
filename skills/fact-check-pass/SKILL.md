@@ -4,6 +4,8 @@ user-invocable: true
 argument-hint: "<chapter: slug or number>"
 description: "Runs the adversarial verification pass on a drafted chapter: an engine-backed marker inventory via bin/ns-claims, then the fact-checker agent's authoritative five-step pass that advances EV entry statuses, updates chapter markers, and writes the per-chapter fact-check report. Reports three counts (verified, unresolved, source-unverifiable) from the agent's report and names the report path. Writes no progress.json - the PostToolBatch hook owns the open-claims total."
 when_to_use: "Use when the author types the legacy /factcheck <ch> verb, finishes drafting and wants claims verified, run-quality-gate reports unresolved claims, or studio routes here from Path 3 (Research and verify). Do not invoke when no chapter argument is supplied (the skill halts if the chapter file is absent), or for unrelated queries."
+chain:
+  - fact-checker
 ---
 
 This skill is the verification front door. It resolves the chapter argument, runs an engine-backed marker inventory via `bin/ns-claims`, states the web gate status, delegates the authoritative verification pass to the `fact-checker` agent, confirms agent writes via Read checks, and formats the three counts from the agent's per-chapter report. The `fact-checker` agent is the sole writer of chapter markers and EV status transitions; the skill orchestrates, confirms, and reports. The skill writes no `.studio/progress.json` - the open-claims total is maintained by the PostToolBatch hook per D-06 (single-writer state discipline).

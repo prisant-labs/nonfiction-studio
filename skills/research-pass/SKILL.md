@@ -4,6 +4,8 @@ user-invocable: true
 argument-hint: "[chapter: slug or number]"
 description: "Runs a structured research session that populates the evidence ledger with EV entries and SRC references per D-07 (claim ledger). Confirms the outline is present via a deterministic guard, presents the research agenda for author approval, delegates all ledger writes to research-librarian, and reports new sources, new evidence entries, and remaining open claims for the scope."
 when_to_use: "Use when the author wants to gather sources before drafting, types the legacy /research verb, or studio routes here from Path 3 (Research and verify). Do not invoke to verify existing claims (use fact-check-pass for that), or for unrelated queries."
+chain:
+  - research-librarian
 ---
 
 This skill is the research front door. It confirms the chapter outline is present via a deterministic Bash guard, resolves any chapter scope argument against the slug registry, presents the research agenda with the web gate status, delegates all ledger writes to the `research-librarian` agent, and reports the three counts from the agent's session output. The `research-librarian` agent is the sole allocator of EV and SRC identifiers and the sole writer of the ledger files; the skill writes no ledger files and no `.studio/` state.
