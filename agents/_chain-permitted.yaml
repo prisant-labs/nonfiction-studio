@@ -7,7 +7,7 @@
 # (HOUSE_REQIDS). Phantom errors for skill callers not yet on disk (intake-interview,
 # capture-voice, outline-book, research-pass, draft-chapter, fact-check-pass) are
 # suppressed in that profile. Enforcement of those edges is pending TSK-055 (Tier A
-# check scripts). See X-02 (task catalog) TSK-044 acceptance note, dated 2026-07-18.
+# check scripts). See X-02 (task catalog) TSK-044 acceptance note, dated 2026-07-19.
 #
 # Every edge is derived from a spec sentence; the per-edge comment cites the source.
 # No Phase 2 or Phase 3 agents appear here (developmental-editor, voice-guardian,
