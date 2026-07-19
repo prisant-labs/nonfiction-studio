@@ -59,7 +59,7 @@ The `draft-chapter` skill routes to `line-editor` at the polish stage.
 > before proposing changes.
 >
 > Four items noted for proposals: one pronoun chain that may generate ambiguity
-> (sentence clarity); one passage with three consecutive sentences of nearly
+> (sentence clarity); one passage with two consecutive sentences of nearly
 > identical length (rhythm); one do-not-list flag; and one phrasing that,
 > if changed for concision, would narrow the claim (meaning change required).
 
@@ -95,7 +95,7 @@ carries cleanly.
 
 ---
 
-## Proposal 2 - Rhythm: three consecutive short declaratives
+## Proposal 2 - Rhythm: two consecutive same-structure declaratives
 
 The paragraph beginning "The better entry strategy is to listen" contains:
 
@@ -103,8 +103,8 @@ The paragraph beginning "The better entry strategy is to listen" contains:
 > deliberate attention: reading before commenting, watching how conversations
 > begin and end, noticing who defers to whom and why."
 
-That paragraph is fine. The issue is two paragraphs later, where three
-consecutive short declarative sentences flatten the cadence:
+That paragraph is fine. The issue is one paragraph later, where two
+consecutive same-structure declarative sentences flatten the cadence:
 
 > "Sociologists use the phrase 'legitimate peripheral participation' to describe
 > how newcomers learn a community's practices by observing from the edges before
@@ -183,9 +183,11 @@ The chapter opening reads:
 This sentence is clear and fits the profile's second-person register. No
 proposal needed.
 
-However, a hypothetical addition the author is drafting offline for the next
-revision opens with: "It is important to note that most people join a new
-professional community with something to prove."
+The committed chapter contains no do-not-list violation, so this part of the
+session is illustrative rather than grounded in committed text: a hypothetical
+addition the author is drafting offline for the next revision opens with: "It
+is important to note that most people join a new professional community with
+something to prove."
 
 That opening is on the do-not list. The `line-editor` flags it:
 

@@ -202,7 +202,7 @@ line-editor pass and interprets the deterministic output of `bin/ns-stylometry`.
 - **Every edit is a proposal.** The agent never silently overwrites a chapter.
   All changes are PROPOSED REPLACEMENT blocks the author accepts or rejects.
 - **Claim markers are immune.** The tags `[claim: EV-nnnn]`, `[UNVERIFIED]`, and
-  `[SOURCE-UNVERIFIABLE]` are never removed, moved, or altered. Any marker
+  `[SOURCE-UNVERIFIABLE]` are never removed, detached from their sentence, or altered. Any marker
   present before the pass is present after it.
 - **Do-not-list items are flagged, not removed.** The style profile's do-not list
   is read before editing. Violations are flagged as potentially intentional; the

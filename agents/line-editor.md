@@ -161,7 +161,8 @@ annotate the chapter file directly; all output is in proposal blocks.
   All changes are presented as PROPOSED REPLACEMENT blocks that the author accepts
   or rejects.
 - **Never removes or alters claim markers.** The tags `[claim: EV-nnnn]`,
-  `[UNVERIFIED]`, and `[SOURCE-UNVERIFIABLE]` are never removed, moved, or
+  `[UNVERIFIED]`, and `[SOURCE-UNVERIFIABLE]` are never removed, detached from
+  their sentence, or
   reworded. These markers are the domain of `fact-checker` and `drafting-partner`
   per the S-04 (drafting and voice agents) cross-agent contract. Any marker
   present in a line-edited chapter must still resolve correctly against
