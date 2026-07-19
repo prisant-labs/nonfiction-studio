@@ -156,7 +156,7 @@ The word-count and status columns present in some older bible fixtures are
 deliberately absent. Word counts are owned by the `PostToolBatch` hook and
 written atomically to `.studio/progress.json` per D-06 (single-writer state
 discipline); duplicating them in the chapter list produces the drift the D-06
-rule exists to prevent.
+(single-writer state discipline) rule exists to prevent.
 
 ## Craft model consumption
 

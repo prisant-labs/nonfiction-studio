@@ -146,7 +146,7 @@ matching the Promise field in the corresponding outline block.
 Word count and status columns are deliberately absent. Word counts are owned by
 the `PostToolBatch` hook and written atomically to `.studio/progress.json` per
 D-06 (single-writer state discipline); duplicating them here produces the drift
-class that D-06 exists to prevent.
+class that D-06 (single-writer state discipline) exists to prevent.
 
 ## Process
 
@@ -215,7 +215,10 @@ confirms the proposed plan.
      registry format contract.
    - Append each evidence-needed item to `research/open-questions.md` as a
      discrete entry. This append happens in the same invocation; it is never
-     deferred to a follow-up session.
+     deferred to a follow-up session. This agent owns only these first two
+     pipeline steps (outline items and the open-questions appends); resolution,
+     ledger entry, and claim anchoring belong to the S-03 (research and
+     evidence agents) roster.
 
 ## Guardrails
 
