@@ -1,8 +1,8 @@
 // tests/hooks/stop-gate.test.mjs
 // what-it-is:   behaviour tests for hooks/stop-gate.mjs (TSK-034)
 // what-it-does: spawns the real script with crafted snake_case Stop events against temp clones
-//               of the sample-book and broken fixtures, covering the ten cases from the
-//               TSK-034 brief; never mutates committed fixtures
+//               of the sample-book and broken fixtures, covering eleven cases; never mutates
+//               committed fixtures
 // runner:       node --test "tests/hooks/*.test.mjs"
 //
 // Cases:
@@ -18,6 +18,8 @@
 //   (h) no book root: exit 0, empty stdout
 //   (i) malformed stdin: exit 0, empty stdout
 //   (j) NS_HOOK_TRACE inert when unset; one line appended when set
+//   (k) syntactically invalid config.json + flag: exit 0, additionalContext starts with
+//       "Gate skipped:", no new report file in .studio/gate/, flag NOT consumed
 //
 // Synthetic events copy the snake_case shape captured live in the TSK-030 report.
 
@@ -207,9 +209,7 @@ test('(c) golden clone + flag: gate runs, empty stdout (pass), last-gate byte-id
   const result = runHook(makeStopEvent(book));
 
   assert.strictEqual(result.status, 0, 'hook exit 0');
-  // The golden book should produce pass or at most warn; either produces no block JSON
-  // This test only asserts empty stdout (which is true for pass).
-  // If the book produces warn, stdout would be non-empty - so we verify the gate ran at all.
+  assert.strictEqual(result.stdout.trim(), '', 'pass path: empty stdout');
   // The key invariant is last-gate.json being byte-identical to the newest timestamped report.
 
   // last-gate.json must have been written
@@ -476,4 +476,56 @@ test('(j) NS_HOOK_TRACE: inert when unset, one line when set', () => {
   assert.strictEqual(traceRecord.event, 'Stop', 'trace event field is Stop');
   assert.ok(typeof traceRecord.script === 'string', 'trace script field is a string');
   assert.ok(typeof traceRecord.stdinRaw === 'string', 'trace stdinRaw field is a string');
+});
+
+// ---------------------------------------------------------------------------
+// (k) syntactically invalid config.json + flag present: exit 0, visible additionalContext
+//     starting with "Gate skipped:", no new report file, flag NOT consumed.
+//
+// Rationale: findBookRoot walks the ancestor chain, detects a valid book root via
+// isBookRoot (meta.json + context/ + chapters/ present), then calls loadBible which
+// attempts JSON.parse on config.json. Invalid JSON throws BibleError with code
+// CONFIG_READ_ERROR. The fixed catch block distinguishes this from NO_BOOK_ROOT and
+// emits one additionalContext line, stays fail-open, never runs the gate, never
+// consumes the flag.
+// ---------------------------------------------------------------------------
+test('(k) invalid config.json + flag: exit 0, Gate-skipped additionalContext, no report, flag not consumed', () => {
+  const book = cloneSampleBook('k');
+  setFlag(book);
+
+  // Corrupt config.json with syntactically invalid JSON so findBookRoot throws CONFIG_READ_ERROR.
+  const configPath = join(book, '.studio', 'config.json');
+  writeFileSync(configPath, '{ this is not valid JSON }', 'utf8');
+
+  const flagPath = join(book, '.studio', 'gate', '.session-write-flag');
+  const reportsBefore = listGateReports(book).length;
+
+  const result = runHook(makeStopEvent(book));
+
+  assert.strictEqual(result.status, 0, 'exit 0 (fail-open on corrupt config)');
+
+  // Stdout must be exactly one JSON object with additionalContext starting "Gate skipped:"
+  assert.ok(result.stdout.trim().length > 0, 'stdout is non-empty on corrupt-config path');
+  let out;
+  try {
+    out = JSON.parse(result.stdout.trim());
+  } catch {
+    assert.fail('stdout is not valid JSON: ' + result.stdout);
+  }
+  const hookOut = out.hookSpecificOutput;
+  assert.ok(hookOut, 'hookSpecificOutput present');
+  assert.strictEqual(hookOut.hookEventName, 'Stop', 'hookEventName is Stop');
+  assert.ok(
+    typeof hookOut.additionalContext === 'string' &&
+      hookOut.additionalContext.startsWith('Gate skipped:'),
+    'additionalContext starts with "Gate skipped:"; got: ' + hookOut.additionalContext
+  );
+  assert.ok(hookOut.decision === undefined, 'no block decision on corrupt-config path');
+
+  // No new report file in .studio/gate/ (gate never ran)
+  const reportsAfter = listGateReports(book).length;
+  assert.strictEqual(reportsAfter, reportsBefore, 'no new report file: gate never ran');
+
+  // Flag NOT consumed (gate never answered)
+  assert.ok(existsSync(flagPath), 'session-write flag NOT consumed on corrupt-config path');
 });

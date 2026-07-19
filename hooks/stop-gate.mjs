@@ -90,12 +90,28 @@ const cwd = (typeof event.cwd === 'string' && event.cwd) ? event.cwd : process.c
 // ---------------------------------------------------------------------------
 // SHORT-CIRCUIT 1: no book root found -> no studio bible project in scope.
 // Exit 0 with no output. Gate NOT run.
+//
+// Error discrimination: BibleError code NO_BOOK_ROOT is normal (no book root
+// anywhere in the ancestor chain); stays silent, exit 0, gate not run.
+// Any other BibleError (CONFIG_READ_ERROR, META_READ_ERROR, etc.) means a
+// book root was found but its bible files are corrupt. The gate is still
+// skipped (fail-open), but one visible additionalContext line is emitted so
+// the author knows config repair is needed. The flag is NOT consumed on
+// either path (the gate never answered).
 // ---------------------------------------------------------------------------
 let bookRoot = null;
 try {
   const found = findBookRoot(cwd);
   bookRoot = found.root;
-} catch {
+} catch (err) {
+  if (err && err.code && err.code !== 'NO_BOOK_ROOT') {
+    process.stdout.write(JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'Stop',
+        additionalContext: 'Gate skipped: ' + err.message
+      }
+    }) + '\n');
+  }
   process.exit(0);
 }
 
