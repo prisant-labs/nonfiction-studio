@@ -53,8 +53,8 @@
 
 ### EV-0006 (dunbar limit)
 - claim: Research on social cognition suggests that people can maintain stable relationships with roughly 150 individuals at one time.
-- source: SRC-0002
-- locator: p. 1371
+- source: SRC-0005
+- locator: pp. 469-493
 - confidence: high
 - status: verified
 - added-by: research-librarian

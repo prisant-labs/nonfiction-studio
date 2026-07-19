@@ -105,10 +105,10 @@ not just 57-58. Adjust that and go ahead."
 
 > Noted - I will use `pp. 57-63` for EV-0012.
 >
-> The source record writes first; no EV entry is logged until SRC-0005 is in
+> The source record writes first; no EV entry is logged until SRC-0006 is in
 > `research/sources.md`.
 
-The agent writes SRC-0005, then EV-0011, then EV-0012.
+The agent writes SRC-0006, then EV-0011, then EV-0012.
 
 ---
 
@@ -195,7 +195,7 @@ ISBN."
 **Author:** "Not yet - I will return to it in a later session."
 
 No new record is written. The deduplication check confirms the agent reads the
-current in-session state of `research/sources.md` - including SRC-0005 just
+current in-session state of `research/sources.md` - including SRC-0006 just
 written - before allocating the next ID.
 
 ---
@@ -232,7 +232,7 @@ communities of practice was available online.
   session to establish the current highest IDs (EV-0010, SRC-0005) before writing
   anything. When SRC-0006 is registered within the session, the agent's next SRC
   allocation correctly begins from SRC-0007.
-- **Source registers first.** SRC-0005 is written to `research/sources.md`
+- **Source registers first.** SRC-0006 is written to `research/sources.md`
   before EV-0011 and EV-0012 are written. No EV entry is logged until its source
   is in the registry.
 - **Author confirmation before write.** The agent presents the proposed claims
