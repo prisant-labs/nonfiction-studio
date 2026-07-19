@@ -14,7 +14,7 @@ This is a condensed transcript of a `status-dashboard` run over the committed tw
 
 - `examples/sample-book/.studio/progress.json` - two chapters with reconciled word counts and open-claim totals
 - `examples/sample-book/.studio/config.json` - `thresholds.drift_score_max: 35`
-- `examples/sample-book/.studio/gate/01-listening-before-speaking.20260718T090000Z.json` - the one committed gate report; top-level `verdict: pass`, `stylometry` detail `"drift_score 0 is within threshold 35"`
+- `examples/sample-book/.studio/gate/01-listening-before-speaking.20260718T090000Z.json` - the one committed gate report; top-level `verdict: pass`, `stylometry` detail `"drift_score 0 is within threshold 35; chapter prose matches the baseline voice profile."`
 
 The dashboard is rendered as the skill would produce it from these files; no live gate run is performed and no files are written. Any scenario showing a `block` verdict, a highlighted row, or a non-zero open-claim count is explicitly synthetic and does not reflect the committed fixture.
 
@@ -113,7 +113,7 @@ Chapter `02-finding-your-network` has no matching gate file. Its Drift and Gate 
 The skill uses the Read tool on `.studio/gate/01-listening-before-speaking.20260718T090000Z.json`. Relevant fields from the report:
 
 - Top-level `verdict`: `"pass"` - this is the Gate cell for chapter 01.
-- `stylometry` check entry: `"detail": "drift_score 0 is within threshold 35"` - parsing the numeric value yields `0`. This is the Drift cell for chapter 01.
+- `stylometry` check entry: `"detail": "drift_score 0 is within threshold 35; chapter prose matches the baseline voice profile."` - parsing the numeric value yields `0`. This is the Drift cell for chapter 01.
 
 **Studio (Step 3 - Config read for drift threshold):**
 
