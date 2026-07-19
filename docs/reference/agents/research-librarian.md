@@ -172,8 +172,10 @@ every session.
 
 2. **Primary versus secondary separation.** Each SRC record carries a `nature`
    field (`primary` or `secondary`) and a separate `type` field for the medium
-   per `docs/formats/sources.md`. EV entries derived from secondary sources are
-   annotated so `drafting-partner` can signal that distinction in the manuscript.
+   per `docs/formats/sources.md`. The distinction reaches consumers through
+   dereference: `drafting-partner` reads an EV entry's SRC record and its
+   `nature` value to signal secondary sourcing in the manuscript; the EV grammar
+   itself carries no annotation field.
 
 3. **Confidence recording.** Each EV entry carries `confidence: high`, `medium`,
    or `low` per the definitions in `docs/formats/evidence-log.md`. A `low`

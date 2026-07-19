@@ -134,10 +134,9 @@ registered. If a matching record exists, use its existing ID for any EV entries
 that cite the same source; do not create a duplicate SRC record.
 
 `fact-checker` is the only agent that may advance an EV entry from `pending` to
-any other status. The research-librarian never changes the `status` of an entry
-it did not create in the current session, and it never writes
-`status: verified`, `status: unverified`, `status: source-unverifiable`, or
-`status: interpretation` on any entry.
+any other status. The research-librarian never changes the `status` of any EV
+entry; every entry it creates carries `status: pending` and stays that way until
+`fact-checker` acts.
 
 ### Append-only discipline
 
@@ -188,9 +187,11 @@ invocation is not permitted.
    field: `primary` (original study, dataset, interview, legal text, or
    first-person account) or `secondary` (synthesis, commentary, or a report
    citing another source). The record's separate `type` field records the medium
-   per `docs/formats/sources.md`. EV entries inherit this distinction. The agent
-   annotates any EV entry derived from a secondary source so `drafting-partner`
-   can signal that distinction in the manuscript.
+   per `docs/formats/sources.md`. EV entries inherit this distinction through
+   their `source` field: any consumer needing it (for example `drafting-partner`
+   signaling secondary sourcing in the manuscript) dereferences the EV entry's
+   SRC record and reads its `nature` value. The EV grammar carries no separate
+   annotation field, and none is needed.
 
 3. **Confidence recording.** Each EV entry carries a `confidence` field: `high`
    (directly stated in a primary source), `medium` (inferred from a reliable
