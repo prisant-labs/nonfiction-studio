@@ -200,10 +200,13 @@ function runStructuralAssertions(projectDir, label) {
   assertions.push(assertDirExists(join(projectDir, 'structure'), label + ':structure/'));
   assertions.push(assertDirExists(join(projectDir, 'chapters'), label + ':chapters/'));
   assertions.push(assertDirExists(join(projectDir, 'research'), label + ':research/'));
+  assertions.push(assertDirExists(join(projectDir, 'production'), label + ':production/'));
   assertions.push(assertDirExists(join(projectDir, '.studio'), label + ':.studio/'));
   // Q-01 section 7: "File contains a DRAFT: block" applies during the active interview.
   // For a seeded clone (post-interview), the brief is finalized with section headers (## N.).
   // The assertion is: brief.md is non-empty and populated (has at least one ## section).
+  // TSK-056 review Minor C: brief-population assertion uses section headers, not DRAFT blocks,
+  // because the seeded sample-book clone has a finalized brief. Q-01 section 5.2 updated 2026-07-19.
   assertions.push(assertFileContains(
     join(projectDir, 'context', 'brief.md'), '## ', label + ':brief populated (section headers)'
   ));
@@ -212,6 +215,10 @@ function runStructuralAssertions(projectDir, label) {
   ));
   assertions.push(assertFileContains(
     join(projectDir, 'research', 'evidence-log.md'), 'EV-', label + ':evidence-log EV- entry'
+  ));
+  // structure/outline.md must exist and be non-empty (Fix 3: TSK-056 review)
+  assertions.push(assertFileContains(
+    join(projectDir, 'structure', 'outline.md'), /\S/, label + ':outline.md non-empty'
   ));
   assertions.push(assertAiUseLogHasAgent(
     join(projectDir, '.studio', 'ai-use-log.jsonl'), label + ':ai-use-log agent field'
@@ -346,15 +353,96 @@ function runLiveMode(model) {
     return exitWithCode(2, 'clone failed: ' + err.message);
   }
 
+  let allOk = true;
+
   try {
+    // Flow step 1: init-project scaffold - verify scaffold directories present
     log('\n[run-integration] -- flow step 1: init-project scaffold --');
-    log('  (seeded from sample-book; scaffold already present)');
+    checkBudget();
 
+    const scaffoldPrompt =
+      'I am running a Tier B integration test on this Nonfiction Studio project. ' +
+      'List which of these directories exist at the project root: context, structure, chapters, research, production, .studio. ' +
+      'Reply with SCAFFOLD_OK if all six directories are present, or SCAFFOLD_MISSING followed by the names of any absent directories.';
+
+    const scaffoldResult = callClaude(scaffoldPrompt, model, tempDir);
+    log('  cost: $' + scaffoldResult.costUsd.toFixed(6) + ' (total: $' + totalSpendUsd.toFixed(6) + ')');
+    if (!scaffoldResult.ok) {
+      log('  FAIL [init-project]: claude call failed: ' + scaffoldResult.error);
+    } else {
+      log('  result snippet: ' + scaffoldResult.text.slice(0, 120).replace(/\n/g, ' '));
+      const scaffoldOk = scaffoldResult.text.toUpperCase().includes('SCAFFOLD_OK');
+      log('  scaffold check: ' + (scaffoldOk ? 'pass (all six directories present)' : 'warn (unexpected result; structural assertions will verify)'));
+    }
+    // Artifact assertions for step 1: scaffold directories
+    const step1Assertions = [
+      assertDirExists(join(tempDir, 'context'), 'step1:context/'),
+      assertDirExists(join(tempDir, 'structure'), 'step1:structure/'),
+      assertDirExists(join(tempDir, 'chapters'), 'step1:chapters/'),
+      assertDirExists(join(tempDir, 'research'), 'step1:research/'),
+      assertDirExists(join(tempDir, 'production'), 'step1:production/'),
+      assertDirExists(join(tempDir, '.studio'), 'step1:.studio/'),
+    ];
+    for (const a of step1Assertions) {
+      log('  ' + a.message);
+      if (!a.ok) allOk = false;
+    }
+
+    checkBudget();
+
+    // Flow step 2: intake-interview brief check - verify brief.md is populated
     log('\n[run-integration] -- flow step 2: intake-interview brief check --');
-    log('  (seeded brief from sample-book)');
+    checkBudget();
 
+    const briefPrompt =
+      'I am running a Tier B integration test on this Nonfiction Studio project. ' +
+      'Check whether context/brief.md exists and contains at least one section header (a line starting with ##). ' +
+      'Reply with BRIEF_OK if the file exists and contains section headers, or BRIEF_MISSING if the file is absent or empty.';
+
+    const briefResult = callClaude(briefPrompt, model, tempDir);
+    log('  cost: $' + briefResult.costUsd.toFixed(6) + ' (total: $' + totalSpendUsd.toFixed(6) + ')');
+    if (!briefResult.ok) {
+      log('  FAIL [intake-interview]: claude call failed: ' + briefResult.error);
+    } else {
+      log('  result snippet: ' + briefResult.text.slice(0, 120).replace(/\n/g, ' '));
+      const briefOk = briefResult.text.toUpperCase().includes('BRIEF_OK');
+      log('  brief check: ' + (briefOk ? 'pass (brief populated with section headers)' : 'warn (unexpected result; structural assertions will verify)'));
+    }
+    // Artifact assertion for step 2: brief.md has section headers
+    const step2Assertion = assertFileContains(
+      join(tempDir, 'context', 'brief.md'), '## ', 'step2:brief populated (section headers)'
+    );
+    log('  ' + step2Assertion.message);
+    if (!step2Assertion.ok) allOk = false;
+
+    checkBudget();
+
+    // Flow step 3: draft-chapter chapter check - verify chapters/ has content
     log('\n[run-integration] -- flow step 3: draft-chapter chapter check --');
-    log('  (seeded chapter from sample-book)');
+    checkBudget();
+
+    const chapterPrompt =
+      'I am running a Tier B integration test on this Nonfiction Studio project. ' +
+      'Check whether the chapters/ directory contains at least one Markdown file (.md) with non-empty content. ' +
+      'Reply with CHAPTER_OK if at least one non-empty .md file exists in chapters/, or CHAPTER_MISSING if chapters/ is absent or empty.';
+
+    const chapterResult = callClaude(chapterPrompt, model, tempDir);
+    log('  cost: $' + chapterResult.costUsd.toFixed(6) + ' (total: $' + totalSpendUsd.toFixed(6) + ')');
+    if (!chapterResult.ok) {
+      log('  FAIL [draft-chapter]: claude call failed: ' + chapterResult.error);
+    } else {
+      log('  result snippet: ' + chapterResult.text.slice(0, 120).replace(/\n/g, ' '));
+      const chapterOk = chapterResult.text.toUpperCase().includes('CHAPTER_OK');
+      log('  chapter check: ' + (chapterOk ? 'pass (chapters/ non-empty)' : 'warn (unexpected result; structural assertions will verify)'));
+    }
+    // Artifact assertion for step 3: chapters/ non-empty
+    const step3Assertion = assertDirNonEmpty(
+      join(tempDir, 'chapters'), '.md', 'step3:chapters/ non-empty'
+    );
+    log('  ' + step3Assertion.message);
+    if (!step3Assertion.ok) allOk = false;
+
+    checkBudget();
 
     // Flow step 4: fact-check-pass with planted [UNVERIFIED] marker
     log('\n[run-integration] -- flow step 4: fact-check-pass with planted [UNVERIFIED] --');
@@ -385,7 +473,6 @@ function runLiveMode(model) {
 
     log('\n[run-integration] -- structural assertions --');
     const structAssertions = runStructuralAssertions(tempDir, 'live');
-    let allOk = true;
     for (const a of structAssertions) {
       log('  ' + a.message);
       if (!a.ok) allOk = false;
