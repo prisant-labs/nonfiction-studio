@@ -20,29 +20,29 @@ This is a condensed transcript of a complete `init-project` run. It shows the bl
 
 > No mode argument supplied; defaulting to blank mode in non-interactive context.
 >
-> No existing book/ directory found. Proceeding.
+> No existing book project found. Proceeding.
 >
 > Finding the plugin root... found at <repo-root>.
 >
-> Stamping book/ tree from templates/book-scaffold/ and copying project-init template:
+> Stamping flat bible tree from templates/book-scaffold/ and copying project-init template:
 
 ```
-book/context/brief.md              created
-book/context/audience.md           created
-book/context/style-profile.md      created
-book/context/decisions.md          created
-book/context/project-init.md       created (blank template)
-book/structure/thesis.md           created
-book/structure/outline.md          created
-book/structure/comps.md            created
-book/chapters/.gitkeep             created
-book/research/evidence-log.md      created
-book/research/sources.md           created
-book/research/open-questions.md    created
-book/production/exports/.gitkeep   created
-book/production/README.md          created
-book/production/front-matter.md    created
-book/production/back-matter.md     created
+context/brief.md              created
+context/audience.md           created
+context/style-profile.md      created
+context/decisions.md          created
+context/project-init.md       created (blank template)
+structure/thesis.md           created
+structure/outline.md          created
+structure/comps.md            created
+chapters/.gitkeep             created
+research/evidence-log.md      created
+research/sources.md           created
+research/open-questions.md    created
+production/exports/.gitkeep   created
+production/README.md          created
+production/front-matter.md    created
+production/back-matter.md     created
 ```
 
 > Writing .studio/ state files:
@@ -58,7 +58,7 @@ book/production/back-matter.md     created
 .studio/logs/.gitkeep          created
 ```
 
-> Book project "The Quiet Ledger" has been initialized. The book/ tree and .studio/ state files are ready.
+> Book project "The Quiet Ledger" has been initialized. The bible tree and .studio/ state files are ready.
 >
 > The next step is intake-interview. Invoke it with `/nonfiction-studio:intake-interview` to conduct the structured intake interview and build your project brief. The interview typically takes 45-90 minutes and produces a confirmed context/brief.md.
 
@@ -103,7 +103,7 @@ Note: `created` is an RFC 3339 UTC timestamp (`{{DATETIME}}`), not a calendar da
 
 **Studio:**
 
-> Warning: A book/ directory already exists in this location. Scanning for missing scaffold files...
+> Warning: This directory already contains a book project. Scanning for missing scaffold files...
 >
 > All 24 expected scaffold files are present. No files were written.
 >
@@ -114,8 +114,8 @@ Note: `created` is an RFC 3339 UTC timestamp (`{{DATETIME}}`), not a calendar da
 ## Key assertions from this transcript
 
 - The mode default ("blank") is stated explicitly in non-interactive context; no silent assumption.
-- `book/context/project-init.md` is created as a copy of the blank template.
+- `context/project-init.md` is created as a copy of the blank template.
 - All `{{BOOK_TITLE}}`, `{{DATETIME}}`, and `{{PLUGIN_VERSION}}` placeholders are replaced in state files; `{{DATE}}` is replaced with YYYY-MM-DD in prose files. None remain in any written file.
 - `progress.json` has `"version": 2`, `"chapters": []`, and all zero counters.
 - The second invocation runs a Bash scan and reports the result honestly. When all files are present it states so; when files are missing it lists exactly which ones.
-- `.studio/` is at the project root (same level as `book/`), not nested inside `book/`.
+- `.studio/` is at the bible root alongside `context/` and `chapters/`, not in a nested subdirectory.

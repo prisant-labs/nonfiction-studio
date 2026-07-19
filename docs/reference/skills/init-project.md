@@ -8,11 +8,11 @@ tags: ["skill", "init", "scaffold", "setup"]
 
 # init-project
 
-Scaffolds the `book/` bible tree and creates `.studio/` state files for a new nonfiction book project. This is the first skill in the studio workflow; every other skill depends on the structure it creates.
+Scaffolds the flat bible tree (context/, structure/, chapters/, research/, production/) and creates `.studio/` state files for a new nonfiction book project. This is the first skill in the studio workflow; every other skill depends on the structure it creates.
 
 ## Purpose
 
-`init-project` creates a complete project layout from the plugin's scaffold template. After it runs, the directory contains a full `book/` bible tree (context, structure, chapters, research, production) and a `.studio/` directory with the three required state files: `meta.json`, `config.json`, and `progress.json`. It also copies the selected project-init intake template to `book/context/project-init.md` for the `intake-interview` skill to consume.
+`init-project` creates a complete project layout from the plugin's scaffold template. After it runs, the directory contains a flat bible tree (context/, structure/, chapters/, research/, production/) and a `.studio/` directory alongside them with the three required state files: `meta.json`, `config.json`, and `progress.json`. It also copies the selected project-init intake template to `context/project-init.md` for the `intake-interview` skill to consume.
 
 ## Invocation
 
@@ -23,7 +23,7 @@ Scaffolds the `book/` bible tree and creates `.studio/` state files for a new no
 Both arguments are optional. If the book title is omitted, the skill asks before writing anything. If the mode is omitted and the session is interactive, the skill asks; in a non-interactive (headless) session the skill defaults to blank and states this.
 
 Modes:
-- `guided` - copies `templates/project-init.guided.md` to `book/context/project-init.md`; each question includes explanations and examples
+- `guided` - copies `templates/project-init.guided.md` to `context/project-init.md`; each question includes explanations and examples
 - `blank` - copies `templates/project-init.blank.md`; questions only, no annotations (default in non-interactive contexts)
 
 Alternate entry points:
@@ -42,28 +42,30 @@ Alternate entry points:
 
 ## Outputs
 
-### book/ tree (bible)
+### Bible tree (flat layout)
+
+The flat bible tree is at the project root. The plugin's scaffold and all engines use this layout. (Note: `bible.mjs` also detects a nested `book/` subdirectory that itself contains `.studio/`, `context/`, and `chapters/` as a compatibility path for authors who nest; the plugin's own scaffold is always flat.)
 
 | Path | Contents |
 |---|---|
-| `book/context/brief.md` | Empty project brief; filled by `intake-interview` |
-| `book/context/audience.md` | Audience persona fields; filled by `intake-interview` |
-| `book/context/style-profile.md` | Voice baseline placeholder; filled by `capture-voice` |
-| `book/context/decisions.md` | Decision log; appended by skills that record choices |
-| `book/context/project-init.md` | Project-init intake template (guided or blank); consumed by `intake-interview` |
-| `book/structure/thesis.md` | Controlling idea template; written by `outline-book` |
-| `book/structure/outline.md` | Chapter outline; written by `outline-book` |
-| `book/structure/comps.md` | Competitive titles tracker |
-| `book/chapters/` | Empty chapter directory (`.gitkeep` only at init) |
-| `book/research/evidence-log.md` | Claim ledger with example entry |
-| `book/research/sources.md` | Source registry with example entry |
-| `book/research/open-questions.md` | Open research questions log |
-| `book/production/README.md` | Production workflow guide |
-| `book/production/front-matter.md` | Front matter template |
-| `book/production/back-matter.md` | Back matter template |
-| `book/production/exports/` | Export output directory (`.gitkeep` at init) |
+| `context/brief.md` | Empty project brief; filled by `intake-interview` |
+| `context/audience.md` | Audience persona fields; filled by `intake-interview` |
+| `context/style-profile.md` | Voice baseline placeholder; filled by `capture-voice` |
+| `context/decisions.md` | Decision log; appended by skills that record choices |
+| `context/project-init.md` | Project-init intake template (guided or blank); consumed by `intake-interview` |
+| `structure/thesis.md` | Controlling idea template; written by `outline-book` |
+| `structure/outline.md` | Chapter outline; written by `outline-book` |
+| `structure/comps.md` | Competitive titles tracker |
+| `chapters/` | Empty chapter directory (`.gitkeep` only at init) |
+| `research/evidence-log.md` | Claim ledger with example entry |
+| `research/sources.md` | Source registry with example entry |
+| `research/open-questions.md` | Open research questions log |
+| `production/README.md` | Production workflow guide |
+| `production/front-matter.md` | Front matter template |
+| `production/back-matter.md` | Back matter template |
+| `production/exports/` | Export output directory (`.gitkeep` at init) |
 
-### .studio/ state files (machine state, not inside book/)
+### .studio/ state files (machine state, alongside the bible tree)
 
 | File | Contents |
 |---|---|
@@ -91,7 +93,7 @@ No `{{` placeholder tokens remain in any written file after init completes.
 
 ## Guardrails
 
-**Never overwrites.** If `book/` already exists, the skill runs a Bash scan of all 24 expected scaffold paths and reports the exact set of missing files. It then offers (or in headless mode, automatically proceeds) to re-stamp only those missing files. No existing file is ever read or replaced in a re-init run.
+**Never overwrites.** If a book project layout already exists (.studio/ or context/brief.md found), the skill runs a Bash scan of all 24 expected scaffold paths and reports the exact set of missing files. It then offers (or in headless mode, automatically proceeds) to re-stamp only those missing files. No existing file is ever read or replaced in a re-init run.
 
 **Surface-independent.** The skill reads template files and writes to the working directory using standard file tools. No hooks or subagents are needed; it works identically on CLI, Cowork, and Chat.
 

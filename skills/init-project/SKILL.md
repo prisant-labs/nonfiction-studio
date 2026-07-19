@@ -2,8 +2,8 @@
 name: init-project
 user-invocable: true
 argument-hint: "[book title] [guided|blank]"
-description: "Scaffolds the book/ bible tree and creates .studio/ state files for a new nonfiction book project. Use when an author starts a new book or follows the studio Path 1 prompt."
-when_to_use: "Use when the author explicitly wants to initialize, start, or set up a new book project, says 'create a new book', types the legacy /book-init verb, or is routed here from the studio dispatcher Path 1 prompt. Do not invoke for authors with an existing book/ directory unless they explicitly ask to re-initialize only the missing pieces."
+description: "Scaffolds the flat bible tree (context/, structure/, chapters/, research/, production/) and creates .studio/ state files for a new nonfiction book project. Use when an author starts a new book or follows the studio Path 1 prompt."
+when_to_use: "Use when the author explicitly wants to initialize, start, or set up a new book project, says 'create a new book', types the legacy /book-init verb, or is routed here from the studio dispatcher Path 1 prompt. Do not invoke for authors with an existing book project layout (.studio/ or context/brief.md) unless they explicitly ask to re-initialize only the missing pieces."
 ---
 
 This skill scaffolds a new nonfiction book project. It is surface-independent: no hooks or subagents are needed.
@@ -18,12 +18,12 @@ Skill inputs read:
 
 Use the Bash tool to run:
 ```
-test -d book && echo REINIT || echo NEWINIT
+if [ -d .studio ] || [ -f context/brief.md ]; then echo REINIT; else echo NEWINIT; fi
 ```
 
 The output will be exactly one of two values:
-- `REINIT` - a book/ directory already exists
-- `NEWINIT` - no book/ directory exists yet
+- `REINIT` - this directory already contains a book project
+- `NEWINIT` - no book project found yet
 
 ### Step 1a - If the output is REINIT
 
@@ -31,13 +31,13 @@ Use the Bash tool to enumerate every expected scaffold path against what is pres
 
 ```bash
 for f in \
-  book/context/brief.md book/context/audience.md book/context/style-profile.md \
-  book/context/decisions.md book/context/project-init.md \
-  book/structure/thesis.md book/structure/outline.md book/structure/comps.md \
-  book/chapters/.gitkeep \
-  book/research/evidence-log.md book/research/sources.md book/research/open-questions.md \
-  book/production/exports/.gitkeep book/production/README.md \
-  book/production/front-matter.md book/production/back-matter.md \
+  context/brief.md context/audience.md context/style-profile.md \
+  context/decisions.md context/project-init.md \
+  structure/thesis.md structure/outline.md structure/comps.md \
+  chapters/.gitkeep \
+  research/evidence-log.md research/sources.md research/open-questions.md \
+  production/exports/.gitkeep production/README.md \
+  production/front-matter.md production/back-matter.md \
   .studio/meta.json .studio/config.json .studio/progress.json \
   .studio/progress.schema.json .studio/ai-use-log.jsonl \
   .studio/snapshots/.gitkeep .studio/gate/.gitkeep .studio/logs/.gitkeep; do
@@ -48,17 +48,17 @@ printf "SCAN_DONE\n"
 
 **If the output is only `SCAN_DONE` (no MISSING lines):** Output this verbatim and STOP. Do not write any files or continue to any further step:
 
-> Warning: A book/ directory already exists in this location. All 24 expected scaffold files are present. No files were written. Run /nonfiction-studio:intake-interview to continue setting up your project.
+> Warning: This directory already contains a book project. All 24 expected scaffold files are present. No files were written. Run /nonfiction-studio:intake-interview to continue setting up your project.
 
 **If the output contains one or more `MISSING:` lines:** The lines name the paths not yet on disk. Report the exact delta:
 
-> Warning: A book/ directory already exists. The following scaffold files are missing: [list each MISSING path from the tool output, one per line]. Re-stamping only the missing files.
+> Warning: This directory already contains a book project. The following scaffold files are missing: [list each MISSING path from the tool output, one per line]. Re-stamping only the missing files.
 
 Then:
-- **Non-interactive context (headless -p session):** State "Proceeding automatically in non-interactive context." Then resolve the plugin root (Step 4, plugin root resolution), stamp the missing files (Step 5, scaffold stamping), and fill state placeholders (Step 6, state files) below, but write ONLY the paths that appeared in the MISSING list. Do not read or write any other file. For `book/context/project-init.md` if it is in the missing list, use blank mode. After writing, report which files were stamped and STOP.
+- **Non-interactive context (headless -p session):** State "Proceeding automatically in non-interactive context." Then resolve the plugin root (Step 4, plugin root resolution), stamp the missing files (Step 5, scaffold stamping), and fill state placeholders (Step 6, state files) below, but write ONLY the paths that appeared in the MISSING list. Do not read or write any other file. For `context/project-init.md` if it is in the missing list, use blank mode. After writing, report which files were stamped and STOP.
 - **Interactive context:** Ask "May I stamp only these missing files? (yes/no)" and wait for author confirmation before writing anything. On confirmation, resolve the plugin root (Step 4, plugin root resolution), stamp the missing files (Step 5, scaffold stamping), and fill state placeholders (Step 6, state files), writing ONLY the missing paths. After writing, report which files were stamped and STOP.
 
-**Note on .studio/meta.json:** If .studio/meta.json is in the missing list, first acquire the book title (from the argument, or by asking the author; in non-interactive contexts reuse the title recorded in book/context/brief.md if present, otherwise report that the title is required) before filling its placeholders.
+**Note on .studio/meta.json:** If .studio/meta.json is in the missing list, first acquire the book title (from the argument, or by asking the author; in non-interactive contexts reuse the title recorded in context/brief.md if present, otherwise report that the title is required) before filling its placeholders.
 
 ### Step 1b - If the output is NEWINIT
 
@@ -105,7 +105,7 @@ test -f "PLUGIN_ROOT/templates/book-scaffold/context/brief.md" && echo OK || ech
 
 If the output is `TEMPLATE_NOT_FOUND`: halt. Report the exact path that was not readable and ask the author to verify the plugin installation. Do not write any files.
 
-## Step 5 - Stamp the book/ tree
+## Step 5 - Stamp the flat bible tree
 
 For each mapping below: use the Read tool on the source path, then the Write tool for the destination (relative to the current working directory).
 
@@ -113,36 +113,36 @@ Token substitutions for prose files:
 - Replace `{{DATE}}` with today's date in YYYY-MM-DD format (calendar date, not timestamp).
 
 **context/**
-- `PLUGIN_ROOT/templates/book-scaffold/context/brief.md` -> `book/context/brief.md`
-- `PLUGIN_ROOT/templates/book-scaffold/context/audience.md` -> `book/context/audience.md`
-- `PLUGIN_ROOT/templates/book-scaffold/context/style-profile.md` -> `book/context/style-profile.md`
-- `PLUGIN_ROOT/templates/book-scaffold/context/decisions.md` -> `book/context/decisions.md`
-- Template from Step 3 (`project-init.guided.md` or `project-init.blank.md`) -> `book/context/project-init.md` (write verbatim; no token substitution)
+- `PLUGIN_ROOT/templates/book-scaffold/context/brief.md` -> `context/brief.md`
+- `PLUGIN_ROOT/templates/book-scaffold/context/audience.md` -> `context/audience.md`
+- `PLUGIN_ROOT/templates/book-scaffold/context/style-profile.md` -> `context/style-profile.md`
+- `PLUGIN_ROOT/templates/book-scaffold/context/decisions.md` -> `context/decisions.md`
+- Template from Step 3 (`project-init.guided.md` or `project-init.blank.md`) -> `context/project-init.md` (write verbatim; no token substitution)
 
 **structure/**
-- `PLUGIN_ROOT/templates/book-scaffold/structure/thesis.md` -> `book/structure/thesis.md`
-- `PLUGIN_ROOT/templates/book-scaffold/structure/outline.md` -> `book/structure/outline.md`
-- `PLUGIN_ROOT/templates/book-scaffold/structure/comps.md` -> `book/structure/comps.md`
+- `PLUGIN_ROOT/templates/book-scaffold/structure/thesis.md` -> `structure/thesis.md`
+- `PLUGIN_ROOT/templates/book-scaffold/structure/outline.md` -> `structure/outline.md`
+- `PLUGIN_ROOT/templates/book-scaffold/structure/comps.md` -> `structure/comps.md`
 
 **chapters/**
-- Write an empty file to `book/chapters/.gitkeep`
+- Write an empty file to `chapters/.gitkeep`
 
 **research/**
-- `PLUGIN_ROOT/templates/book-scaffold/research/evidence-log.md` -> `book/research/evidence-log.md` (replace `{{DATE}}` with YYYY-MM-DD)
-- `PLUGIN_ROOT/templates/book-scaffold/research/sources.md` -> `book/research/sources.md`
-- `PLUGIN_ROOT/templates/book-scaffold/research/open-questions.md` -> `book/research/open-questions.md`
+- `PLUGIN_ROOT/templates/book-scaffold/research/evidence-log.md` -> `research/evidence-log.md` (replace `{{DATE}}` with YYYY-MM-DD)
+- `PLUGIN_ROOT/templates/book-scaffold/research/sources.md` -> `research/sources.md`
+- `PLUGIN_ROOT/templates/book-scaffold/research/open-questions.md` -> `research/open-questions.md`
 
 **production/**
-- Write an empty file to `book/production/exports/.gitkeep`
-- `PLUGIN_ROOT/templates/book-scaffold/production/README.md` -> `book/production/README.md`
-- `PLUGIN_ROOT/templates/book-scaffold/production/front-matter.md` -> `book/production/front-matter.md`
-- `PLUGIN_ROOT/templates/book-scaffold/production/back-matter.md` -> `book/production/back-matter.md`
+- Write an empty file to `production/exports/.gitkeep`
+- `PLUGIN_ROOT/templates/book-scaffold/production/README.md` -> `production/README.md`
+- `PLUGIN_ROOT/templates/book-scaffold/production/front-matter.md` -> `production/front-matter.md`
+- `PLUGIN_ROOT/templates/book-scaffold/production/back-matter.md` -> `production/back-matter.md`
 
 On any Read or Write error: stop immediately. Name the exact path that failed and the operation attempted (Read or Write). Do not stamp any additional files.
 
 ## Step 6 - Write .studio/ state files
 
-Create `.studio/` at the project root (same level as `book/`, not inside it).
+Create `.studio/` at the bible root alongside `context/` and `chapters/`.
 
 Token substitutions for state files:
 - Replace `{{DATETIME}}` with the current UTC date-time in RFC 3339 format (example: `2026-07-18T14:22:07Z`). This is a full timestamp, not a calendar date.
@@ -193,7 +193,7 @@ On any Read or Write error: stop immediately. Name the exact path that failed an
 
 List all files created. Output:
 
-> Book project '{title}' has been initialized. The book/ tree and .studio/ state files are ready.
+> Book project '{title}' has been initialized. The bible tree and .studio/ state files are ready.
 
 Then: "The next step is intake-interview. Invoke it with `/nonfiction-studio:intake-interview` to conduct the structured intake interview and build your project brief. The interview typically takes 45-90 minutes and produces a confirmed context/brief.md."
 
