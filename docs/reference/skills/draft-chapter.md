@@ -89,7 +89,7 @@ The PostToolBatch hook at `hooks/post-tool-batch.mjs` updates `.studio/progress.
 3. If a matching entry is found, updates its `word_count` with the recount result and writes atomically.
 4. **If no matching entry is found** (a brand-new chapter file whose slug was never inserted into `progress.json`), the `if (ch)` branch is not entered and no new entry is created. The hook only updates existing chapter entries; it does not create new ones.
 
-In practice, chapter entries in `progress.json` are created when `outline-book` produces the chapter list and the hook first observes writes to each chapter file path. If a chapter has not yet been written and no entry exists in `progress.json` for its slug, the first `drafting-partner` write updates the file on disk but the hook silently skips the progress update for that slug.
+In practice, NO component currently creates chapter entries in `progress.json`: `outline-book` writes only the `structure/chapter-list.md` slug registry (its progress write was voided per D-06 (single-writer state discipline)), and the hook only updates entries that already exist. For a fresh book the first `drafting-partner` write lands on disk while the hook silently skips the progress update for that slug. Entry-creation ownership is being resolved at TSK-050b (progress entry ownership), which extends the PostToolBatch hook to create entries during its recount pass.
 
 ## Chat Compliance
 
