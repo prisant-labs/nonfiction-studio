@@ -43,7 +43,7 @@ Output: `HAS_REGISTRY`
 The skill uses the Read tool on `structure/chapter-list.md`. The registry has six rows. The argument `02-finding-your-network` matches the slug in row 2:
 
 ```
-| 2 | 02-finding-your-network | Finding Your Network | fact-checked | 987 |
+| 2 | 02-finding-your-network | Finding Your Network | drafted | 462 |
 ```
 
 Chapter resolved: number 2, working title "Finding Your Network", slug `02-finding-your-network`.
@@ -187,7 +187,7 @@ Coverage is 100%. All 5 claim markers are resolved. This chapter is ready for th
 
 **Studio (Step 4 - Confirm agent writes via Read checks):**
 
-The skill uses the Read tool on `chapters/02-finding-your-network.md`. The file is present (987 words, unchanged - no chapter writes were needed because all entries were verified cache hits).
+The skill uses the Read tool on `chapters/02-finding-your-network.md`. The file is present and unchanged - no chapter writes were needed because all entries were verified cache hits.
 
 The skill uses the Read tool on `research/evidence-log.md`. The file is readable. All 5 entries remain at `status: verified` (the agent made no status writes because cache hits require no re-check and no status change).
 
