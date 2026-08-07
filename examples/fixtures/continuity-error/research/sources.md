@@ -65,3 +65,15 @@
 - url: https://doi.org/10.1016/0047-2484(92)90081-J
 - accessed: 2026-07-18
 - retrieval-status: stable
+
+### SRC-0006 (Lave and Wenger 1991)
+- type: book
+- nature: primary
+- author: Lave, Jean and Wenger, Etienne
+- title: Situated Learning: Legitimate Peripheral Participation
+- year: 1991
+- publisher: Cambridge University Press
+- identifier: ISBN 978-0521423748
+- url:
+- accessed:
+- retrieval-status: stable

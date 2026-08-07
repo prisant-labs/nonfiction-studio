@@ -30,7 +30,7 @@ with a closing section on why a well-built network compounds over time.
 The ledger at session start:
 
 - `research/evidence-log.md`: 10 entries, highest is EV-0010 (pacing recommendation)
-- `research/sources.md`: 5 records, SRC-0001 through SRC-0005; no `changed: true`
+- `research/sources.md`: 6 records, SRC-0001 through SRC-0006; no `changed: true`
   flags present
 
 `context/style-profile.md` was written by `voice-capture` and is non-empty. The

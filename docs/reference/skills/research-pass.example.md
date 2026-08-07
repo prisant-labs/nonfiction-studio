@@ -10,7 +10,7 @@ tags: ["skill", "research", "evidence", "sources", "ledger", "example"]
 
 This is a condensed transcript of a chapter-scoped `research-pass` session for the sample book "The Quiet Network" (see `examples/sample-book/`). The session scopes to Chapter 3 (Your Curation Practice, slug `03-your-curation-practice`). The outline probe returns `HAS_OUTLINE`. The chapter argument resolves cleanly against `structure/chapter-list.md`. The web gate is closed. The author provides source text for analysis; the `research-librarian` agent registers one new SRC record and logs two new EV entries. The session closes with the three-count summary. The example follows the flow specified in S-06 3.5 (skills and invocation surface) and the adjudications recorded in TSK-048 (research-pass skill).
 
-**Session provenance note.** This example is an alternative illustration session that branches from the same committed ledger baseline as the `research-librarian` worked example (see `docs/reference/agents/research-librarian.example.md`). Both examples start from the committed state: EV-0010 is the highest EV entry (pacing recommendation) and SRC-0005 (Dunbar 1992) is the highest SRC record. In practice only one session runs before the other, so the IDs EV-0011, EV-0012, and SRC-0006 do not conflict between the two examples - they represent independent hypothetical paths from the same baseline. The committed `research/evidence-log.md` and `research/sources.md` in `examples/sample-book/research/` carry the baseline state (10 EV entries, 5 SRC records); the new entries shown here are the hypothetical outcome of this session only.
+**Session provenance note.** This example is an alternative illustration session that branches from the same committed ledger baseline as the `research-librarian` worked example (see `docs/reference/agents/research-librarian.example.md`). Both examples start from the committed state: EV-0010 is the highest EV entry (pacing recommendation) and SRC-0006 (Lave and Wenger 1991) is the highest SRC record. In practice only one session runs before the other, so the IDs EV-0011, EV-0012, and SRC-0007 do not conflict between the two examples - they represent independent hypothetical paths from the same baseline. The committed `research/evidence-log.md` and `research/sources.md` in `examples/sample-book/research/` carry the baseline state (10 EV entries, 6 SRC records); the new entries shown here are the hypothetical outcome of this session only.
 
 ---
 
@@ -40,7 +40,7 @@ Status: open
 
 The ledger at session start:
 - `research/evidence-log.md`: 10 entries, highest is EV-0010 (pacing recommendation)
-- `research/sources.md`: 5 records, highest is SRC-0005 (Dunbar 1992)
+- `research/sources.md`: 6 records, highest is SRC-0006 (Lave and Wenger 1991)
 
 Web research is disabled for this project (`research.web_enabled` is absent from `.studio/config.json`).
 
@@ -76,7 +76,7 @@ Chapter resolved: number 3, working title "Your Curation Practice", slug `03-you
 
 The skill reads `structure/outline.md` and extracts the evidence-needed items for Chapter 3. It reads `research/open-questions.md` and loads OQ-003 and OQ-004 (both open).
 
-The skill reads `research/evidence-log.md` (highest: EV-0010) and `research/sources.md` (highest: SRC-0005).
+The skill reads `research/evidence-log.md` (highest: EV-0010) and `research/sources.md` (highest: SRC-0006).
 
 The skill reads `.studio/config.json`. The field `research.web_enabled` is absent.
 
@@ -88,7 +88,7 @@ The skill reads `.studio/config.json`. The field `research.web_enabled` is absen
 > - OQ-003: How do explicit selection criteria affect information consumption behavior?
 > - OQ-004: What does evidence say about information volume and quality of understanding?
 >
-> Current ledger: 10 EV entries (highest: EV-0010), 5 SRC records (highest: SRC-0005).
+> Current ledger: 10 EV entries (highest: EV-0010), 6 SRC records (highest: SRC-0006).
 >
 > Web research status: not enabled for this project (`research.web_enabled` is absent from `.studio/config.json`). Source material arrives as pasted text. Paste the text of any sources you want registered; the `research-librarian` agent will analyze pasted content with the same quote-and-attribute discipline it applies to fetched content.
 >
@@ -103,7 +103,7 @@ The skill reads `.studio/config.json`. The field `research.web_enabled` is absen
 The skill spawns `research-librarian` via the `research-pass -> research-librarian` chain edge, passing:
 - Chapter scope: 03-your-curation-practice (Chapter 3, Your Curation Practice)
 - Open questions: OQ-003 and OQ-004 from `research/open-questions.md`
-- Current ledger highs: EV-0010, SRC-0005 (informational; the agent reads the files again for allocation)
+- Current ledger highs: EV-0010, SRC-0006 (informational; the agent reads the files again for allocation)
 - Web gate status: closed
 - Pasted source text: the two Johnson 2012 excerpts
 
@@ -111,9 +111,9 @@ The skill spawns `research-librarian` via the `research-pass -> research-librari
 
 > I read `research/evidence-log.md`: 10 entries, highest ID is EV-0010 (pacing recommendation). The next EV ID will be EV-0011.
 >
-> I read `research/sources.md`: 5 records, highest ID is SRC-0005 (Dunbar 1992). Before allocating a new SRC ID, I will confirm whether Johnson 2012 is already registered.
+> I read `research/sources.md`: 6 records, highest ID is SRC-0006 (Lave and Wenger 1991). Before allocating a new SRC ID, I will confirm whether Johnson 2012 is already registered.
 >
-> Johnson 2012 ("The Information Diet") is not in the source registry. The next SRC ID is SRC-0006.
+> Johnson 2012 ("The Information Diet") is not in the source registry. The next SRC ID is SRC-0007.
 >
 > I read `research/open-questions.md` for Chapter 3: OQ-003 and OQ-004 are open.
 >
@@ -123,13 +123,13 @@ The skill spawns `research-librarian` via the `research-pass -> research-librari
 >
 > **EV-0011 (information-volume-overload)**
 > Claim: The average American adult consumes approximately 34 gigabytes of information content per day, the majority designed to produce an emotional response rather than build understanding.
-> Source: SRC-0006 (to be registered as Johnson 2012)
+> Source: SRC-0007 (to be registered as Johnson 2012)
 > Locator: pp. 6-8
 > Confidence: medium - data cited from a third-party survey rather than original primary research; secondary source
 >
 > **EV-0012 (intentional-selection-sustainability)**
 > Claim: Setting intentional selection criteria for which sources and signals receive regular attention reduces the ongoing cognitive cost of information triage and makes a personal curation practice sustainable long-term.
-> Source: SRC-0006
+> Source: SRC-0007
 > Locator: pp. 103-107
 > Confidence: medium - argument in a secondary source; consistent with cognitive load literature but not itself primary research
 >
@@ -145,16 +145,16 @@ The skill spawns `research-librarian` via the `research-pass -> research-librari
 
 > Noted - I will use `pp. 100-107` for EV-0012.
 >
-> The source record registers first; no EV entry is logged until SRC-0006 is in `research/sources.md`.
+> The source record registers first; no EV entry is logged until SRC-0007 is in `research/sources.md`.
 
-The agent writes SRC-0006, then EV-0011, then EV-0012. The agent also marks OQ-003 and OQ-004 resolved in `research/open-questions.md`.
+The agent writes SRC-0007, then EV-0011, then EV-0012. The agent also marks OQ-003 and OQ-004 resolved in `research/open-questions.md`.
 
 ---
 
 ## research/sources.md append
 
 ```markdown
-### SRC-0006 (Johnson 2012)
+### SRC-0007 (Johnson 2012)
 - type: book
 - nature: secondary
 - author: Johnson, Clay
@@ -174,7 +174,7 @@ The agent writes SRC-0006, then EV-0011, then EV-0012. The agent also marks OQ-0
 ```markdown
 ### EV-0011 (information-volume-overload)
 - claim: The average American adult consumes approximately 34 gigabytes of information content per day, the majority designed to produce an emotional response rather than build understanding.
-- source: SRC-0006
+- source: SRC-0007
 - locator: pp. 6-8
 - confidence: medium
 - status: pending
@@ -183,7 +183,7 @@ The agent writes SRC-0006, then EV-0011, then EV-0012. The agent also marks OQ-0
 
 ### EV-0012 (intentional-selection-sustainability)
 - claim: Setting intentional selection criteria for which sources and signals receive regular attention reduces the ongoing cognitive cost of information triage and makes a personal curation practice sustainable long-term.
-- source: SRC-0006
+- source: SRC-0007
 - locator: pp. 100-107
 - confidence: medium
 - status: pending
@@ -206,7 +206,7 @@ Outline item: EV-NEEDED: Research on cognitive patterns distinguishing deliberat
 Question: Is there research on how setting explicit selection criteria affects
   information consumption behavior and the quality of learning outcomes?
 Status: resolved
-Resolved-by: EV-0012 (intentional-selection-sustainability), SRC-0006 (Johnson 2012)
+Resolved-by: EV-0012 (intentional-selection-sustainability), SRC-0007 (Johnson 2012)
 
 ## OQ-004: Attention and information overload
 
@@ -216,7 +216,7 @@ Outline item: EV-NEEDED: Data on information overload and its effect on
 Question: What does the evidence say about the relationship between information
   volume consumed per day and the quality of understanding retained?
 Status: resolved
-Resolved-by: EV-0011 (information-volume-overload), SRC-0006 (Johnson 2012)
+Resolved-by: EV-0011 (information-volume-overload), SRC-0007 (Johnson 2012)
 ```
 
 ---
@@ -229,7 +229,7 @@ The skill reads `research/open-questions.md`. OQ-003 and OQ-004 are now resolved
 
 > Research session for Chapter 3 (Your Curation Practice) complete:
 >
-> - 1 new source: SRC-0006 (Johnson 2012)
+> - 1 new source: SRC-0007 (Johnson 2012)
 > - 2 new evidence entries: EV-0011 (information-volume-overload), EV-0012 (intentional-selection-sustainability)
 > - 0 claims still unsourced: all open questions for Chapter 3 are resolved
 >
@@ -248,8 +248,8 @@ The skill reads `research/open-questions.md`. OQ-003 and OQ-004 are now resolved
 - **Outline probe is a tool call.** The Bash call on `structure/outline.md` determines the `HAS_OUTLINE`/`NO_OUTLINE` token before any other work begins. No prose inference substitutes for the tool result.
 - **Chapter argument resolved via Read.** The skill reads `structure/chapter-list.md` and matches the supplied slug `03-your-curation-practice` to row 3. An unmatched argument would halt with the registry file name and the list of valid slugs.
 - **Web gate stated honestly in the agenda.** The skill reads `.studio/config.json` before presenting the agenda. The gate is closed; the skill states this explicitly and tells the author how to enable web research. The agent confirms the gate status when it runs and declines any web call accordingly.
-- **Skill writes no ledger files.** SRC-0006, EV-0011, and EV-0012 are written by the `research-librarian` agent, not by the skill. The skill's Step 4 delegates and waits; it calls no Write tool on ledger paths.
-- **Source-first contract.** SRC-0006 is written before EV-0011 and EV-0012. The agent confirms no SRC record for Johnson 2012 exists before allocating SRC-0006.
+- **Skill writes no ledger files.** SRC-0007, EV-0011, and EV-0012 are written by the `research-librarian` agent, not by the skill. The skill's Step 4 delegates and waits; it calls no Write tool on ledger paths.
+- **Source-first contract.** SRC-0007 is written before EV-0011 and EV-0012. The agent confirms no SRC record for Johnson 2012 exists before allocating SRC-0007.
 - **Author confirmation before write.** The agent presents the two proposed entries and the corrected locator for EV-0012 and waits for explicit author confirmation before writing any file.
 - **Status is pending.** Both EV entries land at `status: pending`. Only `fact-checker` may advance them to `verified` or any other status.
 - **Three counts from the agent's report.** The skill formats the three counts (1 new source, 2 new evidence entries, 0 claims still unsourced) from the agent's session report. It reads `research/open-questions.md` to count remaining open items; it does not recount the ledger files independently.

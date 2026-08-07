@@ -22,8 +22,8 @@ Chapter 2 (`chapters/02-finding-your-network.md`) is the committed preceding cha
 
 The evidence ledger has two entries relevant to Chapter 3 (from the prior research-pass session):
 
-- **EV-0011 (information-volume-overload):** The average professional encounters roughly 34 gigabytes of information content per day, the vast majority designed to provoke engagement rather than build understanding. Source: SRC-0006 (Johnson 2012), status: pending.
-- **EV-0012 (intentional-selection-sustainability):** Setting intentional selection criteria for which sources and signals receive regular attention reduces the ongoing cognitive cost of information triage and makes a personal curation practice sustainable long-term. Source: SRC-0006 (Johnson 2012), status: pending.
+- **EV-0011 (information-volume-overload):** The average professional encounters roughly 34 gigabytes of information content per day, the vast majority designed to provoke engagement rather than build understanding. Source: SRC-0007 (Johnson 2012), status: pending.
+- **EV-0012 (intentional-selection-sustainability):** Setting intentional selection criteria for which sources and signals receive regular attention reduces the ongoing cognitive cost of information triage and makes a personal curation practice sustainable long-term. Source: SRC-0007 (Johnson 2012), status: pending.
 
 The session runs on the chat surface. No hooks fire on chat; the skill appends the compliance records at Step 6.
 

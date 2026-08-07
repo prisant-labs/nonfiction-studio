@@ -38,7 +38,7 @@ Status: open
 
 The ledger at session start:
 - `research/evidence-log.md`: 10 entries, highest is EV-0010 (pacing recommendation)
-- `research/sources.md`: 5 records, highest is SRC-0005 (Dunbar 1992)
+- `research/sources.md`: 6 records, highest is SRC-0006 (Lave and Wenger 1991)
 
 Web research is disabled for this project (`research.web_enabled` is absent from
 `.studio/config.json`).
@@ -60,11 +60,11 @@ The `research-pass` skill routes to `research-librarian`.
 > I read `research/evidence-log.md`: 10 entries, highest ID is EV-0010
 > (pacing recommendation). The next EV ID will be EV-0011.
 >
-> I read `research/sources.md`: 5 records, highest ID is SRC-0005
-> (Dunbar 1992). Before allocating a new SRC ID, I will confirm whether
+> I read `research/sources.md`: 6 records, highest ID is SRC-0006
+> (Lave and Wenger 1991). Before allocating a new SRC ID, I will confirm whether
 > Wenger 1998 is already registered.
 >
-> Wenger 1998 is not in the source registry. The next SRC ID is SRC-0006.
+> Wenger 1998 is not in the source registry. The next SRC ID is SRC-0007.
 >
 > I read `research/open-questions.md`: OQ-009 requests primary research on how
 > visible contribution accelerates learning in communities of practice.
@@ -81,14 +81,14 @@ The `research-pass` skill routes to `research-librarian`.
 > Claim: Members of communities of practice move from peripheral to full
 > participation through increasingly complex engagement, not through explicit
 > instruction.
-> Source: SRC-0006 (to be registered as Wenger 1998)
+> Source: SRC-0007 (to be registered as Wenger 1998)
 > Locator: pp. 98-99
 > Confidence: high - directly stated in a primary source
 >
 > **EV-0012 (reification-participation)**
 > Claim: Sustaining learning in a community requires a balance between
 > participation and reification; neither alone produces durable knowledge.
-> Source: SRC-0006
+> Source: SRC-0007
 > Locator: pp. 57-58
 > Confidence: high - directly stated in a primary source
 >
@@ -105,17 +105,17 @@ not just 57-58. Adjust that and go ahead."
 
 > Noted - I will use `pp. 57-63` for EV-0012.
 >
-> The source record writes first; no EV entry is logged until SRC-0006 is in
+> The source record writes first; no EV entry is logged until SRC-0007 is in
 > `research/sources.md`.
 
-The agent writes SRC-0006, then EV-0011, then EV-0012.
+The agent writes SRC-0007, then EV-0011, then EV-0012.
 
 ---
 
 ## research/sources.md append
 
 ```markdown
-### SRC-0006 (Wenger 1998)
+### SRC-0007 (Wenger 1998)
 - type: book
 - nature: primary
 - author: Wenger, Etienne
@@ -135,7 +135,7 @@ The agent writes SRC-0006, then EV-0011, then EV-0012.
 ```markdown
 ### EV-0011 (contribution-transition)
 - claim: Members of communities of practice move from peripheral to full participation through increasingly complex engagement, not through explicit instruction.
-- source: SRC-0006
+- source: SRC-0007
 - locator: pp. 98-99
 - confidence: high
 - status: pending
@@ -144,7 +144,7 @@ The agent writes SRC-0006, then EV-0011, then EV-0012.
 
 ### EV-0012 (reification-participation)
 - claim: Sustaining learning in a community requires a balance between participation and reification; neither alone produces durable knowledge.
-- source: SRC-0006
+- source: SRC-0007
 - locator: pp. 57-63
 - confidence: high
 - status: pending
@@ -168,7 +168,7 @@ Question: Is there primary research on the mechanism by which visible
   contribution - sharing reasoning, process, and questions - accelerates
   learning for the contributor as well as the reader?
 Status: resolved
-Resolved-by: EV-0011 (contribution-transition), EV-0012 (reification-participation), SRC-0006 (Wenger 1998)
+Resolved-by: EV-0011 (contribution-transition), EV-0012 (reification-participation), SRC-0007 (Wenger 1998)
 ```
 
 ---
@@ -184,18 +184,20 @@ ISBN."
 **research-librarian:**
 
 > I am checking `research/sources.md` for any existing record of "Cultivating
-> Communities of Practice" by Wenger, McDermott, and Snyder. The only Wenger
-> entry is SRC-0006 (Wenger 1998), which is a different title and a different
-> work. No duplicate exists; a new SRC record is appropriate.
+> Communities of Practice" by Wenger, McDermott, and Snyder. Two records carry
+> Wenger as an author: SRC-0006 (Lave and Wenger 1991), "Situated Learning",
+> and SRC-0007 (Wenger 1998), registered earlier in this session. Both are
+> different titles and different works, so neither is a duplicate of the
+> requested source. A new SRC record is appropriate.
 >
-> SRC-0006 (Wenger 1998) was registered earlier in this session, so the next
-> available SRC ID is SRC-0007. Do you want to provide the publication details
+> SRC-0007 (Wenger 1998) was registered earlier in this session, so the next
+> available SRC ID is SRC-0008. Do you want to provide the publication details
 > now so I can register it?
 
 **Author:** "Not yet - I will return to it in a later session."
 
 No new record is written. The deduplication check confirms the agent reads the
-current in-session state of `research/sources.md` - including SRC-0006 just
+current in-session state of `research/sources.md` - including SRC-0007 just
 written - before allocating the next ID.
 
 ---
@@ -229,19 +231,19 @@ communities of practice was available online.
 ## Key assertions from this transcript
 
 - **Read before allocate.** The agent reads both ledger files at the start of the
-  session to establish the current highest IDs (EV-0010, SRC-0005) before writing
-  anything. When SRC-0006 is registered within the session, the agent's next SRC
-  allocation correctly begins from SRC-0007.
-- **Source registers first.** SRC-0006 is written to `research/sources.md`
+  session to establish the current highest IDs (EV-0010, SRC-0006) before writing
+  anything. When SRC-0007 is registered within the session, the agent's next SRC
+  allocation correctly begins from SRC-0008.
+- **Source registers first.** SRC-0007 is written to `research/sources.md`
   before EV-0011 and EV-0012 are written. No EV entry is logged until its source
   is in the registry.
 - **Author confirmation before write.** The agent presents the proposed claims
   and locators and waits for explicit author confirmation. The locator for
   EV-0012 was corrected (pp. 57-58 to pp. 57-63) before any write.
 - **Deduplication in-session.** When the author mentions a second Wenger title,
-  the agent checks `research/sources.md` including SRC-0006 just written in the
+  the agent checks `research/sources.md` including SRC-0007 just written in the
   same session. The check correctly identifies that the proposed new source is a
-  distinct work and that the next ID would be SRC-0007.
+  distinct work and that the next ID would be SRC-0008.
 - **Confidence assigned at high.** Both EV entries carry `confidence: high`
   because both claims are directly stated in a primary source (original
   theorization, not synthesis). A secondary source citing Wenger would warrant
@@ -261,4 +263,4 @@ communities of practice was available online.
 - **Open-question resolved atomically.** OQ-009 was marked resolved in the same
   session that logged EV-0011 (contribution-transition) and EV-0012
   (reification-participation). The resolution note cites both EV IDs and
-  SRC-0006 (Wenger 1998).
+  SRC-0007 (Wenger 1998).

@@ -26,8 +26,8 @@
 
 ### EV-0003 (peripheral participation)
 - claim: Sociologists describe legitimate peripheral participation as the process by which newcomers learn a community's practices by observing from the edges before taking a central role, a concept first developed through research on craft apprentices.
-- source: SRC-0001
-- locator: pp. 22-25
+- source: SRC-0006
+- locator: pp. 91-93
 - confidence: high
 - status: verified
 - added-by: research-librarian
