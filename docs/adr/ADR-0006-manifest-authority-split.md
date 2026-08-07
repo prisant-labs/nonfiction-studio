@@ -100,6 +100,19 @@ Logged here (not as an open question) because the trigger is deterministic: when
 
 ---
 
+## Central marketplace amendment (2026-08-07)
+
+A second marketplace now exists: `prisant-labs/agent-plugins`, a pointer repository whose only content is a `.claude-plugin/marketplace.json` listing this plugin by GitHub source. It was created before any public install instructions existed, so the marketplace name users learn is stable from the start and no migration off a per-plugin marketplace name is ever needed. Further prisant-labs plugins are planned and will be added there as entries.
+
+This does not change the authority split above. `plugin.json` and `marketplace.json` remain authored, `library.json` remains the spine's, and the field-level rules are untouched. Two points are added:
+
+- The in-repo `.claude-plugin/marketplace.json` (the self-marketplace, `"source": "./"`) is RETAINED deliberately. It is what makes local directory installs work during development, and step 5 of the SPK-02 (Cowork execution probe) protocol depends on it. Removing it would break both.
+- Marketplace names register independently, so the self-marketplace (`nonfiction-studio`) and the central marketplace (`agent-plugins`) coexist without conflict, and a user may add both.
+
+Visibility caveat while it lasts: `agent-plugins` is public and this plugin repository is private, so the listed entry is visible but will not install until this repository goes public. The agent-plugins README marks the entry accordingly rather than presenting it as installable.
+
+---
+
 ## Verification (present-day equality)
 
 As of the commit that introduces this ADR:
