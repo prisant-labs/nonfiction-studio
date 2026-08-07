@@ -20,7 +20,7 @@ Three observations, each recorded in RESULTS-TEMPLATE.md:
 
 ## Protocol (15 steps)
 
-**Before you start:** Note the Cowork version (visible in the Cowork app titlebar or About panel) for the results template.
+**Before you start:** Note the Cowork version (visible in the Cowork app titlebar or About panel) for the results template. Also check `examples/spikes/spk-02/spk02-evidence.log` for content left over from an earlier run - the probe hook appends to this file rather than overwriting it, so a stale line survives until someone clears it. Delete the file (or note its exact current contents) now, before Step 3, so a leftover line is never mistaken for fresh evidence when you reach Step 13.
 
 **Step 1 - Open a terminal and navigate to the repo.**
 
@@ -30,7 +30,10 @@ cd <repo-root>
 
 **Step 2 - Create a temporary test branch.**
 
+Create this branch from `build/phase-1` so the installed plugin reflects the complete Phase 1 wiring. If you are not already on `build/phase-1`, check it out first.
+
 ```
+git checkout build/phase-1
 git checkout -b spike/cowork-probe
 ```
 
@@ -98,7 +101,9 @@ Back in your terminal (do not close the Cowork session yet):
 cat examples/spikes/spk-02/spk02-evidence.log
 ```
 
-If the file is not found at that path, the hook may have written to the installed plugin root instead (a versioned cache directory, not the repo checkout). To find that root, run `claude plugin list` or check the Cowork plugin panel for the installed path of `nonfiction-studio`, then look for `examples/spikes/spk-02/spk02-evidence.log` beneath it. Record whichever path held the file when filling in O2.
+If the file is not found at that path, the hook may have written to the installed plugin root instead (a versioned cache directory, not the repo checkout), since the hook command resolves its write path through `${CLAUDE_PLUGIN_ROOT}`. To find that root, run `claude plugin list` or check the Cowork plugin panel for the installed path of `nonfiction-studio`, then look for `examples/spikes/spk-02/spk02-evidence.log` beneath it. Record whichever path held the file when filling in O2.
+
+Because the hook appends rather than overwrites, this file only counts as fresh evidence if you cleared or noted it in "Before you start." If you skipped that step, check the timestamp on each line against the time you ran Step 7 (session open) before treating a `SPK02-SESSIONSTART-FIRED` line as this run's result.
 
 **Step 13 - Record O2 (hook command execution).**
 
@@ -114,26 +119,29 @@ In Cowork (panel names vary by Cowork version):
 
 Close the Cowork session.
 
-**Step 15 - Cleanup: remove the probe hook file and restore the branch.**
+**Step 15 - Cleanup: restore the hooks file and the branch.**
+
+`hooks/hooks.json` is a tracked production file that wires five real hooks (confirm with `git ls-files hooks/`). Step 3 overwrote it in the working tree with the temporary spike copy but never committed that change, so cleanup restores the tracked version from git. Do NOT delete it.
 
 In the terminal:
 
 PowerShell:
 ```
-Remove-Item hooks\hooks.json
-git checkout build/phase-0
+git checkout -- hooks/hooks.json
+git checkout build/phase-1
 git branch -d spike/cowork-probe
 ```
 
 Git Bash:
 ```
-rm hooks/hooks.json
-git checkout build/phase-0
+git checkout -- hooks/hooks.json
+git checkout build/phase-1
 git branch -d spike/cowork-probe
 ```
 
-Verify no `hooks.json` remains in `hooks/` (only `.gitkeep` should be present):
+Verify `hooks/hooks.json` is restored to the tracked production version (clean, no diff) and that `hooks/` still contains the full set of production hook files, not just `.gitkeep`:
 ```
+git status hooks/
 ls hooks/
 ```
 
