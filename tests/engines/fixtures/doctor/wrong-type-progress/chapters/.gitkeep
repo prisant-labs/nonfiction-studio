@@ -1,0 +1,4 @@
+Keeps this empty chapters/ directory in git. bible.mjs isBookRoot requires a
+chapters/ sibling to recognize a book root, and git does not track empty
+directories, so without this file the doctor CLI exits 2 in a clean checkout
+while passing locally. Do not delete unless a real chapter file is added.
