@@ -1,7 +1,14 @@
 name: Tier B
 
-# Runs on merge to main and on a nightly cron schedule.
-# Requires ANTHROPIC_API_KEY; advisory to the merge queue but hard-blocks a release.
+# Manual only: runs when dispatched from the Actions tab, never on its own.
+# The push-to-main and nightly cron triggers were removed so this workflow does
+# not demand a credential GitHub does not yet have. Restore them once a secret
+# is set and unattended coverage is wanted. Advisory either way: a Tier B
+# failure never blocks a merge, though it still hard-blocks a release.
+#
+# A live run needs a credential ONLY on a GitHub runner, which has no logged-in
+# user. Run locally instead with `node scripts/run-integration.mjs`, which
+# spawns the claude CLI against your existing login and needs no API key.
 # Zero validation logic lives in this file. Every step is exactly one node call.
 # See Q-02 (CI pipeline) section 2 for the contract and failure taxonomy.
 #
@@ -10,11 +17,7 @@ name: Tier B
 # execution where ANTHROPIC_API_KEY is available.
 
 on:
-  push:
-    branches:
-      - main
-  schedule:
-    - cron: '0 2 * * *'
+  workflow_dispatch:
 
 jobs:
   tier-b:
