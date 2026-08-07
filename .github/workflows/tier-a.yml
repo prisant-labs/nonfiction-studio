@@ -6,9 +6,9 @@ name: Tier A
 # See Q-02 (CI pipeline) sections 1.1 and 6 for the contract and local parity rules.
 #
 # Local proof: all nine steps run green on Windows per TSK-055 (Tier A check scripts).
-# The ubuntu leg proves on first push. The claude CLI step requires the claude binary
-# to be installed on the runner; on standard GitHub Actions runners this is not available
-# by default -- record in X-04 (open questions) and install via a setup step if needed.
+# The ubuntu leg proves on first push. The claude binary is not present on standard
+# GitHub Actions runners, so it is installed by an inert scaffolding step ahead of
+# live step 3; that step's availability on both runners proves on the first PR.
 
 on:
   pull_request:
@@ -46,9 +46,15 @@ jobs:
       - name: Spine conformance
         run: node scripts/check.mjs --profile plain-plugin
 
+      # Inert scaffolding: installs the claude binary required by live step 3.
+      # The npm package is the same binary as the standalone installer and needs
+      # Node 22+, which the setup-node step above already pins.
+      - name: Install claude CLI
+        run: npm install -g @anthropic-ai/claude-code
+
       # Live step 3: platform schema validation via claude CLI.
-      # Note: claude CLI availability on standard GitHub Actions runners must be confirmed
-      # and a setup step added (see X-04 open questions). Local verification runs this step.
+      # Reads the authored manifests in .claude-plugin/ only, per ADR-0006
+      # (manifest authority split); no API key or account auth is involved.
       - name: Platform validation
         run: claude plugin validate --strict .
 
