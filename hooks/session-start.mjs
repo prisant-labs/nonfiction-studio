@@ -3,10 +3,14 @@
 //               findBookRoot (the sole authority), delegates five-element orientation block
 //               assembly to hooks/lib/orientation.mjs (TSK-035 extraction), and emits
 //               hookSpecificOutput.additionalContext with sessionTitle.
-//               When no book root is found the script emits a two-sentence D-17 (guided front door)
-//               empty-state message instead. Fail-open: any read or parse error after root detection
-//               appends one JSONL record to .studio/logs/errors.jsonl and the script continues with
-//               whatever partial block it has assembled. Exits 0 unconditionally.
+//               When no book root is found (BibleError code NO_BOOK_ROOT) the script emits a
+//               two-sentence D-17 (guided front door) empty-state message instead. When a book
+//               root IS found but its bible files are corrupt (META_READ_ERROR, CONFIG_READ_ERROR),
+//               the script emits a truthful one-line message naming the real problem, mirroring the
+//               TSK-034 (stop-gate hook) error-code discrimination pattern. Fail-open: any read or
+//               parse error after root detection appends one JSONL record to .studio/logs/errors.jsonl
+//               and the script continues with whatever partial block it has assembled. Exits 0
+//               unconditionally.
 //
 // stdin:  platform SessionStart event (snake_case: session_id, transcript_path, cwd,
 //         hook_event_name, source) - verified live by TSK-030 (hooks.json Phase 1 wiring)
@@ -51,19 +55,39 @@ const cwd = (typeof event.cwd === 'string' && event.cwd) ? event.cwd : process.c
 
 // ---------------------------------------------------------------------------
 // Book detection - findBookRoot is the sole authority per TSK-031 controller resolution 3.
-// Null root (thrown) means empty-state path.
+// Null root (thrown) means either no book root anywhere in the ancestor chain, or a book
+// root was found but its bible files are corrupt. The two are distinguished by BibleError
+// code, mirroring the TSK-034 (stop-gate hook) error-code discrimination pattern.
 // ---------------------------------------------------------------------------
 let bookRoot = null;
 let meta = null;
+let bibleError = null;
 try {
   const found = findBookRoot(cwd);
   bookRoot = found.root;
   meta = found.meta;
-} catch {
-  // No book root found; take the empty-state path below.
+} catch (err) {
+  bibleError = err;
 }
 
 if (!bookRoot) {
+  // Error discrimination: BibleError code NO_BOOK_ROOT is normal (no book root
+  // anywhere in the ancestor chain); it takes the D-17 empty-state path below.
+  // Any other BibleError (META_READ_ERROR, CONFIG_READ_ERROR) means a book root
+  // was found but its bible files are corrupt. Emit a truthful one-line message
+  // naming the real problem instead of the misleading "no book project" text.
+  if (bibleError && bibleError.code && bibleError.code !== 'NO_BOOK_ROOT') {
+    process.stdout.write(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: 'SessionStart',
+          additionalContext: 'Book project found, but ' + bibleError.message
+        }
+      }) + '\n'
+    );
+    process.exit(0);
+  }
+
   // D-17 (guided front door): exactly two sentences.
   // Sentence 1: states no book project exists here.
   // Sentence 2: names the studio front door by invocation form (D-17), which

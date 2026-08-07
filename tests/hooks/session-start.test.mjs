@@ -265,6 +265,62 @@ test('(e) malformed progress.json: exit 0, partial block, exactly one error line
 });
 
 // ---------------------------------------------------------------------------
+// Case (g): corrupt meta.json - TSK-034 (stop-gate hook) error-code discrimination
+// ---------------------------------------------------------------------------
+test('(g) corrupt meta.json: exit 0, truthful one-line message, no sessionTitle', () => {
+  const cloneDir = cloneSampleBook('corrupt-meta');
+
+  writeFileSync(join(cloneDir, '.studio', 'meta.json'), 'not valid json {{', 'utf8');
+
+  const result = runHook(cloneDir);
+  assert.equal(result.status, 0, 'exit code is 0 despite corrupt meta.json');
+
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout parses as JSON');
+
+  const hso = out.hookSpecificOutput;
+  assert.equal(hso.hookEventName, 'SessionStart', 'hookEventName is SessionStart');
+
+  const ctx = hso.additionalContext;
+  assert.equal(typeof ctx, 'string', 'additionalContext is a string');
+
+  // Truthful: names the real problem, not the misleading "no book project" text.
+  assert.ok(!ctx.includes('No book project'), 'message does not claim no book project exists');
+  assert.ok(ctx.includes('meta.json'), 'message names meta.json as the real problem');
+
+  // No sessionTitle on this path (meta could not be read).
+  assert.equal(hso.sessionTitle, undefined, 'sessionTitle is absent when meta.json is corrupt');
+});
+
+// ---------------------------------------------------------------------------
+// Case (h): corrupt config.json - TSK-034 (stop-gate hook) error-code discrimination
+// ---------------------------------------------------------------------------
+test('(h) corrupt config.json: exit 0, truthful one-line message, no sessionTitle', () => {
+  const cloneDir = cloneSampleBook('corrupt-config');
+
+  writeFileSync(join(cloneDir, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+
+  const result = runHook(cloneDir);
+  assert.equal(result.status, 0, 'exit code is 0 despite corrupt config.json');
+
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout parses as JSON');
+
+  const hso = out.hookSpecificOutput;
+  assert.equal(hso.hookEventName, 'SessionStart', 'hookEventName is SessionStart');
+
+  const ctx = hso.additionalContext;
+  assert.equal(typeof ctx, 'string', 'additionalContext is a string');
+
+  // Truthful: names the real problem, not the misleading "no book project" text.
+  assert.ok(!ctx.includes('No book project'), 'message does not claim no book project exists');
+  assert.ok(ctx.includes('config.json'), 'message names config.json as the real problem');
+
+  // No sessionTitle on this path (root detection threw before orientation ran).
+  assert.equal(hso.sessionTitle, undefined, 'sessionTitle is absent when config.json is corrupt');
+});
+
+// ---------------------------------------------------------------------------
 // Case (f): NS_HOOK_TRACE unset vs set
 // ---------------------------------------------------------------------------
 test('(f) NS_HOOK_TRACE unset: no trace file written', () => {
