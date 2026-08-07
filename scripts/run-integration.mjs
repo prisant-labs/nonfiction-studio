@@ -17,11 +17,19 @@
 //   3  - BUDGET_EXCEEDED: cumulative haiku spend exceeded $0.10
 //
 // Budget mechanism:
-//   Each claude -p call uses --output-format json. The JSON result includes
-//   cost_usd (the API-reported cost for that call). Costs accumulate; when the
+//   Each claude -p call uses --output-format json. The JSON result carries the
+//   API-reported cost for that call in total_cost_usd. Costs accumulate; when the
 //   running total exceeds BUDGET_CAP_USD the runner exits 3 before the next call.
 //   This derives spend from the CLI's machine-readable output surface, not from
 //   token arithmetic, so it honors cache discounts automatically.
+//
+//   Corrected 2026-08-07: this read parsed.cost_usd, a field the CLI does not
+//   emit (verified against CLI 2.1.224, which emits total_cost_usd). The value
+//   was therefore always undefined, coerced to 0, and the cap could never fire.
+//   The defect was undetectable while the API-key gate below forced dry-run on
+//   every machine, so runLiveMode had never executed against a real response.
+//   A missing cost field is now a HARD ERROR rather than a silent zero, so this
+//   class of failure can never again present as a working budget.
 //
 // Flat-layout note (Q-02 section 2.1, 2026-07-19):
 //   The Q-02 sketch references a "book/" scaffold. The built flat reality has no
@@ -180,7 +188,21 @@ function callClaude(prompt, model, cwd) {
   } catch {
     return { ok: false, error: 'non-JSON stdout', costUsd: 0, text: result.stdout.slice(0, 200) };
   }
-  const costUsd = typeof parsed.cost_usd === 'number' ? parsed.cost_usd : 0;
+  // The CLI emits total_cost_usd; cost_usd is accepted as a legacy fallback.
+  // A response with NEITHER field is a hard failure: continuing would run the
+  // rest of the flow with no working spend cap, which is exactly how the
+  // pre-2026-08-07 defect stayed invisible.
+  const costUsd = typeof parsed.total_cost_usd === 'number' ? parsed.total_cost_usd
+    : (typeof parsed.cost_usd === 'number' ? parsed.cost_usd : null);
+  if (costUsd === null) {
+    return {
+      ok: false,
+      error: 'CLI JSON carried no total_cost_usd (or legacy cost_usd) field; '
+        + 'refusing to continue without a working budget cap',
+      costUsd: 0,
+      text: '',
+    };
+  }
   totalSpendUsd += costUsd;
   return {
     ok: !parsed.is_error,
@@ -326,7 +348,7 @@ function runDryMode(model) {
     if (!allOk) return exitWithCode(1, 'dry-run: one or more assertions failed');
 
     log('\n[run-integration] dry-run complete: all assertions pass, $0.00 spent');
-    log('[run-integration] live run deferred to Tier B CI (ANTHROPIC_API_KEY required)');
+    log('[run-integration] no model calls made; rerun without --dry-run for the live flow');
     return exitWithCode(0);
   } finally {
     removeTempClone(tempDir);
@@ -521,13 +543,29 @@ function fatal(msg) { exitWithCode(2, msg); }
 
 const { dryRun, model } = parseArgs(process.argv.slice(2));
 
-// Force dry-run when API key is absent (live run is not possible)
+// Live mode needs working model access, which is NOT the same thing as an API
+// key. The claude CLI authenticates from the active account when one is logged
+// in, so an authenticated CLI is sufficient. A GitHub runner has no logged-in
+// account, which is the only place ANTHROPIC_API_KEY is actually required.
+//
+// Corrected 2026-08-07: this gated solely on ANTHROPIC_API_KEY and so forced
+// dry-run on every developer machine, which is why runLiveMode had never once
+// executed and the broken cost field above went unnoticed.
+function claudeCliUsable() {
+  const probe = spawnSync('claude', ['--version'], { encoding: 'utf8', timeout: 20000 });
+  return !probe.error && probe.status === 0;
+}
+
 const hasApiKey = !!(process.env.ANTHROPIC_API_KEY);
-const forcedDryRun = !hasApiKey && !dryRun;
+const hasUsableCli = hasApiKey ? true : claudeCliUsable();
+const forcedDryRun = !hasApiKey && !hasUsableCli && !dryRun;
 
 if (forcedDryRun) {
-  log('[run-integration] LIVE RUN BLOCKER: ANTHROPIC_API_KEY is not set');
-  log('[run-integration] falling back to dry-run mode; live run deferred to Tier B CI');
+  log('[run-integration] LIVE RUN BLOCKER: no model access available');
+  log('[run-integration]   ANTHROPIC_API_KEY is not set, and the claude CLI is not runnable');
+  log('[run-integration]   (an authenticated claude CLI is sufficient; a key is only needed');
+  log('[run-integration]    where no account is logged in, such as a CI runner)');
+  log('[run-integration] falling back to dry-run mode');
   log('');
   runDryMode(model);
 } else if (dryRun) {
