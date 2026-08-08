@@ -1,7 +1,7 @@
 ---
 name: run-quality-gate
 user-invocable: true
-argument-hint: "[chapter: slug or number] [deep]"
+argument-hint: "[chapter: slug or number]"
 description: "Runs the surface-independent deterministic quality gate over a chapter by wrapping bin/ns-gate in a single Bash call: maps exit 0 to a pass or warn verdict summary from the report JSON, exit 1 to a block verdict with per-check details and next actions, and exit 2 to an error that is never treated as a pass. Pre-checks the voice baseline before invoking the gate; degrades to a four-check subset (claims, scrub, continuity-quick, coherence) with a voice-drift-skipped warning when the baseline is absent. Resolves the chapter argument from the supplied value, the most-recently-modified chapter in progress.json, or by asking the author when neither is available. Deep mode (Phase 2) is acknowledged and politely declined in v1. Use when the author asks 'is this chapter done' or wants to 'run the quality gate,' seeking the overall pass, warn, or block verdict rather than the claims-only check that fact-check-pass performs."
 when_to_use: "Use when the author types the legacy /gate verb, invokes explicitly on chat after any chapter-writing flow, draft-chapter or revise-pass prompts for it on completion, or wants an explicit deterministic gate verdict. Do not invoke for project status overviews (use status-dashboard for that), to re-trigger the Stop hook gate (automatic on CLI and Cowork), in deep mode (Phase 2, not yet available), or for unrelated queries."
 ---

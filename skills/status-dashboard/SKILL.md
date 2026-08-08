@@ -127,7 +127,7 @@ Present a next-actions list:
 
 - For each chapter whose Gate cell is "-" (no gate report on record): suggest `/nonfiction-studio:run-quality-gate <slug>`.
 - For each chapter where `open_claim_count` is greater than 0: suggest `/nonfiction-studio:fact-check-pass <slug>`.
-- For each highlighted row where drift exceeds the threshold: suggest `/nonfiction-studio:revise-pass <slug>` to address voice drift, then re-run `/nonfiction-studio:run-quality-gate <slug>`.
+- For each highlighted row where drift exceeds the threshold: note that a dedicated revision pass (`revise-pass`) is a Phase 2 skill and is not available in v1; suggest `/nonfiction-studio:draft-chapter <slug>` to revise the chapter directly, then re-run `/nonfiction-studio:run-quality-gate <slug>` to confirm the drift score has improved.
 - For each highlighted row where the gate verdict is `block`: name the chapter and suggest `/nonfiction-studio:run-quality-gate <slug>` to inspect the blocking check details, then follow the remediation the gate report prescribes.
 
 If all chapters have gate reports, zero open claims, and no highlighted rows, state that no immediate action is required and name the next un-started chapter from the array (first entry with status `empty`, `outlined`, or `drafting`).
