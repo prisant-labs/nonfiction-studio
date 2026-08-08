@@ -39,7 +39,7 @@ const SAMPLE_BOOK = join(REPO_ROOT, 'examples', 'sample-book');
 // isMain is false here (process.argv[1] is the test runner, not the hook script)
 // so no stdin reads or process.exit() calls happen during import.
 // ---------------------------------------------------------------------------
-const { checkResearchAgentConstraint } = await import('../../hooks/pre-tool-use.mjs');
+const { checkResearchAgentConstraint, pickSnapshotName } = await import('../../hooks/pre-tool-use.mjs');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -153,8 +153,8 @@ test('(a) chapter Write existing file: flag + snapshot written, empty stdout, ex
   allSnapshots.sort();
   const newestSnapshot = allSnapshots[allSnapshots.length - 1];
   assert.ok(
-    /^01-listening-before-speaking\.\d{8}T\d{6}Z\.md$/.test(newestSnapshot),
-    'newest snapshot filename matches <slug>.<YYYYMMDDTHHMMSSZ>.md'
+    /^01-listening-before-speaking\.\d{8}T\d{9}Z\.md$/.test(newestSnapshot),
+    'newest snapshot filename matches <slug>.<YYYYMMDDTHHMMSSmmmZ>.md (F-HK-03: milliseconds added)'
   );
 });
 
@@ -618,4 +618,127 @@ test('F-HK-01 (f) NO_BOOK_ROOT (no book project at all) stays silent exit 0 for 
     result.stdout.trim(), '',
     'NO_BOOK_ROOT is a normal no-op (no book project here at all), not a corrupt-config deny'
   );
+});
+
+// ---------------------------------------------------------------------------
+// F-HK-03: same-second snapshot overwrite.
+//
+// compactUtcNow() previously truncated to whole seconds, so two overwrites of
+// the same chapter within one second produced the same snapshot filename and
+// the second write silently destroyed the first rollback point. The fix adds
+// milliseconds to the timestamp AND a deterministic -2/-3 collision counter
+// (belt and suspenders) via the exported pickSnapshotName, then prunes with a
+// comparator that understands the counter suffix instead of a raw string sort.
+// ---------------------------------------------------------------------------
+
+test('F-HK-03 (a) pickSnapshotName: collision at the base name escalates to -2, then -3, deterministically', () => {
+  const existing = new Set(['01-slug.20260807T154012123Z.md']);
+  const existsFn = (name) => existing.has(name);
+
+  const first = pickSnapshotName('01-slug', '20260807T154012123Z', existsFn);
+  assert.equal(
+    first, '01-slug.20260807T154012123Z-2.md',
+    'base name already taken: first collision escalates to a -2 suffix'
+  );
+
+  existing.add(first);
+  const second = pickSnapshotName('01-slug', '20260807T154012123Z', existsFn);
+  assert.equal(
+    second, '01-slug.20260807T154012123Z-3.md',
+    'base name and -2 both taken: second collision escalates to -3'
+  );
+
+  // No collision at all: the plain base name is returned unchanged.
+  const clear = pickSnapshotName('01-slug', '20260807T999999999Z', existsFn);
+  assert.equal(
+    clear, '01-slug.20260807T999999999Z.md',
+    'no collision: plain <slug>.<timestamp>.md name is used, no counter suffix'
+  );
+});
+
+test('F-HK-03 (b) two rapid writes to the same chapter in the same second: two distinct snapshots survive', () => {
+  const book = cloneSampleBook('fhk03-b-rapid');
+  const slug = '01-listening-before-speaking';
+  const target = join(book, 'chapters', slug + '.md');
+  const snapshotsBefore = countSnapshots(book, slug);
+
+  // Two writes back-to-back, no delay: reproduces the same-second collision
+  // window the audit found (pre-fix, whole-second timestamps made these
+  // indistinguishable and the second write silently clobbered the first).
+  const result1 = runHook(makeWriteEvent(book, target));
+  const result2 = runHook(makeWriteEvent(book, target));
+
+  assert.equal(result1.status, 0, 'first write exit code is 0');
+  assert.equal(result2.status, 0, 'second write exit code is 0');
+
+  const snapshotsAfter = countSnapshots(book, slug);
+  assert.equal(
+    snapshotsAfter, snapshotsBefore + 2,
+    'both writes produced a surviving snapshot (no silent same-second overwrite)'
+  );
+
+  const allNames = readdirSync(join(book, '.studio', 'snapshots'))
+    .filter(f => f.startsWith(slug + '.') && f.endsWith('.md'));
+  const newest = allNames.slice(-2);
+  assert.notEqual(
+    newest[0], newest[1],
+    'the two newest snapshot filenames are distinct from each other'
+  );
+});
+
+test('F-HK-03 (c) prune ordering with a same-timestamp collision pair: base is older, -2 is newer, deterministic', () => {
+  const book = cloneSampleBook('fhk03-c-prune-collision');
+  const slug = '01-listening-before-speaking';
+  const snapshotsDir = join(book, '.studio', 'snapshots');
+  const target = join(book, 'chapters', slug + '.md');
+
+  // Clean slate for this slug.
+  readdirSync(snapshotsDir)
+    .filter(f => f.startsWith(slug + '.') && f.endsWith('.md'))
+    .forEach(f => unlinkSync(join(snapshotsDir, f)));
+
+  // Seed the OLDEST entry as a same-timestamp collision pair: the base file
+  // (no counter, created "first") and its -2 sibling (created "second" at the
+  // identical nominal timestamp). A naive default string sort ranks "-2" as
+  // LESS than the bare base name (ASCII '-' < '.'), which would treat the
+  // second-written file as the older one - backwards. The correct comparator
+  // must treat -2 as newer than the base.
+  const collideTs = '20200101T000001000Z';
+  const pairBase = slug + '.' + collideTs + '.md';
+  const pairNewer = slug + '.' + collideTs + '-2.md';
+  writeFileSync(join(snapshotsDir, pairBase), 'collision pair: base (older)', 'utf8');
+  writeFileSync(join(snapshotsDir, pairNewer), 'collision pair: -2 (newer)', 'utf8');
+
+  // Seed 8 more, distinct, all strictly newer than the collision pair.
+  const seededNewer = [];
+  for (let i = 2; i <= 9; i++) {
+    const ts = '20200101T00000' + i + '000Z';
+    const fname = slug + '.' + ts + '.md';
+    seededNewer.push(fname);
+    writeFileSync(join(snapshotsDir, fname), 'seed ' + i, 'utf8');
+  }
+
+  // Pre-write total: 2 (pair) + 8 (distinct newer) = 10.
+  assert.equal(countSnapshots(book, slug), 10, 'precondition: 10 snapshots seeded (2 pair + 8 distinct)');
+
+  // Trigger one real write: creates an 11th snapshot, newer than everything
+  // seeded (real "now" vs synthetic 2020 dates), and fires the prune (keep 10).
+  const result = runHook(makeWriteEvent(book, target));
+  assert.equal(result.status, 0, 'exit code is 0');
+
+  assert.equal(countSnapshots(book, slug), 10, 'exactly 10 snapshots survive after prune');
+
+  // The pair's BASE (older) must be the one dropped; its -2 sibling (newer)
+  // and all 8 distinct-newer seeds plus the fresh write must survive.
+  assert.ok(
+    !existsSync(join(snapshotsDir, pairBase)),
+    'collision pair base (older, no counter) was pruned as the true oldest entry'
+  );
+  assert.ok(
+    existsSync(join(snapshotsDir, pairNewer)),
+    'collision pair -2 sibling (newer, created second) survives the prune'
+  );
+  for (const fname of seededNewer) {
+    assert.ok(existsSync(join(snapshotsDir, fname)), fname + ' (distinct, newer than the pair) survives');
+  }
 });

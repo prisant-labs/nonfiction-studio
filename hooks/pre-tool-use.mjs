@@ -36,13 +36,74 @@ import { fileURLToPath } from 'node:url';
 import { findBookRoot } from './lib/bible.mjs';
 
 // ---------------------------------------------------------------------------
-// Helper: compact UTC timestamp for snapshot filenames (YYYYMMDDTHHMMSSZ)
-// Example: "2026-07-17T15:40:12.123Z" -> "20260717T154012Z"
+// Helper: compact UTC timestamp for snapshot filenames (YYYYMMDDTHHMMSSmmmZ)
+// F-HK-03: milliseconds are now included (previously truncated to whole
+// seconds), which is the primary defense against same-second snapshot
+// collisions - two overwrites of the same chapter within one second almost
+// always land in different milliseconds.
+// Example: "2026-07-17T15:40:12.123Z" -> "20260717T154012123Z"
 // ---------------------------------------------------------------------------
 function compactUtcNow() {
   return new Date().toISOString()
     .replace(/[-:]/g, '')
-    .replace(/\.\d+/, '');
+    .replace('.', '');
+}
+
+// ---------------------------------------------------------------------------
+// Helper: pick a collision-free snapshot filename (F-HK-03 belt and
+// suspenders). Milliseconds make same-name collisions rare but not
+// impossible (coarse OS clock resolution, or two writes landing in the same
+// tick); if <slug>.<timestamp>.md is already taken, this deterministically
+// escalates to a -2, -3, ... suffix until a free name is found.
+// existsFn is injected (rather than calling existsSync directly) so tests can
+// drive the escalation deterministically without needing real collisions.
+// Exported for direct testing.
+// ---------------------------------------------------------------------------
+export function pickSnapshotName(slug, timestamp, existsFn) {
+  const base = slug + '.' + timestamp;
+  let name = base + '.md';
+  let counter = 2;
+  while (existsFn(name)) {
+    name = base + '-' + counter + '.md';
+    counter++;
+  }
+  return name;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: parse a snapshot filename for a known slug into { timestamp, counter }.
+// Filenames are <slug>.<timestamp>.md (counter 1, implicit) or
+// <slug>.<timestamp>-<N>.md (counter N, from pickSnapshotName's collision
+// escalation). The timestamp itself never contains a hyphen (compactUtcNow
+// strips them), so any hyphen in the remainder is unambiguously the counter
+// separator. Returns null if fname does not belong to slug.
+// ---------------------------------------------------------------------------
+function parseSnapshotName(fname, slug) {
+  const prefix = slug + '.';
+  const suffix = '.md';
+  if (!fname.startsWith(prefix) || !fname.endsWith(suffix)) return null;
+  const middle = fname.slice(prefix.length, fname.length - suffix.length);
+  const m = middle.match(/^(.*)-(\d+)$/);
+  if (m) {
+    return { timestamp: m[1], counter: parseInt(m[2], 10) };
+  }
+  return { timestamp: middle, counter: 1 };
+}
+
+// ---------------------------------------------------------------------------
+// Helper: chronological comparator for snapshot filenames (F-HK-03).
+// A default lexicographic string sort breaks once a -N counter suffix
+// exists: ASCII '-' (0x2D) sorts BEFORE '.' (0x2E), so "<ts>-2.md" would sort
+// as OLDER than the plain "<ts>.md" it was actually created after. This
+// comparator parses out (timestamp, counter) and compares each field
+// explicitly so prune's "newest 10" selection stays correct even when the
+// belt-and-suspenders counter fires.
+// ---------------------------------------------------------------------------
+function compareSnapshotNames(a, b, slug) {
+  const pa = parseSnapshotName(a, slug);
+  const pb = parseSnapshotName(b, slug);
+  if (pa.timestamp !== pb.timestamp) return pa.timestamp < pb.timestamp ? -1 : 1;
+  return pa.counter - pb.counter;
 }
 
 // ---------------------------------------------------------------------------
@@ -343,7 +404,10 @@ if (isMain) {
 
         const fileBase = basename(resolvedTarget);
         const slug = fileBase.endsWith('.md') ? fileBase.slice(0, -3) : fileBase;
-        const snapshotName = slug + '.' + compactUtcNow() + '.md';
+        const timestamp = compactUtcNow();
+        const snapshotName = pickSnapshotName(
+          slug, timestamp, (name) => existsSync(join(snapshotsDir, name))
+        );
 
         writeFileSync(
           join(snapshotsDir, snapshotName),
@@ -351,12 +415,13 @@ if (isMain) {
           'utf8'
         );
 
-        // Prune: keep newest 10 per slug; sort lex ascending (= chronological for
-        // YYYYMMDDTHHMMSSZ prefix) then delete the oldest beyond the retention limit.
+        // Prune: keep newest 10 per slug. F-HK-03: sort with compareSnapshotNames
+        // (timestamp then counter), NOT a raw lexicographic string sort - a -N
+        // collision suffix would otherwise sort before its unsuffixed base name.
         try {
           const allForSlug = readdirSync(snapshotsDir)
             .filter(f => f.startsWith(slug + '.') && f.endsWith('.md'));
-          allForSlug.sort(); // lex ascending = oldest first
+          allForSlug.sort((a, b) => compareSnapshotNames(a, b, slug)); // ascending = oldest first
           if (allForSlug.length > 10) {
             const toDelete = allForSlug.slice(0, allForSlug.length - 10);
             for (const fname of toDelete) {
