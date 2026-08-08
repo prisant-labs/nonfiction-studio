@@ -174,11 +174,18 @@ test('(c) stale last-gate: gate-debt line is present', () => {
   const cloneDir = cloneSampleBook('stale-gate');
 
   // Overwrite last-gate.json with a ts in the distant past.
+  // Flat shape (F-HK-02): {version, chapter, ts, verdict, checks} is the real
+  // S-08 section 11 report shape written verbatim by hooks/stop-gate.mjs -
+  // NOT a per-chapter map keyed by slug.
   const gateDir = join(cloneDir, '.studio', 'gate');
   writeFileSync(
     join(gateDir, 'last-gate.json'),
     JSON.stringify({
-      '01-listening-before-speaking': { ts: '2020-01-01T00:00:00Z', verdict: 'pass' }
+      version: 2,
+      chapter: '01-listening-before-speaking',
+      ts: '2020-01-01T00:00:00Z',
+      verdict: 'pass',
+      checks: []
     }),
     'utf8'
   );
@@ -206,11 +213,16 @@ test('(d) fresh last-gate: no gate-debt line', () => {
   const cloneDir = cloneSampleBook('fresh-gate');
 
   // Overwrite last-gate.json with a ts far in the future.
+  // Flat shape (F-HK-02): see the case (c) comment above.
   const gateDir = join(cloneDir, '.studio', 'gate');
   writeFileSync(
     join(gateDir, 'last-gate.json'),
     JSON.stringify({
-      '01-listening-before-speaking': { ts: '2099-12-31T23:59:59Z', verdict: 'pass' }
+      version: 2,
+      chapter: '01-listening-before-speaking',
+      ts: '2099-12-31T23:59:59Z',
+      verdict: 'pass',
+      checks: []
     }),
     'utf8'
   );
