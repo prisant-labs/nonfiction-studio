@@ -47,33 +47,58 @@ Parse the mode argument from the supplied tokens. The default mode when no argum
 
 ---
 
-## Step 2 - Single Bash invocation (one call per mode)
+## Step 2 - Resolve the plugin root
+
+Use the Bash tool to run the primary lookup:
+```
+node -e "const s=require('fs').readFileSync(require('os').homedir()+'/.claude/settings.json','utf8');const m=JSON.parse(s).extraKnownMarketplaces;const ns=m&&m['nonfiction-studio'];console.log(ns&&ns.source&&ns.source.path||'not-found')"
+```
+
+The output is the plugin root. If it prints `not-found`, run the platform cache fallback:
+```
+find "$HOME/.claude/plugins/cache" -maxdepth 3 -type d -name "nonfiction-studio*" 2>/dev/null | head -1
+```
+
+If that also returns nothing, run the dev-mode fallback:
+```
+test -f bin/ns-doctor && pwd || echo not-found
+```
+
+If all three lookups fail: halt immediately. Report the settings.json path attempted (`$HOME/.claude/settings.json`) and the cache path attempted (`$HOME/.claude/plugins/cache`). Do not invoke ns-doctor. Ask the author how to proceed (verify plugin installation or provide the path manually).
+
+Carry the resolved path forward as `<plugin-root>` for Step 3.
+
+**Shared plugin-root convention.** This three-tier resolution (settings.json lookup, plugins-cache search, dev-mode fallback) is the same routine as `skills/init-project/SKILL.md` Step 4; a future wave extracts it to a shared reference.
+
+---
+
+## Step 3 - Single Bash invocation (one call per mode)
 
 Use the Bash tool to invoke `bin/ns-doctor`. This is the ONE Bash call for this invocation. No individual sub-CLI calls (ns-claims, ns-stylometry, ns-scrub) are made by the skill; the doctor engine composes its checks internally via `runChecks`.
 
 **Mode `report` (full check inventory):**
 
 ```
-node bin/ns-doctor --project=. --report --json
+node "<plugin-root>/bin/ns-doctor" --project=. --report --json
 ```
 
 **Mode `migrate` (schema-version diagnosis; never writes):**
 
 ```
-node bin/ns-doctor --project=. --migrate --json
+node "<plugin-root>/bin/ns-doctor" --project=. --migrate --json
 ```
 
 **Mode `packs` (craft-pack validity check):**
 
 ```
-node bin/ns-doctor --project=. --validate-packs --json
+node "<plugin-root>/bin/ns-doctor" --project=. --validate-packs --json
 ```
 
-Capture the exit code, stdout (JSON), and stderr. Proceed to Step 3.
+Capture the exit code, stdout (JSON), and stderr. Proceed to Step 4.
 
 ---
 
-## Step 3 - Present the result (exit-code mapping)
+## Step 4 - Present the result (exit-code mapping)
 
 ### Report mode exit codes
 
@@ -156,9 +181,9 @@ If the stderr message contains "requires migration", also suggest:
 
 **Unrecognized mode argument.** Step 1 halts with the unrecognized-mode message. No tool calls, no file reads.
 
-**Exit 2 from `--report`.** Step 3 surfaces the stderr and halts. Never treated as a pass. If the error message mentions schema version mismatch, suggest running `/nonfiction-studio:doctor migrate` for the explicit migration diagnosis.
+**Exit 2 from `--report`.** Step 4 surfaces the stderr and halts. Never treated as a pass. If the error message mentions schema version mismatch, suggest running `/nonfiction-studio:doctor migrate` for the explicit migration diagnosis.
 
-**Exit 2 from `--migrate`.** This is expected output from the CLI in both cases (no-migrations and migration-required). Step 3 distinguishes the cases and presents the appropriate message. It is not an unexpected error.
+**Exit 2 from `--migrate`.** This is expected output from the CLI in both cases (no-migrations and migration-required). Step 4 distinguishes the cases and presents the appropriate message. It is not an unexpected error.
 
 **Exit 2 from `--validate-packs`.** Unexpected in v1 (the packs mode exits 0 under all normal conditions). Surface the stderr and halt.
 
