@@ -62,11 +62,17 @@ whether the captured voice is good: it observes, describes, and records.
   `stylometry.baseline.markers` using read-modify-write semantics: load the full
   config file, set only the `stylometry.baseline` key, write the whole object back
   without stripping any other fields.
-- **Bash** - invoke the stylometry engine via
-  `node "$CLAUDE_PLUGIN_ROOT/bin/ns-stylometry" --measure=<comma-separated-paths>`
-  to compute the eight-marker vector. Bare CLI invocation fails on Windows; the
-  env-var form satisfies ADR-0005 (bin PATH on Windows). No other Bash command
-  is permitted.
+- **Bash** - resolve the plugin root before invoking the engine: read
+  `extraKnownMarketplaces['nonfiction-studio'].source.path` from
+  `~/.claude/settings.json`; if that lookup fails, search
+  `~/.claude/plugins/cache` for a `nonfiction-studio*` directory; if that also
+  fails, fall back to the current working directory when `bin/ns-stylometry`
+  is present there; halt and ask the author to verify the plugin installation
+  if all three fail. The hooks.json plugin-root variable is not set in a live
+  Bash shell - ADR-0005 (bin PATH on Windows) is why this resolution step
+  exists. Once resolved, invoke the stylometry engine via
+  `node "<plugin-root>/bin/ns-stylometry" --measure=<comma-separated-paths>`
+  to compute the eight-marker vector. No other Bash command is permitted.
 
 ## Reads and writes
 
@@ -111,8 +117,9 @@ a printed vector; this agent reads it from stdout and writes it into config.json
    word length, punctuation habits, and opener patterns (question, scene, directive,
    data).
 
-4. **Compute the baseline vector.** Run via the Bash tool:
-   `node "$CLAUDE_PLUGIN_ROOT/bin/ns-stylometry" --measure=<sample-file-paths>`
+4. **Compute the baseline vector.** Resolve the plugin root as described under
+   Tools, then run via the Bash tool:
+   `node "<plugin-root>/bin/ns-stylometry" --measure=<sample-file-paths>`
    The engine reads the files and prints
    `{"markers": {...}, "files": [...], "totalWords": N}` to stdout. Read the
    `markers` object from stdout and write it into `.studio/config.json`
@@ -204,10 +211,12 @@ It observes and describes. Evaluative judgment belongs to the author.
   voice differs from the book's chosen narrator voice (for example, a first-person
   memoirist who has chosen second-person present for the book), both are recorded.
   The `narrator_voice_note` field is required in that case.
-- **CLI invocation, resolved by ADR-0005 (bin PATH on Windows).** Bare CLI
-  invocation fails in the Bash tool on Windows. Invoke the engine as
-  `node "$CLAUDE_PLUGIN_ROOT/bin/ns-stylometry" --measure=<paths>` via the Bash
-  tool, using the env-var form for the plugin root. This is why the tools list
+- **CLI invocation, plugin root resolved per ADR-0005 (bin PATH on Windows).**
+  Bare CLI invocation fails in the Bash tool on Windows, and the hooks.json
+  plugin-root variable is not set in a live Bash shell - ADR-0005 (bin PATH on
+  Windows) is why the Tools section's plugin-root resolution step exists.
+  Invoke the engine as `node "<plugin-root>/bin/ns-stylometry" --measure=<paths>`
+  via the Bash tool, using the resolved plugin root. This is why the tools list
   includes Bash alongside Read and Write.
 - **System-prompt behavior only.** Hooks, `permissionMode`, and `mcpServers` cannot
   be declared in agent frontmatter; the platform ignores them for plugin-shipped

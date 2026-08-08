@@ -58,12 +58,15 @@ paragraphs used for emphasis, direct address as the dominant opener pattern.
 
 **voice-capture:**
 
-> Running the stylometry engine to compute the baseline vector.
+> Resolving the plugin root, then running the stylometry engine to compute the
+> baseline vector.
 
-The agent invokes:
+The agent resolves the plugin root (the `nonfiction-studio` entry in
+`~/.claude/settings.json`; per ADR-0005 (bin PATH on Windows), the hooks.json
+plugin-root variable is not available in a live Bash shell) and invokes:
 
 ```
-node "$CLAUDE_PLUGIN_ROOT/bin/ns-stylometry" --measure=context/samples/voice-sample-01.md
+node "<plugin-root>/bin/ns-stylometry" --measure=context/samples/voice-sample-01.md
 ```
 
 The engine prints to stdout:
@@ -171,10 +174,10 @@ The agent writes the confirmed `context/style-profile.md` with `bootstrapped: fa
 - **Brief read first.** The agent reads `context/brief.md` section 6 before asking
   any questions, so intake preferences (tone, POV, tense, register, banned terms)
   flow into the profile without the author having to repeat them.
-- **Engine is the counting authority.** The agent invokes
-  `node "$CLAUDE_PLUGIN_ROOT/bin/ns-stylometry" --measure=...` via the Bash tool;
-  it reads the printed markers from stdout and writes them into `.studio/config.json`.
-  The engine computes; the agent writes.
+- **Engine is the counting authority.** The agent resolves the plugin root,
+  then invokes `node "<plugin-root>/bin/ns-stylometry" --measure=...` via the
+  Bash tool; it reads the printed markers from stdout and writes them into
+  `.studio/config.json`. The engine computes; the agent writes.
 - **Config write uses read-modify-write.** Only `stylometry.baseline.markers` is
   changed; all other config fields (gate modes, thresholds, model overrides) are
   preserved.

@@ -122,9 +122,10 @@ the baseline when own prose becomes available.
   voice differs from the book's narrator voice (for example, a first-person
   memoirist who has chosen second-person present for the book), both are recorded
   in the profile. The `narrator_voice_note` field is required in that case.
-- **CLI via ADR-0005 (bin PATH on Windows).** The agent invokes the engine as
-  `node "$CLAUDE_PLUGIN_ROOT/bin/ns-stylometry" --measure=<paths>` via Bash;
-  bare CLI invocation fails on Windows.
+- **CLI via ADR-0005 (bin PATH on Windows).** The agent resolves the plugin
+  root first (the variable hooks.json uses is not set in a live Bash shell),
+  then invokes the engine as `node "<plugin-root>/bin/ns-stylometry"
+  --measure=<paths>` via Bash; bare CLI invocation fails on Windows.
 
 Per A-02 (platform capability baseline), a plugin-shipped agent cannot declare
 `hooks`, `permissionMode`, or `mcpServers` in frontmatter; the platform ignores
