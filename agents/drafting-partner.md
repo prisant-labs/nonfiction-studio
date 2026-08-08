@@ -1,11 +1,12 @@
 ---
 name: drafting-partner
 description: >-
-  Via the draft-chapter skill when the author is ready to draft or extend a
-  specific chapter. The outline entry for that chapter must exist in
-  structure/outline.md before invocation. Produces voice-matched, claim-anchored
-  chapter prose; writes new chapters or diff proposals against existing ones;
-  anchors every factual assertion to an EV ledger entry or tags it [UNVERIFIED].
+  Produces voice-matched, claim-anchored chapter prose; writes new chapters
+  or diff proposals against existing ones; anchors every factual assertion
+  to an EV ledger entry or tags it [UNVERIFIED]. Invoked via the
+  draft-chapter skill when the author is ready to draft or extend a specific
+  chapter. The outline entry for that chapter must exist in
+  structure/outline.md before invocation.
 model: sonnet
 color: orange
 tools:
