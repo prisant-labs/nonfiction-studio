@@ -550,6 +550,82 @@ test('(j) malformed stdin: exit 0, empty stdout', () => {
 });
 
 // ---------------------------------------------------------------------------
+// F-HK-01: corrupt-config discrimination.
+//
+// findBookRoot throws a BibleError with code CONFIG_READ_ERROR when a book
+// root is found but .studio/config.json is syntactically invalid JSON. The
+// pre-fix hook caught ANY findBookRoot error identically to NO_BOOK_ROOT and
+// exited 0 with empty stdout, silently skipping progress/log updates with no
+// visible sign anything was wrong. This hook cannot deny post-hoc (the tool
+// call already happened), so the fix emits one visible additionalContext line
+// naming the corrupt config and that progress/log updates were skipped, then
+// still exits 0 (fail-open), mirroring hooks/session-start.mjs's shape.
+// ---------------------------------------------------------------------------
+test('F-HK-01 (k) corrupt config.json: visible additionalContext naming it, exit 0, progress.json untouched', () => {
+  const book = cloneSampleBook('fhk01-k-corrupt-config');
+  const progressPath = join(book, '.studio', 'progress.json');
+  const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
+  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
+
+  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  const progressBefore = readFileSync(progressPath, 'utf8');
+  const logLinesBefore = readJsonlLines(logPath).length;
+
+  const result = runHook(makeBatchEvent(book, [
+    {
+      tool_name: 'Write',
+      tool_input: { file_path: ch1Path, content: 'attempted content update' },
+      tool_use_id: 'toolu_fhk01k',
+      tool_response: 'Written.'
+    }
+  ]));
+
+  assert.equal(result.status, 0, 'exit code is 0 (cannot deny post-hoc; fail-open)');
+
+  let out;
+  assert.doesNotThrow(
+    () => { out = JSON.parse(result.stdout.trim()); },
+    'stdout is valid JSON, NOT empty (the pre-fix bug produced silent empty stdout here)'
+  );
+  const hso = out.hookSpecificOutput;
+  assert.equal(hso.hookEventName, 'PostToolBatch', 'hookEventName is PostToolBatch');
+  assert.ok(
+    typeof hso.additionalContext === 'string' && hso.additionalContext.includes('config.json'),
+    'additionalContext names the corrupt config.json; got: ' + hso.additionalContext
+  );
+  assert.ok(
+    /progress/i.test(hso.additionalContext) && /skip/i.test(hso.additionalContext),
+    'additionalContext states that progress and log updates were skipped; got: ' + hso.additionalContext
+  );
+
+  const progressAfter = readFileSync(progressPath, 'utf8');
+  assert.equal(progressAfter, progressBefore, 'progress.json is byte-identical; no mutation occurred');
+
+  const logLinesAfter = readJsonlLines(logPath).length;
+  assert.equal(logLinesAfter, logLinesBefore, 'ai-use-log.jsonl unchanged; no log entry appended');
+});
+
+test('F-HK-01 (l) NO_BOOK_ROOT (no book project at all) stays silent exit 0, unlike a corrupt config', () => {
+  const emptyDir = makeTmpDir('fhk01-l-no-root');
+  const fakePath = join(emptyDir, 'chapters', 'test.md');
+
+  const result = runHook(makeBatchEvent(emptyDir, [
+    {
+      tool_name: 'Write',
+      tool_input: { file_path: fakePath, content: 'x' },
+      tool_use_id: 'toolu_fhk01l',
+      tool_response: 'Written.'
+    }
+  ]));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'NO_BOOK_ROOT is a normal no-op (no book project here at all), not a corrupt-config notice'
+  );
+});
+
+// ---------------------------------------------------------------------------
 // TSK-050b-(a) create-if-absent with registry: new entry has five fields,
 //   title resolved from structure/chapter-list.md, status 'drafting', correct
 //   word_count, open_claim_count 0 (no open markers in content).

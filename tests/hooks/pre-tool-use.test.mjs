@@ -494,3 +494,128 @@ test('(l) malformed stdin: exit 0, empty stdout', () => {
   assert.equal(result.status, 0, 'exit code is 0 for malformed stdin (fail-open)');
   assert.equal(result.stdout.trim(), '', 'stdout is empty for malformed stdin');
 });
+
+// ---------------------------------------------------------------------------
+// F-HK-01: corrupt-config discrimination.
+//
+// findBookRoot throws a BibleError with code CONFIG_READ_ERROR when a book
+// root is found but .studio/config.json is syntactically invalid JSON. The
+// pre-fix hook caught ANY findBookRoot error identically to NO_BOOK_ROOT and
+// exited 0 with empty stdout, silently disabling the containment guard for
+// every write while the config is broken. The fix discriminates the error
+// code (mirrors hooks/stop-gate.mjs and hooks/session-start.mjs): write tools
+// fail closed (deny); non-write tools and Bash are unaffected.
+// ---------------------------------------------------------------------------
+
+test('F-HK-01 (a) corrupt config.json + Write outside the book root: deny naming the corrupt config, not silent exit 0', () => {
+  const book = cloneSampleBook('fhk01-a-outside');
+  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  const outsidePath = join(tmpdir(), 'ns-tsk032-fhk01-outside-' + Date.now() + '.md');
+
+  const result = runHook(makeWriteEvent(book, outsidePath));
+
+  assert.equal(result.status, 0, 'exit code is 0 (deny travels in JSON, not exit code)');
+
+  let out;
+  assert.doesNotThrow(
+    () => { out = JSON.parse(result.stdout.trim()); },
+    'stdout is valid JSON, NOT empty (the pre-fix bug produced empty stdout here)'
+  );
+
+  const hso = out.hookSpecificOutput;
+  assert.equal(hso.hookEventName, 'PreToolUse', 'hookEventName is PreToolUse');
+  assert.equal(hso.permissionDecision, 'deny', 'permissionDecision is deny (fails closed on corrupt config)');
+  assert.ok(
+    typeof hso.permissionDecisionReason === 'string' && hso.permissionDecisionReason.includes('config.json'),
+    'deny reason names the corrupt config.json; got: ' + hso.permissionDecisionReason
+  );
+});
+
+test('F-HK-01 (b) corrupt config.json + Write inside the book tree: still deny (fail closed)', () => {
+  const book = cloneSampleBook('fhk01-b-inside');
+  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  const insideTarget = join(book, 'chapters', '01-listening-before-speaking.md');
+
+  const result = runHook(makeWriteEvent(book, insideTarget));
+
+  assert.equal(result.status, 0, 'exit code is 0 (deny travels in JSON, not exit code)');
+
+  let out;
+  assert.doesNotThrow(
+    () => { out = JSON.parse(result.stdout.trim()); },
+    'stdout is valid JSON, NOT empty (the pre-fix bug allowed this write silently)'
+  );
+
+  const hso = out.hookSpecificOutput;
+  assert.equal(
+    hso.permissionDecision, 'deny',
+    'permissionDecision is deny even for an in-tree target: containment cannot be verified while the config is corrupt'
+  );
+  assert.ok(
+    typeof hso.permissionDecisionReason === 'string' && hso.permissionDecisionReason.includes('config.json'),
+    'deny reason names the corrupt config.json; got: ' + hso.permissionDecisionReason
+  );
+});
+
+test('F-HK-01 (c) corrupt config.json + Edit and NotebookEdit also deny (all three WRITE_TOOLS)', () => {
+  const bookEdit = cloneSampleBook('fhk01-c-edit');
+  writeFileSync(join(bookEdit, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  const editTarget = join(bookEdit, 'chapters', '01-listening-before-speaking.md');
+  const editResult = runHook(makeWriteEvent(bookEdit, editTarget, 'Edit'));
+  assert.equal(editResult.status, 0, 'exit code is 0 for Edit');
+  let editOut;
+  assert.doesNotThrow(() => { editOut = JSON.parse(editResult.stdout.trim()); }, 'Edit stdout is valid JSON');
+  assert.equal(editOut.hookSpecificOutput.permissionDecision, 'deny', 'Edit denied on corrupt config');
+
+  const bookNb = cloneSampleBook('fhk01-c-notebook');
+  writeFileSync(join(bookNb, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  const nbEvent = JSON.stringify({
+    session_id: 'test-session-032',
+    cwd: bookNb,
+    hook_event_name: 'PreToolUse',
+    tool_name: 'NotebookEdit',
+    tool_input: { notebook_path: join(bookNb, 'chapters', 'nb.ipynb'), cell_id: '1' },
+    tool_use_id: 'toolu_test032'
+  });
+  const nbResult = runHook(nbEvent);
+  assert.equal(nbResult.status, 0, 'exit code is 0 for NotebookEdit');
+  let nbOut;
+  assert.doesNotThrow(() => { nbOut = JSON.parse(nbResult.stdout.trim()); }, 'NotebookEdit stdout is valid JSON');
+  assert.equal(nbOut.hookSpecificOutput.permissionDecision, 'deny', 'NotebookEdit denied on corrupt config');
+});
+
+test('F-HK-01 (d) corrupt config.json + Read: exit 0, empty stdout (non-write tools unaffected)', () => {
+  const book = cloneSampleBook('fhk01-d-read');
+  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+
+  const result = runHook(makeReadEvent(book));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(result.stdout.trim(), '', 'stdout is empty for Read tool even with corrupt config (unchanged)');
+});
+
+test('F-HK-01 (e) corrupt config.json + benign Bash: exit 0, empty stdout ("today\'s" caution behavior unchanged)', () => {
+  const book = cloneSampleBook('fhk01-e-bash');
+  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+
+  const result = runHook(makeBashEvent(book, 'rm -rf /tmp/foo'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'stdout is empty for Bash with corrupt config; no deny on corrupt config per the brief'
+  );
+});
+
+test('F-HK-01 (f) NO_BOOK_ROOT (no book project at all) stays silent exit 0 for Write, unlike a corrupt config', () => {
+  const emptyDir = makeTmpDir('fhk01-f-no-root');
+  const target = join(emptyDir, 'chapters', 'test.md');
+
+  const result = runHook(makeWriteEvent(emptyDir, target));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'NO_BOOK_ROOT is a normal no-op (no book project here at all), not a corrupt-config deny'
+  );
+});

@@ -185,14 +185,33 @@ if (isMain) {
     event.tool_input && typeof event.tool_input === 'object' ? event.tool_input : {};
   const cwd = typeof event.cwd === 'string' && event.cwd ? event.cwd : process.cwd();
 
+  // WRITE_TOOLS is declared ahead of book-root detection: the corrupt-config
+  // discrimination below (F-HK-01) needs it to decide fail-closed vs silent exit.
+  const WRITE_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit']);
+
   // -------------------------------------------------------------------------
   // Book root detection. No root found: no-op (exit 0, empty stdout).
+  //
+  // Error discrimination (F-HK-01; mirrors hooks/stop-gate.mjs and
+  // hooks/session-start.mjs): BibleError code NO_BOOK_ROOT is normal (no book
+  // project anywhere in the ancestor chain) and stays silent. Any other code
+  // (CONFIG_READ_ERROR, META_READ_ERROR, ...) means a book root WAS found but
+  // its bible files are corrupt, so containment cannot be verified. Write
+  // tools fail closed (deny) per D-13 (security posture); non-write tools and
+  // Bash are unaffected (exit 0, unchanged from today).
   // -------------------------------------------------------------------------
   let bookRoot = null;
   try {
     const found = findBookRoot(cwd);
     bookRoot = found.root;
-  } catch {
+  } catch (err) {
+    if (err && err.code && err.code !== 'NO_BOOK_ROOT' && WRITE_TOOLS.has(toolName)) {
+      emitDeny(
+        'Cannot verify write safety: bible files are corrupt (' + err.message + '). ' +
+        'Repair .studio/config.json then retry; bin/ns-doctor reports the parse error. ' +
+        'Denied per D-13 (security posture, fail-closed).'
+      );
+    }
     process.exit(0);
   }
 
@@ -200,7 +219,6 @@ if (isMain) {
   // No-op for tools this hook does not handle.
   // Read, Grep, Glob, WebFetch and others exit here with empty stdout.
   // -------------------------------------------------------------------------
-  const WRITE_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit']);
   if (!WRITE_TOOLS.has(toolName) && toolName !== 'Bash') {
     process.exit(0);
   }
