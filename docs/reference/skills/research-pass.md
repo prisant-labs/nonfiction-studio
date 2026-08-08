@@ -28,7 +28,7 @@ The optional `chapter` argument scopes the session to one chapter. Supply the ch
 
 Alternate entry points:
 - Via the `studio` dispatcher: routes here from Path 3 (Research and verify) when the author says they want to gather new sources
-- Legacy verb: `/research` (deprecated; use the namespaced form)
+- Verb alias: `/research` (introduced in v2; the namespaced `/nonfiction-studio:research-pass` form also works)
 - Via the `outline-book` closing prompt: that skill suggests `research-pass` as a natural next step when open EV-NEEDED items remain
 
 ## Inputs and Outputs

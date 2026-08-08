@@ -32,7 +32,7 @@ Alternate entry points:
 - Via the `studio` dispatcher: routes here from Path 4 (Review quality and status) after `status-dashboard`
 - Via `draft-chapter` Step 6: that skill closes with an explicit prompt to run `run-quality-gate` on chat because the Stop hook does not fire automatically there
 - Via `fact-check-pass` Step 6: when coverage reaches 100% the skill suggests running the quality gate
-- Legacy verb: `/gate` (deprecated; use the namespaced form)
+- Verb alias: `/gate` (introduced in v2; the namespaced `/nonfiction-studio:run-quality-gate` form also works)
 
 ## Inputs and Outputs
 
