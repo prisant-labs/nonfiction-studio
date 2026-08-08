@@ -8,15 +8,14 @@ Nonfiction Studio is an open-source Claude Code plugin that turns Claude into a 
 
 ## Install
 
-There is no public marketplace listing yet. For now, install Nonfiction Studio from a local clone of this repository:
+There is no public marketplace listing yet. For now, clone or download this repository, then install it from your local copy:
 
 ```
-git clone <this repository's URL>
 claude plugin marketplace add /path/to/nonfiction-studio
 claude plugin install nonfiction-studio@nonfiction-studio
 ```
 
-Replace `/path/to/nonfiction-studio` with wherever you cloned it (or downloaded and unzipped it) on your machine. A public marketplace listing is planned for a later release.
+Replace `/path/to/nonfiction-studio` with wherever you cloned or unzipped it on your machine. A public marketplace listing is planned for a later release.
 
 ## Quickstart
 
