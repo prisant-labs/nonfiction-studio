@@ -49,7 +49,7 @@ or use the same `node` plus full-path form.
 |---|---|---|
 | `--check` | boolean | Run the full check inventory (default when no mode flag is supplied). |
 | `--report` | boolean | Synonym for `--check` in v1; both run the same inventory. |
-| `--migrate` | boolean | Check whether a migration is available for the current schema version; exits 2 with a message in v1 (no migrations defined yet). |
+| `--migrate` | boolean | Check whether a migration is available for the current schema version; exits 0 with a nothing-to-migrate message when the schema is already current, exits 2 when migration is required (an incompatible version). |
 | `--validate-packs` | boolean | Validate craft-model packs in `packs/`; exits 0 cleanly when no packs directory exists (Phase 2 feature). |
 | `--project=<dir>` | string | Override the book root to `<dir>`. If omitted, walks up from the current directory looking for `.studio/meta.json`. |
 | `--json` | boolean | Emit the full result as JSON to stdout. |

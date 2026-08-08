@@ -31,7 +31,7 @@ The mode argument is optional; the default is `report`.
 | Mode | Description |
 |---|---|
 | `report` (default) | Full 10-check inventory; exit 0 (clean), exit 1 (findings), exit 2 (error or migration-required prelude) |
-| `migrate` | Schema-version diagnosis only; never writes; exit 2 in all cases (no-migrations or migration-required) |
+| `migrate` | Schema-version diagnosis only; never writes; exit 0 when already current, exit 2 when migration is required (genuinely incompatible version) |
 | `packs` | Craft-pack validity check; exit 0 in all v1 cases (no packs directory or no validator yet) |
 | `fix` | Not in v1; the skill declines and states the Phase 2 contract |
 | `validate` | Alias for `report`; subsumed in v1 (the check inventory covers all schema validation) |
@@ -77,7 +77,7 @@ The skill runs four steps.
    - **Report mode, exit 0:** clean pass; no findings; names the ten checks run.
    - **Report mode, exit 1:** findings grouped by check-type prefix with per-group counts and routing hints; closes with total count and re-run invitation.
    - **Report mode, exit 2:** surfaces stderr error; NEVER treated as a pass.
-   - **Migrate mode:** exit 2 always; distinguishes the no-migrations case (stdout JSON) from the migration-required case (stderr content) and presents each clearly.
+   - **Migrate mode:** exit 0 when the schema is already current (stdout JSON with status "current"); exit 2 when migration is required (stderr content); presents each clearly.
    - **Packs mode, exit 0:** presents the stdout JSON `message` field.
 
 ## Exit-Code Mapping
@@ -87,7 +87,8 @@ The skill runs four steps.
 | `report` | 0 | All checks passed; no findings | Present clean pass; name the ten checks; note any notices |
 | `report` | 1 | One or more findings | Present grouped findings with counts and routing hints; invite re-run |
 | `report` | 2 | Operational error (e.g. BibleError, bad args) or schema-version prelude | Surface stderr; NEVER treat as a pass; route to `doctor migrate` if version mismatch indicated |
-| `migrate` | 2 | Always: either no-migrations-defined or migration-required | Present the appropriate case; note writes are never performed in v1 |
+| `migrate` | 0 | Schema is already current; nothing to migrate | Present the current-schema message; note writes are never performed in v1 |
+| `migrate` | 2 | Migration required (genuinely incompatible version) | Present the migration-required message; note writes are never performed in v1 |
 | `packs` | 0 | Always in v1: no packs directory or no validator yet | Present the stdout message field |
 
 ## Check Inventory (Report Mode)
@@ -124,11 +125,11 @@ When exit 1 is returned, findings are grouped by the prefix of their `type` fiel
 
 ## Migrate Mode
 
-`--migrate` exits 2 in all cases in v1. Two cases are possible:
+`--migrate` exits 0 when the schema is already current and 2 only when migration is genuinely required (an incompatible version). Two cases are possible:
 
-**No-migrations case (stdout JSON with `"status": "no-migrations"`).** The schema version is current; no migrations are defined for the current-to-current version pair. Migrations arrive with the first schema change per Q-04 (release, versioning, and compatibility). No files are written.
+**Current schema, nothing to migrate (exit 0; stdout JSON with `"status": "current"`).** The schema version is current; no migrations are defined for the current-to-current version pair. Migrations arrive with the first schema change per Q-04 (release, versioning, and compatibility). No files are written.
 
-**Migration-required case (stderr content).** The bible's `schema_version` in `.studio/meta.json` is older than the supported major (`2`). The engine names both versions in the stderr message. No migration is applied in v1; the snapshot-before-migrate and restore-on-failure contract activates when real migrations arrive per Q-04 (release, versioning, and compatibility). No files are written.
+**Migration required (exit 2; stderr content).** The bible's `schema_version` in `.studio/meta.json` is older than the supported major (`2`). The engine names both versions in the stderr message. No migration is applied in v1; the snapshot-before-migrate and restore-on-failure contract activates when real migrations arrive per Q-04 (release, versioning, and compatibility). No files are written.
 
 ## Packs Mode
 
@@ -151,7 +152,7 @@ The doctor skill works identically on all three surfaces per D-14 (three-surface
 
 **Exit 2 from `--report`.** Step 4 surfaces the stderr and halts. Never treated as a pass. If the error message indicates a schema version mismatch, suggests running `doctor migrate` for the explicit diagnosis.
 
-**Exit 2 from `--migrate`.** Expected behavior; not an unexpected error. Step 4 distinguishes the two cases and presents the appropriate message.
+**Exit 2 from `--migrate`.** Expected behavior when migration is genuinely required (an incompatible schema version); an already-current schema now exits 0 instead. Not an unexpected error. Step 4 distinguishes the two cases and presents the appropriate message.
 
 **Exit 2 from `--validate-packs`.** Unexpected in v1. Step 4 surfaces the stderr and halts.
 

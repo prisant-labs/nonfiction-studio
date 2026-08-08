@@ -140,15 +140,15 @@ This synthetic illustration uses the real finding-type strings (`structure.missi
 
 The following is explicitly synthetic. It shows what Step 4 would present for each of the two migrate-mode cases.
 
-**No-migrations case (stdout JSON, `"status": "no-migrations"`):**
+**Current schema, nothing to migrate (exit 0; stdout JSON, `"status": "current"`):**
 
-> Doctor migrate verdict: Schema version is current. No migration is needed. no migrations defined for this version pair (schema_version "2" to "2"); migrations arrive with the first schema change per Q-04 (release, versioning, and compatibility). No files were written. Migrations arrive with the first schema change per Q-04 (release, versioning, and compatibility); the snapshot-before-migrate and restore-on-failure contract activates at that time.
+> Doctor migrate verdict: Schema version is current. No migration is needed. nothing to migrate, schema is current (schema_version "2"); migrations arrive with the first schema change per Q-04 (release, versioning, and compatibility). No files were written. Migrations arrive with the first schema change per Q-04 (release, versioning, and compatibility); the snapshot-before-migrate and restore-on-failure contract activates at that time.
 
-**Migration-required case (stderr content, `schema_version: "1"`):**
+**Migration required (exit 2; stderr content, `schema_version: "1"`):**
 
 > Doctor migrate verdict: Migration required. bible schema version "1" requires migration to supported major "2"; run ns-doctor --migrate to apply the migration. No migration has been applied; migrations from older schema versions are not yet defined in v1. The snapshot-before-migrate and restore-on-failure contract activates when real migrations arrive per Q-04 (release, versioning, and compatibility). No files were written. Verify the `schema_version` field in `.studio/meta.json`; the supported major is `2`.
 
-The `--migrate` flag always exits 2 in v1 under both cases. Neither case writes any file; the migrate mode in v1 is diagnose-only.
+The `--migrate` flag exits 0 for the current-schema case and 2 for the migration-required case. Neither case writes any file; the migrate mode in v1 is diagnose-only.
 
 ---
 

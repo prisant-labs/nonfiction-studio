@@ -157,13 +157,13 @@ If the stderr message contains "requires migration", also suggest:
 
 ### Migrate mode
 
-`--migrate` always exits 2. Distinguish the two cases by examining stdout and stderr:
+`--migrate` exits 0 when the schema is already current and 2 only when migration is genuinely required (an incompatible version). Distinguish the two cases by the exit code, then by examining stdout and stderr:
 
-**No-migrations case** - stdout parses as JSON with `"status": "no-migrations"`:
+**Current schema, nothing to migrate** - exit 0; stdout parses as JSON with `"status": "current"`:
 
 > Doctor migrate verdict: Schema version is current. No migration is needed. [stdout JSON `message` field verbatim.] No files were written. Migrations arrive with the first schema change per Q-04 (release, versioning, and compatibility); the snapshot-before-migrate and restore-on-failure contract activates at that time.
 
-**Migration-required case** - stderr contains content (stdout is empty or not JSON):
+**Migration required** - exit 2; stderr contains content (stdout is empty or not JSON):
 
 > Doctor migrate verdict: Migration required. [stderr content verbatim.] No migration has been applied; migrations from older schema versions are not yet defined in v1. The snapshot-before-migrate and restore-on-failure contract activates when real migrations arrive per Q-04 (release, versioning, and compatibility). No files were written. Verify the `schema_version` field in `.studio/meta.json`; the supported major is `2`.
 
@@ -183,7 +183,7 @@ If the stderr message contains "requires migration", also suggest:
 
 **Exit 2 from `--report`.** Step 4 surfaces the stderr and halts. Never treated as a pass. If the error message mentions schema version mismatch, suggest running `/nonfiction-studio:doctor migrate` for the explicit migration diagnosis.
 
-**Exit 2 from `--migrate`.** This is expected output from the CLI in both cases (no-migrations and migration-required). Step 4 distinguishes the cases and presents the appropriate message. It is not an unexpected error.
+**Exit 2 from `--migrate`.** Expected output from the CLI when migration is genuinely required (an incompatible schema version); an already-current schema now exits 0 instead. Step 4 distinguishes the two cases and presents the appropriate message. It is not an unexpected error.
 
 **Exit 2 from `--validate-packs`.** Unexpected in v1 (the packs mode exits 0 under all normal conditions). Surface the stderr and halt.
 
