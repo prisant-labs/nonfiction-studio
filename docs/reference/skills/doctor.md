@@ -40,7 +40,6 @@ Alternate entry points:
 - Via the `studio` dispatcher: routes here from Path 5 (Troubleshoot or get help) for structural problems
 - Via `status-dashboard`: routes here when `progress.json` is malformed or unreadable
 - Via `run-quality-gate`: routes here when the gate exits 2 with an engine error
-- Legacy verb: `/doctor` (deprecated; use the namespaced form)
 
 ## Inputs and Outputs
 
