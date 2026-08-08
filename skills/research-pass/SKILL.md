@@ -83,7 +83,7 @@ The skill writes no ledger files. The `research-librarian` agent is the sole wri
 
 ## Step 5 - Report from the agent's session output
 
-Use the Read tool on `research/open-questions.md` to count the items for the scope that are not marked `Status: resolved`.
+Use the Read tool on `research/open-questions.md` to count the items for the scope that are not marked `Status: resolved`, per the entry grammar in `docs/formats/open-questions.md`.
 
 Present the three counts, taking the source and evidence totals from the agent's session report:
 - **New sources:** the count of new SRC records the agent appended in this session
