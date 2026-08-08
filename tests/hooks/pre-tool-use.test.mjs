@@ -100,6 +100,19 @@ function makeBashEvent(cwd, command) {
   });
 }
 
+/** Build a synthetic PowerShell event (F-HK-07: PowerShell is a first-class
+ *  peer of Bash on Windows sessions and carries its command the same way). */
+function makePowerShellEvent(cwd, command) {
+  return JSON.stringify({
+    session_id: 'test-session-032',
+    cwd,
+    hook_event_name: 'PreToolUse',
+    tool_name: 'PowerShell',
+    tool_input: { command },
+    tool_use_id: 'toolu_test032'
+  });
+}
+
 /** Build a synthetic Read event (read-only; should be a no-op). */
 function makeReadEvent(cwd) {
   return JSON.stringify({
@@ -741,4 +754,166 @@ test('F-HK-03 (c) prune ordering with a same-timestamp collision pair: base is o
   for (const fname of seededNewer) {
     assert.ok(existsSync(join(snapshotsDir, fname)), fname + ' (distinct, newer than the pair) survives');
   }
+});
+
+// ---------------------------------------------------------------------------
+// F-HK-07: PowerShell destructive-op caution.
+//
+// The early exit used to read "not a WRITE_TOOL and not Bash -> exit 0", so
+// the PowerShell tool (a first-class peer of Bash on Windows sessions)
+// bypassed the destructive-op caution entirely, no matter what the command
+// did. The fix treats PowerShell like Bash in the early exit and adds a
+// PowerShell-shaped caution pattern set (checked independently of Bash's -
+// Bash's own two patterns must stay byte-unchanged).
+// ---------------------------------------------------------------------------
+
+test('F-HK-07 (a) PowerShell Remove-Item -Recurse -Force: additionalContext caution, no permissionDecision', () => {
+  const book = cloneSampleBook('fhk07-a-removeitem');
+  const result = runHook(makePowerShellEvent(book, 'Remove-Item -Recurse -Force C:\\Temp\\scratch'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+
+  const hso = out.hookSpecificOutput;
+  assert.equal(hso.hookEventName, 'PreToolUse', 'hookEventName is PreToolUse');
+  assert.ok(
+    typeof hso.additionalContext === 'string' && hso.additionalContext.length > 0,
+    'additionalContext is a non-empty caution string'
+  );
+  assert.equal(hso.permissionDecision, undefined, 'no permissionDecision field for caution (never a deny)');
+});
+
+test('F-HK-07 (b) PowerShell Remove-Item -Force -Recurse (reversed flag order): still cautioned', () => {
+  const book = cloneSampleBook('fhk07-b-reversed');
+  const result = runHook(makePowerShellEvent(book, 'Remove-Item -Force -Recurse -Path C:\\Temp\\scratch'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.length > 0,
+    'flag order (-Force before -Recurse) does not evade the caution'
+  );
+});
+
+test('F-HK-07 (c) PowerShell remove-item -recurse -force (lowercase): still cautioned (case-insensitive per PowerShell convention)', () => {
+  const book = cloneSampleBook('fhk07-c-lowercase');
+  const result = runHook(makePowerShellEvent(book, 'remove-item -recurse -force C:\\Temp\\scratch'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.length > 0,
+    'lowercase cmdlet/flags still trigger the caution'
+  );
+});
+
+test('F-HK-07 (d) PowerShell git reset --hard: cautioned', () => {
+  const book = cloneSampleBook('fhk07-d-gitreset');
+  const result = runHook(makePowerShellEvent(book, 'git reset --hard HEAD~1'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.includes('git reset --hard'),
+    'additionalContext names the git reset --hard pattern'
+  );
+});
+
+test('F-HK-07 (e) PowerShell git clean -fd: cautioned', () => {
+  const book = cloneSampleBook('fhk07-e-gitclean');
+  const result = runHook(makePowerShellEvent(book, 'git clean -fd'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.includes('git clean -fd'),
+    'additionalContext names the git clean -fd pattern'
+  );
+});
+
+test('F-HK-07 (f) PowerShell Format-Volume: cautioned', () => {
+  const book = cloneSampleBook('fhk07-f-formatvolume');
+  const result = runHook(makePowerShellEvent(book, 'Format-Volume -DriveLetter D -FileSystem NTFS'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.length > 0,
+    'Format-Volume triggers the caution'
+  );
+});
+
+test('F-HK-07 (g) PowerShell format D: (legacy format targeting a drive): cautioned', () => {
+  const book = cloneSampleBook('fhk07-g-formatdrive');
+  const result = runHook(makePowerShellEvent(book, 'format D:'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.length > 0,
+    'format targeting a drive letter triggers the caution'
+  );
+});
+
+test('F-HK-07 (h) benign PowerShell Get-ChildItem: exits silently (empty stdout)', () => {
+  const book = cloneSampleBook('fhk07-h-benign');
+  const result = runHook(makePowerShellEvent(book, 'Get-ChildItem -Path .'));
+
+  assert.equal(result.status, 0, 'exit code is 0 for benign PowerShell');
+  assert.equal(result.stdout.trim(), '', 'stdout is empty (allow) for benign PowerShell');
+});
+
+test('F-HK-07 (i) benign PowerShell Get-Date -Format with no drive letter: not a false positive for the format pattern', () => {
+  const book = cloneSampleBook('fhk07-i-getdate');
+  const result = runHook(makePowerShellEvent(book, 'Get-Date -Format "yyyy-MM-dd"'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'a -Format parameter with no drive-letter pattern must not be mistaken for the destructive format command'
+  );
+});
+
+test('F-HK-07 (j) regression: Bash git clean -fd is NOT cautioned (Bash pattern set stays byte-unchanged)', () => {
+  const book = cloneSampleBook('fhk07-j-bash-unchanged');
+  const result = runHook(makeBashEvent(book, 'git clean -fd'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'Bash only ever had rm -rf and git reset --hard; git clean -fd is a PowerShell-set addition only, ' +
+    'proving this fix did not silently widen the Bash pattern set'
+  );
+});
+
+test('F-HK-07 (k) regression: Bash rm -rf and git reset --hard cautions unchanged after adding the PowerShell branch', () => {
+  const book1 = cloneSampleBook('fhk07-k-bash-rmrf');
+  const r1 = runHook(makeBashEvent(book1, 'rm -rf /tmp/foo'));
+  assert.equal(r1.status, 0, 'exit code is 0');
+  let out1;
+  assert.doesNotThrow(() => { out1 = JSON.parse(r1.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(out1.hookSpecificOutput.additionalContext.includes('rm -rf'), 'Bash rm -rf still cautioned');
+
+  const book2 = cloneSampleBook('fhk07-k-bash-reset');
+  const r2 = runHook(makeBashEvent(book2, 'git reset --hard HEAD~1'));
+  assert.equal(r2.status, 0, 'exit code is 0');
+  let out2;
+  assert.doesNotThrow(() => { out2 = JSON.parse(r2.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    out2.hookSpecificOutput.additionalContext.includes('git reset --hard'),
+    'Bash git reset --hard still cautioned'
+  );
 });

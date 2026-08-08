@@ -336,23 +336,51 @@ if (isMain) {
   // -------------------------------------------------------------------------
   // No-op for tools this hook does not handle.
   // Read, Grep, Glob, WebFetch and others exit here with empty stdout.
+  // F-HK-07: PowerShell is a first-class peer of Bash on Windows sessions, so
+  // it must reach the destructive-op caution below rather than bypass it here.
   // -------------------------------------------------------------------------
-  if (!WRITE_TOOLS.has(toolName) && toolName !== 'Bash') {
+  if (!WRITE_TOOLS.has(toolName) && toolName !== 'Bash' && toolName !== 'PowerShell') {
     process.exit(0);
   }
 
   // =========================================================================
-  // BASH path (S-07 step 4)
-  // When tool_name is Bash and the command matches a destructive pattern,
-  // inject a one-line caution via additionalContext; no permissionDecision.
-  // Benign Bash exits with empty stdout (allow).
+  // BASH / POWERSHELL path (S-07 step 4; F-HK-07 extends it to PowerShell)
+  // When tool_name is Bash or PowerShell and the command matches that shell's
+  // destructive pattern set, inject a one-line caution via additionalContext;
+  // no permissionDecision (never a deny). Benign commands exit with empty
+  // stdout. The two pattern sets are independent: Bash's stays exactly as it
+  // was (byte-unchanged) and PowerShell gets its own shape.
   // =========================================================================
-  if (toolName === 'Bash') {
+  if (toolName === 'Bash' || toolName === 'PowerShell') {
     const command = typeof toolInput.command === 'string' ? toolInput.command : '';
-    const CAUTION_PATTERNS = [
+
+    // Bash: unchanged from before F-HK-07.
+    const BASH_CAUTION_PATTERNS = [
       { re: /rm\s+-rf\b/, name: 'rm -rf' },
       { re: /git\s+reset\s+--hard\b/, name: 'git reset --hard' }
     ];
+
+    // PowerShell (F-HK-07): cmdlet/flag names are matched case-insensitively
+    // per PowerShell's own convention; git subcommands stay case-sensitive
+    // (git.exe itself is case-sensitive regardless of the invoking shell).
+    // Remove-Item -Recurse -Force: lookaheads accept either flag order and
+    // flexible whitespace/args between the cmdlet and the two flags.
+    const POWERSHELL_CAUTION_PATTERNS = [
+      {
+        re: /Remove-Item\b(?=[\s\S]*-Recurse\b)(?=[\s\S]*-Force\b)/i,
+        name: 'Remove-Item -Recurse -Force'
+      },
+      { re: /git\s+reset\s+--hard\b/, name: 'git reset --hard' },
+      { re: /git\s+clean\s+-fd\b/, name: 'git clean -fd' },
+      { re: /Format-Volume\b/i, name: 'Format-Volume' },
+      // "format" targeting a drive: the bare word "format" alone is too common
+      // (e.g. a -Format parameter) to flag on its own, so this also requires a
+      // drive-letter-shaped token (e.g. "D:", "D:\") somewhere in the command.
+      { re: /\bformat\b(?=[\s\S]*\b[a-zA-Z]:(?:[\\/]|\s|$))/i, name: 'format (drive)' }
+    ];
+
+    const CAUTION_PATTERNS = toolName === 'Bash' ? BASH_CAUTION_PATTERNS : POWERSHELL_CAUTION_PATTERNS;
+
     for (const { re, name } of CAUTION_PATTERNS) {
       if (re.test(command)) {
         process.stdout.write(
@@ -368,7 +396,7 @@ if (isMain) {
         process.exit(0);
       }
     }
-    // Benign Bash: empty stdout (allow).
+    // Benign Bash/PowerShell: empty stdout (allow).
     process.exit(0);
   }
 
