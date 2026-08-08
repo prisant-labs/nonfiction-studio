@@ -31,7 +31,7 @@ Both arguments are optional. The chapter may be a slug (for example `02-finding-
 Alternate entry points:
 - Via the `studio` dispatcher: routes here from Path 4 (Review quality and status) after `status-dashboard`
 - Via `draft-chapter` Step 6: that skill closes with an explicit prompt to run `run-quality-gate` on chat because the Stop hook does not fire automatically there
-- Via `fact-check-pass` Step 5: when coverage reaches 100% the skill suggests running the quality gate
+- Via `fact-check-pass` Step 6: when coverage reaches 100% the skill suggests running the quality gate
 - Legacy verb: `/gate` (deprecated; use the namespaced form)
 
 ## Inputs and Outputs
@@ -52,13 +52,13 @@ The skill writes no files. All state writes are performed by `bin/ns-gate`, not 
 
 | Path | Written by | Contents |
 |---|---|---|
-| `.studio/gate/<slug>.<ts>.json` | `bin/ns-gate` (via Step 4 Bash call) | S-08 section 11 gate report: version, chapter, ts, verdict, per-check entries with detail, evidence, and next action |
+| `.studio/gate/<slug>.<ts>.json` | `bin/ns-gate` (via Step 5 Bash call) | S-08 section 11 gate report: version, chapter, ts, verdict, per-check entries with detail, evidence, and next action |
 
 The `.studio/progress.json` `last_gate` per-chapter field is reserved in the schema (S-08 section 3) and unpopulated in v1; no component writes it during a live gate run.
 
 ## Flow Summary
 
-The skill runs four steps.
+The skill runs five steps.
 
 1. **Argument parsing and deep argument check.** Parses the supplied argument. If the literal token `deep` appears, declines as Phase 2 and halts without any tool calls. Carries the chapter token (if any) forward to Step 2.
 
@@ -66,7 +66,9 @@ The skill runs four steps.
 
 3. **Voice baseline pre-check.** Probes `context/style-profile.md` (Bash). If absent, or if present but `.studio/config.json` lacks `stylometry.baseline.markers`, the skill sets the check subset to `claims,scrub,continuity-quick,coherence`, warns that voice drift was skipped, and continues. If both the profile and the markers are present, the skill runs the full gate (all five checks). This is the degradation mechanism the brief describes: the gate engine exits 2 on a missing baseline, so the skill pre-checks and routes around the error with a clear warning rather than a halt.
 
-4. **Gate invocation (single Bash call; maps exit code to verdict).** Runs one Bash call: `node bin/ns-gate --chapter=<slug> [--check=<subset>] --json`. Captures exit code, stdout (JSON report), and stderr. Maps as follows:
+4. **Resolve the plugin root.** Before ns-gate is invoked, the skill resolves the plugin's installed path: a primary lookup against `extraKnownMarketplaces['nonfiction-studio'].source.path` in `~/.claude/settings.json`, a `~/.claude/plugins/cache` search fallback, and a dev-mode fallback that checks for `bin/ns-gate` in the current directory. This is the same three-tier convention `init-project` uses to locate its scaffold templates; it exists because a literal relative `bin/ns-gate` path resolves against the invoking shell's working directory, not the installed plugin, and would silently fail for a marketplace-installed author. If all three lookups fail, the skill halts and names the settings.json and cache paths it attempted.
+
+5. **Gate invocation (single Bash call; maps exit code to verdict).** Runs one Bash call: `node "<plugin-root>/bin/ns-gate" --chapter=<slug> [--check=<subset>] --json`. Captures exit code, stdout (JSON report), and stderr. Maps as follows:
    - **Exit 0:** present the pass or warn verdict summary. Pass is never silent. For warn, lists each non-passing check with its detail and next action. Notes that this verdict is the deterministic layer only.
    - **Exit 1:** present the block verdict with each blocking check's detail, evidence pointers, and next action. Suggests the appropriate remediation skill per blocking check type.
    - **Exit 2:** surface the stderr error. NEVER treated as a pass, warn, or block verdict. Routes to `doctor` for diagnosis.
@@ -153,7 +155,7 @@ Reports are retained and pruned to the last 10 per chapter slug by `bin/ns-gate`
 
 **Voice baseline absent.** Step 3 sets the degraded check subset and warns. The gate still runs; baseline absence is not a halt condition.
 
-**Exit 2 from ns-gate.** Step 4 presents the stderr error. Never treated as a pass, warn, or block. Routes to `doctor` for diagnosis.
+**Exit 2 from ns-gate.** Step 5 presents the stderr error. Never treated as a pass, warn, or block. Routes to `doctor` for diagnosis.
 
 ## Worked Example
 

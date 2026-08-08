@@ -41,10 +41,10 @@ Alternate entry points:
 | Path | When it is read | Why |
 |---|---|---|
 | `structure/chapter-list.md` | Step 1 (Bash probe + Read) | Confirm the registry is present; resolve the chapter slug or number |
-| `chapters/<slug>.md` | Step 1 (Bash probe); Step 4 (Read check) | Confirm the chapter file exists before delegation; confirm it is present and non-empty after the agent pass |
-| `research/evidence-log.md` | Step 4 (Read check); passed to fact-checker | Confirm the ledger is readable after the agent updates status fields |
+| `chapters/<slug>.md` | Step 1 (Bash probe); Step 5 (Read check) | Confirm the chapter file exists before delegation; confirm it is present and non-empty after the agent pass |
+| `research/evidence-log.md` | Step 5 (Read check); passed to fact-checker | Confirm the ledger is readable after the agent updates status fields |
 | `research/sources.md` | Passed to fact-checker | Source registry the agent reads at session start to scan for `changed: true` flags and to retrieve SRC records during verification |
-| `.studio/config.json` | Step 3 (Read) | Check `research.web_enabled` to state the online pass gate status before delegation |
+| `.studio/config.json` | Step 4 (Read) | Check `research.web_enabled` to state the online pass gate status before delegation |
 | `.claude/agent-memory/nonfiction-studio-fact-checker/` | Read by fact-checker | Verified-claims cache; entries with cache hits are skipped per D-09 (learning checker agents) |
 
 ### Outputs
@@ -62,17 +62,19 @@ The skill writes no `.studio/progress.json` and no other `.studio/` machine stat
 
 ## Flow Summary
 
-The skill runs five steps.
+The skill runs six steps.
 
 1. **Chapter argument resolution and file probe (mandatory first tool call).** Uses a Bash tool call to test whether `structure/chapter-list.md` is present (`HAS_REGISTRY`/`NO_REGISTRY`). If the registry is present, reads it and resolves the slug or number argument. Uses a second Bash tool call to test whether `chapters/<slug>.md` exists (`HAS_CHAPTER`/`NO_CHAPTER`). `NO_CHAPTER` halts immediately, routing to `draft-chapter`. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
 
-2. **Engine-backed marker inventory.** Uses the Bash tool to run `node bin/ns-claims --chapter=<slug> --json`. Parses the JSON output for `totalMarkers`, `resolvedCount`, and `coveragePct`, and presents this pre-count to the author before delegation. If ns-claims exits non-zero, reports the exact stderr message and halts. The skill never eyeballs markers itself: ns-claims is the deterministic inventory source.
+2. **Resolve the plugin root.** Before ns-claims is invoked, the skill resolves the plugin's installed path: a primary lookup against `extraKnownMarketplaces['nonfiction-studio'].source.path` in `~/.claude/settings.json`, a `~/.claude/plugins/cache` search fallback, and a dev-mode fallback that checks for `bin/ns-claims` in the current directory. This is the same three-tier convention `init-project` uses to locate its scaffold templates; it exists because a literal relative `bin/ns-claims` path resolves against the invoking shell's working directory, not the installed plugin, and would silently fail for a marketplace-installed author. If all three lookups fail, the skill halts and names the settings.json and cache paths it attempted.
 
-3. **Web gate check and delegate to fact-checker.** Reads `.studio/config.json` to check `research.web_enabled`. States the gate status explicitly before spawning the agent: gate open announces DOI/URL resolution; gate closed (the default) explains that pasted source content is analyzed with the same quote-and-attribute discipline per D-13 (security posture); on chat notes that WebSearch and WebFetch may not be available. Spawns `fact-checker` via the `fact-check-pass -> fact-checker` chain edge with the chapter slug, ns-claims pre-count, and web gate status. The agent runs its five-step pass: cache protocol, marker resolution, status updates, marker writes (insert and the re-check removal rule), and the optional online pass.
+3. **Engine-backed marker inventory.** Uses the Bash tool to run `node "<plugin-root>/bin/ns-claims" --chapter=<slug> --json`. Parses the JSON output for `totalMarkers`, `resolvedCount`, and `coveragePct`, and presents this pre-count to the author before delegation. If ns-claims exits non-zero, reports the exact stderr message and halts. The skill never eyeballs markers itself: ns-claims is the deterministic inventory source.
 
-4. **Confirm agent writes via Read checks.** Reads `chapters/<slug>.md`, `research/evidence-log.md`, and `.studio/fact-check-reports/<NN>-report.md` to confirm each is present after the agent completes. A missing file surfaces as a gap report with an offer to re-run from Step 3.
+4. **Web gate check and delegate to fact-checker.** Reads `.studio/config.json` to check `research.web_enabled`. States the gate status explicitly before spawning the agent: gate open announces DOI/URL resolution; gate closed (the default) explains that pasted source content is analyzed with the same quote-and-attribute discipline per D-13 (security posture); on chat notes that WebSearch and WebFetch may not be available. Spawns `fact-checker` via the `fact-check-pass -> fact-checker` chain edge with the chapter slug, ns-claims pre-count, and web gate status. The agent runs its five-step pass: cache protocol, marker resolution, status updates, marker writes (insert and the re-check removal rule), and the optional online pass.
 
-5. **Report three counts from the agent's per-chapter report.** Formats and presents the three counts from `.studio/fact-check-reports/<NN>-report.md`: verified (including cache hits), unresolved (open claims), and source-unverifiable. Names the report path explicitly. Suggests next steps based on the counts. On the chat surface, adds an explicit prompt to run `run-quality-gate` because the Stop hook gate does not fire automatically on chat per S-06 1.3 (gate closure compensation).
+5. **Confirm agent writes via Read checks.** Reads `chapters/<slug>.md`, `research/evidence-log.md`, and `.studio/fact-check-reports/<NN>-report.md` to confirm each is present after the agent completes. A missing file surfaces as a gap report with an offer to re-run from Step 4.
+
+6. **Report three counts from the agent's per-chapter report.** Formats and presents the three counts from `.studio/fact-check-reports/<NN>-report.md`: verified (including cache hits), unresolved (open claims), and source-unverifiable. Names the report path explicitly. Suggests next steps based on the counts. On the chat surface, adds an explicit prompt to run `run-quality-gate` because the Stop hook gate does not fire automatically on chat per S-06 1.3 (gate closure compensation).
 
 ## Progress.json and the Open-Claims Total
 
@@ -112,9 +114,9 @@ This cache behavior is the mechanism behind re-run idempotency: a second pass on
 
 **Chapter argument not matched.** Step 1 halts with the supplied value, the registry file name (`structure/chapter-list.md`), and the list of valid slugs when the registry is present but the argument matches no row. No state is written.
 
-**ns-claims failure.** If `bin/ns-claims` exits non-zero (evidence log absent, chapter unreadable, BibleError), the exact stderr message is reported and the skill halts at Step 2. The most common cause is a missing `research/evidence-log.md`; run `/nonfiction-studio:research-pass` to create it, then re-invoke.
+**ns-claims failure.** If `bin/ns-claims` exits non-zero (evidence log absent, chapter unreadable, BibleError), the exact stderr message is reported and the skill halts at Step 3. The most common cause is a missing `research/evidence-log.md`; run `/nonfiction-studio:research-pass` to create it, then re-invoke.
 
-**Agent incomplete or report missing.** If the Step 4 Read checks find a file absent after the agent ran, the skill reports the gap and offers to re-run from Step 3. Re-runs are safe: the agent's cache marks known-good entries and skips their re-verification; status-field writes and marker operations are idempotent against current state.
+**Agent incomplete or report missing.** If the Step 5 Read checks find a file absent after the agent ran, the skill reports the gap and offers to re-run from Step 4. Re-runs are safe: the agent's cache marks known-good entries and skips their re-verification; status-field writes and marker operations are idempotent against current state.
 
 **Gate closed, unresolved claims remain.** When the online pass is disabled and offline verification leaves entries unresolved, the skill reports the count and suggests either enabling the gate or providing pasted source text. The chapter is in a valid intermediate state; the Stop gate blocks only in blocking mode, and in Phase 1 the gate is warn-only by default per D-03 (warn-only default).
 

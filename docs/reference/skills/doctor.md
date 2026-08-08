@@ -48,13 +48,13 @@ Alternate entry points:
 
 | Path | When it is read | Why |
 |---|---|---|
-| `.studio/meta.json` | Step 2 (via engine) | Schema-version check; required fields (schema_version, created, plugin_version_at_creation) |
-| `.studio/progress.json` | Step 2 (via engine) | Schema validation against `templates/book-scaffold/.studio/progress.schema.json` |
-| `.studio/config.json` | Step 2 (via engine) | Shape check (version integer, gate object, gate.mode enum); config-coercion notice |
-| `.studio/snapshots/` | Step 2 (via engine) | Filename conformance check against `<slug>.<YYYYMMDDTHHMMSSZ>.md` pattern |
-| `research/evidence-log.md` | Step 2 (via engine) | EV grammar (required fields, enum values, SRC ID format); orphan-marker cross-reference |
-| `research/sources.md` | Step 2 (via engine) | SRC grammar (type enum, retrieval-status enum); SRC cross-reference check |
-| `chapters/*.md` | Step 2 (via engine) | Scanned for `[claim: EV-nnnn]` markers in the orphan-marker check |
+| `.studio/meta.json` | Step 3 (via engine) | Schema-version check; required fields (schema_version, created, plugin_version_at_creation) |
+| `.studio/progress.json` | Step 3 (via engine) | Schema validation against `templates/book-scaffold/.studio/progress.schema.json` |
+| `.studio/config.json` | Step 3 (via engine) | Shape check (version integer, gate object, gate.mode enum); config-coercion notice |
+| `.studio/snapshots/` | Step 3 (via engine) | Filename conformance check against `<slug>.<YYYYMMDDTHHMMSSZ>.md` pattern |
+| `research/evidence-log.md` | Step 3 (via engine) | EV grammar (required fields, enum values, SRC ID format); orphan-marker cross-reference |
+| `research/sources.md` | Step 3 (via engine) | SRC grammar (type enum, retrieval-status enum); SRC cross-reference check |
+| `chapters/*.md` | Step 3 (via engine) | Scanned for `[claim: EV-nnnn]` markers in the orphan-marker check |
 
 ### Outputs
 
@@ -66,13 +66,15 @@ The skill writes no files. All reads are performed by `bin/ns-doctor` under its 
 
 ## Flow Summary
 
-The skill runs three steps.
+The skill runs four steps.
 
 1. **Argument parsing (no tool call).** Extracts the mode from the supplied argument. Default is `report`. Recognizes `report`, `migrate`, `packs`, and `validate` (treated as `report`). Declines `fix` as Phase 2+ scope and halts without any tool calls. Declines unknown tokens and halts.
 
-2. **Single Bash invocation (one call per mode).** Runs one Bash call: `node bin/ns-doctor --project=. [--report|--migrate|--validate-packs] --json`. Captures exit code, stdout (JSON), and stderr. No individual sub-CLI calls are made; the engine composes its checks internally.
+2. **Resolve the plugin root.** Before the engine is invoked, the skill resolves the plugin's installed path: a primary lookup against `extraKnownMarketplaces['nonfiction-studio'].source.path` in `~/.claude/settings.json`, a `~/.claude/plugins/cache` search fallback, and a dev-mode fallback that checks for `bin/ns-doctor` in the current directory. This is the same three-tier convention `init-project` uses to locate its scaffold templates; it exists because a literal relative `bin/ns-doctor` path resolves against the invoking shell's working directory, not the installed plugin, and would silently fail for a marketplace-installed author. If all three lookups fail, the skill halts and names the settings.json and cache paths it attempted.
 
-3. **Present the result (exit-code mapping).** Maps exit code to the presented verdict:
+3. **Single Bash invocation (one call per mode).** Runs one Bash call: `node "<plugin-root>/bin/ns-doctor" --project=. [--report|--migrate|--validate-packs] --json`. Captures exit code, stdout (JSON), and stderr. No individual sub-CLI calls are made; the engine composes its checks internally.
+
+4. **Present the result (exit-code mapping).** Maps exit code to the presented verdict:
    - **Report mode, exit 0:** clean pass; no findings; names the ten checks run.
    - **Report mode, exit 1:** findings grouped by check-type prefix with per-group counts and routing hints; closes with total count and re-run invitation.
    - **Report mode, exit 2:** surfaces stderr error; NEVER treated as a pass.
@@ -148,11 +150,11 @@ The doctor skill works identically on all three surfaces per D-14 (three-surface
 
 **Unrecognized mode argument.** Step 1 declines and halts without any tool calls. No engine invocation.
 
-**Exit 2 from `--report`.** Step 3 surfaces the stderr and halts. Never treated as a pass. If the error message indicates a schema version mismatch, suggests running `doctor migrate` for the explicit diagnosis.
+**Exit 2 from `--report`.** Step 4 surfaces the stderr and halts. Never treated as a pass. If the error message indicates a schema version mismatch, suggests running `doctor migrate` for the explicit diagnosis.
 
-**Exit 2 from `--migrate`.** Expected behavior; not an unexpected error. Step 3 distinguishes the two cases and presents the appropriate message.
+**Exit 2 from `--migrate`.** Expected behavior; not an unexpected error. Step 4 distinguishes the two cases and presents the appropriate message.
 
-**Exit 2 from `--validate-packs`.** Unexpected in v1. Step 3 surfaces the stderr and halts.
+**Exit 2 from `--validate-packs`.** Unexpected in v1. Step 4 surfaces the stderr and halts.
 
 **Project root not found.** `findBookRoot` exits 2 with a `BibleError` on stderr when `.studio/meta.json` is not found at or above the current directory. The skill surfaces the error and notes that `.studio/meta.json` must be present at the project root.
 
