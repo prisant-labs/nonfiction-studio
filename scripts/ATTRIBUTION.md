@@ -13,8 +13,13 @@ This directory contains code copied from the upstream project (agent-skills-tool
 under the Apache License 2.0. The upstream LICENSE text governs these files.
 Modifications, if ever made, will be marked in this file alongside the reason.
 
-The copyright notices and license headers present in the upstream files are preserved
-verbatim. No substantive modifications have been made to vendored files.
+The vendored files carry no embedded copyright notices or per-file license headers of
+their own; the upstream project (see Repository URL above) licenses its `scripts/` tree
+under Apache License 2.0 at the repository level, not with per-file headers, and none
+were removed in copying. The governing license text is bundled at
+[`scripts/LICENSE-APACHE`](./LICENSE-APACHE) so it travels with these files independent
+of the upstream repository. No substantive modifications have been made to vendored
+files.
 
 ## Files vendored
 
