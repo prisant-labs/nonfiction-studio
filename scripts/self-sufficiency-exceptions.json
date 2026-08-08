@@ -1,0 +1,23 @@
+[
+  {
+    "file": ".github/workflows/tier-b.yml",
+    "pattern": "ANTHROPIC_API_KEY",
+    "reason": "workflow_dispatch-only advisory model CI; a GitHub runner has no logged-in account",
+    "addedBy": "wave-0",
+    "date": "2026-08-07"
+  },
+  {
+    "file": "scripts/run-integration.mjs",
+    "pattern": "ANTHROPIC_API_KEY",
+    "reason": "CI-runner fallback probe only; subscription login preferred",
+    "addedBy": "wave-0",
+    "date": "2026-08-07"
+  },
+  {
+    "file": "scripts/run-evals.mjs",
+    "pattern": "ANTHROPIC_API_KEY",
+    "reason": "CI-runner fallback probe only; subscription login preferred",
+    "addedBy": "wave-0",
+    "date": "2026-08-07"
+  }
+]
