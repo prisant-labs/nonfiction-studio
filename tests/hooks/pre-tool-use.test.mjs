@@ -939,6 +939,131 @@ test('F-HK-07 (k) regression: Bash rm -rf and git reset --hard cautions unchange
 });
 
 // ---------------------------------------------------------------------------
+// F-HK-07 fix round 1: Remove-Item's built-in destructive aliases.
+//
+// The original pattern matched only the literal cmdlet name "Remove-Item".
+// PowerShell's built-in aliases (rm, rd, rmdir, del, erase) evade it entirely -
+// reviewer proved live that `rm -Recurse -Force ...` and `rd -Recurse -Force
+// ...` both produced empty stdout (no caution), and `rm` is exactly what a
+// Unix-habituated author types in PowerShell. The fix extends the cmdlet
+// portion of the pattern to an alternation over Remove-Item and all five
+// built-in aliases, word-boundary-anchored on BOTH sides so short alias names
+// cannot match inside longer tokens (e.g. "confirm", "term-notes.md").
+// ---------------------------------------------------------------------------
+
+test('F-HK-07 (l) PowerShell rm -Recurse -Force (Unix-habit alias): cautioned', () => {
+  const book = cloneSampleBook('fhk07-l-rm-alias');
+  const result = runHook(makePowerShellEvent(book, 'rm -Recurse -Force C:\\Temp\\scratch'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.length > 0,
+    'the rm alias with both destructive flags triggers the caution, same as Remove-Item'
+  );
+});
+
+test('F-HK-07 (m) PowerShell rd -Recurse -Force (alias): cautioned', () => {
+  const book = cloneSampleBook('fhk07-m-rd-alias');
+  const result = runHook(makePowerShellEvent(book, 'rd -Recurse -Force C:\\Temp\\scratch'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.length > 0,
+    'the rd alias with both destructive flags triggers the caution'
+  );
+});
+
+test('F-HK-07 (n) PowerShell rmdir -Recurse -Force (alias): cautioned', () => {
+  const book = cloneSampleBook('fhk07-n-rmdir-alias');
+  const result = runHook(makePowerShellEvent(book, 'rmdir -Force -Recurse C:\\Temp\\scratch'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.length > 0,
+    'the rmdir alias (reversed flag order) triggers the caution'
+  );
+});
+
+test('F-HK-07 (o) PowerShell del -Recurse -Force (alias): cautioned', () => {
+  const book = cloneSampleBook('fhk07-o-del-alias');
+  const result = runHook(makePowerShellEvent(book, 'del -Recurse -Force C:\\Temp\\scratch'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.length > 0,
+    'the del alias triggers the caution'
+  );
+});
+
+test('F-HK-07 (p) PowerShell ERASE -recurse -force (alias, mixed case): cautioned', () => {
+  const book = cloneSampleBook('fhk07-p-erase-alias');
+  const result = runHook(makePowerShellEvent(book, 'ERASE -recurse -force C:\\Temp\\scratch'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.length > 0,
+    'the erase alias, any case, triggers the caution'
+  );
+});
+
+test('F-HK-07 (q) PowerShell rm without both destructive flags: stays silent (no false positive from the new alias)', () => {
+  const book = cloneSampleBook('fhk07-q-rm-benign');
+  const result = runHook(makePowerShellEvent(book, 'rm oldfile.txt'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'rm alone (no -Recurse, no -Force) must not be cautioned - both flags are still required'
+  );
+});
+
+test('F-HK-07 (r) PowerShell word-boundary: "-Confirm" (contains the substring "rm") plus both flags must not false-trigger the alias pattern', () => {
+  const book = cloneSampleBook('fhk07-r-confirm-boundary');
+  // Deliberately includes BOTH -Recurse and -Force elsewhere in the command, so
+  // only the word-boundary anchoring (not a missing flag) can be what keeps this
+  // silent: "-Confirm" contains the substring "rm" but is not the rm alias token.
+  const result = runHook(makePowerShellEvent(
+    book, 'Copy-Item -Recurse -Force -Confirm:$false -Path safe-file.txt -Destination backup\\'
+  ));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    '"-Confirm" must not be mistaken for the "rm" alias even though both destructive flags are present ' +
+    'elsewhere in the command - the alias needs word boundaries on both sides, not just a substring match'
+  );
+});
+
+test('F-HK-07 (s) PowerShell word-boundary: a filename containing "rm" ("term-notes.md") plus both flags must not false-trigger the alias pattern', () => {
+  const book = cloneSampleBook('fhk07-s-filename-boundary');
+  // Same isolation as (r): both flags are genuinely present, so only the
+  // boundary anchoring can be what keeps this silent, not a missing flag.
+  const result = runHook(makePowerShellEvent(book, 'Copy-Item -Recurse -Force -Path term-notes.md -Destination backup\\'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    '"term-notes.md" contains the substring "rm" inside "term" but is not the rm alias token; with both ' +
+    'flags genuinely present, only correct word-boundary anchoring keeps this silent'
+  );
+});
+
+// ---------------------------------------------------------------------------
 // F-HK-13: unconditional case folding.
 //
 // The containment guard used to lowercase both sides of the prefix comparison

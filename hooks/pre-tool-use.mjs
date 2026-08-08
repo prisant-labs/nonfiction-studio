@@ -378,11 +378,17 @@ if (isMain) {
     // per PowerShell's own convention; git subcommands stay case-sensitive
     // (git.exe itself is case-sensitive regardless of the invoking shell).
     // Remove-Item -Recurse -Force: lookaheads accept either flag order and
-    // flexible whitespace/args between the cmdlet and the two flags.
+    // flexible whitespace/args between the cmdlet and the two flags. The
+    // cmdlet portion also covers PowerShell's built-in destructive aliases
+    // (rm, rd, rmdir, del, erase) - fix round 1 (F-HK-07): the literal
+    // cmdlet name alone missed `rm -Recurse -Force`, which is exactly what a
+    // Unix-habituated author types. \b on BOTH sides of the alternation
+    // keeps the short aliases from matching inside longer tokens (e.g.
+    // "confirm", "term-notes.md", "-Confirm").
     const POWERSHELL_CAUTION_PATTERNS = [
       {
-        re: /Remove-Item\b(?=[\s\S]*-Recurse\b)(?=[\s\S]*-Force\b)/i,
-        name: 'Remove-Item -Recurse -Force'
+        re: /\b(?:Remove-Item|rmdir|rm|rd|del|erase)\b(?=[\s\S]*-Recurse\b)(?=[\s\S]*-Force\b)/i,
+        name: 'Remove-Item -Recurse -Force (or a built-in alias: rm, rd, rmdir, del, erase)'
       },
       { re: /git\s+reset\s+--hard\b/, name: 'git reset --hard' },
       { re: /git\s+clean\s+-fd\b/, name: 'git clean -fd' },
