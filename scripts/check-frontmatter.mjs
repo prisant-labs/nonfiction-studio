@@ -1,10 +1,10 @@
 // scripts/check-frontmatter.mjs
 // what-it-is:   agent and skill frontmatter validator with S4-enforcement fold
-// what-it-does: verifies every non-spike agent carries the five-key house set (name,
+// what-it-does: verifies every agent carries the five-key house set (name,
 //               description, model, color, tools) with name matching its filename, color
 //               in the eight-value enum, model in the allowed set, and memory only on the
 //               D-09 roster (fact-checker); verifies no agent carries hooks, mcpServers,
-//               or permissionMode; verifies every non-spike skill carries name and a boolean
+//               or permissionMode; verifies every skill carries name and a boolean
 //               user-invocable; enforces the S4 chain contract (TSK-044) bidirectionally
 //               against agents/_chain-permitted.yaml; verifies chain endpoint existence.
 // why:          Q-02 1.2 frontmatter-completeness step; resolves the phantom-caller era
@@ -140,9 +140,6 @@ try {
 for (const filename of agentFiles) {
   const name = basename(filename, '.md');
 
-  // Skip spike agents (temporary stubs, not in shipped set)
-  if (name.startsWith('spike-')) continue;
-
   const filePath = 'agents/' + filename;
   const fullPath = join(AGENTS_DIR, filename);
 
@@ -250,9 +247,6 @@ try {
 for (const entry of skillEntries) {
   const skillName = entry.name;
 
-  // Skip spike skills
-  if (skillName.startsWith('spike-')) continue;
-
   const skillMdPath = join(SKILLS_DIR, skillName, 'SKILL.md');
   const filePath = 'skills/' + skillName + '/SKILL.md';
 
@@ -316,8 +310,8 @@ for (const entry of skillEntries) {
 // ---------------------------------------------------------------------------
 
 if (findings.length === 0) {
-  const agentCount = agentFiles.filter(f => !basename(f, '.md').startsWith('spike-')).length;
-  const skillCount = skillEntries.filter(e => !e.name.startsWith('spike-')).length;
+  const agentCount = agentFiles.length;
+  const skillCount = skillEntries.length;
   process.stdout.write(
     '[check-frontmatter] pass: ' + agentCount + ' agent(s) and ' +
     skillCount + ' skill(s) validated; chain contract enforced\n'

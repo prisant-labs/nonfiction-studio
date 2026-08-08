@@ -1,6 +1,6 @@
 // scripts/check-docs-completeness.mjs
 // what-it-is:   docs reference completeness gate (D-24 docs release gate)
-// what-it-does: verifies every shipped agent (non-spike), skill (non-spike), and CLI
+// what-it-does: verifies every shipped agent, skill, and CLI
 //               binary has a corresponding reference page under docs/reference/; exits
 //               non-zero with named missing pages when any component lacks coverage.
 // why:          D-24 (docs release gate) makes this a hard gate, not advisory; Q-02 1.2.
@@ -56,9 +56,6 @@ try {
 for (const filename of agentFiles) {
   const name = basename(filename, '.md');
 
-  // Skip spike agents (temporary stubs, not in shipped set)
-  if (name.startsWith('spike-')) continue;
-
   const refPage = join(DOCS_AGENTS, name + '.md');
   if (!existsSync(refPage)) {
     addFinding('docs/reference/agents/' + name + '.md (for agent "' + name + '")');
@@ -80,9 +77,6 @@ try {
 
 for (const entry of skillEntries) {
   const skillName = entry.name;
-
-  // Skip spike skills (temporary stubs, not in shipped set)
-  if (skillName.startsWith('spike-')) continue;
 
   const refPage = join(DOCS_SKILLS, skillName + '.md');
   if (!existsSync(refPage)) {
@@ -114,8 +108,8 @@ for (const cliName of SHIPPED_CLIS) {
 // ---------------------------------------------------------------------------
 
 if (findings.length === 0) {
-  const agentCount = agentFiles.filter(f => !basename(f, '.md').startsWith('spike-')).length;
-  const skillCount = skillEntries.filter(e => !e.name.startsWith('spike-')).length;
+  const agentCount = agentFiles.length;
+  const skillCount = skillEntries.length;
   process.stdout.write(
     '[check-docs-completeness] pass: all ' + agentCount + ' agent(s), ' +
     skillCount + ' skill(s), and ' + SHIPPED_CLIS.length + ' CLI(s) have reference pages\n'
