@@ -29,9 +29,10 @@ import {
   mkdirSync,
   existsSync,
   readdirSync,
-  unlinkSync
+  unlinkSync,
+  realpathSync
 } from 'node:fs';
-import { join, resolve, sep, basename } from 'node:path';
+import { join, resolve, sep, basename, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findBookRoot } from './lib/bible.mjs';
 
@@ -104,6 +105,62 @@ function compareSnapshotNames(a, b, slug) {
   const pb = parseSnapshotName(b, slug);
   if (pa.timestamp !== pb.timestamp) return pa.timestamp < pb.timestamp ? -1 : 1;
   return pa.counter - pb.counter;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: realpath the nearest EXISTING ancestor of absPath, then rejoin the
+// remaining (not-yet-created) path segments (F-HK-04 symlink containment
+// bypass). Write targets are often new files that do not exist yet, so a
+// plain realpathSync on the full path would throw ENOENT; this walks up
+// until it finds a real ancestor, resolves THAT natively, and re-attaches
+// the rest lexically (a symlink cannot live inside a path segment that has
+// not been created yet, so the remainder is safe to re-attach as-is).
+// ---------------------------------------------------------------------------
+function realpathNearestExisting(absPath) {
+  let current = absPath;
+  const remainder = [];
+  while (!existsSync(current)) {
+    const parent = dirname(current);
+    if (parent === current) {
+      // Reached the filesystem root without finding an existing ancestor.
+      // The bible root itself always exists (findBookRoot verified it), so
+      // this should be unreachable in practice; fail closed defensively.
+      throw new Error('no existing ancestor found for ' + absPath);
+    }
+    remainder.unshift(basename(current));
+    current = parent;
+  }
+  const realBase = realpathSync.native(current);
+  return remainder.length > 0 ? join(realBase, ...remainder) : realBase;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: identify the shallowest path component between rootPath and
+// targetPath whose real path diverges from its lexical path (F-HK-04) - i.e.
+// the symlink (or symlinked ancestor) responsible for a containment escape.
+// Used only to make the deny reason legible; returns null when no divergence
+// is found among existing ancestors (e.g. nothing on the path exists yet, or
+// targetPath is not lexically under rootPath at all).
+// ---------------------------------------------------------------------------
+function findSymlinkedComponent(rootPath, targetPath) {
+  const relPath = relative(rootPath, targetPath);
+  if (!relPath || relPath.startsWith('..')) return null;
+  const parts = relPath.split(sep).filter(Boolean);
+  let lexicalSoFar = rootPath;
+  for (const part of parts) {
+    lexicalSoFar = join(lexicalSoFar, part);
+    if (!existsSync(lexicalSoFar)) break;
+    let real;
+    try {
+      real = realpathSync.native(lexicalSoFar);
+    } catch {
+      break;
+    }
+    if (resolve(real).toLowerCase() !== resolve(lexicalSoFar).toLowerCase()) {
+      return lexicalSoFar;
+    }
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -355,6 +412,38 @@ if (isMain) {
     emitDeny(
       'Write target ' + resolvedTarget + ' is outside the bible root ' + resolvedRoot +
       '; denied per D-13 (security posture)'
+    );
+  }
+
+  // Step 3b-2: REAL-PATH re-verification (F-HK-04 symlink containment bypass).
+  // The lexical check above resolves the target textually only (resolve() never
+  // follows symlinks), so a path component inside the root that symlinks OUTSIDE
+  // it passes that check while the write actually lands outside. Re-resolve both
+  // sides to their real (symlink-free) paths with fs.realpathSync.native and
+  // re-verify containment; deny on mismatch. Unresolvable paths fail closed,
+  // matching the existing posture for this guard.
+  let realRoot;
+  let realTarget;
+  try {
+    realRoot = realpathSync.native(resolvedRoot);
+    realTarget = realpathNearestExisting(resolvedTarget);
+  } catch (err) {
+    emitDeny(
+      'Cannot verify write target is contained in the bible root (real-path resolution failed: ' +
+      String(err) + '); denied per D-13 (security posture, fail-closed)'
+    );
+  }
+  const realRootNorm = realRoot.toLowerCase();
+  const realTargetNorm = realTarget.toLowerCase();
+  const realRootPrefix = realRootNorm + sep;
+
+  if (realTargetNorm !== realRootNorm && !realTargetNorm.startsWith(realRootPrefix)) {
+    const symlinkComponent = findSymlinkedComponent(resolvedRoot, resolvedTarget);
+    emitDeny(
+      'Write target ' + resolvedTarget + ' resolves outside the bible root ' + resolvedRoot +
+      ' once symlinks are followed (real path ' + realTarget + ')' +
+      (symlinkComponent ? '; symlinked path component: ' + symlinkComponent : '') +
+      '; denied per D-13 (security posture, fail-closed)'
     );
   }
 
