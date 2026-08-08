@@ -89,6 +89,6 @@ A pending entry with no source yet identified:
 - `bin/ns-claims` (TSK-025 (ns-claims engine)): resolves every `[claim: EV-NNNN]` chapter marker against this file, computes per-chapter `open_claim_count`, and produces the coverage report.
 - `bin/ns-doctor` (TSK-028 (ns-doctor engine)): validates field presence and value constraints, cross-references every `source` field against `research/sources.md`, and reports orphaned or missing EV IDs.
 - `fact-checker`: reads entries and updates the `status` field only; never modifies claim text.
-- `drafting-partner`: reads `status: verified` entries for evidentiary grounding before drafting.
+- `drafting-partner`: reads entries regardless of status and anchors `[claim: EV-nnnn]` markers to any EV ID that exists in the ledger at drafting time, per the agent's own claim-marking rule; requiring `status: verified` entries only would mark every drafted sentence `[UNVERIFIED]` given the pipeline order.
 - `citation-manager`: reads entries for export-path citation assembly.
 - `Stop` gate (via `bin/ns-claims`): warns or blocks when `open_claim_count` is non-zero, per `config.json` gate settings.
