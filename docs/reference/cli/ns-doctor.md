@@ -29,6 +29,20 @@ finding before any model call).
 ns-doctor [--check | --report] [--migrate] [--validate-packs] [--project=<dir>] [--json]
 ```
 
+## Windows invocation
+
+Bare `ns-doctor` invocation fails in the Bash tool on Windows; the plugin
+system does not add `bin/` to PATH (ADR-0005, bin PATH on Windows). Hook, skill,
+and agent contexts must resolve the plugin root first, then invoke:
+
+```
+node "<plugin-root>/bin/ns-doctor" [--check | --report] [--migrate] [--validate-packs] [--project=<dir>] [--json]
+```
+
+where `<plugin-root>` is the resolved plugin installation path. Direct
+interactive invocation from a user's own shell can add `bin/` to PATH manually,
+or use the same `node` plus full-path form.
+
 ## Flags
 
 | Flag | Type | Description |
