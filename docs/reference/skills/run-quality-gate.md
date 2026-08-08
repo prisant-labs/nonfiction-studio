@@ -23,10 +23,10 @@ The `run-quality-gate` skill is the surface-independent Definition-of-Done gate 
 ## Invocation
 
 ```
-/nonfiction-studio:run-quality-gate [chapter] [deep]
+/nonfiction-studio:run-quality-gate [chapter]
 ```
 
-Both arguments are optional. The chapter may be a slug (for example `02-finding-your-network`) or a number (for example `2`). When omitted the skill resolves the target chapter from `progress.json`. The `deep` argument is acknowledged and politely declined in v1.
+The chapter argument is optional. The chapter may be a slug (for example `02-finding-your-network`) or a number (for example `2`). When omitted the skill resolves the target chapter from `progress.json`. A `deep` argument is not part of the invocation form: if supplied anyway, Step 1 acknowledges and politely declines it in v1.
 
 Alternate entry points:
 - Via the `studio` dispatcher: routes here from Path 4 (Review quality and status) after `status-dashboard`
