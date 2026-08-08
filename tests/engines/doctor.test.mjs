@@ -5,7 +5,8 @@
 //               with coherence finding naming chapter 2 and both counts); the committed-tree
 //               runs (golden exit 0; unsourced-claim exit 1; config-coercion notice exit 0);
 //               additionalProperties-tolerant (banked adjudication 1: extra field passes);
-//               read-only proof; single-tokenizer proof; older-major exit 2; --migrate exit 2
+//               read-only proof; single-tokenizer proof; older-major exit 2;
+//               --migrate exit 0 when schema is current, exit 2 when incompatible (F-HK-09)
 // runner:       node --test tests/engines/doctor.test.mjs
 
 import { test } from 'node:test';
@@ -313,13 +314,26 @@ test('config-coercion: exit 0 reading confirmed; no contradiction with Q-01 sect
 // --migrate mode: exits 2
 // ---------------------------------------------------------------------------
 
-test('--migrate on current version: CLI exits 2 with no-migrations message', () => {
+test('--migrate on current version: CLI exits 0 with nothing-to-migrate message (F-HK-09)', () => {
   const r = spawnDoctor(['--migrate', '--project=' + join(EXAMPLES, 'sample-book')]);
-  assert.equal(r.status, 2, 'exit 2: --migrate on current version exits 2 per brief');
+  assert.equal(r.status, 0,
+    'exit 0: --migrate on an already-current schema is success, not an error, and must not ' +
+    'be indistinguishable from a broken bible; stdout: ' + r.stdout + ' stderr: ' + r.stderr);
   const combined = r.stdout + r.stderr;
   assert.ok(
-    combined.includes('no migrations') || combined.includes('no-migrations'),
-    'output mentions "no migrations": ' + combined
+    combined.includes('nothing to migrate') && combined.includes('schema is current'),
+    'output states "nothing to migrate" and "schema is current": ' + combined
+  );
+});
+
+test('--migrate on current version, --json: status field reflects success, not the old no-migrations error shape', () => {
+  const r = spawnDoctor(['--migrate', '--json', '--project=' + join(EXAMPLES, 'sample-book')]);
+  assert.equal(r.status, 0, 'exit 0 with --json too; stdout: ' + r.stdout + ' stderr: ' + r.stderr);
+  const json = JSON.parse(r.stdout);
+  assert.equal(json.status, 'current', 'JSON status field must be "current"; got: ' + json.status);
+  assert.ok(
+    json.message.includes('nothing to migrate') && json.message.includes('schema is current'),
+    'JSON message states nothing to migrate, schema is current: ' + json.message
   );
 });
 
