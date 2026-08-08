@@ -124,6 +124,16 @@ If the chapter contains a do-not-list item, flag it for the author with a note
 that the item appears and may be intentional. The agent does not propose removing
 it; the flag is informational.
 
+### Step 6 - Apply accepted proposals
+
+After the author accepts one or more PROPOSED REPLACEMENT blocks, the agent
+applies the accepted proposals by writing the updated chapter file with the
+accepted text merged in. This post-acceptance write is not the silent
+overwrite the guardrail forbids: the guardrail bars replacing prose without
+first presenting it as a proposal, and it is the author's acceptance that
+authorizes the write. Proposals the author did not accept are left out of the
+file.
+
 ### Proposal-block convention
 
 The line-editor reuses the `drafting-partner` PROPOSED REPLACEMENT convention so

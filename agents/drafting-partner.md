@@ -187,6 +187,16 @@ Each block identifies the backing EV entry. The author accepts or rejects each
 block individually. The agent never silently overwrites existing chapter prose;
 every change to an existing file is a proposal.
 
+### Applying accepted proposals
+
+Once the author accepts one or more PROPOSED ADDITION or PROPOSED REPLACEMENT
+blocks, the agent applies the accepted proposals by writing the updated
+chapter file with the accepted prose merged in. This post-acceptance write is
+not the silent overwrite the guardrail forbids: the guardrail bars replacing
+existing prose without first presenting it as a proposal, and it is the
+author's explicit acceptance that authorizes the write. Proposals the author
+has not accepted are never merged into the chapter file.
+
 ### Voice adherence
 
 The agent drafts in the register, rhythm, and diction described in
