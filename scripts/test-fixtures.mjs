@@ -11,8 +11,9 @@
 // exit taxonomy: 0 = all assertions pass; 1 = assertion failure(s); 2 = operational error
 
 import { spawnSync, execFileSync } from 'node:child_process';
-import { mkdtempSync, cpSync, rmSync, existsSync } from 'node:fs';
-import { join, resolve, dirname } from 'node:path';
+import { mkdtempSync, cpSync, rmSync, existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join, resolve, dirname, relative } from 'node:path';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
@@ -158,6 +159,56 @@ const tempDirs = [];
 
 process.stdout.write('[test-fixtures] running bidirectional matrix (' + MATRIX.length + ' fixtures)\n');
 
+// ---------------------------------------------------------------------------
+// Snapshot examples/ CONTENT before the matrix runs, so the post-run assertion
+// can tell residue produced by this run apart from uncommitted work that was
+// already there (see the residue diff below).
+//
+// This hashes file content rather than diffing `git status --porcelain` lines.
+// A porcelain line is not sensitive to how much a file changed: a file that is
+// already modified before the run emits the same " M path" line whether or not
+// an engine appends to it during the run, so a line-level diff silently
+// classifies real residue as pre-existing work. Hashing also catches files an
+// engine deletes or reverts, which a line diff over the after-snapshot misses
+// entirely. Content hashing needs no git, so the check keeps working in a
+// tarball export or a non-repo checkout.
+// ---------------------------------------------------------------------------
+
+const EXAMPLES_DIR = join(REPO_ROOT, 'examples');
+
+function snapshotExamples() {
+  const map = new Map();
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const abs = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(abs);
+        continue;
+      }
+      const rel = relative(REPO_ROOT, abs).split('\\').join('/');
+      map.set(rel, createHash('sha256').update(readFileSync(abs)).digest('hex'));
+    }
+  };
+  walk(EXAMPLES_DIR);
+  return map;
+}
+
+const beforeContent = snapshotExamples();
+
+// Best-effort, informational only: which examples/ paths were ALREADY dirty
+// before this run. Never fails the assertion; it exists so a reader is not
+// misled into reading "no residue" as "tree is clean". git being unavailable
+// costs only this note, not the residue check itself.
+let baselineDirt = null;
+try {
+  baselineDirt = execFileSync('git', ['status', '--porcelain', '--', 'examples/'], {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+  }).trim();
+} catch {
+  baselineDirt = null;
+}
+
 for (const fixture of MATRIX) {
   if (!existsSync(fixture.fixture)) {
     process.stderr.write('[test-fixtures] FATAL: fixture not found: ' + fixture.fixture + '\n');
@@ -219,35 +270,53 @@ for (const td of tempDirs) {
 }
 
 // ---------------------------------------------------------------------------
-// Committed-tree clean assertion
-// Verifies the matrix runs left no residue in the committed fixture directories.
-// Gate and doctor runs that write reports must use temp clones; this is the proof.
+// Residue assertion
+// Verifies the matrix runs left no residue in the committed fixture
+// directories, without requiring examples/ to have been clean to begin with.
+// Gate and doctor runs that write reports must use temp clones; this is the
+// proof.
+//
+// Residue is decided by comparing a CONTENT-HASH snapshot of examples/ taken
+// before the matrix against one taken after. Any path that is added, removed,
+// or whose bytes changed is residue and fails the assertion. Uncommitted work
+// that predates the run is invisible to this comparison, because its bytes do
+// not move, so the check no longer has to demand a clean tree to be runnable.
 // ---------------------------------------------------------------------------
 
-process.stdout.write('\n[test-fixtures] asserting committed tree is clean after fixture runs\n');
+process.stdout.write('\n[test-fixtures] asserting the matrix wrote nothing into examples/\n');
 
-// Scope the clean-tree check to the examples/ directory, which contains the committed
-// fixture files. This proves that engine runs (which write gate reports, progress updates,
-// etc.) did not modify any committed fixture file in place. Scoping to examples/ avoids
-// false failures from uncommitted files elsewhere (e.g., new scripts added by this task).
-let gitStatus;
-try {
-  gitStatus = execFileSync('git', ['status', '--porcelain', '--', 'examples/'], {
-    cwd: REPO_ROOT,
-    encoding: 'utf8',
-  }).trim();
-} catch (err) {
-  process.stderr.write('[test-fixtures] WARN: git status check failed: ' + err.message + '\n');
-  gitStatus = null;
-}
+{
+  const afterContent = snapshotExamples();
+  const residue = [];
 
-if (gitStatus === null) {
-  process.stdout.write('[test-fixtures] (tree-clean assertion skipped: not a git repo or git unavailable)\n');
-} else if (gitStatus === '') {
-  process.stdout.write('[test-fixtures] examples/ tree is clean: temp-clone discipline confirmed\n');
-} else {
-  failures.push('examples/ tree is dirty after fixture runs -- temp-clone discipline violated:\n' + gitStatus);
-  process.stderr.write('[test-fixtures] ERROR: examples/ tree is dirty after fixture runs:\n' + gitStatus + '\n');
+  for (const [path, hash] of afterContent) {
+    const before = beforeContent.get(path);
+    if (before === undefined) {
+      residue.push('created: ' + path);
+    } else if (before !== hash) {
+      residue.push('modified: ' + path);
+    }
+  }
+  for (const path of beforeContent.keys()) {
+    if (!afterContent.has(path)) {
+      residue.push('deleted: ' + path);
+    }
+  }
+
+  if (residue.length > 0) {
+    const detail = residue.sort().join('\n');
+    failures.push('the matrix wrote into examples/ -- temp-clone discipline violated:\n' + detail);
+    process.stderr.write('[test-fixtures] ERROR: the matrix wrote into examples/:\n' + detail + '\n');
+  } else if (baselineDirt) {
+    const paths = baselineDirt.split('\n').length;
+    process.stdout.write(
+      '[test-fixtures] the matrix wrote nothing into examples/: temp-clone discipline confirmed\n' +
+      '[test-fixtures] NOTE: examples/ was ALREADY dirty before this run (' + paths +
+      ' uncommitted path(s)), so this result does not mean the tree is clean:\n' + baselineDirt + '\n'
+    );
+  } else {
+    process.stdout.write('[test-fixtures] examples/ tree is clean: temp-clone discipline confirmed\n');
+  }
 }
 
 // ---------------------------------------------------------------------------

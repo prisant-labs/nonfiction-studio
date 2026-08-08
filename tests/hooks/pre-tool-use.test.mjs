@@ -404,6 +404,59 @@ test('(j) research-agent guard: fact-checker denied chapters/, allowed research/
 });
 
 // ---------------------------------------------------------------------------
+// Separator-boundary containment
+//
+// The guard decides membership with startsWith(root + sep + 'research' + sep).
+// The trailing separator is the whole defense: without it, any sibling whose
+// name merely BEGINS with an allowed segment would be treated as inside it.
+// These cases pin that boundary and, because the paths are built with join(),
+// they exercise the platform's native separator, which is the backslash on
+// Windows and the forward slash on the CI ubuntu leg.
+// ---------------------------------------------------------------------------
+
+test('research-agent containment: a sibling whose name merely prefixes an allowed directory is denied', () => {
+  // "research-notes" shares the "research" prefix but is a different directory.
+  const prefixCollision = join(SAMPLE_BOOK, 'research-notes', 'scratch.md');
+  const denied = checkResearchAgentConstraint('research-librarian', prefixCollision, SAMPLE_BOOK);
+  assert.ok(
+    typeof denied === 'string' && denied.length > 0,
+    'research-notes/ must be denied; it is a sibling of research/, not inside it'
+  );
+
+  // Same boundary on the .studio side.
+  const studioCollision = join(SAMPLE_BOOK, '.studio-backup', 'progress.json');
+  const studioDenied = checkResearchAgentConstraint('research-librarian', studioCollision, SAMPLE_BOOK);
+  assert.ok(
+    typeof studioDenied === 'string' && studioDenied.length > 0,
+    '.studio-backup/ must be denied; it is a sibling of .studio/, not inside it'
+  );
+
+  // The genuine directories still pass, so the boundary is not simply rejecting
+  // everything. Without this pair the assertions above would survive a guard
+  // that denied all writes.
+  assert.equal(
+    checkResearchAgentConstraint('research-librarian', join(SAMPLE_BOOK, 'research', 'sources.md'), SAMPLE_BOOK),
+    null,
+    'research/ itself is still allowed'
+  );
+  assert.equal(
+    checkResearchAgentConstraint('research-librarian', join(SAMPLE_BOOK, '.studio', 'progress.json'), SAMPLE_BOOK),
+    null,
+    '.studio/ itself is still allowed'
+  );
+});
+
+test('research-agent containment: a traversal that escapes the book root is denied', () => {
+  // Resolves to a sibling of the book root, reached by climbing out of research/.
+  const escape = join(SAMPLE_BOOK, 'research', '..', '..', 'outside-the-book.md');
+  const denied = checkResearchAgentConstraint('fact-checker', escape, SAMPLE_BOOK);
+  assert.ok(
+    typeof denied === 'string' && denied.length > 0,
+    'a path resolving outside the book root must be denied even though it is written through research/'
+  );
+});
+
+// ---------------------------------------------------------------------------
 // (k) NS_HOOK_TRACE inert when unset, one line written when set
 // ---------------------------------------------------------------------------
 test('(k) NS_HOOK_TRACE unset: no trace file created', () => {

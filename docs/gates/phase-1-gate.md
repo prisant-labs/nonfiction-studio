@@ -202,3 +202,99 @@ What the maintainer should weigh for the gate DECISION ([human], the maintainer'
 3. Two acceptance lines in TSK-057 are out of phase with the plan the branch executed: the cookbook line (Phase 3) and, secondarily, the Linux leg (needs a remote and a claude-CLI setup step). Neither reflects a build gap; both reflect the acceptance list reaching ahead of Phase 1. Consider reconciling the TSK-057 acceptance text.
 
 The verifier's recommendation: the Phase 1 build meets its gate on every criterion that is in-phase and runnable here (checklists 1, 2, 4-Windows, 5, 6, plus all three seams), with the two out-of-phase criteria (3, and 4-Linux) blocked for honest, documented reasons rather than defects; on the evidence, Phase 1 is ready to gate open once the maintainer accepts the Linux-on-first-push and cookbook-in-Phase-3 deferrals and the zero-MUST-FIX roll-up triage.
+
+---
+
+## Addendum: post-push verification (2026-08-07)
+
+The original report above was written at `5c0381e` on a machine with no git remote. Two of its six verdicts were qualified for that reason. This addendum records what changed once the branch was actually pushed and CI ran, and it is written by the session that pushed it, not by an independent verifier.
+
+### Checklist 4 (Tier A on Windows and Linux) is now PASS
+
+The original verdict was "Windows PASS; Linux BLOCKED-until-push". It is now green on both legs.
+
+| Run | Head | Result |
+|---|---|---|
+| 31153116392 | `2e7352c` | FAIL, step 7 Link check, both legs |
+| 31153304696 | `683b2cd` | FAIL, step 8 Engine unit tests, both legs |
+| 31153637026 | `2fca9f4` | PASS, both legs |
+| 31221687880 | `2c630e2` | PASS, both legs, all nine steps |
+
+The `claude plugin validate --strict` caveat recorded in the original report is also closed: the binary is installed by an inert scaffolding step (`npm install -g @anthropic-ai/claude-code`) and the validate step passes unauthenticated on both `ubuntu-latest` and `windows-latest`.
+
+### Three defects the local gate could not observe
+
+The original report was honest and its checks were correctly run. It could not have caught the following, and that is the finding worth recording.
+
+**1. Neither workflow could ever fire.** `tier-a.yml` triggered on pull requests targeting `main` while the repository default branch was `master`. A push would have produced silence rather than an error. The deferred item ("the ubuntu leg proves on first push") was recorded as a waiting state rather than a work item, so nothing inspected the artifact that would run once unblocked. Fixed in `2e7352c` by renaming the default branch to `main`.
+
+**2. `check-links` validated the filesystem, not the tracked file set.** ADR-0006 (manifest authority split) carried four markdown links into gitignored `_local/`. Those targets exist in a working tree and vanish in a clean checkout, so the check returned a truthful exit 0 locally and failed on the first CI run. Links converted to code spans in `683b2cd`; the checker itself hardened to validate against `git ls-files` in `dc865a9`.
+
+**3. Seven fixtures depended on empty directories git cannot store.** `hooks/lib/bible.mjs` `isBookRoot` requires a `chapters/` sibling. Seven doctor fixtures carried an empty `chapters/`, present locally and absent on clone, so `findBookRoot` walked to the filesystem root and the CLI exited 2 before running any check. Seven of 261 tests failed in CI while passing locally. Fixed in `2fca9f4` with `.gitkeep` files. A repo-wide sweep for directories holding zero tracked files found exactly those seven and no others.
+
+All three share one cause: **the local gate validates the working tree while CI validates the tracked file set.** Anything present locally but uncommitted is invisible to local verification, and no amount of local rigor closes that gap. The cheap general defense, which reproduced both CI failures in seconds, is to clone the repository to a temp directory and run the suite there.
+
+### Tier B: first live execution, and two defects it exposed
+
+The original report recorded Tier B as dry-run only. It has now executed live for the first time, which surfaced two defects that had concealed each other.
+
+**Budget accounting was inert.** `run-integration.mjs` read `parsed.cost_usd`. The claude CLI emits `total_cost_usd`, verified directly against CLI 2.1.224. Every call therefore recorded `$0.00`, the running total never advanced, and the `$0.10` cap could not fire. Live mode had no spending limit at all.
+
+**Live mode gated on the wrong precondition.** It required `ANTHROPIC_API_KEY`, which forced dry-run on every developer machine and meant `runLiveMode()` had never executed. That is why the inert budget was unobservable, and why the TSK-056 (Tier B integration and eval files) review could record the budget mechanism as live-verified without contradiction.
+
+An API key is not what live mode needs. It needs working model access, which an authenticated claude CLI provides from the active account. A key is required only where no account is logged in, which is a CI runner and nowhere else. Both fixed in `2c630e2`; a response carrying no cost field is now a hard error rather than a silent zero.
+
+The first live run proves both fixes and the cap firing correctly:
+
+```
+step 1: cost: $0.039674 (total: $0.039674)   assertions pass
+step 2: cost: $0.032382 (total: $0.072055)   assertions pass
+step 3: cost: $0.037495 (total: $0.109550)   assertions pass
+BUDGET_EXCEEDED: $0.109550 > $0.1  ->  exit 3
+```
+
+The generalizable lesson: a deferred check does not hold code in a known-good state, it holds it in an unknown one, and the deferral removes the evidence that would show the difference.
+
+### Carry triage, updated
+
+Closed since the original report:
+
+| Item | Commit |
+|---|---|
+| EV-0003 scholarly mis-pairing, plus the nine-pairing sweep | `5980718` |
+| Corrupt-config empty state on session-start | `893de92` |
+| Local and CI parity gap in `check-links` | `dc865a9` |
+| SPK-02 protocol steps that deleted `hooks/hooks.json` and returned to a stale branch | `f9b9dba` |
+| Dead budget cap and the unnecessary API-key gate | `2c630e2` |
+
+The EV-0003 correction proved larger than the original triage assumed. A ledger-only fix left `production/back-matter.md` still crediting Hart 2015 with the Bibliography missing Lave and Wenger entirely, and left the `.studio/ai-use-log.jsonl` final record asserting a five-record registry. Adding SRC-0006 also collided with three worked examples that had already allocated that ID to different works while demonstrating sole-allocator ID discipline. Every `SRC-0006` and `SRC-0007` binding in the repository was enumerated and adjudicated before the fix was accepted.
+
+Still carried, unchanged in disposition:
+
+- D-08 (hybrid voice scoring) calibration granularity, which lands in TSK-075 (calibration run)
+- `progress.json` status lifecycle transitions, Phase 2 scope
+- Fixture chapter-list and outline format normalization
+- `intake-interview` skip-voice-if-profile-exists. The skill does implement `HAS_PROFILE` skipping at its close; the carry concerns skipping interview sections, which is a behavior change requiring spec judgment rather than cleanup.
+
+New items opened by this work:
+
+- `scripts/test-fixtures.mjs` asserts `git status --porcelain -- examples/` is empty, so the fixture gate cannot be run during any work touching `examples/`. The assertion cannot distinguish residue produced by the run from pre-existing uncommitted work.
+- `BUDGET_CAP_USD` is `$0.10` against a measured cost of roughly `$0.037` per haiku call for a five-step flow. Flow steps 4 and 5 remain unproven.
+- Tier B triggers were reduced to `workflow_dispatch` only, deliberately, so the workflow does not demand a credential before one is chosen. Restoring push and schedule triggers is a two-line change.
+
+### Test counts superseded
+
+The original report records 261 tests across four suites. The count is now 267: negative fixtures for `malformed-src` and `orphan-src` were added, two tautological schema tests were deleted, and two research-agent containment cases were added. The suite totals table above is therefore historical.
+
+### Residue assertion in the fixture matrix, corrected
+
+The clean-tree assertion required `git status --porcelain -- examples/` to be empty, so the fixture gate could not be run at all during any work touching `examples/`, and it was skipped for the duration of the EV-0003 correction. It now compares a content-hash snapshot of `examples/` taken before the matrix against one taken after: any path added, removed, or byte-changed is residue.
+
+A first rewrite of this check diffed `git status` lines rather than content, which silently reclassified real residue as pre-existing whenever the affected file was already dirty, because porcelain emits the same status line either way. Adversarial review caught it. The hash-based version was then proven to fail correctly: injecting an append to `examples/sample-book/research/sources.md` mid-run produces exit 1 and `modified: examples/sample-book/research/sources.md`. Loosening a gate is only safe when the loosened gate is demonstrated to still say no.
+
+### Standing of the gate
+
+Five of six checklist items now PASS on evidence. Checklist 3 (interview-to-chapter cookbook) remains NOT APPLICABLE at Phase 1, because TSK-088 (cookbook completion) is Phase 3 work; that acceptance line still reaches ahead of the plan the branch executed.
+
+No MUST-FIX item is outstanding. The gate decision remains the maintainer's.
+

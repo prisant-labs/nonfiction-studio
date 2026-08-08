@@ -29,11 +29,11 @@ jobs:
     steps:
       # Inert scaffolding: required by GitHub Actions; no local equivalent.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # Inert scaffolding: pins Node.js to the engines floor declared in package.json.
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22.12.0'
           cache: npm

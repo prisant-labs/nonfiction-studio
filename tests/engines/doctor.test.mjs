@@ -156,6 +156,51 @@ test('orphan-ev fixture: CLI exits 1 and reports orphaned claim', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Negative-coverage gap (Phase 1 carry): malformed SRC entry - exit 1
+// Mirrors the malformed-ev fixture/test above, on the source-side ledger instead.
+// ---------------------------------------------------------------------------
+
+test('malformed-src fixture: runChecks finds malformed entry naming SRC-0001', () => {
+  const root = join(FIXTURES, 'malformed-src');
+  const { findings } = runChecks(root);
+  const srcFindings = findings.filter(f => f.type === 'src-grammar.malformed-entry');
+  assert.ok(srcFindings.length > 0, 'should have a SRC grammar finding');
+  assert.ok(srcFindings[0].message.includes('SRC-0001'), 'finding names the entry ID');
+  // Assert the whole phrase, not just "type". A bare includes('type') also
+  // matches the adjacent invalid-type branch, so it would survive a mutant
+  // that disabled the missing-required-field check entirely.
+  assert.ok(srcFindings[0].message.includes('missing required field "type"'),
+    'finding names the missing required field, not merely the word type; got: ' + srcFindings[0].message);
+});
+
+test('malformed-src fixture: CLI exits 1 and names the entry ID', () => {
+  const r = spawnDoctor(['--report', '--project=' + join(FIXTURES, 'malformed-src')]);
+  assert.equal(r.status, 1, 'exit code should be 1; stdout: ' + r.stdout + ' stderr: ' + r.stderr);
+  assert.ok(r.stdout.includes('SRC-0001'), 'output names the malformed entry ID');
+});
+
+// ---------------------------------------------------------------------------
+// Negative-coverage gap (Phase 1 carry): orphan SRC reference - exit 1
+// Mirrors the orphan-ev fixture/test above: here an EV entry points at a SRC id
+// that is absent from research/sources.md (src-ref.orphan-referenced), rather
+// than a chapter marker pointing at an absent EV id.
+// ---------------------------------------------------------------------------
+
+test('orphan-src fixture: runChecks finds EV entry referencing absent SRC-9999', () => {
+  const root = join(FIXTURES, 'orphan-src');
+  const { findings } = runChecks(root);
+  const orphanFindings = findings.filter(f => f.type === 'src-ref.orphan-referenced');
+  assert.ok(orphanFindings.length > 0, 'should have an orphan SRC reference finding');
+  assert.ok(orphanFindings[0].message.includes('SRC-9999'), 'finding reports the orphaned SRC ID');
+});
+
+test('orphan-src fixture: CLI exits 1 and reports orphaned SRC id', () => {
+  const r = spawnDoctor(['--report', '--project=' + join(FIXTURES, 'orphan-src')]);
+  assert.equal(r.status, 1, 'exit code should be 1; stdout: ' + r.stdout + ' stderr: ' + r.stderr);
+  assert.ok(r.stdout.includes('SRC-9999'), 'output reports the orphaned SRC id');
+});
+
+// ---------------------------------------------------------------------------
 // Q-01 section 2.5 row 6: unsourced-claim fixture - exit 1 (word-count coherence)
 // ---------------------------------------------------------------------------
 

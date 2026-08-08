@@ -1,11 +1,16 @@
 // tests/schemas/schemas.test.mjs
 // what-it-is:   schema round-trip tests per Q-01 section 4
-// what-it-does: tests every structured format in S-08 (schemas and file formats) via the
+// what-it-does: tests structured formats in S-08 (schemas and file formats) via the
 //               doctor engine and ledger lib: parse a committed valid instance, assert no
-//               violations; parse/construct an invalid instance, assert the named finding;
+//               violations; parse an invalid instance, assert the named finding;
 //               assert unknown-field preservation where S-08 Rule 2 applies.
 // why:          Q-01 section 4 specifies round-trip coverage for every structured format;
 //               one test per format, sized honestly.
+// known gap:    ai-use-log.jsonl and style-profile.md have a positive case only. Their
+//               former negative cases were deleted because they asserted on literals the
+//               test body itself built and drove no repo code, so they could not fail.
+//               Neither format has an owning validator to drive, which is the real gap;
+//               a test that cannot fail was hiding it rather than covering it.
 // runner:       node --test tests/schemas/schemas.test.mjs
 
 import { test } from 'node:test';
@@ -16,7 +21,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { runChecks, checkSchemaVersion, SUPPORTED_MAJOR } from '../../hooks/lib/doctor-engine.mjs';
-import { parseEvidenceLog, parseSources } from '../../hooks/lib/ledger.mjs';
+import { parseEvidenceLog, serializeEvidenceLog, parseSources } from '../../hooks/lib/ledger.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -182,13 +187,33 @@ test('evidence-log.md: malformed EV entry with missing required field produces a
 
 test('evidence-log.md: unknown fields round-trip via ledger lib (S-08 Rule 2)', () => {
   // The EV format is Markdown, not JSON; unknown fields appear as bullet lines.
-  // The ledger parser preserves them via the extras mechanism.
-  const text = readFileSync(join(GOLDEN, 'research', 'evidence-log.md'), 'utf8');
-  const entries = parseEvidenceLog(text);
-  // The known fields should all be parsed; entries should not be empty
-  assert.ok(entries.length > 0, 'entries must be parsed');
-  // No test assertion on extras here because the parser behavior for unknown fields
-  // is tested by the fact that known entries are captured correctly.
+  // parseEvidenceLog (hooks/lib/ledger.mjs) puts unrecognized bullet keys into
+  // entry.extra and records field order in entry._fieldOrder; serializeEvidenceLog
+  // must reproduce the unknown field on the way back out. This drives the actual
+  // extras mechanism rather than only re-checking that known fields parsed.
+  const ledgerWithExtra = `# Evidence Log
+
+### EV-0001 (round-trip-test)
+- claim: A test claim used to prove unknown-field round-trip.
+- source: none
+- locator:
+- confidence: low
+- status: pending
+- added-by: test
+- date: 2026-07-19
+- reviewed-by: jprisant
+`;
+  const entries = parseEvidenceLog(ledgerWithExtra);
+  assert.equal(entries.length, 1, 'one entry must be parsed');
+  assert.equal(
+    entries[0].extra['reviewed-by'], 'jprisant',
+    'unknown field "reviewed-by" must land in entry.extra, not be dropped'
+  );
+  const serialized = serializeEvidenceLog(entries);
+  assert.ok(
+    serialized.includes('- reviewed-by: jprisant'),
+    'unknown field must round-trip through serializeEvidenceLog (S-08 Rule 2)'
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -206,19 +231,17 @@ test('ai-use-log.jsonl: every line in the golden fixture is valid JSON with requ
   }
 });
 
-test('ai-use-log.jsonl: a line missing the required "agent" key is detectable', () => {
-  // The ai-use-log.jsonl format (S-08 section 8) requires an "agent" field per line.
-  // This test verifies the detection logic directly (the doctor does not currently
-  // validate ai-use-log.jsonl in runChecks; the format contract is enforced at write time
-  // by the PostToolBatch hook per S-07 section 4).
-  const badLine = JSON.stringify({ ts: '2026-07-19T00:00:00Z', surface: 'claude-code' }); // no agent
-  const parsed = JSON.parse(badLine);
-  assert.ok(!Object.prototype.hasOwnProperty.call(parsed, 'agent'), 'test line must be missing agent field');
-  // The test is honest: the format contract is verified via this structural check.
-  // A line missing "agent" is detectable by inspecting the parsed object's keys.
-  const hasAgent = Object.prototype.hasOwnProperty.call(parsed, 'agent');
-  assert.equal(hasAgent, false, 'missing "agent" key is detectable');
-});
+// DELETED (test-quality pass, queued at TSK-055 (Tier A check scripts)):
+// 'ai-use-log.jsonl: a line missing the required "agent" key is detectable' was
+// tautological -- it built a JS object literal in the test body, then asserted a
+// property of that same literal (hasOwnProperty('agent') === false). No repo code
+// was invoked. Verified there is no owning validator to redirect it to: doctor-engine.mjs
+// REQUIRED_PATHS only checks that .studio/ai-use-log.jsonl exists (structure.missing-path);
+// it never inspects line content or emits a finding about a missing "agent" field.
+// hooks/post-tool-batch.mjs WRITES the agent field but never reads/validates it back.
+// docs/formats/ai-use-log.md confirms the only readers are the disclosure-report and
+// publish-readiness skills (LLM-driven skill prompts, not deterministic repo code).
+// A test that cannot fail is worse than no test, so it is deleted rather than dressed up.
 
 // ---------------------------------------------------------------------------
 // 6. context/style-profile.md - valid instance section check
@@ -234,14 +257,19 @@ test('style-profile.md: golden fixture has the required section markers', () => 
   }
 });
 
-test('style-profile.md: absence of required section is detectable via content check', () => {
-  // This test verifies the detection contract without requiring a full doctor check.
-  // The doctor does not currently validate style-profile.md sections; this test is
-  // honest about that scope while proving the format constraint is checkable.
-  const missingVoice = `# Style profile\n\n## Diction\n- prefer: concrete nouns.\n\n## Rhythm\n- sentence length: short.\n`;
-  const hasVoice = missingVoice.includes('## Voice');
-  assert.equal(hasVoice, false, 'content without ## Voice section is identifiable');
-});
+// DELETED (test-quality pass, queued at TSK-055 (Tier A check scripts)):
+// 'style-profile.md: absence of required section is detectable via content check' was
+// tautological -- it built a template-literal string in the test body, then asserted a
+// property of that same string (string.includes('## Voice') === false). No repo code
+// was invoked. Verified there is no owning validator to redirect it to: doctor-engine.mjs
+// REQUIRED_PATHS only checks that context/style-profile.md exists (structure.missing-path);
+// it never inspects section headings or emits a finding about a missing "## Voice" section.
+// hooks/lib/orientation.mjs reads style-profile.md but scans for "## Do" / "## Do not"
+// bullet rules for the session-start orientation block, fails open (silently omits the
+// line) when absent, and does not check for "## Voice", "## Diction", or "## Rhythm" at
+// all. The three-section requirement is documented convention (docs/formats/style-profile.md)
+// with no runtime enforcement anywhere in the repo. A test that cannot fail is worse than
+// no test, so it is deleted rather than dressed up.
 
 // ---------------------------------------------------------------------------
 // 7. Gate report (.studio/gate/*.json) - valid instance shape
