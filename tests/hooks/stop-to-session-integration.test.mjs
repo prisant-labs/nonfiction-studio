@@ -15,6 +15,14 @@
 //               bug (see the flattened cases in session-start.test.mjs); this
 //               test consumes only real producer output, never hand-authored
 //               JSON - that is the point.
+// guard note:   the clone's committed last-gate.json
+//               (examples/sample-book/.studio/gate/last-gate.json) is itself a
+//               genuine flat-shape report, so its ts could satisfy the
+//               fresh/stale assertions below even if stop-gate.mjs silently
+//               stopped writing the file. The test deletes that file before
+//               running stop-gate.mjs and asserts the written report's ts is
+//               recent (produced this run), so the pass condition can only be
+//               satisfied by a real write happening during this test.
 // runner:       node --test "tests/hooks/*.test.mjs"
 //
 // Envelope shapes copied from the existing suites:
@@ -29,9 +37,12 @@ import { spawnSync } from 'node:child_process';
 import {
   mkdirSync,
   writeFileSync,
+  readFileSync,
   readdirSync,
   cpSync,
   renameSync,
+  unlinkSync,
+  existsSync,
   utimesSync
 } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -129,6 +140,16 @@ test('F-HK-02 real stop-gate output -> session-start gate-debt tracks it: absent
 
   setFlag(book);
 
+  // --- Phase 0: delete the clone's committed last-gate.json before running
+  // the real gate. examples/sample-book/.studio/gate/last-gate.json is itself
+  // a genuine flat-shape report (repaired by the F-HK-02 fix) whose ts falls
+  // between the pinned 2020/2099 mtimes used below; left in place, the
+  // fresh/stale assertions could pass even if Phase 1 never ran stop-gate.mjs
+  // at all. Deleting it first means ONLY a genuine write by the real
+  // stop-gate.mjs can produce a file for session-start.mjs to read.
+  const lastGatePath = join(book, '.studio', 'gate', 'last-gate.json');
+  if (existsSync(lastGatePath)) unlinkSync(lastGatePath);
+
   // --- Phase 1: run the REAL stop-gate hook; it spawns bin/ns-gate for real
   // and writes a REAL .studio/gate/last-gate.json (flat shape, verbatim
   // ns-gate stdout). Nothing here is hand-authored.
@@ -137,6 +158,23 @@ test('F-HK-02 real stop-gate output -> session-start gate-debt tracks it: absent
   assert.equal(
     stopResult.stdout.trim(), '',
     'golden clone gate run is a silent pass (same as stop-gate.test.mjs case c); got stdout: ' + stopResult.stdout
+  );
+
+  // --- Phase 1b: prove the write was genuine. last-gate.json was deleted
+  // above, so its mere existence now proves stop-gate.mjs wrote it; the ts
+  // recency check additionally rules out any stale/leftover value (a
+  // regression where stop-gate silently stopped writing last-gate.json would
+  // fail the existsSync assertion right here instead of slipping through to
+  // Phase 2).
+  assert.ok(existsSync(lastGatePath), 'stop-gate wrote a real last-gate.json (it was deleted before Phase 1)');
+  const writtenReport = JSON.parse(readFileSync(lastGatePath, 'utf8'));
+  assert.ok(typeof writtenReport.ts === 'string', 'written report has a ts field');
+  const writtenTsMs = Date.parse(writtenReport.ts);
+  assert.ok(Number.isFinite(writtenTsMs), 'written report ts parses as a valid date');
+  const reportAgeMs = Date.now() - writtenTsMs;
+  assert.ok(
+    reportAgeMs >= -5000 && reportAgeMs < 5 * 60 * 1000,
+    'written report ts is recent (produced by this run), not a stale or committed value; age_ms=' + reportAgeMs
   );
 
   // --- Phase 2: run the REAL session-start hook against the same clone.
