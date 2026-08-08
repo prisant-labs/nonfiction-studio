@@ -2,7 +2,7 @@
 name: status-dashboard
 user-invocable: true
 argument-hint: ""
-description: "Renders a read-only per-chapter status dashboard from .studio/progress.json (status, word count, open claims per entry) and the newest dot-form gate reports in .studio/gate/ (drift score, gate verdict per slug); highlights rows where drift exceeds thresholds.drift_score_max or where the newest gate report carries a block verdict; writes nothing; routes to init-project when progress.json is absent and to doctor when progress.json is malformed."
+description: "Renders a read-only per-chapter status dashboard from .studio/progress.json (status, word count, open claims per entry) and the newest dot-form gate reports in .studio/gate/ (drift score, gate verdict per slug); highlights rows where drift exceeds thresholds.drift_score_max or where the newest gate report carries a block verdict; writes nothing; routes to init-project when progress.json is absent and to doctor when progress.json is malformed. Use when the author asks 'where am I on the book,' wants to 'check my progress,' or needs a quick status check before starting a session."
 when_to_use: "Use when the author types the legacy /status verb, asks how their book is going, or wants a project overview before starting a session. Do not invoke to run the quality gate (use run-quality-gate), diagnose project structure problems (use doctor), start a new project (use init-project), or for unrelated queries."
 ---
 
