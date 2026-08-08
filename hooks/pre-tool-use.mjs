@@ -135,6 +135,20 @@ function realpathNearestExisting(absPath) {
 }
 
 // ---------------------------------------------------------------------------
+// Helper: case-fold a path for comparison only on case-insensitive
+// filesystems (F-HK-13). Folding unconditionally WIDENS matching on a
+// case-sensitive filesystem (POSIX), which is the wrong direction for a
+// security guard: a path that differs only in case from an allowed prefix
+// is a DIFFERENT path on Linux/macOS and must not be treated as contained.
+// platformOverride is injectable so tests can drive both branches
+// deterministically regardless of the host OS; production call sites omit
+// it and get the real process.platform. Exported for direct testing.
+// ---------------------------------------------------------------------------
+export function foldForCompare(p, platformOverride = process.platform) {
+  return platformOverride === 'win32' ? p.toLowerCase() : p;
+}
+
+// ---------------------------------------------------------------------------
 // Helper: identify the shallowest path component between rootPath and
 // targetPath whose real path diverges from its lexical path (F-HK-04) - i.e.
 // the symlink (or symlinked ancestor) responsible for a containment escape.
@@ -156,7 +170,7 @@ function findSymlinkedComponent(rootPath, targetPath) {
     } catch {
       break;
     }
-    if (resolve(real).toLowerCase() !== resolve(lexicalSoFar).toLowerCase()) {
+    if (foldForCompare(resolve(real)) !== foldForCompare(resolve(lexicalSoFar))) {
       return lexicalSoFar;
     }
   }
@@ -431,9 +445,11 @@ if (isMain) {
   // allowlist (.studio/, research/) is subsumed because both directories live
   // inside the root in the committed layout. The guard now simply checks whether
   // the resolved target falls inside the bible root subtree. FAIL-CLOSED.]
+  // F-HK-13: case-fold only on win32 (foldForCompare) - unconditional folding
+  // widens matching in the wrong direction on a case-sensitive filesystem.
   const resolvedRoot = resolve(bookRoot);
-  const targetNorm = resolvedTarget.toLowerCase();
-  const rootNorm = resolvedRoot.toLowerCase();
+  const targetNorm = foldForCompare(resolvedTarget);
+  const rootNorm = foldForCompare(resolvedRoot);
   const rootPrefix = rootNorm + sep;
 
   if (targetNorm !== rootNorm && !targetNorm.startsWith(rootPrefix)) {
@@ -461,8 +477,9 @@ if (isMain) {
       String(err) + '); denied per D-13 (security posture, fail-closed)'
     );
   }
-  const realRootNorm = realRoot.toLowerCase();
-  const realTargetNorm = realTarget.toLowerCase();
+  // F-HK-13: same platform-conditional folding as the lexical check above.
+  const realRootNorm = foldForCompare(realRoot);
+  const realTargetNorm = foldForCompare(realTarget);
   const realRootPrefix = realRootNorm + sep;
 
   if (realTargetNorm !== realRootNorm && !realTargetNorm.startsWith(realRootPrefix)) {

@@ -83,6 +83,25 @@ function readJsonlLines(filePath) {
   return readFileSync(filePath, 'utf8').split('\n').filter(l => l.trim());
 }
 
+/** F-HK-13: flip the case of an ASCII drive letter (if present, e.g. "C:" -> "c:")
+ *  and invert the case of every other ASCII letter in the path. Produces a path
+ *  that refers to the SAME file on a case-insensitive filesystem but differs
+ *  textually in both the drive letter and the rest of the path. */
+function flipCase(p) {
+  const driveMatch = p.match(/^([a-zA-Z]):(.*)$/);
+  let drive = '';
+  let rest = p;
+  if (driveMatch) {
+    const letter = driveMatch[1];
+    drive = (letter === letter.toUpperCase() ? letter.toLowerCase() : letter.toUpperCase()) + ':';
+    rest = driveMatch[2];
+  }
+  const flippedRest = rest.replace(/[a-zA-Z]/g, (ch) => (
+    ch === ch.toUpperCase() ? ch.toLowerCase() : ch.toUpperCase()
+  ));
+  return drive + flippedRest;
+}
+
 // ---------------------------------------------------------------------------
 // (a) one chapter Write: recorded count equals stylometry counter, no tmp file,
 //     exactly one generated log line appended, additionalContext present, exit 0
@@ -817,6 +836,89 @@ test('TSK-050b-(e) golden clone recount: totals.open_claim_count is 0', () => {
 //   entry is created, unknown fields on other entries (and at top level and
 //   totals) are preserved unmodified.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// F-HK-13: unconditional case folding in isChapterPath.
+//
+// isChapterPath used to lowercase unconditionally before the startsWith
+// prefix check. On a case-sensitive filesystem (POSIX) that WIDENS what
+// counts as a chapter path - the wrong direction for a security-adjacent
+// classification (it feeds the progress/compliance-log write path). The fix
+// folds case only when process.platform === 'win32'.
+// ---------------------------------------------------------------------------
+
+test('F-HK-13 (m) isChapterPath on win32: a case-differing chapters/ path is still recognized (current behavior kept)', (t) => {
+  if (process.platform !== 'win32') {
+    t.skip('win32-only assertion; this leg is ' + process.platform + ' (case-sensitive filesystem)');
+    return;
+  }
+  const book = cloneSampleBook('fhk13-m-win32-case');
+  const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
+  const caseFlippedPath = flipCase(ch1Path);
+  assert.notEqual(caseFlippedPath, ch1Path, 'precondition: the flipped path is textually different from the original');
+  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
+  const logLinesBefore = readJsonlLines(logPath).length;
+
+  const newContent = 'F-HK-13 win32 regression content.\n';
+  writeFileSync(ch1Path, newContent, 'utf8');
+
+  const result = runHook(makeBatchEvent(book, [{
+    tool_name: 'Write',
+    tool_input: { file_path: caseFlippedPath, content: newContent },
+    tool_use_id: 'toolu_fhk13m',
+    tool_response: 'Written.'
+  }]));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+
+  // win32: case-differing path is still recognized as a chapter write -> one
+  // new log line and a non-empty additionalContext, exactly as the unflipped case.
+  const logLinesAfter = readJsonlLines(logPath);
+  assert.equal(
+    logLinesAfter.length, logLinesBefore + 1,
+    'one new log line: the case-flipped path was still recognized as a chapter write'
+  );
+
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' && out.hookSpecificOutput.additionalContext.length > 0,
+    'additionalContext present: chapter write recognized despite the case difference'
+  );
+});
+
+test('F-HK-13 (n) isChapterPath on a case-sensitive filesystem: a case-differing chapters/ path is NOT recognized as a chapter write', (t) => {
+  if (process.platform === 'win32') {
+    t.skip('POSIX-only assertion (case-sensitive filesystem); this leg is win32');
+    return;
+  }
+  const book = cloneSampleBook('fhk13-n-posix-case');
+  const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
+  const caseFlippedPath = flipCase(ch1Path);
+  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
+  const progressPath = join(book, '.studio', 'progress.json');
+  const logLinesBefore = readJsonlLines(logPath).length;
+  const progressBefore = readFileSync(progressPath, 'utf8');
+
+  const result = runHook(makeBatchEvent(book, [{
+    tool_name: 'Write',
+    tool_input: { file_path: caseFlippedPath, content: 'irrelevant on this leg' },
+    tool_use_id: 'toolu_fhk13n',
+    tool_response: 'Written.'
+  }]));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'non-win32: a case-differing path is NOT a chapters/ write -> no-op, empty stdout'
+  );
+
+  const logLinesAfter = readJsonlLines(logPath);
+  assert.equal(logLinesAfter.length, logLinesBefore, 'no new log line: case-widened matching must not occur');
+
+  const progressAfter = readFileSync(progressPath, 'utf8');
+  assert.equal(progressAfter, progressBefore, 'progress.json unchanged (case-differing path was not treated as a chapter write)');
+});
+
 test('TSK-050b-(f) unknown fields survive when create-if-absent path runs', () => {
   const book = cloneSampleBook('050b-f-unknown');
   const progressPath = join(book, '.studio', 'progress.json');

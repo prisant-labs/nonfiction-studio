@@ -39,7 +39,7 @@ const SAMPLE_BOOK = join(REPO_ROOT, 'examples', 'sample-book');
 // isMain is false here (process.argv[1] is the test runner, not the hook script)
 // so no stdin reads or process.exit() calls happen during import.
 // ---------------------------------------------------------------------------
-const { checkResearchAgentConstraint, pickSnapshotName } = await import('../../hooks/pre-tool-use.mjs');
+const { checkResearchAgentConstraint, pickSnapshotName, foldForCompare } = await import('../../hooks/pre-tool-use.mjs');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -130,6 +130,26 @@ function countSnapshots(bookRoot, slug) {
   const dir = join(bookRoot, '.studio', 'snapshots');
   if (!existsSync(dir)) return 0;
   return readdirSync(dir).filter(f => f.startsWith(slug + '.') && f.endsWith('.md')).length;
+}
+
+/** F-HK-13: flip the case of an ASCII drive letter (if present, e.g. "C:" -> "c:")
+ *  and invert the case of every other ASCII letter in the path. Produces a path
+ *  that refers to the SAME file on a case-insensitive filesystem but differs
+ *  textually in both the drive letter and the rest of the path, per the brief's
+ *  "case-differing drive letter or path" wording. */
+function flipCase(p) {
+  const driveMatch = p.match(/^([a-zA-Z]):(.*)$/);
+  let drive = '';
+  let rest = p;
+  if (driveMatch) {
+    const letter = driveMatch[1];
+    drive = (letter === letter.toUpperCase() ? letter.toLowerCase() : letter.toUpperCase()) + ':';
+    rest = driveMatch[2];
+  }
+  const flippedRest = rest.replace(/[a-zA-Z]/g, (ch) => (
+    ch === ch.toUpperCase() ? ch.toLowerCase() : ch.toUpperCase()
+  ));
+  return drive + flippedRest;
 }
 
 // ---------------------------------------------------------------------------
@@ -915,5 +935,76 @@ test('F-HK-07 (k) regression: Bash rm -rf and git reset --hard cautions unchange
   assert.ok(
     out2.hookSpecificOutput.additionalContext.includes('git reset --hard'),
     'Bash git reset --hard still cautioned'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// F-HK-13: unconditional case folding.
+//
+// The containment guard used to lowercase both sides of the prefix comparison
+// unconditionally. On a case-sensitive filesystem (POSIX) that WIDENS what
+// counts as "contained" - the wrong direction for a security guard, since a
+// path differing only in case from an allowed prefix is a DIFFERENT path on
+// Linux/macOS and must not be treated as the same one. The fix folds case
+// only when process.platform === 'win32'.
+// ---------------------------------------------------------------------------
+
+test('F-HK-13 (a) foldForCompare: win32 folds case, non-win32 preserves case (both branches, platform-injected)', () => {
+  const mixed = '/Book/CHAPTERS/Foo.MD';
+
+  assert.equal(
+    foldForCompare(mixed, 'win32'),
+    '/book/chapters/foo.md',
+    'win32: case-folded for comparison (matches the case-insensitive-filesystem behavior)'
+  );
+  assert.equal(
+    foldForCompare(mixed, 'linux'),
+    mixed,
+    'linux (non-win32): case is PRESERVED - folding here would widen matching the wrong way'
+  );
+  assert.equal(
+    foldForCompare(mixed, 'darwin'),
+    mixed,
+    'darwin (non-win32): case is preserved too'
+  );
+});
+
+test('F-HK-13 (b) containment guard on win32: a case-differing drive letter or path still matches (current behavior kept)', (t) => {
+  if (process.platform !== 'win32') {
+    t.skip('win32-only assertion; this leg is ' + process.platform + ' (case-sensitive filesystem)');
+    return;
+  }
+  const book = cloneSampleBook('fhk13-b-win32-case');
+  const target = join(book, 'chapters', '01-listening-before-speaking.md');
+  const caseFlipped = flipCase(target);
+  assert.notEqual(caseFlipped, target, 'precondition: the flipped path is textually different from the original');
+
+  const result = runHook(makeWriteEvent(book, caseFlipped));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'win32: a case-differing path (including drive letter) is still treated as contained; empty stdout (allow)'
+  );
+});
+
+test('F-HK-13 (c) containment guard on a case-sensitive filesystem: a case-differing path is NOT treated as contained', (t) => {
+  if (process.platform === 'win32') {
+    t.skip('POSIX-only assertion (case-sensitive filesystem); this leg is win32');
+    return;
+  }
+  const book = cloneSampleBook('fhk13-c-posix-case');
+  const target = join(book, 'chapters', '01-listening-before-speaking.md');
+  const caseFlipped = flipCase(target);
+  assert.notEqual(caseFlipped, target, 'precondition: the flipped path is textually different from the original');
+
+  const result = runHook(makeWriteEvent(book, caseFlipped));
+
+  assert.equal(result.status, 0, 'exit code is 0 (deny travels in JSON, not exit code)');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON (deny), not empty');
+  assert.equal(
+    out.hookSpecificOutput.permissionDecision, 'deny',
+    'non-win32: case-widened matching must NOT occur - a case-differing path is a different, uncontained path'
   );
 });

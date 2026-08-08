@@ -140,14 +140,23 @@ function appendAiUseLog(record) {
 // ---------------------------------------------------------------------------
 // Windows-safe chapter-path helpers.
 // chapters/ is the direct child of the book root holding prose files.
-// Path comparison is case-insensitive and uses the platform separator so that
-// partial-name collisions (e.g. chapters-archive/) are excluded.
+// Path comparison uses the platform separator so that partial-name collisions
+// (e.g. chapters-archive/) are excluded.
+//
+// F-HK-13: case folding is applied only on win32 (case-insensitive
+// filesystem). Folding unconditionally would WIDEN what counts as a chapter
+// path on a case-sensitive filesystem (POSIX) - the wrong direction for a
+// check that feeds the progress/compliance-log write path.
 // ---------------------------------------------------------------------------
-const chaptersDirNorm = resolve(bookRoot, 'chapters').toLowerCase();
+function foldForCompare(p) {
+  return process.platform === 'win32' ? p.toLowerCase() : p;
+}
+
+const chaptersDirNorm = foldForCompare(resolve(bookRoot, 'chapters'));
 const chaptersDirPrefix = chaptersDirNorm + sep;
 
 function isChapterPath(absPath) {
-  const norm = absPath.toLowerCase();
+  const norm = foldForCompare(absPath);
   return norm.startsWith(chaptersDirPrefix);
 }
 
