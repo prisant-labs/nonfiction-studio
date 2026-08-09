@@ -68,12 +68,33 @@ const cwd = typeof event.cwd === 'string' && event.cwd ? event.cwd : process.cwd
 
 // ---------------------------------------------------------------------------
 // Book root detection. No root found: no-op (exit 0, empty stdout).
+//
+// Error discrimination (F-HK-01; mirrors hooks/stop-gate.mjs and
+// hooks/session-start.mjs): BibleError code NO_BOOK_ROOT is normal (no book
+// project anywhere in the ancestor chain) and stays silent. Any other code
+// (CONFIG_READ_ERROR, META_READ_ERROR, ...) means a book root WAS found but
+// its bible files are corrupt. This hook cannot deny post-hoc (the tool call
+// already happened), so it emits one visible additionalContext line naming
+// the problem and that progress/log updates were skipped, then still exits 0
+// (fail-open).
 // ---------------------------------------------------------------------------
 let bookRoot = null;
 try {
   const found = findBookRoot(cwd);
   bookRoot = found.root;
-} catch {
+} catch (err) {
+  if (err && err.code && err.code !== 'NO_BOOK_ROOT') {
+    process.stdout.write(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: 'PostToolBatch',
+          additionalContext:
+            'Book project found, but ' + err.message +
+            '; progress and log updates were skipped for this batch.'
+        }
+      }) + '\n'
+    );
+  }
   process.exit(0);
 }
 
@@ -119,14 +140,23 @@ function appendAiUseLog(record) {
 // ---------------------------------------------------------------------------
 // Windows-safe chapter-path helpers.
 // chapters/ is the direct child of the book root holding prose files.
-// Path comparison is case-insensitive and uses the platform separator so that
-// partial-name collisions (e.g. chapters-archive/) are excluded.
+// Path comparison uses the platform separator so that partial-name collisions
+// (e.g. chapters-archive/) are excluded.
+//
+// F-HK-13: case folding is applied only on win32 (case-insensitive
+// filesystem). Folding unconditionally would WIDEN what counts as a chapter
+// path on a case-sensitive filesystem (POSIX) - the wrong direction for a
+// check that feeds the progress/compliance-log write path.
 // ---------------------------------------------------------------------------
-const chaptersDirNorm = resolve(bookRoot, 'chapters').toLowerCase();
+function foldForCompare(p) {
+  return process.platform === 'win32' ? p.toLowerCase() : p;
+}
+
+const chaptersDirNorm = foldForCompare(resolve(bookRoot, 'chapters'));
 const chaptersDirPrefix = chaptersDirNorm + sep;
 
 function isChapterPath(absPath) {
-  const norm = absPath.toLowerCase();
+  const norm = foldForCompare(absPath);
   return norm.startsWith(chaptersDirPrefix);
 }
 

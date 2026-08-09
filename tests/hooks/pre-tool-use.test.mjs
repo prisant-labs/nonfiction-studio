@@ -39,7 +39,7 @@ const SAMPLE_BOOK = join(REPO_ROOT, 'examples', 'sample-book');
 // isMain is false here (process.argv[1] is the test runner, not the hook script)
 // so no stdin reads or process.exit() calls happen during import.
 // ---------------------------------------------------------------------------
-const { checkResearchAgentConstraint } = await import('../../hooks/pre-tool-use.mjs');
+const { checkResearchAgentConstraint, pickSnapshotName, foldForCompare } = await import('../../hooks/pre-tool-use.mjs');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -100,6 +100,19 @@ function makeBashEvent(cwd, command) {
   });
 }
 
+/** Build a synthetic PowerShell event (F-HK-07: PowerShell is a first-class
+ *  peer of Bash on Windows sessions and carries its command the same way). */
+function makePowerShellEvent(cwd, command) {
+  return JSON.stringify({
+    session_id: 'test-session-032',
+    cwd,
+    hook_event_name: 'PreToolUse',
+    tool_name: 'PowerShell',
+    tool_input: { command },
+    tool_use_id: 'toolu_test032'
+  });
+}
+
 /** Build a synthetic Read event (read-only; should be a no-op). */
 function makeReadEvent(cwd) {
   return JSON.stringify({
@@ -117,6 +130,26 @@ function countSnapshots(bookRoot, slug) {
   const dir = join(bookRoot, '.studio', 'snapshots');
   if (!existsSync(dir)) return 0;
   return readdirSync(dir).filter(f => f.startsWith(slug + '.') && f.endsWith('.md')).length;
+}
+
+/** F-HK-13: flip the case of an ASCII drive letter (if present, e.g. "C:" -> "c:")
+ *  and invert the case of every other ASCII letter in the path. Produces a path
+ *  that refers to the SAME file on a case-insensitive filesystem but differs
+ *  textually in both the drive letter and the rest of the path, per the brief's
+ *  "case-differing drive letter or path" wording. */
+function flipCase(p) {
+  const driveMatch = p.match(/^([a-zA-Z]):(.*)$/);
+  let drive = '';
+  let rest = p;
+  if (driveMatch) {
+    const letter = driveMatch[1];
+    drive = (letter === letter.toUpperCase() ? letter.toLowerCase() : letter.toUpperCase()) + ':';
+    rest = driveMatch[2];
+  }
+  const flippedRest = rest.replace(/[a-zA-Z]/g, (ch) => (
+    ch === ch.toUpperCase() ? ch.toLowerCase() : ch.toUpperCase()
+  ));
+  return drive + flippedRest;
 }
 
 // ---------------------------------------------------------------------------
@@ -153,8 +186,8 @@ test('(a) chapter Write existing file: flag + snapshot written, empty stdout, ex
   allSnapshots.sort();
   const newestSnapshot = allSnapshots[allSnapshots.length - 1];
   assert.ok(
-    /^01-listening-before-speaking\.\d{8}T\d{6}Z\.md$/.test(newestSnapshot),
-    'newest snapshot filename matches <slug>.<YYYYMMDDTHHMMSSZ>.md'
+    /^01-listening-before-speaking\.\d{8}T\d{9}Z\.md$/.test(newestSnapshot),
+    'newest snapshot filename matches <slug>.<YYYYMMDDTHHMMSSmmmZ>.md (F-HK-03: milliseconds added)'
   );
 });
 
@@ -493,4 +526,610 @@ test('(l) malformed stdin: exit 0, empty stdout', () => {
 
   assert.equal(result.status, 0, 'exit code is 0 for malformed stdin (fail-open)');
   assert.equal(result.stdout.trim(), '', 'stdout is empty for malformed stdin');
+});
+
+// ---------------------------------------------------------------------------
+// F-HK-01: corrupt-config discrimination.
+//
+// findBookRoot throws a BibleError with code CONFIG_READ_ERROR when a book
+// root is found but .studio/config.json is syntactically invalid JSON. The
+// pre-fix hook caught ANY findBookRoot error identically to NO_BOOK_ROOT and
+// exited 0 with empty stdout, silently disabling the containment guard for
+// every write while the config is broken. The fix discriminates the error
+// code (mirrors hooks/stop-gate.mjs and hooks/session-start.mjs): write tools
+// fail closed (deny); non-write tools and Bash are unaffected.
+// ---------------------------------------------------------------------------
+
+test('F-HK-01 (a) corrupt config.json + Write outside the book root: deny naming the corrupt config, not silent exit 0', () => {
+  const book = cloneSampleBook('fhk01-a-outside');
+  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  const outsidePath = join(tmpdir(), 'ns-tsk032-fhk01-outside-' + Date.now() + '.md');
+
+  const result = runHook(makeWriteEvent(book, outsidePath));
+
+  assert.equal(result.status, 0, 'exit code is 0 (deny travels in JSON, not exit code)');
+
+  let out;
+  assert.doesNotThrow(
+    () => { out = JSON.parse(result.stdout.trim()); },
+    'stdout is valid JSON, NOT empty (the pre-fix bug produced empty stdout here)'
+  );
+
+  const hso = out.hookSpecificOutput;
+  assert.equal(hso.hookEventName, 'PreToolUse', 'hookEventName is PreToolUse');
+  assert.equal(hso.permissionDecision, 'deny', 'permissionDecision is deny (fails closed on corrupt config)');
+  assert.ok(
+    typeof hso.permissionDecisionReason === 'string' && hso.permissionDecisionReason.includes('config.json'),
+    'deny reason names the corrupt config.json; got: ' + hso.permissionDecisionReason
+  );
+});
+
+test('F-HK-01 (b) corrupt config.json + Write inside the book tree: still deny (fail closed)', () => {
+  const book = cloneSampleBook('fhk01-b-inside');
+  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  const insideTarget = join(book, 'chapters', '01-listening-before-speaking.md');
+
+  const result = runHook(makeWriteEvent(book, insideTarget));
+
+  assert.equal(result.status, 0, 'exit code is 0 (deny travels in JSON, not exit code)');
+
+  let out;
+  assert.doesNotThrow(
+    () => { out = JSON.parse(result.stdout.trim()); },
+    'stdout is valid JSON, NOT empty (the pre-fix bug allowed this write silently)'
+  );
+
+  const hso = out.hookSpecificOutput;
+  assert.equal(
+    hso.permissionDecision, 'deny',
+    'permissionDecision is deny even for an in-tree target: containment cannot be verified while the config is corrupt'
+  );
+  assert.ok(
+    typeof hso.permissionDecisionReason === 'string' && hso.permissionDecisionReason.includes('config.json'),
+    'deny reason names the corrupt config.json; got: ' + hso.permissionDecisionReason
+  );
+});
+
+test('F-HK-01 (c) corrupt config.json + Edit and NotebookEdit also deny (all three WRITE_TOOLS)', () => {
+  const bookEdit = cloneSampleBook('fhk01-c-edit');
+  writeFileSync(join(bookEdit, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  const editTarget = join(bookEdit, 'chapters', '01-listening-before-speaking.md');
+  const editResult = runHook(makeWriteEvent(bookEdit, editTarget, 'Edit'));
+  assert.equal(editResult.status, 0, 'exit code is 0 for Edit');
+  let editOut;
+  assert.doesNotThrow(() => { editOut = JSON.parse(editResult.stdout.trim()); }, 'Edit stdout is valid JSON');
+  assert.equal(editOut.hookSpecificOutput.permissionDecision, 'deny', 'Edit denied on corrupt config');
+
+  const bookNb = cloneSampleBook('fhk01-c-notebook');
+  writeFileSync(join(bookNb, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  const nbEvent = JSON.stringify({
+    session_id: 'test-session-032',
+    cwd: bookNb,
+    hook_event_name: 'PreToolUse',
+    tool_name: 'NotebookEdit',
+    tool_input: { notebook_path: join(bookNb, 'chapters', 'nb.ipynb'), cell_id: '1' },
+    tool_use_id: 'toolu_test032'
+  });
+  const nbResult = runHook(nbEvent);
+  assert.equal(nbResult.status, 0, 'exit code is 0 for NotebookEdit');
+  let nbOut;
+  assert.doesNotThrow(() => { nbOut = JSON.parse(nbResult.stdout.trim()); }, 'NotebookEdit stdout is valid JSON');
+  assert.equal(nbOut.hookSpecificOutput.permissionDecision, 'deny', 'NotebookEdit denied on corrupt config');
+});
+
+test('F-HK-01 (d) corrupt config.json + Read: exit 0, empty stdout (non-write tools unaffected)', () => {
+  const book = cloneSampleBook('fhk01-d-read');
+  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+
+  const result = runHook(makeReadEvent(book));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(result.stdout.trim(), '', 'stdout is empty for Read tool even with corrupt config (unchanged)');
+});
+
+test('F-HK-01 (e) corrupt config.json + benign Bash: exit 0, empty stdout ("today\'s" caution behavior unchanged)', () => {
+  const book = cloneSampleBook('fhk01-e-bash');
+  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+
+  const result = runHook(makeBashEvent(book, 'rm -rf /tmp/foo'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'stdout is empty for Bash with corrupt config; no deny on corrupt config per the brief'
+  );
+});
+
+test('F-HK-01 (f) NO_BOOK_ROOT (no book project at all) stays silent exit 0 for Write, unlike a corrupt config', () => {
+  const emptyDir = makeTmpDir('fhk01-f-no-root');
+  const target = join(emptyDir, 'chapters', 'test.md');
+
+  const result = runHook(makeWriteEvent(emptyDir, target));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'NO_BOOK_ROOT is a normal no-op (no book project here at all), not a corrupt-config deny'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// F-HK-03: same-second snapshot overwrite.
+//
+// compactUtcNow() previously truncated to whole seconds, so two overwrites of
+// the same chapter within one second produced the same snapshot filename and
+// the second write silently destroyed the first rollback point. The fix adds
+// milliseconds to the timestamp AND a deterministic -2/-3 collision counter
+// (belt and suspenders) via the exported pickSnapshotName, then prunes with a
+// comparator that understands the counter suffix instead of a raw string sort.
+// ---------------------------------------------------------------------------
+
+test('F-HK-03 (a) pickSnapshotName: collision at the base name escalates to -2, then -3, deterministically', () => {
+  const existing = new Set(['01-slug.20260807T154012123Z.md']);
+  const existsFn = (name) => existing.has(name);
+
+  const first = pickSnapshotName('01-slug', '20260807T154012123Z', existsFn);
+  assert.equal(
+    first, '01-slug.20260807T154012123Z-2.md',
+    'base name already taken: first collision escalates to a -2 suffix'
+  );
+
+  existing.add(first);
+  const second = pickSnapshotName('01-slug', '20260807T154012123Z', existsFn);
+  assert.equal(
+    second, '01-slug.20260807T154012123Z-3.md',
+    'base name and -2 both taken: second collision escalates to -3'
+  );
+
+  // No collision at all: the plain base name is returned unchanged.
+  const clear = pickSnapshotName('01-slug', '20260807T999999999Z', existsFn);
+  assert.equal(
+    clear, '01-slug.20260807T999999999Z.md',
+    'no collision: plain <slug>.<timestamp>.md name is used, no counter suffix'
+  );
+});
+
+test('F-HK-03 (b) two rapid writes to the same chapter in the same second: two distinct snapshots survive', () => {
+  const book = cloneSampleBook('fhk03-b-rapid');
+  const slug = '01-listening-before-speaking';
+  const target = join(book, 'chapters', slug + '.md');
+  const snapshotsBefore = countSnapshots(book, slug);
+
+  // Two writes back-to-back, no delay: reproduces the same-second collision
+  // window the audit found (pre-fix, whole-second timestamps made these
+  // indistinguishable and the second write silently clobbered the first).
+  const result1 = runHook(makeWriteEvent(book, target));
+  const result2 = runHook(makeWriteEvent(book, target));
+
+  assert.equal(result1.status, 0, 'first write exit code is 0');
+  assert.equal(result2.status, 0, 'second write exit code is 0');
+
+  const snapshotsAfter = countSnapshots(book, slug);
+  assert.equal(
+    snapshotsAfter, snapshotsBefore + 2,
+    'both writes produced a surviving snapshot (no silent same-second overwrite)'
+  );
+
+  const allNames = readdirSync(join(book, '.studio', 'snapshots'))
+    .filter(f => f.startsWith(slug + '.') && f.endsWith('.md'));
+  const newest = allNames.slice(-2);
+  assert.notEqual(
+    newest[0], newest[1],
+    'the two newest snapshot filenames are distinct from each other'
+  );
+});
+
+test('F-HK-03 (c) prune ordering with a same-timestamp collision pair: base is older, -2 is newer, deterministic', () => {
+  const book = cloneSampleBook('fhk03-c-prune-collision');
+  const slug = '01-listening-before-speaking';
+  const snapshotsDir = join(book, '.studio', 'snapshots');
+  const target = join(book, 'chapters', slug + '.md');
+
+  // Clean slate for this slug.
+  readdirSync(snapshotsDir)
+    .filter(f => f.startsWith(slug + '.') && f.endsWith('.md'))
+    .forEach(f => unlinkSync(join(snapshotsDir, f)));
+
+  // Seed the OLDEST entry as a same-timestamp collision pair: the base file
+  // (no counter, created "first") and its -2 sibling (created "second" at the
+  // identical nominal timestamp). A naive default string sort ranks "-2" as
+  // LESS than the bare base name (ASCII '-' < '.'), which would treat the
+  // second-written file as the older one - backwards. The correct comparator
+  // must treat -2 as newer than the base.
+  const collideTs = '20200101T000001000Z';
+  const pairBase = slug + '.' + collideTs + '.md';
+  const pairNewer = slug + '.' + collideTs + '-2.md';
+  writeFileSync(join(snapshotsDir, pairBase), 'collision pair: base (older)', 'utf8');
+  writeFileSync(join(snapshotsDir, pairNewer), 'collision pair: -2 (newer)', 'utf8');
+
+  // Seed 8 more, distinct, all strictly newer than the collision pair.
+  const seededNewer = [];
+  for (let i = 2; i <= 9; i++) {
+    const ts = '20200101T00000' + i + '000Z';
+    const fname = slug + '.' + ts + '.md';
+    seededNewer.push(fname);
+    writeFileSync(join(snapshotsDir, fname), 'seed ' + i, 'utf8');
+  }
+
+  // Pre-write total: 2 (pair) + 8 (distinct newer) = 10.
+  assert.equal(countSnapshots(book, slug), 10, 'precondition: 10 snapshots seeded (2 pair + 8 distinct)');
+
+  // Trigger one real write: creates an 11th snapshot, newer than everything
+  // seeded (real "now" vs synthetic 2020 dates), and fires the prune (keep 10).
+  const result = runHook(makeWriteEvent(book, target));
+  assert.equal(result.status, 0, 'exit code is 0');
+
+  assert.equal(countSnapshots(book, slug), 10, 'exactly 10 snapshots survive after prune');
+
+  // The pair's BASE (older) must be the one dropped; its -2 sibling (newer)
+  // and all 8 distinct-newer seeds plus the fresh write must survive.
+  assert.ok(
+    !existsSync(join(snapshotsDir, pairBase)),
+    'collision pair base (older, no counter) was pruned as the true oldest entry'
+  );
+  assert.ok(
+    existsSync(join(snapshotsDir, pairNewer)),
+    'collision pair -2 sibling (newer, created second) survives the prune'
+  );
+  for (const fname of seededNewer) {
+    assert.ok(existsSync(join(snapshotsDir, fname)), fname + ' (distinct, newer than the pair) survives');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// F-HK-07: PowerShell destructive-op caution.
+//
+// The early exit used to read "not a WRITE_TOOL and not Bash -> exit 0", so
+// the PowerShell tool (a first-class peer of Bash on Windows sessions)
+// bypassed the destructive-op caution entirely, no matter what the command
+// did. The fix treats PowerShell like Bash in the early exit and adds a
+// PowerShell-shaped caution pattern set (checked independently of Bash's -
+// Bash's own two patterns must stay byte-unchanged).
+// ---------------------------------------------------------------------------
+
+test('F-HK-07 (a) PowerShell Remove-Item -Recurse -Force: additionalContext caution, no permissionDecision', () => {
+  const book = cloneSampleBook('fhk07-a-removeitem');
+  const result = runHook(makePowerShellEvent(book, 'Remove-Item -Recurse -Force C:\\Temp\\scratch'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+
+  const hso = out.hookSpecificOutput;
+  assert.equal(hso.hookEventName, 'PreToolUse', 'hookEventName is PreToolUse');
+  assert.ok(
+    typeof hso.additionalContext === 'string' && hso.additionalContext.length > 0,
+    'additionalContext is a non-empty caution string'
+  );
+  assert.equal(hso.permissionDecision, undefined, 'no permissionDecision field for caution (never a deny)');
+});
+
+test('F-HK-07 (b) PowerShell Remove-Item -Force -Recurse (reversed flag order): still cautioned', () => {
+  const book = cloneSampleBook('fhk07-b-reversed');
+  const result = runHook(makePowerShellEvent(book, 'Remove-Item -Force -Recurse -Path C:\\Temp\\scratch'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.length > 0,
+    'flag order (-Force before -Recurse) does not evade the caution'
+  );
+});
+
+test('F-HK-07 (c) PowerShell remove-item -recurse -force (lowercase): still cautioned (case-insensitive per PowerShell convention)', () => {
+  const book = cloneSampleBook('fhk07-c-lowercase');
+  const result = runHook(makePowerShellEvent(book, 'remove-item -recurse -force C:\\Temp\\scratch'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.length > 0,
+    'lowercase cmdlet/flags still trigger the caution'
+  );
+});
+
+test('F-HK-07 (d) PowerShell git reset --hard: cautioned', () => {
+  const book = cloneSampleBook('fhk07-d-gitreset');
+  const result = runHook(makePowerShellEvent(book, 'git reset --hard HEAD~1'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.includes('git reset --hard'),
+    'additionalContext names the git reset --hard pattern'
+  );
+});
+
+test('F-HK-07 (e) PowerShell git clean -fd: cautioned', () => {
+  const book = cloneSampleBook('fhk07-e-gitclean');
+  const result = runHook(makePowerShellEvent(book, 'git clean -fd'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.includes('git clean -fd'),
+    'additionalContext names the git clean -fd pattern'
+  );
+});
+
+test('F-HK-07 (f) PowerShell Format-Volume: cautioned', () => {
+  const book = cloneSampleBook('fhk07-f-formatvolume');
+  const result = runHook(makePowerShellEvent(book, 'Format-Volume -DriveLetter D -FileSystem NTFS'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.length > 0,
+    'Format-Volume triggers the caution'
+  );
+});
+
+test('F-HK-07 (g) PowerShell format D: (legacy format targeting a drive): cautioned', () => {
+  const book = cloneSampleBook('fhk07-g-formatdrive');
+  const result = runHook(makePowerShellEvent(book, 'format D:'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.length > 0,
+    'format targeting a drive letter triggers the caution'
+  );
+});
+
+test('F-HK-07 (h) benign PowerShell Get-ChildItem: exits silently (empty stdout)', () => {
+  const book = cloneSampleBook('fhk07-h-benign');
+  const result = runHook(makePowerShellEvent(book, 'Get-ChildItem -Path .'));
+
+  assert.equal(result.status, 0, 'exit code is 0 for benign PowerShell');
+  assert.equal(result.stdout.trim(), '', 'stdout is empty (allow) for benign PowerShell');
+});
+
+test('F-HK-07 (i) benign PowerShell Get-Date -Format with no drive letter: not a false positive for the format pattern', () => {
+  const book = cloneSampleBook('fhk07-i-getdate');
+  const result = runHook(makePowerShellEvent(book, 'Get-Date -Format "yyyy-MM-dd"'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'a -Format parameter with no drive-letter pattern must not be mistaken for the destructive format command'
+  );
+});
+
+test('F-HK-07 (j) regression: Bash git clean -fd is NOT cautioned (Bash pattern set stays byte-unchanged)', () => {
+  const book = cloneSampleBook('fhk07-j-bash-unchanged');
+  const result = runHook(makeBashEvent(book, 'git clean -fd'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'Bash only ever had rm -rf and git reset --hard; git clean -fd is a PowerShell-set addition only, ' +
+    'proving this fix did not silently widen the Bash pattern set'
+  );
+});
+
+test('F-HK-07 (k) regression: Bash rm -rf and git reset --hard cautions unchanged after adding the PowerShell branch', () => {
+  const book1 = cloneSampleBook('fhk07-k-bash-rmrf');
+  const r1 = runHook(makeBashEvent(book1, 'rm -rf /tmp/foo'));
+  assert.equal(r1.status, 0, 'exit code is 0');
+  let out1;
+  assert.doesNotThrow(() => { out1 = JSON.parse(r1.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(out1.hookSpecificOutput.additionalContext.includes('rm -rf'), 'Bash rm -rf still cautioned');
+
+  const book2 = cloneSampleBook('fhk07-k-bash-reset');
+  const r2 = runHook(makeBashEvent(book2, 'git reset --hard HEAD~1'));
+  assert.equal(r2.status, 0, 'exit code is 0');
+  let out2;
+  assert.doesNotThrow(() => { out2 = JSON.parse(r2.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    out2.hookSpecificOutput.additionalContext.includes('git reset --hard'),
+    'Bash git reset --hard still cautioned'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// F-HK-07 fix round 1: Remove-Item's built-in destructive aliases.
+//
+// The original pattern matched only the literal cmdlet name "Remove-Item".
+// PowerShell's built-in aliases (rm, rd, rmdir, del, erase) evade it entirely -
+// reviewer proved live that `rm -Recurse -Force ...` and `rd -Recurse -Force
+// ...` both produced empty stdout (no caution), and `rm` is exactly what a
+// Unix-habituated author types in PowerShell. The fix extends the cmdlet
+// portion of the pattern to an alternation over Remove-Item and all five
+// built-in aliases, word-boundary-anchored on BOTH sides so short alias names
+// cannot match inside longer tokens (e.g. "confirm", "term-notes.md").
+// ---------------------------------------------------------------------------
+
+test('F-HK-07 (l) PowerShell rm -Recurse -Force (Unix-habit alias): cautioned', () => {
+  const book = cloneSampleBook('fhk07-l-rm-alias');
+  const result = runHook(makePowerShellEvent(book, 'rm -Recurse -Force C:\\Temp\\scratch'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.length > 0,
+    'the rm alias with both destructive flags triggers the caution, same as Remove-Item'
+  );
+});
+
+test('F-HK-07 (m) PowerShell rd -Recurse -Force (alias): cautioned', () => {
+  const book = cloneSampleBook('fhk07-m-rd-alias');
+  const result = runHook(makePowerShellEvent(book, 'rd -Recurse -Force C:\\Temp\\scratch'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.length > 0,
+    'the rd alias with both destructive flags triggers the caution'
+  );
+});
+
+test('F-HK-07 (n) PowerShell rmdir -Recurse -Force (alias): cautioned', () => {
+  const book = cloneSampleBook('fhk07-n-rmdir-alias');
+  const result = runHook(makePowerShellEvent(book, 'rmdir -Force -Recurse C:\\Temp\\scratch'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.length > 0,
+    'the rmdir alias (reversed flag order) triggers the caution'
+  );
+});
+
+test('F-HK-07 (o) PowerShell del -Recurse -Force (alias): cautioned', () => {
+  const book = cloneSampleBook('fhk07-o-del-alias');
+  const result = runHook(makePowerShellEvent(book, 'del -Recurse -Force C:\\Temp\\scratch'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.length > 0,
+    'the del alias triggers the caution'
+  );
+});
+
+test('F-HK-07 (p) PowerShell ERASE -recurse -force (alias, mixed case): cautioned', () => {
+  const book = cloneSampleBook('fhk07-p-erase-alias');
+  const result = runHook(makePowerShellEvent(book, 'ERASE -recurse -force C:\\Temp\\scratch'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' &&
+    out.hookSpecificOutput.additionalContext.length > 0,
+    'the erase alias, any case, triggers the caution'
+  );
+});
+
+test('F-HK-07 (q) PowerShell rm without both destructive flags: stays silent (no false positive from the new alias)', () => {
+  const book = cloneSampleBook('fhk07-q-rm-benign');
+  const result = runHook(makePowerShellEvent(book, 'rm oldfile.txt'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'rm alone (no -Recurse, no -Force) must not be cautioned - both flags are still required'
+  );
+});
+
+test('F-HK-07 (r) PowerShell word-boundary: "-Confirm" (contains the substring "rm") plus both flags must not false-trigger the alias pattern', () => {
+  const book = cloneSampleBook('fhk07-r-confirm-boundary');
+  // Deliberately includes BOTH -Recurse and -Force elsewhere in the command, so
+  // only the word-boundary anchoring (not a missing flag) can be what keeps this
+  // silent: "-Confirm" contains the substring "rm" but is not the rm alias token.
+  const result = runHook(makePowerShellEvent(
+    book, 'Copy-Item -Recurse -Force -Confirm:$false -Path safe-file.txt -Destination backup\\'
+  ));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    '"-Confirm" must not be mistaken for the "rm" alias even though both destructive flags are present ' +
+    'elsewhere in the command - the alias needs word boundaries on both sides, not just a substring match'
+  );
+});
+
+test('F-HK-07 (s) PowerShell word-boundary: a filename containing "rm" ("term-notes.md") plus both flags must not false-trigger the alias pattern', () => {
+  const book = cloneSampleBook('fhk07-s-filename-boundary');
+  // Same isolation as (r): both flags are genuinely present, so only the
+  // boundary anchoring can be what keeps this silent, not a missing flag.
+  const result = runHook(makePowerShellEvent(book, 'Copy-Item -Recurse -Force -Path term-notes.md -Destination backup\\'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    '"term-notes.md" contains the substring "rm" inside "term" but is not the rm alias token; with both ' +
+    'flags genuinely present, only correct word-boundary anchoring keeps this silent'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// F-HK-13: unconditional case folding.
+//
+// The containment guard used to lowercase both sides of the prefix comparison
+// unconditionally. On a case-sensitive filesystem (POSIX) that WIDENS what
+// counts as "contained" - the wrong direction for a security guard, since a
+// path differing only in case from an allowed prefix is a DIFFERENT path on
+// Linux/macOS and must not be treated as the same one. The fix folds case
+// only when process.platform === 'win32'.
+// ---------------------------------------------------------------------------
+
+test('F-HK-13 (a) foldForCompare: win32 folds case, non-win32 preserves case (both branches, platform-injected)', () => {
+  const mixed = '/Book/CHAPTERS/Foo.MD';
+
+  assert.equal(
+    foldForCompare(mixed, 'win32'),
+    '/book/chapters/foo.md',
+    'win32: case-folded for comparison (matches the case-insensitive-filesystem behavior)'
+  );
+  assert.equal(
+    foldForCompare(mixed, 'linux'),
+    mixed,
+    'linux (non-win32): case is PRESERVED - folding here would widen matching the wrong way'
+  );
+  assert.equal(
+    foldForCompare(mixed, 'darwin'),
+    mixed,
+    'darwin (non-win32): case is preserved too'
+  );
+});
+
+test('F-HK-13 (b) containment guard on win32: a case-differing drive letter or path still matches (current behavior kept)', (t) => {
+  if (process.platform !== 'win32') {
+    t.skip('win32-only assertion; this leg is ' + process.platform + ' (case-sensitive filesystem)');
+    return;
+  }
+  const book = cloneSampleBook('fhk13-b-win32-case');
+  const target = join(book, 'chapters', '01-listening-before-speaking.md');
+  const caseFlipped = flipCase(target);
+  assert.notEqual(caseFlipped, target, 'precondition: the flipped path is textually different from the original');
+
+  const result = runHook(makeWriteEvent(book, caseFlipped));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'win32: a case-differing path (including drive letter) is still treated as contained; empty stdout (allow)'
+  );
+});
+
+test('F-HK-13 (c) containment guard on a case-sensitive filesystem: a case-differing path is NOT treated as contained', (t) => {
+  if (process.platform === 'win32') {
+    t.skip('POSIX-only assertion (case-sensitive filesystem); this leg is win32');
+    return;
+  }
+  const book = cloneSampleBook('fhk13-c-posix-case');
+  const target = join(book, 'chapters', '01-listening-before-speaking.md');
+  const caseFlipped = flipCase(target);
+  assert.notEqual(caseFlipped, target, 'precondition: the flipped path is textually different from the original');
+
+  const result = runHook(makeWriteEvent(book, caseFlipped));
+
+  assert.equal(result.status, 0, 'exit code is 0 (deny travels in JSON, not exit code)');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON (deny), not empty');
+  assert.equal(
+    out.hookSpecificOutput.permissionDecision, 'deny',
+    'non-win32: case-widened matching must NOT occur - a case-differing path is a different, uncontained path'
+  );
 });

@@ -7,6 +7,7 @@
       "prompt_scrub":       { "enabled": true,  "mode": "block" },
       "stylometry":         { "enabled": true,  "mode": "warn" },
       "continuity":         { "enabled": true,  "mode": "warn" },
+      "state_coherence":    { "enabled": true,  "mode": "warn" },
       "thesis_alignment":   { "enabled": true,  "mode": "warn" },
       "session_write_flag": { "enabled": true,  "mode": "block" }
     }

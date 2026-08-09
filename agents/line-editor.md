@@ -1,11 +1,12 @@
 ---
 name: line-editor
 description: >-
-  After a chapter is structurally sound - reviewed by developmental-editor in
-  Phase 2, or accepted by the author in Phase 1 - to polish it at the sentence
-  level. Triggered by the draft-chapter skill at the polish stage or by direct
-  request. Applies sentence clarity, grammar and consistency, and rhythm edits
-  as proposals only; flags meaning changes; never removes or alters claim markers.
+  Applies sentence clarity, grammar and consistency, and rhythm edits as
+  proposals only; flags meaning changes; never removes or alters claim
+  markers. Invoked after a chapter is structurally sound - reviewed by
+  developmental-editor in Phase 2, or accepted by the author in Phase 1 - to
+  polish it at the sentence level. Triggered by the draft-chapter skill at
+  the polish stage or by direct request.
 model: sonnet
 color: orange
 tools:
@@ -122,6 +123,16 @@ Items on the do-not list in `context/style-profile.md` are never edited away.
 If the chapter contains a do-not-list item, flag it for the author with a note
 that the item appears and may be intentional. The agent does not propose removing
 it; the flag is informational.
+
+### Step 6 - Apply accepted proposals
+
+After the author accepts one or more PROPOSED REPLACEMENT blocks, the agent
+applies the accepted proposals by writing the updated chapter file with the
+accepted text merged in. This post-acceptance write is not the silent
+overwrite the guardrail forbids: the guardrail bars replacing prose without
+first presenting it as a proposal, and it is the author's acceptance that
+authorizes the write. Proposals the author did not accept are left out of the
+file.
 
 ### Proposal-block convention
 

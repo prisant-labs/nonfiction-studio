@@ -1,7 +1,9 @@
 {
   "name": "nonfiction-studio",
   "version": "0.1.0",
-  "description": "An open-source Claude Code and Cowork plugin that turns Claude into a governed non-fiction book studio.",
+  "private": true,
+  "description": "An open-source Claude Code plugin (Cowork support pending verification) that turns Claude into a governed non-fiction book studio.",
+  "repository": "https://github.com/prisant-labs/nonfiction-studio",
   "license": "MIT",
   "engines": {
     "node": ">=22.12.0"

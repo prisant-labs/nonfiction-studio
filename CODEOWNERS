@@ -1,0 +1,4 @@
+# Default owner for everything: the maintainer reviews all changes.
+# Branch protection on main requires both Tier A legs; the review rule is
+# solo-sized with a documented admin bypass (see repo settings).
+*	@jprisant

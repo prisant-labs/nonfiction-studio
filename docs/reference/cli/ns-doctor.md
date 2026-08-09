@@ -29,13 +29,27 @@ finding before any model call).
 ns-doctor [--check | --report] [--migrate] [--validate-packs] [--project=<dir>] [--json]
 ```
 
+## Windows invocation
+
+Bare `ns-doctor` invocation fails in the Bash tool on Windows; the plugin
+system does not add `bin/` to PATH (ADR-0005, bin PATH on Windows). Hook, skill,
+and agent contexts must resolve the plugin root first, then invoke:
+
+```
+node "<plugin-root>/bin/ns-doctor" [--check | --report] [--migrate] [--validate-packs] [--project=<dir>] [--json]
+```
+
+where `<plugin-root>` is the resolved plugin installation path. Direct
+interactive invocation from a user's own shell can add `bin/` to PATH manually,
+or use the same `node` plus full-path form.
+
 ## Flags
 
 | Flag | Type | Description |
 |---|---|---|
 | `--check` | boolean | Run the full check inventory (default when no mode flag is supplied). |
 | `--report` | boolean | Synonym for `--check` in v1; both run the same inventory. |
-| `--migrate` | boolean | Check whether a migration is available for the current schema version; exits 2 with a message in v1 (no migrations defined yet). |
+| `--migrate` | boolean | Check whether a migration is available for the current schema version; exits 0 with a nothing-to-migrate message when the schema is already current, exits 2 when migration is required (an incompatible version). |
 | `--validate-packs` | boolean | Validate craft-model packs in `packs/`; exits 0 cleanly when no packs directory exists (Phase 2 feature). |
 | `--project=<dir>` | string | Override the book root to `<dir>`. If omitted, walks up from the current directory looking for `.studio/meta.json`. |
 | `--json` | boolean | Emit the full result as JSON to stdout. |

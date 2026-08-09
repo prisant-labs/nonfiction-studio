@@ -40,15 +40,32 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Inert scaffolding: installs the claude binary required by live steps 2
+      # and 3 below. The npm package is the same binary as the standalone
+      # installer and needs Node 22+, which the setup-node step above already
+      # pins.
+      - name: Install claude CLI
+        run: npm install -g @anthropic-ai/claude-code
+
       # Live step 2: model integration smoke test against examples/sample-book/
-      # with the haiku model; exits BUDGET_EXCEEDED (code 3) if spend > $0.10.
+      # with the haiku model. Exits 1 if a model-call outcome or structural
+      # assertion fails anywhere in the five-step flow, 2 on an operational
+      # error (clone or CLI), 3 on BUDGET_EXCEEDED (cap sized for one full run;
+      # spend > $1.00).
       - name: Model integration
         run: node scripts/run-integration.mjs
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
-      # Live step 3: eval dispatch-accuracy batch runner (advisory; always exits 0
-      # after grading all cases so a routing failure does not block CI).
+      # Live step 3: eval dispatch-accuracy batch runner. Real exit contract
+      # (scripts/run-evals.mjs's own taxonomy): 0 once every case has been
+      # graded, whatever the pass rate - dispatch accuracy is advisory signal
+      # only and does not affect the exit code; 1 if an evals/*.eval.json file
+      # is malformed; 2 if no model access is available; 3 only on a genuine
+      # BUDGET_EXCEEDED (cap sized for the full 28-case batch; see the script).
+      # This tier is advisory because the trigger above is workflow_dispatch
+      # only, not because any step here suppresses a nonzero exit - there is
+      # no continue-on-error in this file.
       - name: Eval dispatch accuracy
         run: node scripts/run-evals.mjs
         env:

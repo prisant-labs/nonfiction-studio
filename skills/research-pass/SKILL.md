@@ -2,8 +2,8 @@
 name: research-pass
 user-invocable: true
 argument-hint: "[chapter: slug or number]"
-description: "Runs a structured research session that populates the evidence ledger with EV entries and SRC references per D-07 (claim ledger). Confirms the outline is present via a deterministic guard, presents the research agenda for author approval, delegates all ledger writes to research-librarian, and reports new sources, new evidence entries, and remaining open claims for the scope."
-when_to_use: "Use when the author wants to gather sources before drafting, types the legacy /research verb, or studio routes here from Path 3 (Research and verify). Do not invoke to verify existing claims (use fact-check-pass for that), or for unrelated queries."
+description: "Runs a structured research session that populates the evidence ledger with EV entries and SRC references per D-07 (claim ledger). Confirms the outline is present via a deterministic guard, presents the research agenda for author approval, delegates all ledger writes to research-librarian, and reports new sources, new evidence entries, and remaining open claims for the scope. Use when the author wants to 'find me sources,' says 'help me research this chapter,' or needs evidence gathered before drafting begins."
+when_to_use: "Use when the author wants to gather sources before drafting, types the /research verb alias, or studio routes here from Path 3 (Research and verify). Do not invoke to verify existing claims (use fact-check-pass for that), or for unrelated queries."
 chain:
   - research-librarian
 ---
@@ -83,7 +83,7 @@ The skill writes no ledger files. The `research-librarian` agent is the sole wri
 
 ## Step 5 - Report from the agent's session output
 
-Use the Read tool on `research/open-questions.md` to count the items for the scope that are not marked `Status: resolved`.
+Use the Read tool on `research/open-questions.md` to count the items for the scope that are not marked `Status: resolved`, per the entry grammar in `docs/formats/open-questions.md`.
 
 Present the three counts, taking the source and evidence totals from the agent's session report:
 - **New sources:** the count of new SRC records the agent appended in this session

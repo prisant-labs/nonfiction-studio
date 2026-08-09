@@ -83,6 +83,25 @@ function readJsonlLines(filePath) {
   return readFileSync(filePath, 'utf8').split('\n').filter(l => l.trim());
 }
 
+/** F-HK-13: flip the case of an ASCII drive letter (if present, e.g. "C:" -> "c:")
+ *  and invert the case of every other ASCII letter in the path. Produces a path
+ *  that refers to the SAME file on a case-insensitive filesystem but differs
+ *  textually in both the drive letter and the rest of the path. */
+function flipCase(p) {
+  const driveMatch = p.match(/^([a-zA-Z]):(.*)$/);
+  let drive = '';
+  let rest = p;
+  if (driveMatch) {
+    const letter = driveMatch[1];
+    drive = (letter === letter.toUpperCase() ? letter.toLowerCase() : letter.toUpperCase()) + ':';
+    rest = driveMatch[2];
+  }
+  const flippedRest = rest.replace(/[a-zA-Z]/g, (ch) => (
+    ch === ch.toUpperCase() ? ch.toLowerCase() : ch.toUpperCase()
+  ));
+  return drive + flippedRest;
+}
+
 // ---------------------------------------------------------------------------
 // (a) one chapter Write: recorded count equals stylometry counter, no tmp file,
 //     exactly one generated log line appended, additionalContext present, exit 0
@@ -550,6 +569,82 @@ test('(j) malformed stdin: exit 0, empty stdout', () => {
 });
 
 // ---------------------------------------------------------------------------
+// F-HK-01: corrupt-config discrimination.
+//
+// findBookRoot throws a BibleError with code CONFIG_READ_ERROR when a book
+// root is found but .studio/config.json is syntactically invalid JSON. The
+// pre-fix hook caught ANY findBookRoot error identically to NO_BOOK_ROOT and
+// exited 0 with empty stdout, silently skipping progress/log updates with no
+// visible sign anything was wrong. This hook cannot deny post-hoc (the tool
+// call already happened), so the fix emits one visible additionalContext line
+// naming the corrupt config and that progress/log updates were skipped, then
+// still exits 0 (fail-open), mirroring hooks/session-start.mjs's shape.
+// ---------------------------------------------------------------------------
+test('F-HK-01 (k) corrupt config.json: visible additionalContext naming it, exit 0, progress.json untouched', () => {
+  const book = cloneSampleBook('fhk01-k-corrupt-config');
+  const progressPath = join(book, '.studio', 'progress.json');
+  const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
+  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
+
+  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  const progressBefore = readFileSync(progressPath, 'utf8');
+  const logLinesBefore = readJsonlLines(logPath).length;
+
+  const result = runHook(makeBatchEvent(book, [
+    {
+      tool_name: 'Write',
+      tool_input: { file_path: ch1Path, content: 'attempted content update' },
+      tool_use_id: 'toolu_fhk01k',
+      tool_response: 'Written.'
+    }
+  ]));
+
+  assert.equal(result.status, 0, 'exit code is 0 (cannot deny post-hoc; fail-open)');
+
+  let out;
+  assert.doesNotThrow(
+    () => { out = JSON.parse(result.stdout.trim()); },
+    'stdout is valid JSON, NOT empty (the pre-fix bug produced silent empty stdout here)'
+  );
+  const hso = out.hookSpecificOutput;
+  assert.equal(hso.hookEventName, 'PostToolBatch', 'hookEventName is PostToolBatch');
+  assert.ok(
+    typeof hso.additionalContext === 'string' && hso.additionalContext.includes('config.json'),
+    'additionalContext names the corrupt config.json; got: ' + hso.additionalContext
+  );
+  assert.ok(
+    /progress/i.test(hso.additionalContext) && /skip/i.test(hso.additionalContext),
+    'additionalContext states that progress and log updates were skipped; got: ' + hso.additionalContext
+  );
+
+  const progressAfter = readFileSync(progressPath, 'utf8');
+  assert.equal(progressAfter, progressBefore, 'progress.json is byte-identical; no mutation occurred');
+
+  const logLinesAfter = readJsonlLines(logPath).length;
+  assert.equal(logLinesAfter, logLinesBefore, 'ai-use-log.jsonl unchanged; no log entry appended');
+});
+
+test('F-HK-01 (l) NO_BOOK_ROOT (no book project at all) stays silent exit 0, unlike a corrupt config', () => {
+  const emptyDir = makeTmpDir('fhk01-l-no-root');
+  const fakePath = join(emptyDir, 'chapters', 'test.md');
+
+  const result = runHook(makeBatchEvent(emptyDir, [
+    {
+      tool_name: 'Write',
+      tool_input: { file_path: fakePath, content: 'x' },
+      tool_use_id: 'toolu_fhk01l',
+      tool_response: 'Written.'
+    }
+  ]));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'NO_BOOK_ROOT is a normal no-op (no book project here at all), not a corrupt-config notice'
+  );
+});
+
+// ---------------------------------------------------------------------------
 // TSK-050b-(a) create-if-absent with registry: new entry has five fields,
 //   title resolved from structure/chapter-list.md, status 'drafting', correct
 //   word_count, open_claim_count 0 (no open markers in content).
@@ -741,6 +836,89 @@ test('TSK-050b-(e) golden clone recount: totals.open_claim_count is 0', () => {
 //   entry is created, unknown fields on other entries (and at top level and
 //   totals) are preserved unmodified.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// F-HK-13: unconditional case folding in isChapterPath.
+//
+// isChapterPath used to lowercase unconditionally before the startsWith
+// prefix check. On a case-sensitive filesystem (POSIX) that WIDENS what
+// counts as a chapter path - the wrong direction for a security-adjacent
+// classification (it feeds the progress/compliance-log write path). The fix
+// folds case only when process.platform === 'win32'.
+// ---------------------------------------------------------------------------
+
+test('F-HK-13 (m) isChapterPath on win32: a case-differing chapters/ path is still recognized (current behavior kept)', (t) => {
+  if (process.platform !== 'win32') {
+    t.skip('win32-only assertion; this leg is ' + process.platform + ' (case-sensitive filesystem)');
+    return;
+  }
+  const book = cloneSampleBook('fhk13-m-win32-case');
+  const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
+  const caseFlippedPath = flipCase(ch1Path);
+  assert.notEqual(caseFlippedPath, ch1Path, 'precondition: the flipped path is textually different from the original');
+  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
+  const logLinesBefore = readJsonlLines(logPath).length;
+
+  const newContent = 'F-HK-13 win32 regression content.\n';
+  writeFileSync(ch1Path, newContent, 'utf8');
+
+  const result = runHook(makeBatchEvent(book, [{
+    tool_name: 'Write',
+    tool_input: { file_path: caseFlippedPath, content: newContent },
+    tool_use_id: 'toolu_fhk13m',
+    tool_response: 'Written.'
+  }]));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+
+  // win32: case-differing path is still recognized as a chapter write -> one
+  // new log line and a non-empty additionalContext, exactly as the unflipped case.
+  const logLinesAfter = readJsonlLines(logPath);
+  assert.equal(
+    logLinesAfter.length, logLinesBefore + 1,
+    'one new log line: the case-flipped path was still recognized as a chapter write'
+  );
+
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' && out.hookSpecificOutput.additionalContext.length > 0,
+    'additionalContext present: chapter write recognized despite the case difference'
+  );
+});
+
+test('F-HK-13 (n) isChapterPath on a case-sensitive filesystem: a case-differing chapters/ path is NOT recognized as a chapter write', (t) => {
+  if (process.platform === 'win32') {
+    t.skip('POSIX-only assertion (case-sensitive filesystem); this leg is win32');
+    return;
+  }
+  const book = cloneSampleBook('fhk13-n-posix-case');
+  const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
+  const caseFlippedPath = flipCase(ch1Path);
+  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
+  const progressPath = join(book, '.studio', 'progress.json');
+  const logLinesBefore = readJsonlLines(logPath).length;
+  const progressBefore = readFileSync(progressPath, 'utf8');
+
+  const result = runHook(makeBatchEvent(book, [{
+    tool_name: 'Write',
+    tool_input: { file_path: caseFlippedPath, content: 'irrelevant on this leg' },
+    tool_use_id: 'toolu_fhk13n',
+    tool_response: 'Written.'
+  }]));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'non-win32: a case-differing path is NOT a chapters/ write -> no-op, empty stdout'
+  );
+
+  const logLinesAfter = readJsonlLines(logPath);
+  assert.equal(logLinesAfter.length, logLinesBefore, 'no new log line: case-widened matching must not occur');
+
+  const progressAfter = readFileSync(progressPath, 'utf8');
+  assert.equal(progressAfter, progressBefore, 'progress.json unchanged (case-differing path was not treated as a chapter write)');
+});
+
 test('TSK-050b-(f) unknown fields survive when create-if-absent path runs', () => {
   const book = cloneSampleBook('050b-f-unknown');
   const progressPath = join(book, '.studio', 'progress.json');

@@ -25,6 +25,16 @@ try {
   throw err;
 }
 
+// Reject --check= with no items. An empty list is truthy in JavaScript, so
+// without this guard it silently ran zero checks while still reporting a
+// pass verdict (F-HK-08: empty check list silently passes).
+if (opts.check && opts.check.length === 0) {
+  process.stderr.write(
+    'ns-gate: --check requires at least one check; valid checks: ' + ALL_FLAGS.join(', ') + '\n'
+  );
+  process.exit(2);
+}
+
 // Validate --check values if provided
 if (opts.check) {
   for (const flag of opts.check) {

@@ -1,11 +1,12 @@
 ---
 name: drafting-partner
 description: >-
-  Via the draft-chapter skill when the author is ready to draft or extend a
-  specific chapter. The outline entry for that chapter must exist in
-  structure/outline.md before invocation. Produces voice-matched, claim-anchored
-  chapter prose; writes new chapters or diff proposals against existing ones;
-  anchors every factual assertion to an EV ledger entry or tags it [UNVERIFIED].
+  Produces voice-matched, claim-anchored chapter prose; writes new chapters
+  or diff proposals against existing ones; anchors every factual assertion
+  to an EV ledger entry or tags it [UNVERIFIED]. Invoked via the
+  draft-chapter skill when the author is ready to draft or extend a specific
+  chapter. The outline entry for that chapter must exist in
+  structure/outline.md before invocation.
 model: sonnet
 color: orange
 tools:
@@ -185,6 +186,16 @@ Backed by: EV-nnnn (handle)
 Each block identifies the backing EV entry. The author accepts or rejects each
 block individually. The agent never silently overwrites existing chapter prose;
 every change to an existing file is a proposal.
+
+### Applying accepted proposals
+
+Once the author accepts one or more PROPOSED ADDITION or PROPOSED REPLACEMENT
+blocks, the agent applies the accepted proposals by writing the updated
+chapter file with the accepted prose merged in. This post-acceptance write is
+not the silent overwrite the guardrail forbids: the guardrail bars replacing
+existing prose without first presenting it as a proposal, and it is the
+author's explicit acceptance that authorizes the write. Proposals the author
+has not accepted are never merged into the chapter file.
 
 ### Voice adherence
 

@@ -88,9 +88,9 @@ if (opts['validate-packs']) {
 
 // ---- --migrate mode ------------------------------------------------------------
 // v1 scope: schema_version match check only.
-// Older majors exit 2 naming both versions. Current major with --migrate exits 2
-// with "no migrations defined for this version pair" (migrations arrive with schema changes).
-// No destructive operations.
+// Older majors (genuinely incompatible) exit 2 naming both versions. Current major
+// with --migrate exits 0: there is nothing to migrate, which is success, not an
+// error indistinguishable from a broken bible (F-HK-09). No destructive operations.
 
 if (opts.migrate) {
   const versionCheck = checkSchemaVersion(meta);
@@ -99,22 +99,22 @@ if (opts.migrate) {
     process.stderr.write('ns-doctor: ' + msg + '\n');
     process.exit(2);
   }
-  // Current version with --migrate: no migrations defined yet.
+  // Current version with --migrate: nothing to migrate. This is success (exit 0),
+  // not the exit-2 error path - a current schema is not a broken bible.
   const noMigMsg =
-    'no migrations defined for this version pair ' +
-    '(schema_version "' + SUPPORTED_MAJOR + '" to "' + SUPPORTED_MAJOR + '"); ' +
+    'nothing to migrate, schema is current (schema_version "' + SUPPORTED_MAJOR + '"); ' +
     'migrations arrive with the first schema change per Q-04 (release, versioning, and compatibility)';
   if (opts.json) {
     process.stdout.write(JSON.stringify({
       check: 'migrate',
-      status: 'no-migrations',
+      status: 'current',
       schemaVersion: SUPPORTED_MAJOR,
       message: noMigMsg
     }, null, 2) + '\n');
   } else {
     process.stdout.write('[migrate] ' + noMigMsg + '\n');
   }
-  process.exit(2);
+  process.exit(0);
 }
 
 // ---- schema version check (prelude to all check/report modes) ------------------

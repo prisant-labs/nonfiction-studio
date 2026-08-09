@@ -10,7 +10,7 @@ tags: ["skill", "gate", "quality", "deterministic", "claims", "scrub", "example"
 
 This is a condensed transcript of a `run-quality-gate` session over Chapter 2 (Finding Your Network, slug `02-finding-your-network`) of the sample book "The Quiet Network" (see `examples/sample-book/`). The example follows the flow specified in S-06 3.8 (skills and invocation surface) and the adjudications recorded in TSK-051 (run-quality-gate skill).
 
-**Session provenance note.** This example is grounded in a live gate run executed 2026-07-19 over a temp clone of the committed `examples/sample-book/` baseline at `<temp-dir>`. The run was performed by removing `context/style-profile.md` from the temp clone before invoking the gate, so the skill's baseline pre-check triggers the degraded four-check subset (`claims,scrub,continuity-quick,coherence`). The gate was invoked as `node bin/ns-gate --chapter=02-finding-your-network --check=claims,scrub,continuity-quick,coherence --json`; it exited 0 with verdict `pass`. The JSON output is quoted verbatim. The committed sample-book fixture is never modified by a gate run; the report was written to the temp-clone's `.studio/gate/` directory (not to the committed fixture).
+**Session provenance note.** This example is grounded in a live gate run executed 2026-07-19 over a temp clone of the committed `examples/sample-book/` baseline at `<temp-dir>`. The run was performed by removing `context/style-profile.md` from the temp clone before invoking the gate, so the skill's baseline pre-check triggers the degraded four-check subset (`claims,scrub,continuity-quick,coherence`). The gate was invoked, after resolving the plugin root per Step 4 below, as `node "<plugin-root>/bin/ns-gate" --chapter=02-finding-your-network --check=claims,scrub,continuity-quick,coherence --json`; it exited 0 with verdict `pass`. The JSON output is quoted verbatim. The committed sample-book fixture is never modified by a gate run; the report was written to the temp-clone's `.studio/gate/` directory (not to the committed fixture).
 
 Any scenario showing a `block` verdict or exit 1 is explicitly synthetic and does not reflect the committed fixture or the live run output.
 
@@ -76,12 +76,16 @@ Output: `NO_PROFILE`
 
 Check subset set to `claims,scrub,continuity-quick,coherence`. Continue to Step 4.
 
-**Studio (Step 4 - Gate invocation):**
+**Studio (Step 4 - Resolve the plugin root):**
+
+The skill uses the Bash tool to look up the `nonfiction-studio` marketplace source path in `~/.claude/settings.json`. The primary lookup resolves the plugin's installed path on the first try; the plugins-cache and dev-mode fallbacks are not needed for this run. Continue to Step 5.
+
+**Studio (Step 5 - Gate invocation):**
 
 The skill uses the Bash tool (this is the single ns-gate call; no individual CLI invocations are made):
 
 ```
-node bin/ns-gate --chapter=02-finding-your-network --check=claims,scrub,continuity-quick,coherence --json
+node "<plugin-root>/bin/ns-gate" --chapter=02-finding-your-network --check=claims,scrub,continuity-quick,coherence --json
 ```
 
 **Gate stdout (verbatim, exit code 0):**
@@ -166,7 +170,7 @@ Gate exit code: 0. Parse stdout as JSON report. Top-level `verdict: pass`.
 
 - **Baseline pre-check is a tool call.** The Bash call on `context/style-profile.md` produces `NO_PROFILE`, which deterministically selects the degraded check subset. The skill does not infer whether a baseline exists from conversation context.
 
-- **ONE Bash call invokes the gate.** The skill issues a single Bash call to `node bin/ns-gate --chapter=02-finding-your-network --check=claims,scrub,continuity-quick,coherence --json`. No individual calls to `bin/ns-claims`, `bin/ns-stylometry`, or `bin/ns-scrub` are made by the skill; the orchestrator composes them internally.
+- **ONE Bash call invokes the gate.** After resolving the plugin root in Step 4, the skill issues a single Bash call to `node "<plugin-root>/bin/ns-gate" --chapter=02-finding-your-network --check=claims,scrub,continuity-quick,coherence --json`. No individual calls to `bin/ns-claims`, `bin/ns-stylometry`, or `bin/ns-scrub` are made by the skill; the orchestrator composes them internally.
 
 - **Exit 0 maps to a presented verdict, never silent.** The skill parsed stdout as JSON, identified `verdict: pass`, and presented the full per-check table plus the voice-drift-skipped note. A pass verdict is never silently swallowed; the author always sees the result.
 
@@ -182,7 +186,7 @@ Gate exit code: 0. Parse stdout as JSON report. Top-level `verdict: pass`.
 
 ## Synthetic illustration: what a warn verdict looks like
 
-The following is explicitly a synthetic illustration and does NOT reflect the committed sample-book fixture. It shows what Step 4 would report if the full gate (including stylometry) were run and the voice drift check fired a warn:
+The following is explicitly a synthetic illustration and does NOT reflect the committed sample-book fixture. It shows what Step 5 would report if the full gate (including stylometry) were run and the voice drift check fired a warn:
 
 > Gate verdict: WARN for `chapters/02-finding-your-network.md`. The gate ran without a blocking condition (exit 0). Voice drift is warn-only by default; coverage and scrub issues block only when blocking mode is explicitly enabled.
 >
@@ -197,13 +201,13 @@ The following is explicitly a synthetic illustration and does NOT reflect the co
 >
 > To address the stylometry warn: revise the chapter with `/nonfiction-studio:revise-pass 02-finding-your-network`, then re-run the quality gate. To opt stylometry into blocking mode once the baseline is calibrated, set `gate.checks.stylometry.mode` to `block` in `.studio/config.json`.
 
-The drift score of 222.38 in this synthetic illustration is consistent with a verified fresh run: `node bin/ns-gate --project=. --chapter=02-finding-your-network --json` over a clean clone of the committed sample book yields exactly this score, because a single chapter's marker vector naturally deviates from the book-aggregate baseline. The committed Chapter 2 is a teaching fixture; the high drift score reflects the fact that the sample-book baseline was set for illustrative purposes, not for a calibrated voice capture. The primary provenance-honest example above (four-check pass with baseline absent) is the grounded transcript.
+The drift score of 222.38 in this synthetic illustration is consistent with a verified fresh run: `node "<plugin-root>/bin/ns-gate" --project=. --chapter=02-finding-your-network --json` over a clean clone of the committed sample book yields exactly this score, because a single chapter's marker vector naturally deviates from the book-aggregate baseline. The committed Chapter 2 is a teaching fixture; the high drift score reflects the fact that the sample-book baseline was set for illustrative purposes, not for a calibrated voice capture. The primary provenance-honest example above (four-check pass with baseline absent) is the grounded transcript.
 
 ---
 
 ## Synthetic illustration: what a block verdict looks like
 
-The following is explicitly synthetic. It shows what Step 4 would report on exit 1 if a chapter had uncovered claim markers:
+The following is explicitly synthetic. It shows what Step 5 would report on exit 1 if a chapter had uncovered claim markers:
 
 > Gate verdict: BLOCK for `chapters/03-your-curation-practice.md`. The chapter cannot proceed until the blocking conditions below are resolved.
 >

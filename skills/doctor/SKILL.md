@@ -2,7 +2,7 @@
 name: doctor
 user-invocable: true
 argument-hint: "[mode: report | migrate | packs]"
-description: "Fronts the read-only bin/ns-doctor engine in one Bash call per invocation: report (default) runs the full bible integrity check inventory (structure, schemas, EV/SRC grammar, orphan markers, cross-references, word-count coherence, config coercion, snapshot naming) and maps exit 0 to a clean pass, exit 1 to findings grouped by check type with counts and routing hints, exit 2 to a surfaced error never treated as a pass; migrate diagnoses schema-version status without writing; packs confirms craft-pack validity; the fix mode is Phase 2+ scope and is not available in v1."
+description: "Fronts the read-only bin/ns-doctor engine in one Bash call per invocation: report (default) runs the full bible integrity check inventory (structure, schemas, EV/SRC grammar, orphan markers, cross-references, word-count coherence, config coercion, snapshot naming) and maps exit 0 to a clean pass, exit 1 to findings grouped by check type with counts and routing hints, exit 2 to a surfaced error never treated as a pass; migrate diagnoses schema-version status without writing; packs confirms craft-pack validity; the fix mode is Phase 2+ scope and is not available in v1. Use when the author says 'something is broken in my project,' 'my project structure looks wrong,' or wants to run a diagnostic check separate from a status overview or a quality-gate run."
 when_to_use: "Use when the author types /doctor, reports unexpected structural or schema errors from other skills, studio routes here from Path 5 (Troubleshoot or get help), status-dashboard routes here on a malformed progress.json, or run-quality-gate exits 2 with an engine error. Do not invoke for normal project status overviews (use status-dashboard), quality-gate runs (use run-quality-gate), or new project setup (use init-project)."
 ---
 
@@ -47,33 +47,58 @@ Parse the mode argument from the supplied tokens. The default mode when no argum
 
 ---
 
-## Step 2 - Single Bash invocation (one call per mode)
+## Step 2 - Resolve the plugin root
+
+Use the Bash tool to run the primary lookup:
+```
+node -e "const s=require('fs').readFileSync(require('os').homedir()+'/.claude/settings.json','utf8');const m=JSON.parse(s).extraKnownMarketplaces;const ns=m&&m['nonfiction-studio'];console.log(ns&&ns.source&&ns.source.path||'not-found')"
+```
+
+The output is the plugin root. If it prints `not-found`, run the platform cache fallback:
+```
+find "$HOME/.claude/plugins/cache" -maxdepth 3 -type d -name "nonfiction-studio*" 2>/dev/null | head -1
+```
+
+If that also returns nothing, run the dev-mode fallback:
+```
+test -f bin/ns-doctor && pwd || echo not-found
+```
+
+If all three lookups fail: halt immediately. Report the settings.json path attempted (`$HOME/.claude/settings.json`) and the cache path attempted (`$HOME/.claude/plugins/cache`). Do not invoke ns-doctor. Ask the author how to proceed (verify plugin installation or provide the path manually).
+
+Carry the resolved path forward as `<plugin-root>` for Step 3.
+
+**Shared plugin-root convention.** This three-tier resolution (settings.json lookup, plugins-cache search, dev-mode fallback) is the same routine as `skills/init-project/SKILL.md` Step 4; a future wave extracts it to a shared reference.
+
+---
+
+## Step 3 - Single Bash invocation (one call per mode)
 
 Use the Bash tool to invoke `bin/ns-doctor`. This is the ONE Bash call for this invocation. No individual sub-CLI calls (ns-claims, ns-stylometry, ns-scrub) are made by the skill; the doctor engine composes its checks internally via `runChecks`.
 
 **Mode `report` (full check inventory):**
 
 ```
-node bin/ns-doctor --project=. --report --json
+node "<plugin-root>/bin/ns-doctor" --project=. --report --json
 ```
 
 **Mode `migrate` (schema-version diagnosis; never writes):**
 
 ```
-node bin/ns-doctor --project=. --migrate --json
+node "<plugin-root>/bin/ns-doctor" --project=. --migrate --json
 ```
 
 **Mode `packs` (craft-pack validity check):**
 
 ```
-node bin/ns-doctor --project=. --validate-packs --json
+node "<plugin-root>/bin/ns-doctor" --project=. --validate-packs --json
 ```
 
-Capture the exit code, stdout (JSON), and stderr. Proceed to Step 3.
+Capture the exit code, stdout (JSON), and stderr. Proceed to Step 4.
 
 ---
 
-## Step 3 - Present the result (exit-code mapping)
+## Step 4 - Present the result (exit-code mapping)
 
 ### Report mode exit codes
 
@@ -132,13 +157,13 @@ If the stderr message contains "requires migration", also suggest:
 
 ### Migrate mode
 
-`--migrate` always exits 2. Distinguish the two cases by examining stdout and stderr:
+`--migrate` exits 0 when the schema is already current and 2 only when migration is genuinely required (an incompatible version). Distinguish the two cases by the exit code, then by examining stdout and stderr:
 
-**No-migrations case** - stdout parses as JSON with `"status": "no-migrations"`:
+**Current schema, nothing to migrate** - exit 0; stdout parses as JSON with `"status": "current"`:
 
 > Doctor migrate verdict: Schema version is current. No migration is needed. [stdout JSON `message` field verbatim.] No files were written. Migrations arrive with the first schema change per Q-04 (release, versioning, and compatibility); the snapshot-before-migrate and restore-on-failure contract activates at that time.
 
-**Migration-required case** - stderr contains content (stdout is empty or not JSON):
+**Migration required** - exit 2; stderr contains content (stdout is empty or not JSON):
 
 > Doctor migrate verdict: Migration required. [stderr content verbatim.] No migration has been applied; migrations from older schema versions are not yet defined in v1. The snapshot-before-migrate and restore-on-failure contract activates when real migrations arrive per Q-04 (release, versioning, and compatibility). No files were written. Verify the `schema_version` field in `.studio/meta.json`; the supported major is `2`.
 
@@ -156,9 +181,9 @@ If the stderr message contains "requires migration", also suggest:
 
 **Unrecognized mode argument.** Step 1 halts with the unrecognized-mode message. No tool calls, no file reads.
 
-**Exit 2 from `--report`.** Step 3 surfaces the stderr and halts. Never treated as a pass. If the error message mentions schema version mismatch, suggest running `/nonfiction-studio:doctor migrate` for the explicit migration diagnosis.
+**Exit 2 from `--report`.** Step 4 surfaces the stderr and halts. Never treated as a pass. If the error message mentions schema version mismatch, suggest running `/nonfiction-studio:doctor migrate` for the explicit migration diagnosis.
 
-**Exit 2 from `--migrate`.** This is expected output from the CLI in both cases (no-migrations and migration-required). Step 3 distinguishes the cases and presents the appropriate message. It is not an unexpected error.
+**Exit 2 from `--migrate`.** Expected output from the CLI when migration is genuinely required (an incompatible schema version); an already-current schema now exits 0 instead. Step 4 distinguishes the two cases and presents the appropriate message. It is not an unexpected error.
 
 **Exit 2 from `--validate-packs`.** Unexpected in v1 (the packs mode exits 0 under all normal conditions). Surface the stderr and halt.
 

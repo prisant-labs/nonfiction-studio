@@ -1,14 +1,14 @@
 {
   "covers": { "chain": ["drafting-partner", "research-librarian"] },
-  "description": "The drafting-partner agent dispatches research-librarian when evidence is needed before a drafting run begins.",
+  "description": "The drafting-partner agent alerts the author and recommends research-librarian when evidence is needed before a drafting run begins; the author invokes research-pass, which invokes research-librarian.",
   "cases": [
     {
       "given": "drafting-partner is invoked for a chapter and the evidence log lacks entries for the chapter topic",
-      "expect": "research-librarian agent is dispatched to gather evidence before the drafting run begins"
+      "expect": "drafting-partner alerts the author and recommends research-librarian; the author invokes research-pass to gather evidence before the drafting run begins"
     },
     {
       "given": "drafting-partner determines that source coverage is insufficient for the planned argument",
-      "expect": "research-librarian is dispatched to populate evidence-log.md with relevant EV- entries"
+      "expect": "drafting-partner recommends research-librarian to populate evidence-log.md with relevant EV- entries; the author invokes research-pass to run it"
     }
   ]
 }

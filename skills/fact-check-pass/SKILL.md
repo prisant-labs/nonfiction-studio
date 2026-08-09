@@ -2,7 +2,7 @@
 name: fact-check-pass
 user-invocable: true
 argument-hint: "<chapter: slug or number>"
-description: "Runs the adversarial verification pass on a drafted chapter: an engine-backed marker inventory via bin/ns-claims, then the fact-checker agent's authoritative five-step pass that advances EV entry statuses, updates chapter markers, and writes the per-chapter fact-check report. Reports three counts (verified, unresolved, source-unverifiable) from the agent's report and names the report path. Writes no progress.json - the PostToolBatch hook owns the open-claims total."
+description: "Runs the adversarial verification pass on a drafted chapter: an engine-backed marker inventory via bin/ns-claims, then the fact-checker agent's authoritative five-step pass that advances EV entry statuses, updates chapter markers, and writes the per-chapter fact-check report. Reports three counts (verified, unresolved, source-unverifiable) from the agent's report and names the report path. Writes no progress.json - the PostToolBatch hook owns the open-claims total. Use when the author says 'check my facts' or 'verify my claims,' wanting claim-level verification rather than the full pass-or-block verdict that run-quality-gate produces."
 when_to_use: "Use when the author types the legacy /factcheck <ch> verb, finishes drafting and wants claims verified, run-quality-gate reports unresolved claims, or studio routes here from Path 3 (Research and verify). Do not invoke when no chapter argument is supplied (the skill halts if the chapter file is absent), or for unrelated queries."
 chain:
   - fact-checker
@@ -19,7 +19,7 @@ Skill inputs read:
 - `chapters/<slug>.md` (target chapter; file-existence probed at Step 1, confirmed via Read after agent pass)
 - `research/evidence-log.md` (evidence ledger; passed to fact-checker, confirmed via Read after agent pass)
 - `research/sources.md` (source registry; passed to fact-checker for the session-start changed-flag scan and online pass)
-- `.studio/config.json` (web gate check at Step 3)
+- `.studio/config.json` (web gate check at Step 4)
 - `.claude/agent-memory/nonfiction-studio-fact-checker/` (verified-claims cache; read by fact-checker at session start per D-09)
 
 Skill chain edge: `fact-check-pass -> fact-checker` per `agents/_chain-permitted.yaml`.
@@ -53,11 +53,36 @@ A chapter argument is required. Do not proceed without a resolved slug pointing 
 
 ---
 
-## Step 2 - Engine-backed marker inventory
+## Step 2 - Resolve the plugin root
+
+Use the Bash tool to run the primary lookup:
+```
+node -e "const s=require('fs').readFileSync(require('os').homedir()+'/.claude/settings.json','utf8');const m=JSON.parse(s).extraKnownMarketplaces;const ns=m&&m['nonfiction-studio'];console.log(ns&&ns.source&&ns.source.path||'not-found')"
+```
+
+The output is the plugin root. If it prints `not-found`, run the platform cache fallback:
+```
+find "$HOME/.claude/plugins/cache" -maxdepth 3 -type d -name "nonfiction-studio*" 2>/dev/null | head -1
+```
+
+If that also returns nothing, run the dev-mode fallback:
+```
+test -f bin/ns-claims && pwd || echo not-found
+```
+
+If all three lookups fail: halt immediately. Report the settings.json path attempted (`$HOME/.claude/settings.json`) and the cache path attempted (`$HOME/.claude/plugins/cache`). Do not invoke ns-claims. Ask the author how to proceed (verify plugin installation or provide the path manually).
+
+Carry the resolved path forward as `<plugin-root>` for Step 3.
+
+**Shared plugin-root convention.** This three-tier resolution (settings.json lookup, plugins-cache search, dev-mode fallback) is the same routine as `skills/init-project/SKILL.md` Step 4; a future wave extracts it to a shared reference.
+
+---
+
+## Step 3 - Engine-backed marker inventory
 
 Use the Bash tool to run the deterministic marker inventory:
 ```
-node bin/ns-claims --chapter=<slug> --json
+node "<plugin-root>/bin/ns-claims" --chapter=<slug> --json
 ```
 
 Parse the JSON output for the pre-count fields:
@@ -75,7 +100,7 @@ The ns-claims count is the deterministic pre-count the skill presents. The `fact
 
 ---
 
-## Step 3 - Web gate check and delegate to fact-checker
+## Step 4 - Web gate check and delegate to fact-checker
 
 Use the Read tool on `.studio/config.json` to check whether `research.web_enabled` is exactly the boolean `true`. State the gate status before spawning the agent:
 
@@ -85,7 +110,7 @@ Use the Read tool on `.studio/config.json` to check whether `research.web_enable
 
 Spawn `fact-checker` via the `fact-check-pass -> fact-checker` chain edge, passing:
 - The chapter slug and file path (`chapters/<slug>.md`)
-- The ns-claims pre-count from Step 2 (total markers, resolved, coverage)
+- The ns-claims pre-count from Step 3 (total markers, resolved, coverage)
 - The web gate status from the config read
 - Any pasted source content provided by the author
 
@@ -102,18 +127,18 @@ The skill writes no chapter files, no ledger files, and no `.studio/` machine st
 
 ---
 
-## Step 4 - Confirm agent writes via Read checks
+## Step 5 - Confirm agent writes via Read checks
 
 After the agent completes its pass, use the Read tool to confirm:
 - `chapters/<slug>.md` is present and non-empty
 - `research/evidence-log.md` is readable
 - `.studio/fact-check-reports/<NN>-report.md` exists (the report the agent writes at the end of every pass)
 
-If any file is missing, report the gap, name the last successful step, and offer to re-run from Step 3. Idempotency is guaranteed by the agent's cache-skip semantics and status-field update model: re-running starts from current state and repeats only the work not yet reflected on disk.
+If any file is missing, report the gap, name the last successful step, and offer to re-run from Step 4. Idempotency is guaranteed by the agent's cache-skip semantics and status-field update model: re-running starts from current state and repeats only the work not yet reflected on disk.
 
 ---
 
-## Step 5 - Report three counts from the agent's per-chapter report
+## Step 6 - Report three counts from the agent's per-chapter report
 
 Format and present the three counts from the agent's per-chapter report at `.studio/fact-check-reports/<NN>-report.md`:
 
@@ -141,8 +166,8 @@ On the chat surface, state that the Stop hook gate does not fire automatically: 
 
 **Chapter argument not matched.** Step 1 halts with the supplied value, the registry file name (`structure/chapter-list.md`), and the list of valid slugs when the registry is present but the argument matches no row. No state is written.
 
-**ns-claims failure.** If `bin/ns-claims` exits non-zero (evidence log absent, chapter unreadable, BibleError), the exact stderr message is reported and the skill halts at Step 2. Do not proceed to agent delegation with a failed inventory. The most common cause is a missing `research/evidence-log.md`; run `/nonfiction-studio:research-pass` to create it.
+**ns-claims failure.** If `bin/ns-claims` exits non-zero (evidence log absent, chapter unreadable, BibleError), the exact stderr message is reported and the skill halts at Step 3. Do not proceed to agent delegation with a failed inventory. The most common cause is a missing `research/evidence-log.md`; run `/nonfiction-studio:research-pass` to create it.
 
-**Agent incomplete or report missing.** If the Step 4 Read checks find the chapter file or report absent after the agent ran, report the gap and offer to re-run from Step 3. The re-run is safe: the agent's cache marks known-good entries and skips their re-verification; the agent's status-field writes and marker operations are idempotent against current state.
+**Agent incomplete or report missing.** If the Step 5 Read checks find the chapter file or report absent after the agent ran, report the gap and offer to re-run from Step 4. The re-run is safe: the agent's cache marks known-good entries and skips their re-verification; the agent's status-field writes and marker operations are idempotent against current state.
 
 **Gate closed, unresolved claims remain.** When the online pass is disabled and offline verification leaves entries unresolved, the skill reports the count and suggests either enabling the gate or providing pasted source text. The chapter is in a valid intermediate state; the Stop gate blocks release only in blocking mode, and in Phase 1 the gate is warn-only by default.

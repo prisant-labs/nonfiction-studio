@@ -640,3 +640,48 @@ test('T17: unsourced-claim block-mode (state_coherence block): exit 1; top-level
     rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+// ============================================================================
+// F-HK-08 (empty check list silently passes) fix
+// T18: --check= (empty value) must be an argument error, not a zero-check pass
+// ============================================================================
+
+// ---- T18: --check= empty list is an argument error -----------------------
+
+test('T18: --check= (empty list) exits 2 and names the valid check flags', () => {
+  // Run against a valid book root (not process.cwd()) so the assertion actually
+  // exercises the --check validation path rather than an unrelated book-root
+  // discovery failure. Before the F-HK-08 fix this silently exits 0 having run
+  // zero checks (only session_write_flag survives an empty requested-flags set).
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    const result = spawnGate(tmp, ['--check=', '--json']);
+    assert.strictEqual(result.status, 2,
+      '--check= with no items must exit 2 (argument error), not silently run zero checks; ' +
+      'stdout: ' + result.stdout + ' stderr: ' + result.stderr);
+    for (const flag of ['claims', 'stylometry', 'scrub', 'continuity-quick', 'coherence']) {
+      assert.ok(
+        result.stderr.includes(flag),
+        'stderr must name valid check flag "' + flag + '"; got: ' + result.stderr
+      );
+    }
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('T18b: --check=claims, (trailing comma, one real item) still runs the named check', () => {
+  // Guards against an over-eager fix: a list with at least one real item must
+  // not be rejected just because split(",") produces an empty trailing token.
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    const result = spawnGate(tmp, ['--check=claims,', '--json']);
+    assert.strictEqual(result.status, 0,
+      '--check=claims, (trailing comma) must still run the claims check; stderr: ' + result.stderr);
+    const report = readLatestReport(tmp, 'all');
+    const names = report.checks.map(c => c.check);
+    assert.ok(names.includes('claim_coverage'), 'claim_coverage must be present');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});

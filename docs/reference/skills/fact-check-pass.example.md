@@ -56,11 +56,15 @@ Output: `HAS_CHAPTER`
 
 Chapter file confirmed present. Continue to Step 2.
 
-**Studio (Step 2 - Engine-backed marker inventory):**
+**Studio (Step 2 - Resolve the plugin root):**
+
+The skill uses the Bash tool to look up the `nonfiction-studio` marketplace source path in `~/.claude/settings.json`. The primary lookup resolves the plugin's installed path on the first try; the plugins-cache and dev-mode fallbacks are not needed for this run. Continue to Step 3.
+
+**Studio (Step 3 - Engine-backed marker inventory):**
 
 The skill uses the Bash tool:
 ```
-node bin/ns-claims --chapter=02-finding-your-network --json
+node "<plugin-root>/bin/ns-claims" --chapter=02-finding-your-network --json
 ```
 
 Output (abbreviated):
@@ -89,7 +93,7 @@ Output (abbreviated):
 >
 > All 5 markers reference EV entries the ledger already shows as `verified`. The fact-checker agent will run its authoritative pass, confirm each entry against its source, and write the per-chapter report.
 
-**Studio (Step 3 - Web gate check and delegate to fact-checker):**
+**Studio (Step 4 - Web gate check and delegate to fact-checker):**
 
 The skill uses the Read tool on `.studio/config.json`. The field `research.web_enabled` is absent.
 
@@ -185,15 +189,15 @@ Coverage is 100%. All 5 claim markers are resolved. This chapter is ready for th
 
 ---
 
-**Studio (Step 4 - Confirm agent writes via Read checks):**
+**Studio (Step 5 - Confirm agent writes via Read checks):**
 
 The skill uses the Read tool on `chapters/02-finding-your-network.md`. The file is present and unchanged - no chapter writes were needed because all entries were verified cache hits.
 
 The skill uses the Read tool on `research/evidence-log.md`. The file is readable. All 5 entries remain at `status: verified` (the agent made no status writes because cache hits require no re-check and no status change).
 
-The skill uses the Read tool on `.studio/fact-check-reports/02-report.md`. The file is present. Continue to Step 5.
+The skill uses the Read tool on `.studio/fact-check-reports/02-report.md`. The file is present. Continue to Step 6.
 
-**Studio (Step 5 - Report three counts from the agent's per-chapter report):**
+**Studio (Step 6 - Report three counts from the agent's per-chapter report):**
 
 **Studio:**
 
@@ -217,7 +221,7 @@ The skill uses the Read tool on `.studio/fact-check-reports/02-report.md`. The f
 
 - **Chapter argument resolved via Read.** The skill reads `structure/chapter-list.md` and matches the supplied slug `02-finding-your-network` to row 2. An unmatched argument would halt with the registry file name and the list of valid slugs.
 
-- **ns-claims provides the engine-backed pre-count.** The Bash call `node bin/ns-claims --chapter=02-finding-your-network --json` returns 5 total markers, 5 resolved, 100% coverage. The skill presents this count before delegation. The skill never eyeballs markers itself; ns-claims is the deterministic inventory source per the TSK-050 (fact-check-pass skill) adjudication.
+- **ns-claims provides the engine-backed pre-count.** After resolving the plugin root in Step 2, the Bash call `node "<plugin-root>/bin/ns-claims" --chapter=02-finding-your-network --json` returns 5 total markers, 5 resolved, 100% coverage. The skill presents this count before delegation. The skill never eyeballs markers itself; ns-claims is the deterministic inventory source per the TSK-050 (fact-check-pass skill) adjudication.
 
 - **Agent performs the authoritative pass.** The fact-checker agent runs its full five-step protocol - cache protocol, marker resolution, status assessment, marker writes (none needed here), and the online pass decision - regardless of what ns-claims already showed. The agent's assessment is the operative one; the ns-claims count is a pre-delegation snapshot.
 
@@ -237,7 +241,7 @@ The skill uses the Read tool on `.studio/fact-check-reports/02-report.md`. The f
 
 ## Synthetic illustration: what a partial-verification pass looks like
 
-The following is explicitly a synthetic illustration and does NOT reflect the committed sample-book fixture. It shows what Step 5 would report if a hypothetical chapter carried one unresolved claim after an offline pass:
+The following is explicitly a synthetic illustration and does NOT reflect the committed sample-book fixture. It shows what Step 6 would report if a hypothetical chapter carried one unresolved claim after an offline pass:
 
 > Counts from `.studio/fact-check-reports/03-report.md`:
 > - Verified: 3

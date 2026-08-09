@@ -29,20 +29,152 @@ import {
   mkdirSync,
   existsSync,
   readdirSync,
-  unlinkSync
+  unlinkSync,
+  realpathSync
 } from 'node:fs';
-import { join, resolve, sep, basename } from 'node:path';
+import { join, resolve, sep, basename, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findBookRoot } from './lib/bible.mjs';
 
 // ---------------------------------------------------------------------------
-// Helper: compact UTC timestamp for snapshot filenames (YYYYMMDDTHHMMSSZ)
-// Example: "2026-07-17T15:40:12.123Z" -> "20260717T154012Z"
+// Helper: compact UTC timestamp for snapshot filenames (YYYYMMDDTHHMMSSmmmZ)
+// F-HK-03: milliseconds are now included (previously truncated to whole
+// seconds), which is the primary defense against same-second snapshot
+// collisions - two overwrites of the same chapter within one second almost
+// always land in different milliseconds.
+// Example: "2026-07-17T15:40:12.123Z" -> "20260717T154012123Z"
 // ---------------------------------------------------------------------------
 function compactUtcNow() {
   return new Date().toISOString()
     .replace(/[-:]/g, '')
-    .replace(/\.\d+/, '');
+    .replace('.', '');
+}
+
+// ---------------------------------------------------------------------------
+// Helper: pick a collision-free snapshot filename (F-HK-03 belt and
+// suspenders). Milliseconds make same-name collisions rare but not
+// impossible (coarse OS clock resolution, or two writes landing in the same
+// tick); if <slug>.<timestamp>.md is already taken, this deterministically
+// escalates to a -2, -3, ... suffix until a free name is found.
+// existsFn is injected (rather than calling existsSync directly) so tests can
+// drive the escalation deterministically without needing real collisions.
+// Exported for direct testing.
+// ---------------------------------------------------------------------------
+export function pickSnapshotName(slug, timestamp, existsFn) {
+  const base = slug + '.' + timestamp;
+  let name = base + '.md';
+  let counter = 2;
+  while (existsFn(name)) {
+    name = base + '-' + counter + '.md';
+    counter++;
+  }
+  return name;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: parse a snapshot filename for a known slug into { timestamp, counter }.
+// Filenames are <slug>.<timestamp>.md (counter 1, implicit) or
+// <slug>.<timestamp>-<N>.md (counter N, from pickSnapshotName's collision
+// escalation). The timestamp itself never contains a hyphen (compactUtcNow
+// strips them), so any hyphen in the remainder is unambiguously the counter
+// separator. Returns null if fname does not belong to slug.
+// ---------------------------------------------------------------------------
+function parseSnapshotName(fname, slug) {
+  const prefix = slug + '.';
+  const suffix = '.md';
+  if (!fname.startsWith(prefix) || !fname.endsWith(suffix)) return null;
+  const middle = fname.slice(prefix.length, fname.length - suffix.length);
+  const m = middle.match(/^(.*)-(\d+)$/);
+  if (m) {
+    return { timestamp: m[1], counter: parseInt(m[2], 10) };
+  }
+  return { timestamp: middle, counter: 1 };
+}
+
+// ---------------------------------------------------------------------------
+// Helper: chronological comparator for snapshot filenames (F-HK-03).
+// A default lexicographic string sort breaks once a -N counter suffix
+// exists: ASCII '-' (0x2D) sorts BEFORE '.' (0x2E), so "<ts>-2.md" would sort
+// as OLDER than the plain "<ts>.md" it was actually created after. This
+// comparator parses out (timestamp, counter) and compares each field
+// explicitly so prune's "newest 10" selection stays correct even when the
+// belt-and-suspenders counter fires.
+// ---------------------------------------------------------------------------
+function compareSnapshotNames(a, b, slug) {
+  const pa = parseSnapshotName(a, slug);
+  const pb = parseSnapshotName(b, slug);
+  if (pa.timestamp !== pb.timestamp) return pa.timestamp < pb.timestamp ? -1 : 1;
+  return pa.counter - pb.counter;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: realpath the nearest EXISTING ancestor of absPath, then rejoin the
+// remaining (not-yet-created) path segments (F-HK-04 symlink containment
+// bypass). Write targets are often new files that do not exist yet, so a
+// plain realpathSync on the full path would throw ENOENT; this walks up
+// until it finds a real ancestor, resolves THAT natively, and re-attaches
+// the rest lexically (a symlink cannot live inside a path segment that has
+// not been created yet, so the remainder is safe to re-attach as-is).
+// ---------------------------------------------------------------------------
+function realpathNearestExisting(absPath) {
+  let current = absPath;
+  const remainder = [];
+  while (!existsSync(current)) {
+    const parent = dirname(current);
+    if (parent === current) {
+      // Reached the filesystem root without finding an existing ancestor.
+      // The bible root itself always exists (findBookRoot verified it), so
+      // this should be unreachable in practice; fail closed defensively.
+      throw new Error('no existing ancestor found for ' + absPath);
+    }
+    remainder.unshift(basename(current));
+    current = parent;
+  }
+  const realBase = realpathSync.native(current);
+  return remainder.length > 0 ? join(realBase, ...remainder) : realBase;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: case-fold a path for comparison only on case-insensitive
+// filesystems (F-HK-13). Folding unconditionally WIDENS matching on a
+// case-sensitive filesystem (POSIX), which is the wrong direction for a
+// security guard: a path that differs only in case from an allowed prefix
+// is a DIFFERENT path on Linux/macOS and must not be treated as contained.
+// platformOverride is injectable so tests can drive both branches
+// deterministically regardless of the host OS; production call sites omit
+// it and get the real process.platform. Exported for direct testing.
+// ---------------------------------------------------------------------------
+export function foldForCompare(p, platformOverride = process.platform) {
+  return platformOverride === 'win32' ? p.toLowerCase() : p;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: identify the shallowest path component between rootPath and
+// targetPath whose real path diverges from its lexical path (F-HK-04) - i.e.
+// the symlink (or symlinked ancestor) responsible for a containment escape.
+// Used only to make the deny reason legible; returns null when no divergence
+// is found among existing ancestors (e.g. nothing on the path exists yet, or
+// targetPath is not lexically under rootPath at all).
+// ---------------------------------------------------------------------------
+function findSymlinkedComponent(rootPath, targetPath) {
+  const relPath = relative(rootPath, targetPath);
+  if (!relPath || relPath.startsWith('..')) return null;
+  const parts = relPath.split(sep).filter(Boolean);
+  let lexicalSoFar = rootPath;
+  for (const part of parts) {
+    lexicalSoFar = join(lexicalSoFar, part);
+    if (!existsSync(lexicalSoFar)) break;
+    let real;
+    try {
+      real = realpathSync.native(lexicalSoFar);
+    } catch {
+      break;
+    }
+    if (foldForCompare(resolve(real)) !== foldForCompare(resolve(lexicalSoFar))) {
+      return lexicalSoFar;
+    }
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -185,38 +317,90 @@ if (isMain) {
     event.tool_input && typeof event.tool_input === 'object' ? event.tool_input : {};
   const cwd = typeof event.cwd === 'string' && event.cwd ? event.cwd : process.cwd();
 
+  // WRITE_TOOLS is declared ahead of book-root detection: the corrupt-config
+  // discrimination below (F-HK-01) needs it to decide fail-closed vs silent exit.
+  const WRITE_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit']);
+
   // -------------------------------------------------------------------------
   // Book root detection. No root found: no-op (exit 0, empty stdout).
+  //
+  // Error discrimination (F-HK-01; mirrors hooks/stop-gate.mjs and
+  // hooks/session-start.mjs): BibleError code NO_BOOK_ROOT is normal (no book
+  // project anywhere in the ancestor chain) and stays silent. Any other code
+  // (CONFIG_READ_ERROR, META_READ_ERROR, ...) means a book root WAS found but
+  // its bible files are corrupt, so containment cannot be verified. Write
+  // tools fail closed (deny) per D-13 (security posture); non-write tools and
+  // Bash are unaffected (exit 0, unchanged from today).
   // -------------------------------------------------------------------------
   let bookRoot = null;
   try {
     const found = findBookRoot(cwd);
     bookRoot = found.root;
-  } catch {
+  } catch (err) {
+    if (err && err.code && err.code !== 'NO_BOOK_ROOT' && WRITE_TOOLS.has(toolName)) {
+      emitDeny(
+        'Cannot verify write safety: bible files are corrupt (' + err.message + '). ' +
+        'Repair .studio/config.json then retry; bin/ns-doctor reports the parse error. ' +
+        'Denied per D-13 (security posture, fail-closed).'
+      );
+    }
     process.exit(0);
   }
 
   // -------------------------------------------------------------------------
   // No-op for tools this hook does not handle.
   // Read, Grep, Glob, WebFetch and others exit here with empty stdout.
+  // F-HK-07: PowerShell is a first-class peer of Bash on Windows sessions, so
+  // it must reach the destructive-op caution below rather than bypass it here.
   // -------------------------------------------------------------------------
-  const WRITE_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit']);
-  if (!WRITE_TOOLS.has(toolName) && toolName !== 'Bash') {
+  if (!WRITE_TOOLS.has(toolName) && toolName !== 'Bash' && toolName !== 'PowerShell') {
     process.exit(0);
   }
 
   // =========================================================================
-  // BASH path (S-07 step 4)
-  // When tool_name is Bash and the command matches a destructive pattern,
-  // inject a one-line caution via additionalContext; no permissionDecision.
-  // Benign Bash exits with empty stdout (allow).
+  // BASH / POWERSHELL path (S-07 step 4; F-HK-07 extends it to PowerShell)
+  // When tool_name is Bash or PowerShell and the command matches that shell's
+  // destructive pattern set, inject a one-line caution via additionalContext;
+  // no permissionDecision (never a deny). Benign commands exit with empty
+  // stdout. The two pattern sets are independent: Bash's stays exactly as it
+  // was (byte-unchanged) and PowerShell gets its own shape.
   // =========================================================================
-  if (toolName === 'Bash') {
+  if (toolName === 'Bash' || toolName === 'PowerShell') {
     const command = typeof toolInput.command === 'string' ? toolInput.command : '';
-    const CAUTION_PATTERNS = [
+
+    // Bash: unchanged from before F-HK-07.
+    const BASH_CAUTION_PATTERNS = [
       { re: /rm\s+-rf\b/, name: 'rm -rf' },
       { re: /git\s+reset\s+--hard\b/, name: 'git reset --hard' }
     ];
+
+    // PowerShell (F-HK-07): cmdlet/flag names are matched case-insensitively
+    // per PowerShell's own convention; git subcommands stay case-sensitive
+    // (git.exe itself is case-sensitive regardless of the invoking shell).
+    // Remove-Item -Recurse -Force: lookaheads accept either flag order and
+    // flexible whitespace/args between the cmdlet and the two flags. The
+    // cmdlet portion also covers PowerShell's built-in destructive aliases
+    // (rm, rd, rmdir, del, erase) - fix round 1 (F-HK-07): the literal
+    // cmdlet name alone missed `rm -Recurse -Force`, which is exactly what a
+    // Unix-habituated author types. \b on BOTH sides of the alternation
+    // keeps the short aliases from matching inside longer tokens (e.g.
+    // "confirm", "term-notes.md", "-Confirm").
+    const POWERSHELL_CAUTION_PATTERNS = [
+      {
+        re: /\b(?:Remove-Item|rmdir|rm|rd|del|erase)\b(?=[\s\S]*-Recurse\b)(?=[\s\S]*-Force\b)/i,
+        name: 'Remove-Item -Recurse -Force (or a built-in alias: rm, rd, rmdir, del, erase)'
+      },
+      { re: /git\s+reset\s+--hard\b/, name: 'git reset --hard' },
+      { re: /git\s+clean\s+-fd\b/, name: 'git clean -fd' },
+      { re: /Format-Volume\b/i, name: 'Format-Volume' },
+      // "format" targeting a drive: the bare word "format" alone is too common
+      // (e.g. a -Format parameter) to flag on its own, so this also requires a
+      // drive-letter-shaped token (e.g. "D:", "D:\") somewhere in the command.
+      { re: /\bformat\b(?=[\s\S]*\b[a-zA-Z]:(?:[\\/]|\s|$))/i, name: 'format (drive)' }
+    ];
+
+    const CAUTION_PATTERNS = toolName === 'Bash' ? BASH_CAUTION_PATTERNS : POWERSHELL_CAUTION_PATTERNS;
+
     for (const { re, name } of CAUTION_PATTERNS) {
       if (re.test(command)) {
         process.stdout.write(
@@ -232,7 +416,7 @@ if (isMain) {
         process.exit(0);
       }
     }
-    // Benign Bash: empty stdout (allow).
+    // Benign Bash/PowerShell: empty stdout (allow).
     process.exit(0);
   }
 
@@ -267,15 +451,50 @@ if (isMain) {
   // allowlist (.studio/, research/) is subsumed because both directories live
   // inside the root in the committed layout. The guard now simply checks whether
   // the resolved target falls inside the bible root subtree. FAIL-CLOSED.]
+  // F-HK-13: case-fold only on win32 (foldForCompare) - unconditional folding
+  // widens matching in the wrong direction on a case-sensitive filesystem.
   const resolvedRoot = resolve(bookRoot);
-  const targetNorm = resolvedTarget.toLowerCase();
-  const rootNorm = resolvedRoot.toLowerCase();
+  const targetNorm = foldForCompare(resolvedTarget);
+  const rootNorm = foldForCompare(resolvedRoot);
   const rootPrefix = rootNorm + sep;
 
   if (targetNorm !== rootNorm && !targetNorm.startsWith(rootPrefix)) {
     emitDeny(
       'Write target ' + resolvedTarget + ' is outside the bible root ' + resolvedRoot +
       '; denied per D-13 (security posture)'
+    );
+  }
+
+  // Step 3b-2: REAL-PATH re-verification (F-HK-04 symlink containment bypass).
+  // The lexical check above resolves the target textually only (resolve() never
+  // follows symlinks), so a path component inside the root that symlinks OUTSIDE
+  // it passes that check while the write actually lands outside. Re-resolve both
+  // sides to their real (symlink-free) paths with fs.realpathSync.native and
+  // re-verify containment; deny on mismatch. Unresolvable paths fail closed,
+  // matching the existing posture for this guard.
+  let realRoot;
+  let realTarget;
+  try {
+    realRoot = realpathSync.native(resolvedRoot);
+    realTarget = realpathNearestExisting(resolvedTarget);
+  } catch (err) {
+    emitDeny(
+      'Cannot verify write target is contained in the bible root (real-path resolution failed: ' +
+      String(err) + '); denied per D-13 (security posture, fail-closed)'
+    );
+  }
+  // F-HK-13: same platform-conditional folding as the lexical check above.
+  const realRootNorm = foldForCompare(realRoot);
+  const realTargetNorm = foldForCompare(realTarget);
+  const realRootPrefix = realRootNorm + sep;
+
+  if (realTargetNorm !== realRootNorm && !realTargetNorm.startsWith(realRootPrefix)) {
+    const symlinkComponent = findSymlinkedComponent(resolvedRoot, resolvedTarget);
+    emitDeny(
+      'Write target ' + resolvedTarget + ' resolves outside the bible root ' + resolvedRoot +
+      ' once symlinks are followed (real path ' + realTarget + ')' +
+      (symlinkComponent ? '; symlinked path component: ' + symlinkComponent : '') +
+      '; denied per D-13 (security posture, fail-closed)'
     );
   }
 
@@ -325,7 +544,10 @@ if (isMain) {
 
         const fileBase = basename(resolvedTarget);
         const slug = fileBase.endsWith('.md') ? fileBase.slice(0, -3) : fileBase;
-        const snapshotName = slug + '.' + compactUtcNow() + '.md';
+        const timestamp = compactUtcNow();
+        const snapshotName = pickSnapshotName(
+          slug, timestamp, (name) => existsSync(join(snapshotsDir, name))
+        );
 
         writeFileSync(
           join(snapshotsDir, snapshotName),
@@ -333,12 +555,13 @@ if (isMain) {
           'utf8'
         );
 
-        // Prune: keep newest 10 per slug; sort lex ascending (= chronological for
-        // YYYYMMDDTHHMMSSZ prefix) then delete the oldest beyond the retention limit.
+        // Prune: keep newest 10 per slug. F-HK-03: sort with compareSnapshotNames
+        // (timestamp then counter), NOT a raw lexicographic string sort - a -N
+        // collision suffix would otherwise sort before its unsuffixed base name.
         try {
           const allForSlug = readdirSync(snapshotsDir)
             .filter(f => f.startsWith(slug + '.') && f.endsWith('.md'));
-          allForSlug.sort(); // lex ascending = oldest first
+          allForSlug.sort((a, b) => compareSnapshotNames(a, b, slug)); // ascending = oldest first
           if (allForSlug.length > 10) {
             const toDelete = allForSlug.slice(0, allForSlug.length - 10);
             for (const fname of toDelete) {

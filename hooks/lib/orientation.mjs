@@ -74,14 +74,16 @@ export function buildOrientation(root, meta, hookName) {
     const lastGatePath = join(root, '.studio', 'gate', 'last-gate.json');
     const chaptersDir = join(root, 'chapters');
 
-    let gateTsMs = 0; // 0 means absent or unreadable
+    let gateTsMs = 0; // 0 means absent, unreadable, or wrong type
     try {
       const lastGate = JSON.parse(readFileSync(lastGatePath, 'utf8'));
-      for (const entry of Object.values(lastGate)) {
-        if (entry && typeof entry.ts === 'string') {
-          const ms = Date.parse(entry.ts);
-          if (Number.isFinite(ms) && ms > gateTsMs) gateTsMs = ms;
-        }
+      // last-gate.json is a FLAT object (S-08 section 11 report shape:
+      // {version, chapter, ts, verdict, checks}) written verbatim by
+      // hooks/stop-gate.mjs from the ns-gate report - NOT a per-chapter map.
+      // Read ts directly; tolerant of absence or a non-string value (F-HK-02).
+      if (lastGate && typeof lastGate.ts === 'string') {
+        const ms = Date.parse(lastGate.ts);
+        if (Number.isFinite(ms)) gateTsMs = ms;
       }
     } catch {
       // Missing or unreadable last-gate.json: gateTsMs stays 0 (no gate on record).

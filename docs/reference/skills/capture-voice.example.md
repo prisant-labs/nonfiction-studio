@@ -95,9 +95,9 @@ The `voice-capture` agent is spawned via the `capture-voice -> voice-capture` ch
 
 **Voice-capture agent (summary of actions):**
 
-The agent reads `context/brief.md` section 6, analyzes the three samples against the D-08 (hybrid voice scoring) marker set, and runs the stylometry engine:
+The agent reads `context/brief.md` section 6, analyzes the three samples against the D-08 (hybrid voice scoring) marker set, resolves the plugin root, and runs the stylometry engine:
 ```
-node "$CLAUDE_PLUGIN_ROOT/bin/ns-stylometry" --measure=<sample-paths>
+node "<plugin-root>/bin/ns-stylometry" --measure=<sample-paths>
 ```
 
 The engine prints the eight-marker vector to stdout. The agent reads the output:

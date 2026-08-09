@@ -1,6 +1,6 @@
 # AI Use Log Format
 
-**Purpose.** This is the normative grammar for `.studio/ai-use-log.jsonl`, the append-only compliance ledger defined in S-08 (schemas and file formats) section 5 and D-10 (compliance layer). The `PostToolBatch` and `SubagentStop` hooks append records; the `disclosure-report` and `publish-readiness` skills read the file. Every field name, value constraint, and structural rule below is authoritative. A parser author must be able to implement a conformant reader without consulting any other document.
+**Purpose.** This is the normative grammar for `.studio/ai-use-log.jsonl`, the append-only compliance ledger defined in S-08 (schemas and file formats) section 5 and D-10 (compliance layer). The `PostToolBatch` and `SubagentStop` hooks append records; the `disclosure-report` and `publish-readiness` skills (Phase 2, not yet shipped) read the file. Every field name, value constraint, and structural rule below is authoritative. A parser author must be able to implement a conformant reader without consulting any other document.
 
 ## Record structure
 
@@ -62,5 +62,5 @@ A record produced by the `PostToolBatch` hook for a mechanical snapshot event:
 
 - `PostToolBatch` hook (TSK-033 (post-tool-batch hook)): appends one record per batch of tool calls involving bible-relative paths.
 - `SubagentStop` hook (TSK-069 (subagent-stop hook)): appends one record when a named subagent completes its turn.
-- `disclosure-report` skill (TSK-067 (disclosure-report skill)): reads all records to produce the AI disclosure report for the author.
-- `publish-readiness` skill: reads all records to confirm the compliance ledger is present and non-empty before clearing the publish gate.
+- `disclosure-report` skill (Phase 2, not yet shipped; TSK-067 (disclosure-report skill)): reads all records to produce the AI disclosure report for the author.
+- `publish-readiness` skill (Phase 2, not yet shipped): reads all records to confirm the compliance ledger is present and non-empty before clearing the publish gate.

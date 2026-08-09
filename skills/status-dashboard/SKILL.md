@@ -2,7 +2,7 @@
 name: status-dashboard
 user-invocable: true
 argument-hint: ""
-description: "Renders a read-only per-chapter status dashboard from .studio/progress.json (status, word count, open claims per entry) and the newest dot-form gate reports in .studio/gate/ (drift score, gate verdict per slug); highlights rows where drift exceeds thresholds.drift_score_max or where the newest gate report carries a block verdict; writes nothing; routes to init-project when progress.json is absent and to doctor when progress.json is malformed."
+description: "Renders a read-only per-chapter status dashboard from .studio/progress.json (status, word count, open claims per entry) and the newest dot-form gate reports in .studio/gate/ (drift score, gate verdict per slug); highlights rows where drift exceeds thresholds.drift_score_max or where the newest gate report carries a block verdict; writes nothing; routes to init-project when progress.json is absent and to doctor when progress.json is malformed. Use when the author asks 'where am I on the book,' wants to 'check my progress,' or needs a quick status check before starting a session."
 when_to_use: "Use when the author types the legacy /status verb, asks how their book is going, or wants a project overview before starting a session. Do not invoke to run the quality gate (use run-quality-gate), diagnose project structure problems (use doctor), start a new project (use init-project), or for unrelated queries."
 ---
 
@@ -127,7 +127,7 @@ Present a next-actions list:
 
 - For each chapter whose Gate cell is "-" (no gate report on record): suggest `/nonfiction-studio:run-quality-gate <slug>`.
 - For each chapter where `open_claim_count` is greater than 0: suggest `/nonfiction-studio:fact-check-pass <slug>`.
-- For each highlighted row where drift exceeds the threshold: suggest `/nonfiction-studio:revise-pass <slug>` to address voice drift, then re-run `/nonfiction-studio:run-quality-gate <slug>`.
+- For each highlighted row where drift exceeds the threshold: note that a dedicated revision pass (`revise-pass`) is a Phase 2 skill and is not available in v1; suggest `/nonfiction-studio:draft-chapter <slug>` to revise the chapter directly, then re-run `/nonfiction-studio:run-quality-gate <slug>` to confirm the drift score has improved.
 - For each highlighted row where the gate verdict is `block`: name the chapter and suggest `/nonfiction-studio:run-quality-gate <slug>` to inspect the blocking check details, then follow the remediation the gate report prescribes.
 
 If all chapters have gate reports, zero open claims, and no highlighted rows, state that no immediate action is required and name the next un-started chapter from the array (first entry with status `empty`, `outlined`, or `drafting`).

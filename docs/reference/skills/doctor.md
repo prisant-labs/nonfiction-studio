@@ -31,7 +31,7 @@ The mode argument is optional; the default is `report`.
 | Mode | Description |
 |---|---|
 | `report` (default) | Full 10-check inventory; exit 0 (clean), exit 1 (findings), exit 2 (error or migration-required prelude) |
-| `migrate` | Schema-version diagnosis only; never writes; exit 2 in all cases (no-migrations or migration-required) |
+| `migrate` | Schema-version diagnosis only; never writes; exit 0 when already current, exit 2 when migration is required (genuinely incompatible version) |
 | `packs` | Craft-pack validity check; exit 0 in all v1 cases (no packs directory or no validator yet) |
 | `fix` | Not in v1; the skill declines and states the Phase 2 contract |
 | `validate` | Alias for `report`; subsumed in v1 (the check inventory covers all schema validation) |
@@ -40,7 +40,6 @@ Alternate entry points:
 - Via the `studio` dispatcher: routes here from Path 5 (Troubleshoot or get help) for structural problems
 - Via `status-dashboard`: routes here when `progress.json` is malformed or unreadable
 - Via `run-quality-gate`: routes here when the gate exits 2 with an engine error
-- Legacy verb: `/doctor` (deprecated; use the namespaced form)
 
 ## Inputs and Outputs
 
@@ -48,13 +47,13 @@ Alternate entry points:
 
 | Path | When it is read | Why |
 |---|---|---|
-| `.studio/meta.json` | Step 2 (via engine) | Schema-version check; required fields (schema_version, created, plugin_version_at_creation) |
-| `.studio/progress.json` | Step 2 (via engine) | Schema validation against `templates/book-scaffold/.studio/progress.schema.json` |
-| `.studio/config.json` | Step 2 (via engine) | Shape check (version integer, gate object, gate.mode enum); config-coercion notice |
-| `.studio/snapshots/` | Step 2 (via engine) | Filename conformance check against `<slug>.<YYYYMMDDTHHMMSSZ>.md` pattern |
-| `research/evidence-log.md` | Step 2 (via engine) | EV grammar (required fields, enum values, SRC ID format); orphan-marker cross-reference |
-| `research/sources.md` | Step 2 (via engine) | SRC grammar (type enum, retrieval-status enum); SRC cross-reference check |
-| `chapters/*.md` | Step 2 (via engine) | Scanned for `[claim: EV-nnnn]` markers in the orphan-marker check |
+| `.studio/meta.json` | Step 3 (via engine) | Schema-version check; required fields (schema_version, created, plugin_version_at_creation) |
+| `.studio/progress.json` | Step 3 (via engine) | Schema validation against `templates/book-scaffold/.studio/progress.schema.json` |
+| `.studio/config.json` | Step 3 (via engine) | Shape check (version integer, gate object, gate.mode enum); config-coercion notice |
+| `.studio/snapshots/` | Step 3 (via engine) | Filename conformance check against `<slug>.<YYYYMMDDTHHMMSSZ>.md` pattern |
+| `research/evidence-log.md` | Step 3 (via engine) | EV grammar (required fields, enum values, SRC ID format); orphan-marker cross-reference |
+| `research/sources.md` | Step 3 (via engine) | SRC grammar (type enum, retrieval-status enum); SRC cross-reference check |
+| `chapters/*.md` | Step 3 (via engine) | Scanned for `[claim: EV-nnnn]` markers in the orphan-marker check |
 
 ### Outputs
 
@@ -66,17 +65,19 @@ The skill writes no files. All reads are performed by `bin/ns-doctor` under its 
 
 ## Flow Summary
 
-The skill runs three steps.
+The skill runs four steps.
 
 1. **Argument parsing (no tool call).** Extracts the mode from the supplied argument. Default is `report`. Recognizes `report`, `migrate`, `packs`, and `validate` (treated as `report`). Declines `fix` as Phase 2+ scope and halts without any tool calls. Declines unknown tokens and halts.
 
-2. **Single Bash invocation (one call per mode).** Runs one Bash call: `node bin/ns-doctor --project=. [--report|--migrate|--validate-packs] --json`. Captures exit code, stdout (JSON), and stderr. No individual sub-CLI calls are made; the engine composes its checks internally.
+2. **Resolve the plugin root.** Before the engine is invoked, the skill resolves the plugin's installed path: a primary lookup against `extraKnownMarketplaces['nonfiction-studio'].source.path` in `~/.claude/settings.json`, a `~/.claude/plugins/cache` search fallback, and a dev-mode fallback that checks for `bin/ns-doctor` in the current directory. This is the same three-tier convention `init-project` uses to locate its scaffold templates; it exists because a literal relative `bin/ns-doctor` path resolves against the invoking shell's working directory, not the installed plugin, and would silently fail for a marketplace-installed author. If all three lookups fail, the skill halts and names the settings.json and cache paths it attempted.
 
-3. **Present the result (exit-code mapping).** Maps exit code to the presented verdict:
+3. **Single Bash invocation (one call per mode).** Runs one Bash call: `node "<plugin-root>/bin/ns-doctor" --project=. [--report|--migrate|--validate-packs] --json`. Captures exit code, stdout (JSON), and stderr. No individual sub-CLI calls are made; the engine composes its checks internally.
+
+4. **Present the result (exit-code mapping).** Maps exit code to the presented verdict:
    - **Report mode, exit 0:** clean pass; no findings; names the ten checks run.
    - **Report mode, exit 1:** findings grouped by check-type prefix with per-group counts and routing hints; closes with total count and re-run invitation.
    - **Report mode, exit 2:** surfaces stderr error; NEVER treated as a pass.
-   - **Migrate mode:** exit 2 always; distinguishes the no-migrations case (stdout JSON) from the migration-required case (stderr content) and presents each clearly.
+   - **Migrate mode:** exit 0 when the schema is already current (stdout JSON with status "current"); exit 2 when migration is required (stderr content); presents each clearly.
    - **Packs mode, exit 0:** presents the stdout JSON `message` field.
 
 ## Exit-Code Mapping
@@ -86,7 +87,8 @@ The skill runs three steps.
 | `report` | 0 | All checks passed; no findings | Present clean pass; name the ten checks; note any notices |
 | `report` | 1 | One or more findings | Present grouped findings with counts and routing hints; invite re-run |
 | `report` | 2 | Operational error (e.g. BibleError, bad args) or schema-version prelude | Surface stderr; NEVER treat as a pass; route to `doctor migrate` if version mismatch indicated |
-| `migrate` | 2 | Always: either no-migrations-defined or migration-required | Present the appropriate case; note writes are never performed in v1 |
+| `migrate` | 0 | Schema is already current; nothing to migrate | Present the current-schema message; note writes are never performed in v1 |
+| `migrate` | 2 | Migration required (genuinely incompatible version) | Present the migration-required message; note writes are never performed in v1 |
 | `packs` | 0 | Always in v1: no packs directory or no validator yet | Present the stdout message field |
 
 ## Check Inventory (Report Mode)
@@ -123,11 +125,11 @@ When exit 1 is returned, findings are grouped by the prefix of their `type` fiel
 
 ## Migrate Mode
 
-`--migrate` exits 2 in all cases in v1. Two cases are possible:
+`--migrate` exits 0 when the schema is already current and 2 only when migration is genuinely required (an incompatible version). Two cases are possible:
 
-**No-migrations case (stdout JSON with `"status": "no-migrations"`).** The schema version is current; no migrations are defined for the current-to-current version pair. Migrations arrive with the first schema change per Q-04 (release, versioning, and compatibility). No files are written.
+**Current schema, nothing to migrate (exit 0; stdout JSON with `"status": "current"`).** The schema version is current; no migrations are defined for the current-to-current version pair. Migrations arrive with the first schema change per Q-04 (release, versioning, and compatibility). No files are written.
 
-**Migration-required case (stderr content).** The bible's `schema_version` in `.studio/meta.json` is older than the supported major (`2`). The engine names both versions in the stderr message. No migration is applied in v1; the snapshot-before-migrate and restore-on-failure contract activates when real migrations arrive per Q-04 (release, versioning, and compatibility). No files are written.
+**Migration required (exit 2; stderr content).** The bible's `schema_version` in `.studio/meta.json` is older than the supported major (`2`). The engine names both versions in the stderr message. No migration is applied in v1; the snapshot-before-migrate and restore-on-failure contract activates when real migrations arrive per Q-04 (release, versioning, and compatibility). No files are written.
 
 ## Packs Mode
 
@@ -148,11 +150,11 @@ The doctor skill works identically on all three surfaces per D-14 (three-surface
 
 **Unrecognized mode argument.** Step 1 declines and halts without any tool calls. No engine invocation.
 
-**Exit 2 from `--report`.** Step 3 surfaces the stderr and halts. Never treated as a pass. If the error message indicates a schema version mismatch, suggests running `doctor migrate` for the explicit diagnosis.
+**Exit 2 from `--report`.** Step 4 surfaces the stderr and halts. Never treated as a pass. If the error message indicates a schema version mismatch, suggests running `doctor migrate` for the explicit diagnosis.
 
-**Exit 2 from `--migrate`.** Expected behavior; not an unexpected error. Step 3 distinguishes the two cases and presents the appropriate message.
+**Exit 2 from `--migrate`.** Expected behavior when migration is genuinely required (an incompatible schema version); an already-current schema now exits 0 instead. Not an unexpected error. Step 4 distinguishes the two cases and presents the appropriate message.
 
-**Exit 2 from `--validate-packs`.** Unexpected in v1. Step 3 surfaces the stderr and halts.
+**Exit 2 from `--validate-packs`.** Unexpected in v1. Step 4 surfaces the stderr and halts.
 
 **Project root not found.** `findBookRoot` exits 2 with a `BibleError` on stderr when `.studio/meta.json` is not found at or above the current directory. The skill surfaces the error and notes that `.studio/meta.json` must be present at the project root.
 

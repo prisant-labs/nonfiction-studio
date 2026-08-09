@@ -56,7 +56,7 @@ printf "SCAN_DONE\n"
 
 Then:
 - **Non-interactive context (headless -p session):** State "Proceeding automatically in non-interactive context." Then resolve the plugin root (Step 4, plugin root resolution), stamp the missing files (Step 5, scaffold stamping), and fill state placeholders (Step 6, state files) below, but write ONLY the paths that appeared in the MISSING list. Do not read or write any other file. For `context/project-init.md` if it is in the missing list, use blank mode. After writing, report which files were stamped and STOP.
-- **Interactive context:** Ask "May I stamp only these missing files? (yes/no)" and wait for author confirmation before writing anything. On confirmation, resolve the plugin root (Step 4, plugin root resolution), stamp the missing files (Step 5, scaffold stamping), and fill state placeholders (Step 6, state files), writing ONLY the missing paths. After writing, report which files were stamped and STOP.
+- **Interactive context:** Ask "May I stamp only these missing files? (yes/no)" and wait for author confirmation before writing anything. On confirmation, resolve the plugin root (Step 4, plugin root resolution), confirm the working directory if Step 4b applies, stamp the missing files (Step 5, scaffold stamping), and fill state placeholders (Step 6, state files), writing ONLY the missing paths. After writing, report which files were stamped and STOP.
 
 **Note on .studio/meta.json:** If .studio/meta.json is in the missing list, first acquire the book title (from the argument, or by asking the author; in non-interactive contexts reuse the title recorded in context/brief.md if present, otherwise report that the title is required) before filling its placeholders.
 
@@ -104,6 +104,15 @@ test -f "PLUGIN_ROOT/templates/book-scaffold/context/brief.md" && echo OK || ech
 ```
 
 If the output is `TEMPLATE_NOT_FOUND`: halt. Report the exact path that was not readable and ask the author to verify the plugin installation. Do not write any files.
+
+### Step 4b - Confirm the working directory (uncertain surface only)
+
+This is the S-06 chat safeguard: on chat, no hooks or `bin/` are available and the author has less visibility into where files land than on CLI or Cowork, where the terminal or workspace already makes the working directory unambiguous. Skip this step silently and continue to Step 5 when either applies:
+
+- PLUGIN_ROOT above resolved via the primary settings.json lookup or the platform cache fallback (the normal installed-plugin path on CLI and Cowork), and the working directory is not otherwise in doubt.
+- This is a non-interactive session (headless `-p`): there is no author present to answer, so proceed the same as the rest of this skill does in non-interactive mode.
+
+Otherwise, confirm before writing. This covers both signals named in the S-06 requirement: PLUGIN_ROOT resolved only via the dev-mode fallback (the third lookup, `test -d templates/book-scaffold && pwd`), which means no settings.json entry or plugins cache match was found and hooks and `bin/` are typically unavailable in that same session; or the working directory is not otherwise confirmed by any completed tool call. State the absolute directory about to receive the new book tree (the path the dev-mode fallback already returned, or the result of running `pwd` via the Bash tool if that path is not yet known) and ask: "This will create the new book project in `<path>`. Shall I proceed? (yes/no)" Wait for an explicit "yes" before continuing to Step 5. Any other answer, or inability to confirm a path at all, halts here; no files are written.
 
 ## Step 5 - Stamp the flat bible tree
 
@@ -202,5 +211,6 @@ Then: "The next step is intake-interview. Invoke it with `/nonfiction-studio:int
 ## Failure behavior
 
 - **Plugin root unresolved.** If all three lookups in Step 4 fail, halt before writing any file. Report the settings.json path attempted and the cache path attempted. Ask the author how to proceed (verify plugin installation or provide the path manually).
+- **Working directory not confirmed (Step 4b).** If the author does not answer yes, or no path can be confirmed at all, halt before Step 5. No files are written.
 - **Read or write error.** On any file operation failure, stop immediately. Name the exact path and operation that failed. Never continue stamping remaining files after a failure.
 - **Missing template.** If a template file is not readable after PLUGIN_ROOT is confirmed, halt. Name the exact template path and ask the author to verify the plugin installation.

@@ -5,7 +5,9 @@ name: Tier A
 # Zero validation logic lives in this file. Every step is exactly one node or claude call.
 # See Q-02 (CI pipeline) sections 1.1 and 6 for the contract and local parity rules.
 #
-# Local proof: all nine steps run green on Windows per TSK-055 (Tier A check scripts).
+# Local proof: all nine original steps run green on Windows per TSK-055 (Tier A
+# check scripts); the three inventory, self-sufficiency, and plugin-root gates
+# added below (Wave 0 hardening) were verified locally in the same run.
 # The ubuntu leg proves on first push. The claude binary is not present on standard
 # GitHub Actions runners, so it is installed by an inert scaffolding step ahead of
 # live step 3; that step's availability on both runners proves on the first PR.
@@ -74,10 +76,22 @@ jobs:
       - name: Link check
         run: node scripts/check-links.mjs
 
-      # Live step 8: engine, lib, hook, and schema unit test suites (no API key required).
+      # Live step 8: plugin-root invocation convention check (F-SK-01, F-ST-01).
+      - name: Plugin root convention
+        run: node scripts/checks/check-plugin-root.mjs
+
+      # Live step 9: no-additional-keys self-sufficiency guard.
+      - name: Self-sufficiency
+        run: node scripts/check-self-sufficiency.mjs
+
+      # Live step 10: component inventory equality and manifest name-equality check (F-ST-03, F-ST-04).
+      - name: Component inventory
+        run: node scripts/checks/check-inventory.mjs
+
+      # Live step 11: engine, lib, hook, and schema unit test suites (no API key required).
       - name: Engine unit tests
         run: node scripts/test-engines.mjs
 
-      # Live step 9: bidirectional fixture matrix with temp-clone discipline.
+      # Live step 12: bidirectional fixture matrix with temp-clone discipline.
       - name: Fixture tests
         run: node scripts/test-fixtures.mjs

@@ -10,7 +10,7 @@ tags: ["skill", "doctor", "integrity", "schema", "orphan", "example"]
 
 This is a condensed transcript of a `doctor report` session over the committed two-chapter sample book "The Quiet Network" (see `examples/sample-book/`). The example follows the flow specified in S-06 3.11 (skills and invocation surface) and the adjudications recorded in TSK-054 (doctor skill).
 
-**Session provenance note.** This example is grounded in a live `report` run executed 2026-07-19 against the committed `examples/sample-book/` baseline. The command run from the plugin root was `node bin/ns-doctor --project=examples/sample-book --report --json`; it exited 0 with `status: valid` and no findings. The JSON output is quoted verbatim. In a real book project the skill would run as `node bin/ns-doctor --project=. --report --json` from the book root; this is equivalent. The committed sample-book fixture is never modified by a doctor run; the engine is read-only per its READ-ONLY COVENANT.
+**Session provenance note.** This example is grounded in a live `report` run executed 2026-07-19 against the committed `examples/sample-book/` baseline. The command, run after resolving the plugin root per Step 2 below, was `node "<plugin-root>/bin/ns-doctor" --project=examples/sample-book --report --json`; it exited 0 with `status: valid` and no findings. The JSON output is quoted verbatim. In a real book project the skill would run as `node "<plugin-root>/bin/ns-doctor" --project=. --report --json` from the book root; this is equivalent. The committed sample-book fixture is never modified by a doctor run; the engine is read-only per its READ-ONLY COVENANT.
 
 Any scenario showing exit 1 findings is explicitly labeled as a synthetic illustration and does not reflect the committed fixture or the live run output.
 
@@ -32,12 +32,16 @@ The EV and SRC entries in the research files are well-formed; all chapter claim 
 
 No argument was supplied. Default mode is `report`. No tool call needed. Continue to Step 2.
 
-**Studio (Step 2 - Single Bash invocation):**
+**Studio (Step 2 - Resolve the plugin root):**
+
+The skill uses the Bash tool to look up the `nonfiction-studio` marketplace source path in `~/.claude/settings.json`. The primary lookup resolves the plugin's installed path on the first try; the plugins-cache and dev-mode fallbacks are not needed for this run. Continue to Step 3.
+
+**Studio (Step 3 - Single Bash invocation):**
 
 The skill uses the Bash tool (this is the single doctor call; no sub-CLI calls are made):
 
 ```
-node bin/ns-doctor --project=. --report --json
+node "<plugin-root>/bin/ns-doctor" --project=. --report --json
 ```
 
 **Doctor stdout (verbatim, exit code 0):**
@@ -55,7 +59,7 @@ node bin/ns-doctor --project=. --report --json
 
 Doctor exit code: 0. Parse stdout as JSON report. `status: valid`, zero findings.
 
-**Studio (Step 3 - Present the result, exit 0):**
+**Studio (Step 4 - Present the result, exit 0):**
 
 > Doctor verdict: PASS. Bible integrity check complete; no issues found.
 >
@@ -69,7 +73,7 @@ Doctor exit code: 0. Parse stdout as JSON report. `status: valid`, zero findings
 
 - **Step 1 argument check is prose-only.** No tool call is needed to detect the mode or apply the default. The skill branches without accessing the file system.
 
-- **ONE Bash call invokes the engine.** The skill issued a single Bash call: `node bin/ns-doctor --project=. --report --json`. No individual calls to `bin/ns-claims`, `bin/ns-stylometry`, or `bin/ns-scrub` are made by the skill; the doctor engine runs its full check inventory internally via `runChecks`.
+- **ONE Bash call invokes the engine.** After resolving the plugin root in Step 2, the skill issued a single Bash call: `node "<plugin-root>/bin/ns-doctor" --project=. --report --json`. No individual calls to `bin/ns-claims`, `bin/ns-stylometry`, or `bin/ns-scrub` are made by the skill; the doctor engine runs its full check inventory internally via `runChecks`.
 
 - **Exit 0 maps to a presented verdict, never silent.** The skill parsed stdout as JSON, confirmed `status: valid` and zero findings, and presented the full clean-pass message naming all ten checks. A pass verdict is never silently swallowed.
 
@@ -81,7 +85,7 @@ Doctor exit code: 0. Parse stdout as JSON report. `status: valid`, zero findings
 
 ## Synthetic illustration: what exit 1 findings look like
 
-The following is explicitly a synthetic illustration. It does NOT reflect the committed sample-book fixture. It shows what Step 3 would report if the bible had three findings across three check groups.
+The following is explicitly a synthetic illustration. It does NOT reflect the committed sample-book fixture. It shows what Step 4 would report if the bible had three findings across three check groups.
 
 **Doctor stdout (synthetic, exit code 1):**
 
@@ -112,7 +116,7 @@ The following is explicitly a synthetic illustration. It does NOT reflect the co
 }
 ```
 
-**Studio (synthetic Step 3, exit 1):**
+**Studio (synthetic Step 4, exit 1):**
 
 > **Bible structure: 1 finding**
 > `structure/outline.md` [`structure.missing-path`]: required bible path is absent: structure/outline.md
@@ -134,17 +138,17 @@ This synthetic illustration uses the real finding-type strings (`structure.missi
 
 ## Synthetic illustration: migrate mode output
 
-The following is explicitly synthetic. It shows what Step 3 would present for each of the two migrate-mode cases.
+The following is explicitly synthetic. It shows what Step 4 would present for each of the two migrate-mode cases.
 
-**No-migrations case (stdout JSON, `"status": "no-migrations"`):**
+**Current schema, nothing to migrate (exit 0; stdout JSON, `"status": "current"`):**
 
-> Doctor migrate verdict: Schema version is current. No migration is needed. no migrations defined for this version pair (schema_version "2" to "2"); migrations arrive with the first schema change per Q-04 (release, versioning, and compatibility). No files were written. Migrations arrive with the first schema change per Q-04 (release, versioning, and compatibility); the snapshot-before-migrate and restore-on-failure contract activates at that time.
+> Doctor migrate verdict: Schema version is current. No migration is needed. nothing to migrate, schema is current (schema_version "2"); migrations arrive with the first schema change per Q-04 (release, versioning, and compatibility). No files were written. Migrations arrive with the first schema change per Q-04 (release, versioning, and compatibility); the snapshot-before-migrate and restore-on-failure contract activates at that time.
 
-**Migration-required case (stderr content, `schema_version: "1"`):**
+**Migration required (exit 2; stderr content, `schema_version: "1"`):**
 
 > Doctor migrate verdict: Migration required. bible schema version "1" requires migration to supported major "2"; run ns-doctor --migrate to apply the migration. No migration has been applied; migrations from older schema versions are not yet defined in v1. The snapshot-before-migrate and restore-on-failure contract activates when real migrations arrive per Q-04 (release, versioning, and compatibility). No files were written. Verify the `schema_version` field in `.studio/meta.json`; the supported major is `2`.
 
-The `--migrate` flag always exits 2 in v1 under both cases. Neither case writes any file; the migrate mode in v1 is diagnose-only.
+The `--migrate` flag exits 0 for the current-schema case and 2 for the migration-required case. Neither case writes any file; the migrate mode in v1 is diagnose-only.
 
 ---
 

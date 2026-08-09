@@ -1,9 +1,9 @@
 ---
 name: run-quality-gate
 user-invocable: true
-argument-hint: "[chapter: slug or number] [deep]"
-description: "Runs the surface-independent deterministic quality gate over a chapter by wrapping bin/ns-gate in a single Bash call: maps exit 0 to a pass or warn verdict summary from the report JSON, exit 1 to a block verdict with per-check details and next actions, and exit 2 to an error that is never treated as a pass. Pre-checks the voice baseline before invoking the gate; degrades to a four-check subset (claims, scrub, continuity-quick, coherence) with a voice-drift-skipped warning when the baseline is absent. Resolves the chapter argument from the supplied value, the most-recently-modified chapter in progress.json, or by asking the author when neither is available. Deep mode (Phase 2) is acknowledged and politely declined in v1."
-when_to_use: "Use when the author types the legacy /gate verb, invokes explicitly on chat after any chapter-writing flow, draft-chapter or revise-pass prompts for it on completion, or wants an explicit deterministic gate verdict. Do not invoke for project status overviews (use status-dashboard for that), to re-trigger the Stop hook gate (automatic on CLI and Cowork), in deep mode (Phase 2, not yet available), or for unrelated queries."
+argument-hint: "[chapter: slug or number]"
+description: "Runs the surface-independent deterministic quality gate over a chapter by wrapping bin/ns-gate in a single Bash call: maps exit 0 to a pass or warn verdict summary from the report JSON, exit 1 to a block verdict with per-check details and next actions, and exit 2 to an error that is never treated as a pass. Pre-checks the voice baseline before invoking the gate; degrades to a four-check subset (claims, scrub, continuity-quick, coherence) with a voice-drift-skipped warning when the baseline is absent. Resolves the chapter argument from the supplied value, the most-recently-modified chapter in progress.json, or by asking the author when neither is available. Deep mode (Phase 2) is acknowledged and politely declined in v1. Use when the author asks 'is this chapter done' or wants to 'run the quality gate,' seeking the overall pass, warn, or block verdict rather than the claims-only check that fact-check-pass performs."
+when_to_use: "Use when the author types the /gate verb alias, invokes explicitly on chat after any chapter-writing flow, draft-chapter or revise-pass prompts for it on completion, or wants an explicit deterministic gate verdict. Do not invoke for project status overviews (use status-dashboard for that), to re-trigger the Stop hook gate (automatic on CLI and Cowork), in deep mode (Phase 2, not yet available), or for unrelated queries."
 ---
 
 This skill is the surface-independent quality gate. It resolves the chapter argument, pre-checks the voice baseline to determine which check set to run, invokes `bin/ns-gate` in a single Bash call, and maps the exit code to a presented verdict: exit 0 presents the pass or warn summary from the report JSON, exit 1 presents the block verdict with per-check details and next actions, and exit 2 surfaces an error that is never treated as a pass. The `bin/ns-gate` orchestrator is the sole writer of `.studio/gate/<slug>.<ts>.json` reports and handles its own prune policy; the skill writes no `.studio/` state.
@@ -92,7 +92,7 @@ test -f context/style-profile.md && echo HAS_PROFILE || echo NO_PROFILE
 
 > Voice drift check skipped: `context/style-profile.md` was not found. The gate will run claim coverage, prompt scrub, continuity, and state coherence checks only. Capture your voice baseline with `/nonfiction-studio:capture-voice` to enable voice drift detection.
 
-Continue to Step 4 with check subset `claims,scrub,continuity-quick,coherence`.
+Continue to Step 4 to resolve the plugin root; the gate invocation in Step 5 uses check subset `claims,scrub,continuity-quick,coherence`.
 
 **If `HAS_PROFILE`:** use the Read tool on `.studio/config.json` to check whether `stylometry.baseline.markers` is present and non-null. If the field is absent or null, treat this the same as the `NO_PROFILE` case: set the check subset to `claims,scrub,continuity-quick,coherence` and present:
 
@@ -102,18 +102,43 @@ If `stylometry.baseline.markers` is present and non-null, run the full gate. Set
 
 ---
 
-## Step 4 - Gate invocation (single Bash call; maps exit code to verdict)
+## Step 4 - Resolve the plugin root
+
+Use the Bash tool to run the primary lookup:
+```
+node -e "const s=require('fs').readFileSync(require('os').homedir()+'/.claude/settings.json','utf8');const m=JSON.parse(s).extraKnownMarketplaces;const ns=m&&m['nonfiction-studio'];console.log(ns&&ns.source&&ns.source.path||'not-found')"
+```
+
+The output is the plugin root. If it prints `not-found`, run the platform cache fallback:
+```
+find "$HOME/.claude/plugins/cache" -maxdepth 3 -type d -name "nonfiction-studio*" 2>/dev/null | head -1
+```
+
+If that also returns nothing, run the dev-mode fallback:
+```
+test -f bin/ns-gate && pwd || echo not-found
+```
+
+If all three lookups fail: halt immediately. Report the settings.json path attempted (`$HOME/.claude/settings.json`) and the cache path attempted (`$HOME/.claude/plugins/cache`). Do not invoke ns-gate. Ask the author how to proceed (verify plugin installation or provide the path manually).
+
+Carry the resolved path forward as `<plugin-root>` for Step 5.
+
+**Shared plugin-root convention.** This three-tier resolution (settings.json lookup, plugins-cache search, dev-mode fallback) is the same routine as `skills/init-project/SKILL.md` Step 4; a future wave extracts it to a shared reference.
+
+---
+
+## Step 5 - Gate invocation (single Bash call; maps exit code to verdict)
 
 Use the Bash tool to run the gate. This is the ONE Bash call that wraps the gate; no individual CLI invocations (ns-claims, ns-stylometry, ns-scrub) are made by the skill.
 
 When a check subset was set in Step 3:
 ```
-node bin/ns-gate --project=. --chapter=<slug> --check=<subset> --json
+node "<plugin-root>/bin/ns-gate" --project=. --chapter=<slug> --check=<subset> --json
 ```
 
 When no subset was set (full gate):
 ```
-node bin/ns-gate --project=. --chapter=<slug> --json
+node "<plugin-root>/bin/ns-gate" --project=. --chapter=<slug> --json
 ```
 
 Capture the exit code and the stdout (the JSON report) and the stderr.
@@ -170,4 +195,4 @@ If stdout also contains output (partial JSON or other text), include it verbatim
 
 **Voice baseline absent.** Step 3 sets the degraded check subset and warns about the skipped voice drift check. The gate still runs; baseline absence is not a halt condition. The four remaining checks run normally.
 
-**Exit 2 from ns-gate.** Step 4 presents the error from stderr and halts. Never treated as a pass, warn, or block verdict. Re-run after diagnosing with `doctor`.
+**Exit 2 from ns-gate.** Step 5 presents the error from stderr and halts. Never treated as a pass, warn, or block verdict. Re-run after diagnosing with `doctor`.
