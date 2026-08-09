@@ -534,7 +534,7 @@ function runLiveMode(model) {
     const factCheckPrompt =
       'I am running a Tier B integration test. ' +
       'Check whether the text "[UNVERIFIED]" appears anywhere in the context/ or chapters/ directories of this project. ' +
-      'Reply with FOUND if you see [UNVERIFIED] in any file, or NOT_FOUND if you do not. ' +
+      'Reply with MARKER_ABSENT if you do not see [UNVERIFIED] in any file, or MARKER_PRESENT if you do, followed by a one-line finding. ' +
       'Do not run any quality gate or write any files; read-only check only.';
 
     const factResult = callClaude(factCheckPrompt, model, tempDir);
@@ -545,14 +545,19 @@ function runLiveMode(model) {
       failures.push(msg);
     } else {
       log('  result snippet: ' + factResult.text.slice(0, 120).replace(/\n/g, ' '));
-      // The sample-book chapters do NOT have [UNVERIFIED] markers; expect NOT_FOUND
-      const markerFound = factResult.text.toUpperCase().includes('NOT_FOUND') ||
-        !factResult.text.toUpperCase().includes('[UNVERIFIED]');
-      const msg = markerFound
-        ? 'pass [fact-check-pass]: model reported no [UNVERIFIED] marker (expected for seeded clone)'
-        : 'FAIL [fact-check-pass]: model reported [UNVERIFIED] present, but the seeded clone has none';
+      // Fail-closed, same as scaffoldOk/briefOk/chapterOk: only the literal
+      // affirmative token counts as pass. Its absence - whether the model said
+      // MARKER_PRESENT, said nothing relevant, or returned unrelated text - is
+      // a failure. (Previously this derived from the ABSENCE of "[UNVERIFIED]"
+      // in the response, which defaulted to pass whenever the model's reply
+      // simply never mentioned the marker at all, e.g. an off-topic response;
+      // fail-open for that whole class of garbage responses, unlike steps 1-3.)
+      const factCheckOk = factResult.text.toUpperCase().includes('MARKER_ABSENT');
+      const msg = factCheckOk
+        ? 'pass [fact-check-pass]: model reported MARKER_ABSENT'
+        : 'FAIL [fact-check-pass]: model did not report MARKER_ABSENT';
       log('  [UNVERIFIED] check: ' + msg);
-      if (!markerFound) failures.push(msg);
+      if (!factCheckOk) failures.push(msg);
     }
     // Artifact assertion for step 4: [UNVERIFIED] is genuinely absent from the
     // seeded clone's context/ and chapters/ files - ground truth, independent
