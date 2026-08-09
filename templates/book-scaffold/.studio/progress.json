@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "updated": "{{DATETIME}}",
+  "chapters": [],
+  "totals": {
+    "word_count": 0,
+    "open_claim_count": 0,
+    "chapters_final": 0,
+    "chapters_total": 0
+  }
+}

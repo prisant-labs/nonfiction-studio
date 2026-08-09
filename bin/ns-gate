@@ -1,0 +1,99 @@
+#!/usr/bin/env node
+// what-it-is:   the ns-gate orchestrator CLI (thin shell over hooks/lib/gate-engine.mjs)
+// what-it-does: parses arguments, locates the book root, delegates to gate-engine.mjs,
+//               writes the gate report under .studio/gate/, emits to stdout, and exits
+//               with the policy exit code; mode-DEPENDENT exit taxonomy (0/1/2) per TSK-029
+// why:          the CLI is the public surface; all logic lives in gate-engine.mjs so
+//               hooks/stop-gate.mjs and CI can share the same computation path per S-07 section 4
+// usage:        ns-gate [--check=<checks>] [--chapter=<slug>] [--project=<dir>] [--json]
+
+import { resolve } from 'node:path';
+import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
+import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
+import { runGate, writeGateReport, ALL_FLAGS, CHECK_REGISTRY } from '../hooks/lib/gate-engine.mjs';
+
+// ---- arg parsing ---------------------------------------------------------------
+
+let opts;
+try {
+  opts = parseArgs(process.argv.slice(2), ['check', 'chapter', 'project', 'json']);
+} catch (err) {
+  if (err.name === 'ArgsError') {
+    process.stderr.write('ns-gate: ' + err.message + '\n');
+    process.exit(2);
+  }
+  throw err;
+}
+
+// Validate --check values if provided
+if (opts.check) {
+  for (const flag of opts.check) {
+    if (!ALL_FLAGS.includes(flag)) {
+      process.stderr.write(
+        'ns-gate: unknown check "' + flag + '"; valid checks: ' + ALL_FLAGS.join(', ') + '\n'
+      );
+      process.exit(2);
+    }
+  }
+}
+
+// ---- book root discovery -------------------------------------------------------
+
+const startDir = opts.project ? resolve(opts.project) : process.cwd();
+
+let root;
+try {
+  ({ root } = findBookRoot(startDir));
+} catch (err) {
+  if (err.name === 'BibleError') {
+    process.stderr.write('ns-gate: ' + err.message + '\n');
+    process.exit(2);
+  }
+  throw err;
+}
+
+// ---- run gate ------------------------------------------------------------------
+
+const { exitCode, report } = runGate(root, {
+  checkSubset: opts.check || null,
+  chapterSlug: opts.chapter || null,
+  stderrFn: s => process.stderr.write(s),
+});
+
+if (!report) {
+  process.stderr.write('ns-gate: gate engine failed to produce a report\n');
+  process.exit(2);
+}
+
+// ---- write report --------------------------------------------------------------
+
+let reportPath;
+try {
+  ({ reportPath } = writeGateReport(root, report));
+} catch (err) {
+  process.stderr.write('ns-gate: failed to write gate report: ' + err.message + '\n');
+  process.exit(2);
+}
+
+// ---- emit to stdout ------------------------------------------------------------
+
+if (opts.json) {
+  process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+} else {
+  // Human-readable summary
+  const verdictLine = '[ns-gate] verdict: ' + report.verdict + ' (report: ' + reportPath + ')';
+  process.stdout.write(verdictLine + '\n');
+
+  for (const entry of report.checks) {
+    const icon = entry.verdict === 'pass' ? 'pass'
+      : entry.verdict === 'skip' ? 'skip'
+      : entry.verdict === 'warn' ? 'warn'
+      : 'BLOCK';
+    process.stdout.write('  [' + entry.check + '] ' + icon + ': ' + entry.detail + '\n');
+    if (entry.next) {
+      process.stdout.write('    next: ' + entry.next + '\n');
+    }
+  }
+}
+
+process.exit(exitCode);

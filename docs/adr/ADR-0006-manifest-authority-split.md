@@ -100,6 +100,19 @@ Logged here (not as an open question) because the trigger is deterministic: when
 
 ---
 
+## Central marketplace amendment (2026-08-07)
+
+A second marketplace now exists: `prisant-labs/agent-plugins`, a pointer repository whose only content is a `.claude-plugin/marketplace.json` listing this plugin by GitHub source. It was created before any public install instructions existed, so the marketplace name users learn is stable from the start and no migration off a per-plugin marketplace name is ever needed. Further prisant-labs plugins are planned and will be added there as entries.
+
+This does not change the authority split above. `plugin.json` and `marketplace.json` remain authored, `library.json` remains the spine's, and the field-level rules are untouched. Two points are added:
+
+- The in-repo `.claude-plugin/marketplace.json` (the self-marketplace, `"source": "./"`) is RETAINED deliberately. It is what makes local directory installs work during development, and step 5 of the SPK-02 (Cowork execution probe) protocol depends on it. Removing it would break both.
+- Marketplace names register independently, so the self-marketplace (`nonfiction-studio`) and the central marketplace (`agent-plugins`) coexist without conflict, and a user may add both.
+
+Visibility caveat while it lasts: `agent-plugins` is public and this plugin repository is private, so the listed entry is visible but will not install until this repository goes public. The agent-plugins README marks the entry accordingly rather than presenting it as installable.
+
+---
+
 ## Verification (present-day equality)
 
 As of the commit that introduces this ADR:
@@ -118,10 +131,15 @@ All three files satisfy the `name` equality rule. `library.json` and `plugin.jso
 
 ## References
 
-- [D-22 (packaging corrected)](../../(local working notes, not published)) - decision establishing authored manifests and requiring this ADR
-- [D-11 (toolkit adoption)](../../(local working notes, not published)) - decision establishing `library.json` as component source of truth
-- [T-01 (toolkit assessment)](../../(local working notes, not published)) - dual source-of-truth tension (section 5) and gen-manifest.mjs adapt note (section 4.2)
+Planning-doc paths below are code spans, not links: `_local/` is gitignored, so a
+relative link to it resolves in a working tree but breaks in a clean checkout. This
+matches the convention in ADR-0003 (skill invocation ergonomics) and ADR-0005 (bin
+PATH on Windows).
+
+- D-22 (packaging corrected): `(local working notes, not published)` - decision establishing authored manifests and requiring this ADR
+- D-11 (toolkit adoption): `(local working notes, not published)` - decision establishing `library.json` as component source of truth
+- T-01 (toolkit assessment): `(local working notes, not published)` - dual source-of-truth tension (section 5) and gen-manifest.mjs adapt note (section 4.2)
 - [ADR-0001 (hooks.json schema)](./ADR-0001-hooks-json-schema.md) - evidence that the platform validator ignores hooks.json
 - TSK-003 (packaging manifests) report - `description` required under `--strict` evidence
 - TSK-005 (agent template adaptation) report - platform validator ignores agent files evidence
-- [Q-02 (CI pipeline)](../../(local working notes, not published)) - the release workflow that owns field-equality enforcement
+- Q-02 (CI pipeline): `(local working notes, not published)` - the release workflow that owns field-equality enforcement

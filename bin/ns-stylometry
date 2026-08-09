@@ -1,0 +1,273 @@
+#!/usr/bin/env node
+// what-it-is:   the ns-stylometry voice-drift CLI (thin shell over hooks/lib/stylometry-engine.mjs)
+// what-it-does: parses arguments, locates the book root, reads the baseline from config.json,
+//               reads chapter files, measures the eight-marker vector, computes drift, and emits
+//               a gate report; exits 0 when score is below threshold, 1 when exceeded, 2 on error
+// why:          the CLI is the public surface; all logic lives in stylometry-engine.mjs so hooks
+//               and CI share the same computation path per S-07 section 4
+// usage:        ns-stylometry [--chapter=<slug>|--all] [--baseline=<path>] [--project=<dir>] [--json]
+
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
+import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
+import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
+import { measureChapter, measureBook, computeDrift, countWords } from '../hooks/lib/stylometry-engine.mjs';
+
+// ---- arg parsing ---------------------------------------------------------------
+
+let opts;
+try {
+  opts = parseArgs(process.argv.slice(2), [
+    'chapter', 'all', 'baseline', 'project', 'json',
+    { name: 'measure', type: 'list' },
+  ]);
+} catch (err) {
+  if (err.name === 'ArgsError') {
+    process.stderr.write('ns-stylometry: ' + err.message + '\n');
+    process.exit(2);
+  }
+  throw err;
+}
+
+// ---- measure mode (read files, compute vector, print JSON; reads no config, writes nothing) -----
+// usage: ns-stylometry --measure=<path>[,<path>...]
+// single file: measureChapter; multiple files: measureBook (aggregated counts before ratios).
+// JSON implied; exit 0 on success, exit 2 on missing or unreadable file.
+
+if (opts.measure !== null) {
+  if (opts.measure.length === 0) {
+    process.stderr.write('ns-stylometry: --measure requires at least one file path\n');
+    process.exit(2);
+  }
+
+  const texts = [];
+  const resolvedPaths = [];
+  let totalWords = 0;
+
+  for (const rawPath of opts.measure) {
+    const absPath = resolve(rawPath);
+    let text;
+    try {
+      text = readFileSync(absPath, 'utf8');
+    } catch (err) {
+      process.stderr.write('ns-stylometry: cannot read file: ' + absPath + '\n');
+      process.exit(2);
+    }
+    texts.push(text);
+    resolvedPaths.push(absPath.replace(/\\/g, '/'));
+    totalWords += countWords(text);
+  }
+
+  const markers = texts.length === 1 ? measureChapter(texts[0]) : measureBook(texts);
+  const out = { markers, files: resolvedPaths, totalWords };
+  process.stdout.write(JSON.stringify(out, null, 2) + '\n');
+  process.exit(0);
+}
+
+// ---- book root discovery -------------------------------------------------------
+
+const startDir = opts.project ? resolve(opts.project) : process.cwd();
+
+let root;
+try {
+  ({ root } = findBookRoot(startDir));
+} catch (err) {
+  if (err.name === 'BibleError') {
+    process.stderr.write('ns-stylometry: ' + err.message + '\n');
+    process.exit(2);
+  }
+  throw err;
+}
+
+// ---- baseline discovery --------------------------------------------------------
+
+let baseline;
+let thresholds;
+
+if (opts.baseline) {
+  // Explicit --baseline path: read a JSON file containing the markers object directly
+  // or a config-shaped object with stylometry.baseline.markers.
+  const bPath = resolve(opts.baseline);
+  if (!existsSync(bPath)) {
+    process.stderr.write('ns-stylometry: baseline file not found: ' + bPath + '\n');
+    process.exit(2);
+  }
+  let bData;
+  try {
+    bData = JSON.parse(readFileSync(bPath, 'utf8'));
+  } catch (err) {
+    process.stderr.write('ns-stylometry: cannot read baseline file ' + bPath + ': ' + err.message + '\n');
+    process.exit(2);
+  }
+  // Accept either a raw markers object or a config-shaped object.
+  baseline = (bData && bData.stylometry && bData.stylometry.baseline && bData.stylometry.baseline.markers)
+    ? bData.stylometry.baseline.markers
+    : bData;
+  thresholds = (bData && bData.thresholds) ? bData.thresholds : null;
+} else {
+  // Default: read from .studio/config.json
+  const configPath = join(root, '.studio', 'config.json');
+  if (!existsSync(configPath)) {
+    process.stderr.write(
+      'ns-stylometry: config.json not found at ' + configPath +
+      ' -- run voice-capture to create a baseline\n'
+    );
+    process.exit(2);
+  }
+  let config;
+  try {
+    config = JSON.parse(readFileSync(configPath, 'utf8'));
+  } catch (err) {
+    process.stderr.write('ns-stylometry: cannot read config.json at ' + configPath + ': ' + err.message + '\n');
+    process.exit(2);
+  }
+  if (!config || !config.stylometry || !config.stylometry.baseline ||
+      !config.stylometry.baseline.markers) {
+    process.stderr.write(
+      'ns-stylometry: no baseline vector found in ' + configPath +
+      ' (stylometry.baseline.markers is missing or null) -- run voice-capture to capture a baseline\n'
+    );
+    process.exit(2);
+  }
+  baseline = config.stylometry.baseline.markers;
+  thresholds = config.thresholds || null;
+}
+
+// ---- chapter discovery ---------------------------------------------------------
+
+const chapterDir = join(root, 'chapters');
+if (!existsSync(chapterDir)) {
+  process.stderr.write('ns-stylometry: chapters/ directory not found at ' + chapterDir + '\n');
+  process.exit(2);
+}
+
+let chapterPaths;
+if (opts.chapter) {
+  const p = join(chapterDir, opts.chapter + '.md');
+  if (!existsSync(p)) {
+    process.stderr.write('ns-stylometry: chapter not found: ' + p + '\n');
+    process.exit(2);
+  }
+  chapterPaths = [p];
+} else {
+  // --all or no scope: every .md file in chapters/, sorted by name
+  chapterPaths = readdirSync(chapterDir)
+    .filter(f => f.endsWith('.md'))
+    .sort()
+    .map(f => join(chapterDir, f));
+}
+
+// ---- read chapter texts --------------------------------------------------------
+
+const chapterTexts = [];
+const chapterFiles = [];
+for (const absPath of chapterPaths) {
+  let text;
+  try {
+    text = readFileSync(absPath, 'utf8');
+  } catch (err) {
+    process.stderr.write('ns-stylometry: cannot read chapter ' + absPath + ': ' + err.message + '\n');
+    process.exit(2);
+  }
+  chapterTexts.push(text);
+  chapterFiles.push(relative(root, absPath).replace(/\\/g, '/'));
+}
+
+// Zero-chapter edge case: no chapters means no drift.
+if (chapterTexts.length === 0) {
+  const driftScoreMax = (thresholds && thresholds.drift_score_max != null) ? thresholds.drift_score_max : 35;
+  const outJson = {
+    check: 'stylometry',
+    verdict: 'pass',
+    detail: 'no chapters to scan',
+    driftScore: 0,
+    threshold: driftScoreMax,
+    status: 'pass',
+    markers: {},
+    chapters: [],
+    findings: [],
+    ts: new Date().toISOString(),
+  };
+  if (opts.json) {
+    process.stdout.write(JSON.stringify(outJson, null, 2) + '\n');
+  } else {
+    process.stdout.write('[stylometry] pass: no chapters to scan\n');
+  }
+  process.exit(0);
+}
+
+// ---- measure and compute drift -------------------------------------------------
+
+const measured = measureBook(chapterTexts);
+const { score, perMarker, exceeded } = computeDrift(measured, baseline, thresholds);
+
+const driftScoreMax = (thresholds && thresholds.drift_score_max != null) ? thresholds.drift_score_max : 35;
+const flaggedMarkers = perMarker.filter(m => m.flagged);
+
+// Exit code is determined solely by score vs threshold; gate mode is not read.
+// exit 0: score < threshold (passes), exit 1: score >= threshold (exceeded).
+const exitCode = exceeded ? 1 : 0;
+
+// Build per-marker delta map for the JSON shape (S-07 section 4 stdout schema).
+const markersObj = {};
+for (const m of perMarker) {
+  markersObj[m.marker] = {
+    baseline: m.baseline,
+    measured: m.measured,
+    deviationPct: m.deviationPct,
+    flagged: m.flagged,
+  };
+}
+
+// Build findings array: one entry per flagged marker.
+const findings = flaggedMarkers.map(m => ({
+  file: null,
+  line: null,
+  type: 'stylometry.marker_flag',
+  excerpt: m.marker,
+  detail: m.marker + ': baseline=' + m.baseline.toFixed(4) +
+          ' measured=' + m.measured.toFixed(4) +
+          ' deviation=' + m.deviationPct.toFixed(2) + '%',
+}));
+
+const verdict = exceeded ? 'block' : 'pass';
+const outJson = {
+  check: 'stylometry',
+  verdict,
+  detail: exceeded
+    ? 'drift score ' + score.toFixed(2) + ' exceeds threshold ' + driftScoreMax
+    : 'drift score ' + score.toFixed(2) + ' is within threshold ' + driftScoreMax,
+  driftScore: score,
+  threshold: driftScoreMax,
+  status: exceeded ? 'block' : 'pass',
+  markers: markersObj,
+  chapters: chapterFiles,
+  findings,
+  ts: new Date().toISOString(),
+};
+
+// ---- emit ----------------------------------------------------------------------
+
+if (opts.json) {
+  process.stdout.write(JSON.stringify(outJson, null, 2) + '\n');
+} else {
+  const prefix = '[stylometry]';
+  const scoreStr = score.toFixed(2);
+  if (!exceeded) {
+    process.stdout.write(
+      prefix + ' pass: drift score ' + scoreStr + ' < threshold ' + driftScoreMax + '\n'
+    );
+  } else {
+    process.stdout.write(
+      prefix + ' drift score ' + scoreStr + ' exceeds threshold ' + driftScoreMax + '\n'
+    );
+    for (const m of flaggedMarkers) {
+      process.stdout.write(
+        '  [' + m.marker + '] deviation ' + m.deviationPct.toFixed(2) +
+        '% (baseline=' + m.baseline.toFixed(4) + ' measured=' + m.measured.toFixed(4) + ')\n'
+      );
+    }
+  }
+}
+
+process.exit(exitCode);

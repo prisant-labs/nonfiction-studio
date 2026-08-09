@@ -1,0 +1,14 @@
+{
+  "covers": { "chain": ["intake-interview", "interviewer"] },
+  "description": "The intake-interview skill dispatches the interviewer agent to conduct the ten-section project intake and write context/brief.md.",
+  "cases": [
+    {
+      "given": "I want to start a new nonfiction book project",
+      "expect": "interviewer agent is dispatched to conduct the intake interview"
+    },
+    {
+      "given": "Run intake-interview for my book about professional learning networks",
+      "expect": "interviewer is invoked and begins the ten-section intake sequence"
+    }
+  ]
+}

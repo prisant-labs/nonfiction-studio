@@ -1,0 +1,182 @@
+#!/usr/bin/env node
+// what-it-is:   the ns-doctor bible integrity CLI (thin shell over hooks/lib/doctor-engine.mjs)
+// what-it-does: parses arguments, locates the book root, invokes the doctor engine,
+//               and emits a full bible health report; exits 0 when clean, 1 with findings,
+//               2 on operational error or migration-required schema version
+// why:          the CLI is the public surface; all logic lives in doctor-engine.mjs so tests
+//               can drive the engine directly without CLI overhead per S-07 section 4
+// usage:        ns-doctor [--check | --migrate | --report] [--project=<dir>]
+//                         [--validate-packs] [--json]
+
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
+import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
+import {
+  SUPPORTED_MAJOR,
+  checkSchemaVersion,
+  runChecks
+} from '../hooks/lib/doctor-engine.mjs';
+
+// ---- arg parsing ---------------------------------------------------------------
+
+let opts;
+try {
+  opts = parseArgs(process.argv.slice(2), [
+    // --check is a BOOLEAN mode flag for ns-doctor (inline type override because the
+    // shared FLAG_DEFS defines it as a list; see note in S-07 section 4).
+    { name: 'check', type: 'boolean' },
+    { name: 'migrate', type: 'boolean' },
+    'report',
+    'validate-packs',
+    'project',
+    'json',
+  ]);
+} catch (err) {
+  if (err.name === 'ArgsError') {
+    process.stderr.write('ns-doctor: ' + err.message + '\n');
+    process.exit(2);
+  }
+  throw err;
+}
+
+// ---- book root discovery -------------------------------------------------------
+
+const startDir = opts.project ? resolve(opts.project) : process.cwd();
+
+let root, meta, config;
+try {
+  ({ root, meta, config } = findBookRoot(startDir));
+} catch (err) {
+  if (err.name === 'BibleError') {
+    process.stderr.write('ns-doctor: ' + err.message + '\n');
+    process.exit(2);
+  }
+  throw err;
+}
+
+// ---- --validate-packs mode -----------------------------------------------------
+// Craft-pack validation: registered but not-yet (no packs exist until Phase 2).
+// Reports "no packs directory" cleanly and exits 0.
+
+if (opts['validate-packs']) {
+  const packsDir = join(root, 'packs');
+  if (!existsSync(packsDir)) {
+    if (opts.json) {
+      process.stdout.write(JSON.stringify({
+        check: 'validate-packs',
+        status: 'no-packs',
+        message: 'no packs directory found; craft-model packs ship in Phase 2 per D-21'
+      }, null, 2) + '\n');
+    } else {
+      process.stdout.write('[validate-packs] no packs directory; craft-model packs arrive in Phase 2\n');
+    }
+    process.exit(0);
+  }
+  // Packs directory exists but no validator is implemented yet.
+  if (opts.json) {
+    process.stdout.write(JSON.stringify({
+      check: 'validate-packs',
+      status: 'no-packs-validator',
+      message: 'packs directory found but pack schema validation is not yet implemented (Phase 2)'
+    }, null, 2) + '\n');
+  } else {
+    process.stdout.write('[validate-packs] packs directory found; pack validation arrives in Phase 2\n');
+  }
+  process.exit(0);
+}
+
+// ---- --migrate mode ------------------------------------------------------------
+// v1 scope: schema_version match check only.
+// Older majors exit 2 naming both versions. Current major with --migrate exits 2
+// with "no migrations defined for this version pair" (migrations arrive with schema changes).
+// No destructive operations.
+
+if (opts.migrate) {
+  const versionCheck = checkSchemaVersion(meta);
+  if (!versionCheck.ok) {
+    const msg = versionCheck.message || 'migration required';
+    process.stderr.write('ns-doctor: ' + msg + '\n');
+    process.exit(2);
+  }
+  // Current version with --migrate: no migrations defined yet.
+  const noMigMsg =
+    'no migrations defined for this version pair ' +
+    '(schema_version "' + SUPPORTED_MAJOR + '" to "' + SUPPORTED_MAJOR + '"); ' +
+    'migrations arrive with the first schema change per Q-04 (release, versioning, and compatibility)';
+  if (opts.json) {
+    process.stdout.write(JSON.stringify({
+      check: 'migrate',
+      status: 'no-migrations',
+      schemaVersion: SUPPORTED_MAJOR,
+      message: noMigMsg
+    }, null, 2) + '\n');
+  } else {
+    process.stdout.write('[migrate] ' + noMigMsg + '\n');
+  }
+  process.exit(2);
+}
+
+// ---- schema version check (prelude to all check/report modes) ------------------
+// Older schema_version exits 2 with migration-required message before running checks.
+
+const versionCheck = checkSchemaVersion(meta);
+if (!versionCheck.ok) {
+  const msg = versionCheck.message || 'migration required';
+  if (opts.json) {
+    process.stdout.write(JSON.stringify({
+      check: 'doctor',
+      status: 'migration-required',
+      schemaVersion: versionCheck.current,
+      supportedVersion: versionCheck.supported,
+      message: msg,
+      migrationAvailable: false
+    }, null, 2) + '\n');
+  } else {
+    process.stdout.write('[doctor] migration-required: ' + msg + '\n');
+  }
+  process.exit(2);
+}
+
+// ---- run checks (--check, --report, or default) --------------------------------
+// --check and --report both run the full check inventory in v1.
+// Default (no mode flag) also runs the full check inventory.
+
+const { findings, notices } = runChecks(root);
+
+// ---- emit ----------------------------------------------------------------------
+
+const hasFindings = findings.length > 0;
+const status = hasFindings ? 'warnings' : 'valid';
+const exitCode = hasFindings ? 1 : 0;
+
+if (opts.json) {
+  const json = {
+    check: 'doctor',
+    schemaVersion: SUPPORTED_MAJOR,
+    status,
+    findings: findings.map(f => ({ type: f.type, path: f.path, message: f.message })),
+    notices: notices.map(n => ({ type: n.type, path: n.path, message: n.message })),
+    migrationAvailable: false
+  };
+  process.stdout.write(JSON.stringify(json, null, 2) + '\n');
+} else {
+  const prefix = '[doctor]';
+
+  // Emit notices first (informational, never cause exit 1)
+  for (const n of notices) {
+    process.stdout.write(prefix + ' NOTICE [' + n.type + ']: ' + n.message + '\n');
+  }
+
+  if (!hasFindings) {
+    process.stdout.write(prefix + ' pass: bible is valid, no issues found\n');
+  } else {
+    process.stdout.write(prefix + ' ' + findings.length + ' finding(s):\n');
+    for (const f of findings) {
+      const loc = f.path || '(no path)';
+      process.stdout.write('  ' + loc + ' [' + f.type + ']: ' + f.message + '\n');
+    }
+  }
+}
+
+process.exit(exitCode);

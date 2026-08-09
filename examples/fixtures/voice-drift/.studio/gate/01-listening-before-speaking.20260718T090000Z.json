@@ -1,0 +1,53 @@
+{
+  "version": 2,
+  "chapter": "01-listening-before-speaking",
+  "ts": "2026-07-18T09:00:00Z",
+  "verdict": "pass",
+  "checks": [
+    {
+      "check": "claim_coverage",
+      "verdict": "pass",
+      "detail": "5 markers found; all resolve to verified or interpretation-status ledger entries; open_claim_count = 0",
+      "evidence": [
+        "chapters/01-listening-before-speaking.md",
+        "research/evidence-log.md"
+      ],
+      "next": null
+    },
+    {
+      "check": "prompt_scrub",
+      "verdict": "pass",
+      "detail": "No agent scaffolding, prompt residue, or template placeholders found.",
+      "evidence": [],
+      "next": null
+    },
+    {
+      "check": "stylometry",
+      "verdict": "pass",
+      "detail": "drift_score 0 is within threshold 20; chapter prose matches the baseline voice profile.",
+      "evidence": [".studio/progress.json#/chapters/0/drift_score"],
+      "next": null
+    },
+    {
+      "check": "continuity",
+      "verdict": "pass",
+      "detail": "No continuity breaks detected against prior chapters.",
+      "evidence": [],
+      "next": null
+    },
+    {
+      "check": "thesis_alignment",
+      "verdict": "pass",
+      "detail": "Chapter argument serves the controlling idea: deliberate listening as the foundation of a personal learning network.",
+      "evidence": ["structure/thesis.md"],
+      "next": null
+    },
+    {
+      "check": "session_write_flag",
+      "verdict": "pass",
+      "detail": "No uncommitted writes detected at gate time.",
+      "evidence": [],
+      "next": null
+    }
+  ]
+}

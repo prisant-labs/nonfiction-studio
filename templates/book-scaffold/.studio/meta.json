@@ -1,0 +1,6 @@
+{
+  "schema_version": "2",
+  "created": "{{DATETIME}}",
+  "plugin_version_at_creation": "{{PLUGIN_VERSION}}",
+  "book_title": "{{BOOK_TITLE}}"
+}

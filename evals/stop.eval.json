@@ -1,0 +1,14 @@
+{
+  "covers": { "hook": "Stop" },
+  "description": "The Stop hook runs the deterministic quality gate via stop-gate.mjs and, in warn-mode, writes the gate findings to .studio/gate/last-gate.json without blocking.",
+  "cases": [
+    {
+      "given": "Stop fires with stop_hook_active false after a session with a well-formed chapter",
+      "expect": "stop-gate.mjs runs ns-gate in warn mode, writes .studio/gate/last-gate.json, and exits 0"
+    },
+    {
+      "given": "Stop fires with stop_hook_active true (re-entrant stop turn)",
+      "expect": "stop-gate.mjs exits 0 without re-running the gate to avoid duplicate gate records"
+    }
+  ]
+}

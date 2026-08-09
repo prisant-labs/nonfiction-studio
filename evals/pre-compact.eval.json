@@ -1,0 +1,14 @@
+{
+  "covers": { "hook": "PreCompact" },
+  "description": "The PreCompact hook re-injects the book project orientation block before context compaction to preserve project context across the compaction boundary.",
+  "cases": [
+    {
+      "given": "PreCompact fires during an active book project session",
+      "expect": "pre-compact.mjs injects the same orientation block as SessionStart and exits 0"
+    },
+    {
+      "given": "PreCompact fires in a directory with no book project",
+      "expect": "pre-compact.mjs is a no-op; exits 0"
+    }
+  ]
+}

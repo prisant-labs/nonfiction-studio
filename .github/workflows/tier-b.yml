@@ -1,0 +1,55 @@
+name: Tier B
+
+# Manual only: runs when dispatched from the Actions tab, never on its own.
+# The push-to-main and nightly cron triggers were removed so this workflow does
+# not demand a credential GitHub does not yet have. Restore them once a secret
+# is set and unattended coverage is wanted. Advisory either way: a Tier B
+# failure never blocks a merge, though it still hard-blocks a release.
+#
+# A live run needs a credential ONLY on a GitHub runner, which has no logged-in
+# user. Run locally instead with `node scripts/run-integration.mjs`, which
+# spawns the claude CLI against your existing login and needs no API key.
+# Zero validation logic lives in this file. Every step is exactly one node call.
+# See Q-02 (CI pipeline) section 2 for the contract and failure taxonomy.
+#
+# Local proof: node scripts/run-integration.mjs --dry-run runs green locally
+# per TSK-056 (Tier B integration and eval files). Live run deferred to first CI
+# execution where ANTHROPIC_API_KEY is available.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  tier-b:
+    name: Tier B (model integration)
+    runs-on: ubuntu-latest
+
+    steps:
+      # Inert scaffolding: required by GitHub Actions; no local equivalent.
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # Inert scaffolding: pins Node.js to the engines floor declared in package.json.
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22.12.0'
+          cache: npm
+
+      # Live step 1: clean install from lockfile.
+      - name: Install dependencies
+        run: npm ci
+
+      # Live step 2: model integration smoke test against examples/sample-book/
+      # with the haiku model; exits BUDGET_EXCEEDED (code 3) if spend > $0.10.
+      - name: Model integration
+        run: node scripts/run-integration.mjs
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      # Live step 3: eval dispatch-accuracy batch runner (advisory; always exits 0
+      # after grading all cases so a routing failure does not block CI).
+      - name: Eval dispatch accuracy
+        run: node scripts/run-evals.mjs
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

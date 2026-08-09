@@ -1,0 +1,156 @@
+#!/usr/bin/env node
+// what-it-is:   the ns-scrub injection and continuity CLI (thin shell over hooks/lib/scrub-engine.mjs)
+// what-it-does: parses arguments, locates the book root, reads chapter files, runs the requested
+//               scan mode(s), and emits a gate report; exits 0 when clean, 1 with findings,
+//               2 on argument or operational error
+// why:          the CLI is the public surface; all logic lives in scrub-engine.mjs so hooks and
+//               CI share the same computation path per S-07 section 4
+// usage:        ns-scrub [--mode=injection|continuity|all] [--chapter=<slug>|--all]
+//                        [--project=<dir>] [--json]
+
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
+import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
+import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
+import { makeReport, addFinding, finalize } from '../hooks/lib/report.mjs';
+import { scrub } from '../hooks/lib/scrub-engine.mjs';
+
+// ---- arg parsing ---------------------------------------------------------------
+
+let opts;
+try {
+  opts = parseArgs(process.argv.slice(2), [
+    // --mode is not in FLAG_DEFS; use the inline type-override mechanism from args.mjs
+    { name: 'mode', type: 'string' },
+    'chapter',
+    'all',
+    'project',
+    'json',
+  ]);
+} catch (err) {
+  if (err.name === 'ArgsError') {
+    process.stderr.write('ns-scrub: ' + err.message + '\n');
+    process.exit(2);
+  }
+  throw err;
+}
+
+// Resolve and validate --mode; default is 'all'
+const mode = opts.mode || 'all';
+const VALID_MODES = ['injection', 'continuity', 'all'];
+if (!VALID_MODES.includes(mode)) {
+  process.stderr.write(
+    'ns-scrub: invalid --mode value "' + mode + '"; valid values: ' + VALID_MODES.join(', ') + '\n'
+  );
+  process.exit(2);
+}
+
+// ---- book root discovery -------------------------------------------------------
+
+const startDir = opts.project ? resolve(opts.project) : process.cwd();
+
+let root;
+try {
+  ({ root } = findBookRoot(startDir));
+} catch (err) {
+  if (err.name === 'BibleError') {
+    process.stderr.write('ns-scrub: ' + err.message + '\n');
+    process.exit(2);
+  }
+  throw err;
+}
+
+// ---- chapter discovery ---------------------------------------------------------
+
+const chapterDir = join(root, 'chapters');
+if (!existsSync(chapterDir)) {
+  process.stderr.write('ns-scrub: chapters/ directory not found at ' + chapterDir + '\n');
+  process.exit(2);
+}
+
+let chapterPaths;
+if (opts.chapter) {
+  const p = join(chapterDir, opts.chapter + '.md');
+  if (!existsSync(p)) {
+    process.stderr.write('ns-scrub: chapter not found: ' + p + '\n');
+    process.exit(2);
+  }
+  chapterPaths = [p];
+} else {
+  // --all or no scope flag: every .md file in chapters/, sorted by name
+  chapterPaths = readdirSync(chapterDir)
+    .filter(f => f.endsWith('.md'))
+    .sort()
+    .map(f => join(chapterDir, f));
+}
+
+if (chapterPaths.length === 0) {
+  // No chapters to scan; clean by definition
+  const report = makeReport('scrub');
+  const { exitCode, json } = finalize(report);
+  if (opts.json) {
+    process.stdout.write(JSON.stringify(json, null, 2) + '\n');
+  } else {
+    process.stdout.write('[scrub] pass: no chapters to scan\n');
+  }
+  process.exit(exitCode);
+}
+
+// ---- read chapter texts --------------------------------------------------------
+
+const chapters = [];
+for (const absPath of chapterPaths) {
+  let text;
+  try {
+    text = readFileSync(absPath, 'utf8');
+  } catch (err) {
+    process.stderr.write('ns-scrub: cannot read chapter ' + absPath + ': ' + err.message + '\n');
+    process.exit(2);
+  }
+  // Bible-relative path with forward slashes for portability
+  const relFile = relative(root, absPath).replace(/\\/g, '/');
+  chapters.push({ file: relFile, text });
+}
+
+// ---- run scrub engine ----------------------------------------------------------
+
+const findings = scrub(chapters, mode);
+
+// ---- report building -----------------------------------------------------------
+
+const report = makeReport('scrub');
+
+for (const f of findings) {
+  addFinding(report, {
+    file: f.file,
+    line: f.line,
+    type: f.type,
+    excerpt: f.excerpt,
+    detail: f.detail || '',
+  });
+}
+
+const { exitCode, json } = finalize(report);
+
+// ---- emit ----------------------------------------------------------------------
+
+if (opts.json) {
+  process.stdout.write(JSON.stringify(json, null, 2) + '\n');
+} else {
+  const prefix = '[scrub]';
+  if (findings.length === 0) {
+    process.stdout.write(prefix + ' pass: no issues found\n');
+  } else {
+    process.stdout.write(prefix + ' ' + findings.length + ' finding(s):\n');
+    for (const f of findings) {
+      const loc = f.file
+        ? (f.line != null ? f.file + ':' + f.line : f.file)
+        : '(no file)';
+      const typeTag = f.type ? ' [' + f.type + ']' : '';
+      const msg = f.detail ? f.detail : f.excerpt;
+      process.stdout.write('  ' + loc + typeTag + ': ' + msg + '\n');
+    }
+  }
+}
+
+process.exit(exitCode);

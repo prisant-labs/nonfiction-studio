@@ -1,0 +1,48 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/session-start.mjs",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use.mjs" }
+        ]
+      }
+    ],
+    "PostToolBatch": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-batch.mjs" }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/stop-gate.mjs" },
+          {
+            "type": "prompt",
+            "prompt": "Review the thesis-alignment of the last written section. Reply 'pass' if the content advances the thesis, or 'warn: <one-sentence reason>' if it drifts. This check is advisory only in v1.",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-compact.mjs" }
+        ]
+      }
+    ]
+  }
+}

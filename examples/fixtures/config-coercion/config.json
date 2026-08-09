@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "gate": {
+    "mode": "warn",
+    "checks": {
+      "claim_coverage":     { "enabled": true,  "mode": "block" },
+      "prompt_scrub":       { "enabled": true,  "mode": "block" },
+      "stylometry":         { "enabled": true,  "mode": "warn" },
+      "continuity":         { "enabled": true,  "mode": "warn" },
+      "thesis_alignment":   { "enabled": true,  "mode": "block" },
+      "session_write_flag": { "enabled": true,  "mode": "block" }
+    }
+  },
+  "thresholds": {
+    "drift_score_max": 35,
+    "claim_coverage_min": 1.0,
+    "stylometry_marker_tolerance": 2.0
+  },
+  "dod": {
+    "require_claim_coverage": true,
+    "require_scrub_clean": true,
+    "require_drift_under_threshold": false,
+    "require_human_final_pass": true
+  },
+  "stylometry": {
+    "baseline": null
+  },
+  "models": {
+    "drafting-partner": "sonnet",
+    "line-editor": "sonnet",
+    "developmental-editor": "opus",
+    "continuity-checker": "haiku"
+  }
+}

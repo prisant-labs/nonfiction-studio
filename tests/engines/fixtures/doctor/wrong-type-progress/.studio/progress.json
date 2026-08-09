@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "updated": "2026-07-18T00:00:00Z",
+  "chapters": [
+    {
+      "slug": "01-test-chapter",
+      "status": "drafted",
+      "word_count": "not-a-number",
+      "open_claim_count": 0
+    }
+  ],
+  "totals": {
+    "word_count": 0,
+    "open_claim_count": 0,
+    "chapters_final": 0
+  }
+}

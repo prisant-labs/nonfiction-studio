@@ -1,0 +1,14 @@
+{
+  "covers": { "chain": ["outline-book", "structure-architect"] },
+  "description": "The outline-book skill dispatches structure-architect to produce the chapter-by-chapter outline after the thesis is confirmed.",
+  "cases": [
+    {
+      "given": "outline-book is invoked and structure/thesis.md already exists and is confirmed",
+      "expect": "structure-architect agent is dispatched to produce the chapter-by-chapter outline in structure/outline.md"
+    },
+    {
+      "given": "outline-book runs after thesis-architect completes and a confirmed thesis is on disk",
+      "expect": "structure-architect is dispatched to lay out the chapter structure"
+    }
+  ]
+}
