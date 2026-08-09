@@ -1,7 +1,7 @@
 {
   "name": "nonfiction-studio",
   "version": "0.1.0",
-  "description": "An open-source Claude Code / Cowork plugin that turns Claude into a governed non-fiction book studio: specialist subagents, a plain-Markdown project bible, deterministic quality gates, and publishing compliance support.",
+  "description": "An open-source Claude Code plugin (Cowork support pending verification) that turns Claude into a governed non-fiction book studio: specialist subagents, a plain-Markdown project bible, deterministic quality gates, and publishing compliance support.",
   "standard": "0.12",
   "tier": "universal",
   "agent-targets": ["claude"],

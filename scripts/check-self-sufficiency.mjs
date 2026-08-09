@@ -38,8 +38,7 @@
 //               no-additional-keys invariant held on inspection across all 486 tracked files;
 //               this turns that one-time audit finding into permanent, deterministic CI
 //               machinery instead of a claim that can silently rot as the tree changes.
-// used-by:      intended as a future Tier A step (not yet wired into .github/workflows/tier-a.yml
-//               or scripts/check.mjs's registry - a later task owns that wiring)
+// used-by:      runs as a Tier A step (wired into .github/workflows/tier-a.yml at lines 83-85)
 // exit taxonomy: 0 = pass; 1 = named finding(s) (forbidden pattern, stale or invalid exception);
 //                2 = operational error (unreadable root, malformed exceptions file)
 
