@@ -3,7 +3,7 @@
 // what-it-does: drives the MVP author flow against a TEMP CLONE seeded from
 //               examples/sample-book/ with the haiku model; asserts ONLY
 //               artifact-level conditions from Q-01 section 7; exits
-//               BUDGET_EXCEEDED (code 3) when haiku spend passes $0.10.
+//               BUDGET_EXCEEDED (code 3) when haiku spend passes $1.00.
 //               Supports --dry-run: validates the plan and resolves paths with
 //               zero model calls, running only deterministic assertions.
 // why:          Q-02 section 2 Tier B; the budget cap makes this safe to run
@@ -14,7 +14,7 @@
 //   0  - all assertions pass (live or dry-run)
 //   1  - functional assertion failure
 //   2  - operational error (clone failed, CLI unavailable, etc.)
-//   3  - BUDGET_EXCEEDED: cumulative haiku spend exceeded $0.10
+//   3  - BUDGET_EXCEEDED: cumulative haiku spend exceeded $1.00
 //
 // Budget mechanism:
 //   Each claude -p call uses --output-format json. The JSON result carries the
@@ -30,6 +30,18 @@
 //   every machine, so runLiveMode had never executed against a real response.
 //   A missing cost field is now a HARD ERROR rather than a silent zero, so this
 //   class of failure can never again present as a working budget.
+//
+// Live-mode result integrity (corrected 2026-08-08):
+//   The four model-call outcomes (SCAFFOLD_OK, BRIEF_OK, CHAPTER_OK, and the
+//   [UNVERIFIED] check in step 4) and every claude-call failure now feed the
+//   same failures[] list the structural assertions already fed, and a
+//   non-empty list exits nonzero. Previously these outcomes were computed and
+//   logged but never consulted: the live-mode pass/fail flag was set only by
+//   assertions against the temp clone's pre-populated contents (copied in by
+//   cpSync before step 1's first model call), so a run against a model that
+//   answered every prompt wrong, or that never ran at all, still exited 0.
+//   Step 4 also gained a structural assertion of its own - it previously had
+//   none, unlike steps 1-3.
 //
 // Flat-layout note (Q-02 section 2.1, 2026-07-19):
 //   The Q-02 sketch references a "book/" scaffold. The built flat reality has no
@@ -51,7 +63,7 @@ const REPO_ROOT = resolve(__dirname, '..');
 // Configuration
 // ---------------------------------------------------------------------------
 
-const BUDGET_CAP_USD = 0.10;
+const BUDGET_CAP_USD = 1.00;
 const DEFAULT_MODEL = 'haiku';
 const SAMPLE_BOOK = join(REPO_ROOT, 'examples', 'sample-book');
 const FIXTURES_DIR = join(REPO_ROOT, 'examples', 'fixtures');
@@ -144,6 +156,28 @@ function assertAiUseLogHasAgent(logPath, label) {
   return { ok: true, message: 'pass [' + label + ']: ai-use-log has entry with agent field' };
 }
 
+// Ground-truth check for flow step 4 (fact-check-pass): scans the real files
+// in the given directories for a marker string, independent of anything a
+// model claimed about them. This is the artifact step 4's prompt is actually
+// about ("does [UNVERIFIED] appear in context/ or chapters/"), so it is the
+// natural structural assertion for that step per Q-01's artifact-only rule.
+function assertMarkerAbsentInDirs(dirs, marker, label) {
+  const hits = [];
+  for (const dir of dirs) {
+    if (!existsSync(dir) || !statSync(dir).isDirectory()) continue;
+    for (const f of readdirSync(dir)) {
+      const filePath = join(dir, f);
+      if (!statSync(filePath).isFile()) continue;
+      const content = readFileSync(filePath, 'utf8');
+      if (content.includes(marker)) hits.push(filePath);
+    }
+  }
+  if (hits.length > 0) {
+    return { ok: false, message: 'FAIL [' + label + ']: ' + marker + ' found in: ' + hits.join(', ') };
+  }
+  return { ok: true, message: 'pass [' + label + ']: ' + marker + ' absent from ' + dirs.join(', ') };
+}
+
 // ---------------------------------------------------------------------------
 // Engine runner (deterministic; no model calls)
 // ---------------------------------------------------------------------------
@@ -188,16 +222,19 @@ function callClaude(prompt, model, cwd) {
   } catch {
     return { ok: false, error: 'non-JSON stdout', costUsd: 0, text: result.stdout.slice(0, 200) };
   }
-  // The CLI emits total_cost_usd; cost_usd is accepted as a legacy fallback.
-  // A response with NEITHER field is a hard failure: continuing would run the
-  // rest of the flow with no working spend cap, which is exactly how the
-  // pre-2026-08-07 defect stayed invisible.
-  const costUsd = typeof parsed.total_cost_usd === 'number' ? parsed.total_cost_usd
-    : (typeof parsed.cost_usd === 'number' ? parsed.cost_usd : null);
+  // The CLI emits total_cost_usd. A response missing it is a hard failure:
+  // continuing would run the rest of the flow with no working spend cap,
+  // which is exactly how the pre-2026-08-07 defect stayed invisible.
+  //
+  // Removed 2026-08-08: a legacy fallback to parsed.cost_usd. Live-verified
+  // absent against CLI 2.1.225 and never once observed; the branch was dead
+  // code that could only ever mask a future rename of total_cost_usd behind
+  // a silent zero.
+  const costUsd = typeof parsed.total_cost_usd === 'number' ? parsed.total_cost_usd : null;
   if (costUsd === null) {
     return {
       ok: false,
-      error: 'CLI JSON carried no total_cost_usd (or legacy cost_usd) field; '
+      error: 'CLI JSON carried no total_cost_usd field; '
         + 'refusing to continue without a working budget cap',
       costUsd: 0,
       text: '',
@@ -375,7 +412,13 @@ function runLiveMode(model) {
     return exitWithCode(2, 'clone failed: ' + err.message);
   }
 
-  let allOk = true;
+  // Every check that can fail - a claude call erroring out, a model outcome
+  // boolean coming back wrong, or a structural assertion against the temp
+  // clone - appends its message here. Exit is nonzero iff this is non-empty,
+  // so live-mode pass/fail is provably conditioned on what the model actually
+  // said, not only on clone state that was already there before the first
+  // call was ever made.
+  const failures = [];
 
   try {
     // Flow step 1: init-project scaffold - verify scaffold directories present
@@ -390,11 +433,17 @@ function runLiveMode(model) {
     const scaffoldResult = callClaude(scaffoldPrompt, model, tempDir);
     log('  cost: $' + scaffoldResult.costUsd.toFixed(6) + ' (total: $' + totalSpendUsd.toFixed(6) + ')');
     if (!scaffoldResult.ok) {
-      log('  FAIL [init-project]: claude call failed: ' + scaffoldResult.error);
+      const msg = 'FAIL [init-project]: claude call failed: ' + scaffoldResult.error;
+      log('  ' + msg);
+      failures.push(msg);
     } else {
       log('  result snippet: ' + scaffoldResult.text.slice(0, 120).replace(/\n/g, ' '));
       const scaffoldOk = scaffoldResult.text.toUpperCase().includes('SCAFFOLD_OK');
-      log('  scaffold check: ' + (scaffoldOk ? 'pass (all six directories present)' : 'warn (unexpected result; structural assertions will verify)'));
+      const msg = scaffoldOk
+        ? 'pass [init-project]: model reported SCAFFOLD_OK'
+        : 'FAIL [init-project]: model did not report SCAFFOLD_OK';
+      log('  scaffold check: ' + msg);
+      if (!scaffoldOk) failures.push(msg);
     }
     // Artifact assertions for step 1: scaffold directories
     const step1Assertions = [
@@ -407,7 +456,7 @@ function runLiveMode(model) {
     ];
     for (const a of step1Assertions) {
       log('  ' + a.message);
-      if (!a.ok) allOk = false;
+      if (!a.ok) failures.push(a.message);
     }
 
     checkBudget();
@@ -424,18 +473,24 @@ function runLiveMode(model) {
     const briefResult = callClaude(briefPrompt, model, tempDir);
     log('  cost: $' + briefResult.costUsd.toFixed(6) + ' (total: $' + totalSpendUsd.toFixed(6) + ')');
     if (!briefResult.ok) {
-      log('  FAIL [intake-interview]: claude call failed: ' + briefResult.error);
+      const msg = 'FAIL [intake-interview]: claude call failed: ' + briefResult.error;
+      log('  ' + msg);
+      failures.push(msg);
     } else {
       log('  result snippet: ' + briefResult.text.slice(0, 120).replace(/\n/g, ' '));
       const briefOk = briefResult.text.toUpperCase().includes('BRIEF_OK');
-      log('  brief check: ' + (briefOk ? 'pass (brief populated with section headers)' : 'warn (unexpected result; structural assertions will verify)'));
+      const msg = briefOk
+        ? 'pass [intake-interview]: model reported BRIEF_OK'
+        : 'FAIL [intake-interview]: model did not report BRIEF_OK';
+      log('  brief check: ' + msg);
+      if (!briefOk) failures.push(msg);
     }
     // Artifact assertion for step 2: brief.md has section headers
     const step2Assertion = assertFileContains(
       join(tempDir, 'context', 'brief.md'), '## ', 'step2:brief populated (section headers)'
     );
     log('  ' + step2Assertion.message);
-    if (!step2Assertion.ok) allOk = false;
+    if (!step2Assertion.ok) failures.push(step2Assertion.message);
 
     checkBudget();
 
@@ -451,18 +506,24 @@ function runLiveMode(model) {
     const chapterResult = callClaude(chapterPrompt, model, tempDir);
     log('  cost: $' + chapterResult.costUsd.toFixed(6) + ' (total: $' + totalSpendUsd.toFixed(6) + ')');
     if (!chapterResult.ok) {
-      log('  FAIL [draft-chapter]: claude call failed: ' + chapterResult.error);
+      const msg = 'FAIL [draft-chapter]: claude call failed: ' + chapterResult.error;
+      log('  ' + msg);
+      failures.push(msg);
     } else {
       log('  result snippet: ' + chapterResult.text.slice(0, 120).replace(/\n/g, ' '));
       const chapterOk = chapterResult.text.toUpperCase().includes('CHAPTER_OK');
-      log('  chapter check: ' + (chapterOk ? 'pass (chapters/ non-empty)' : 'warn (unexpected result; structural assertions will verify)'));
+      const msg = chapterOk
+        ? 'pass [draft-chapter]: model reported CHAPTER_OK'
+        : 'FAIL [draft-chapter]: model did not report CHAPTER_OK';
+      log('  chapter check: ' + msg);
+      if (!chapterOk) failures.push(msg);
     }
     // Artifact assertion for step 3: chapters/ non-empty
     const step3Assertion = assertDirNonEmpty(
       join(tempDir, 'chapters'), '.md', 'step3:chapters/ non-empty'
     );
     log('  ' + step3Assertion.message);
-    if (!step3Assertion.ok) allOk = false;
+    if (!step3Assertion.ok) failures.push(step3Assertion.message);
 
     checkBudget();
 
@@ -479,14 +540,29 @@ function runLiveMode(model) {
     const factResult = callClaude(factCheckPrompt, model, tempDir);
     log('  cost: $' + factResult.costUsd.toFixed(6) + ' (total: $' + totalSpendUsd.toFixed(6) + ')');
     if (!factResult.ok) {
-      log('  FAIL [fact-check-pass]: claude call failed: ' + factResult.error);
+      const msg = 'FAIL [fact-check-pass]: claude call failed: ' + factResult.error;
+      log('  ' + msg);
+      failures.push(msg);
     } else {
       log('  result snippet: ' + factResult.text.slice(0, 120).replace(/\n/g, ' '));
       // The sample-book chapters do NOT have [UNVERIFIED] markers; expect NOT_FOUND
       const markerFound = factResult.text.toUpperCase().includes('NOT_FOUND') ||
         !factResult.text.toUpperCase().includes('[UNVERIFIED]');
-      log('  [UNVERIFIED] check: ' + (markerFound ? 'pass (no planted marker in seeded clone, as expected)' : 'unexpected UNVERIFIED found'));
+      const msg = markerFound
+        ? 'pass [fact-check-pass]: model reported no [UNVERIFIED] marker (expected for seeded clone)'
+        : 'FAIL [fact-check-pass]: model reported [UNVERIFIED] present, but the seeded clone has none';
+      log('  [UNVERIFIED] check: ' + msg);
+      if (!markerFound) failures.push(msg);
     }
+    // Artifact assertion for step 4: [UNVERIFIED] is genuinely absent from the
+    // seeded clone's context/ and chapters/ files - ground truth, independent
+    // of what the model claimed above, and the real artifact this step's
+    // prompt is actually about.
+    const step4Assertion = assertMarkerAbsentInDirs(
+      [join(tempDir, 'context'), join(tempDir, 'chapters')], '[UNVERIFIED]', 'step4:[UNVERIFIED] absent (seeded clone)'
+    );
+    log('  ' + step4Assertion.message);
+    if (!step4Assertion.ok) failures.push(step4Assertion.message);
 
     checkBudget();
 
@@ -497,19 +573,23 @@ function runLiveMode(model) {
     const structAssertions = runStructuralAssertions(tempDir, 'live');
     for (const a of structAssertions) {
       log('  ' + a.message);
-      if (!a.ok) allOk = false;
+      if (!a.ok) failures.push(a.message);
     }
 
     log('\n[run-integration] -- deterministic assertions --');
     const detAssertions = runDeterministicAssertions(tempDir);
     for (const a of detAssertions) {
       log('  ' + a.message);
-      if (!a.ok) allOk = false;
+      if (!a.ok) failures.push(a.message);
     }
 
     log('\n[run-integration] total spend: $' + totalSpendUsd.toFixed(6) + ' of $' + BUDGET_CAP_USD + ' cap');
 
-    if (!allOk) return exitWithCode(1, 'live run: one or more assertions failed');
+    if (failures.length > 0) {
+      log('\n[run-integration] FAILURES (' + failures.length + '):');
+      for (const f of failures) log('  - ' + f);
+      return exitWithCode(1, 'live run: ' + failures.length + ' check(s) failed');
+    }
     log('[run-integration] live run complete: all assertions pass');
     return exitWithCode(0);
   } finally {
