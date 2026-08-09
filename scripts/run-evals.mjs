@@ -16,11 +16,15 @@
 //   0  - all cases graded (pass or fail; the runner always completes)
 //   1  - one or more eval files are malformed; runner aborted
 //   2  - operational error (no model access: no API key and no usable claude CLI)
-//   3  - BUDGET_EXCEEDED: cumulative spend exceeded the $0.10 cap
+//   3  - BUDGET_EXCEEDED: cumulative spend exceeded the $1.50 cap
 //
-// Budget note: 15 eval cases at a measured $0.037 per haiku call is roughly
-// $0.55, well past the $0.10 cap, so a live batch stops partway by design until
-// the cap is recalibrated. See docs and the _local/ note on credentialing.
+// Budget note (recalibrated 2026-08-08): 28 eval cases across 15 files at a
+// measured $0.037 per haiku call cost roughly $1.04 the last time this was
+// measured live, comfortably inside the $1.50 cap. A live batch is expected
+// to grade every case and exit 0; the old $0.10 cap covered barely two calls,
+// so it tripped BUDGET_EXCEEDED partway through every single run by design,
+// not in response to any real overrun. Hitting BUDGET_EXCEEDED (exit 3) now
+// means a genuine regression in spend, not the previously guaranteed outcome.
 
 import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
@@ -32,7 +36,7 @@ const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, '..');
 const EVALS_DIR = join(REPO_ROOT, 'evals');
 
-const BUDGET_CAP_USD = 0.10;
+const BUDGET_CAP_USD = 1.50;
 const MODEL = 'haiku';
 
 // ---------------------------------------------------------------------------
@@ -105,17 +109,20 @@ function callClaude(prompt) {
   try { parsed = JSON.parse(result.stdout); } catch {
     return { ok: false, error: 'non-JSON stdout', costUsd: 0, text: '' };
   }
-  // The CLI emits total_cost_usd; cost_usd is a legacy fallback. A response
-  // with neither is a hard failure, because continuing would grade the rest of
-  // the batch with no working spend cap. Corrected 2026-08-07: this read only
-  // cost_usd, which CLI 2.1.224 does not emit, so every call recorded $0.00 and
-  // the cap at the bottom of the loop could never fire.
-  const costUsd = typeof parsed.total_cost_usd === 'number' ? parsed.total_cost_usd
-    : (typeof parsed.cost_usd === 'number' ? parsed.cost_usd : null);
+  // The CLI emits total_cost_usd. A response missing it is a hard failure,
+  // because continuing would grade the rest of the batch with no working
+  // spend cap. Corrected 2026-08-07: this read only cost_usd, which CLI
+  // 2.1.224 does not emit, so every call recorded $0.00 and the cap at the
+  // bottom of the loop could never fire.
+  //
+  // Removed 2026-08-08: a legacy fallback to parsed.cost_usd, live-verified
+  // absent against CLI 2.1.225 and never once observed; dead code that could
+  // only ever mask a future rename of total_cost_usd behind a silent zero.
+  const costUsd = typeof parsed.total_cost_usd === 'number' ? parsed.total_cost_usd : null;
   if (costUsd === null) {
     return {
       ok: false,
-      error: 'CLI JSON carried no total_cost_usd (or legacy cost_usd) field; '
+      error: 'CLI JSON carried no total_cost_usd field; '
         + 'refusing to continue without a working budget cap',
       costUsd: 0,
       text: '',
