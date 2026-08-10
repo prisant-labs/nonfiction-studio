@@ -61,7 +61,7 @@ test('case 1: full render contains active chapter, words vs target, open claims,
   const tmp = makeTempClone(GOLDEN);
   try {
     // Add a book-wide word-count target and a per-chapter promise: neither field is
-    // populated by any shipped writer yet (see ADR-0008, status HUD and CANON 3.5), but the
+    // populated by any shipped writer yet (see ADR-0008 (status HUD and CANON 3.5)), but the
     // engine is forward-compatible with both when present, per additionalProperties:
     // true on both schemas. This proves that path with a real fixture.
     const configPath = join(tmp, '.studio', 'config.json');
