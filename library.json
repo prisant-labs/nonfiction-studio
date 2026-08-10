@@ -42,6 +42,7 @@
       "ns-doctor",
       "ns-gate",
       "ns-scrub",
+      "ns-statusline",
       "ns-stylometry"
     ]
   }
