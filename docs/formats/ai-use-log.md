@@ -1,6 +1,6 @@
 # AI Use Log Format
 
-**Purpose.** This is the normative grammar for `.studio/ai-use-log.jsonl`, the append-only compliance ledger defined in S-08 (schemas and file formats) section 5 and D-10 (compliance layer). The `PostToolBatch` and `SubagentStop` hooks append records; the `disclosure-report` and `publish-readiness` skills (Phase 2, not yet shipped) read the file. Every field name, value constraint, and structural rule below is authoritative. A parser author must be able to implement a conformant reader without consulting any other document.
+**Purpose.** This is the normative grammar for `.studio/ai-use-log.jsonl`, the append-only compliance ledger defined in S-08 (schemas and file formats) section 5 and D-10 (compliance layer). The `PostToolBatch` hook appends records; the `SubagentStop` hook (Phase 2, not yet shipped) will append records once built; the `disclosure-report` and `publish-readiness` skills (Phase 2, not yet shipped) read the file. Every field name, value constraint, and structural rule below is authoritative. A parser author must be able to implement a conformant reader without consulting any other document.
 
 ## Record structure
 
@@ -38,7 +38,7 @@ The `scope` enum maps to Amazon KDP's AI content disclosure categories:
 ## Placement and append rules
 
 - The file is created as an empty zero-byte file at scaffold time and seeded at `templates/book-scaffold/.studio/ai-use-log.jsonl`.
-- Writers are the `PostToolBatch` and `SubagentStop` hooks only. No agent writes to this file directly.
+- Writers are the `PostToolBatch` hook and, once built, the `SubagentStop` hook (Phase 2, not yet shipped; `hooks/hooks.json` registers no `SubagentStop` entry today). No agent writes to this file directly.
 - Each hook call appends exactly one record followed by a newline character. Writers never overwrite or rewrite existing content.
 - Readers treat the file as an ordered sequence of independent JSON objects, one per line.
 - A partial final line from an interrupted write is silently discarded by readers.
@@ -61,6 +61,6 @@ A record produced by the `PostToolBatch` hook for a mechanical snapshot event:
 ## Consumed by
 
 - `PostToolBatch` hook (TSK-033 (post-tool-batch hook)): appends one record per batch of tool calls involving bible-relative paths.
-- `SubagentStop` hook (TSK-069 (subagent-stop hook)): appends one record when a named subagent completes its turn.
+- `SubagentStop` hook (Phase 2, not yet shipped; TSK-069 (subagent-stop hook)): will append one record when a named subagent completes its turn, once built.
 - `disclosure-report` skill (Phase 2, not yet shipped; TSK-067 (disclosure-report skill)): reads all records to produce the AI disclosure report for the author.
 - `publish-readiness` skill (Phase 2, not yet shipped): reads all records to confirm the compliance ledger is present and non-empty before clearing the publish gate.

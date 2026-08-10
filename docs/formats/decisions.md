@@ -1,6 +1,6 @@
 # Decision Log Format
 
-**Purpose.** This is the normative grammar for `context/decisions.md`, the append-only editorial and attestation trail defined in S-08 (schemas and file formats) section 12 and D-10 (compliance layer). The `SubagentStop` hook writes editorial outcome entries; the `publish-readiness` skill (Phase 2, not yet shipped) writes human-final-pass attestation entries; the `disclosure-report` skill (Phase 2, not yet shipped) and the export path read the file. Every field name, value constraint, and structural rule below is authoritative. A parser author must be able to implement a conformant reader without consulting any other document.
+**Purpose.** This is the normative grammar for `context/decisions.md`, the append-only editorial and attestation trail defined in S-08 (schemas and file formats) section 12 and D-10 (compliance layer). The `SubagentStop` hook (Phase 2, not yet shipped) will write editorial outcome entries once built; the `publish-readiness` skill (Phase 2, not yet shipped) writes human-final-pass attestation entries; the `disclosure-report` skill (Phase 2, not yet shipped) and the export path read the file. Every field name, value constraint, and structural rule below is authoritative. A parser author must be able to implement a conformant reader without consulting any other document.
 
 ## Entry structure
 
@@ -26,7 +26,7 @@ Each entry body is a Markdown bullet list with the following fields:
 - `context/decisions.md` is append-only. New entries are always added at the end of the file.
 - Entries are never edited or deleted after they land.
 - The heading date is the calendar date the entry was written, not the date of the event being recorded.
-- The `SubagentStop` hook appends one entry per editorial outcome it records.
+- The `SubagentStop` hook (Phase 2, not yet shipped) will append one entry per editorial outcome it records, once built.
 - The `publish-readiness` skill (Phase 2, not yet shipped) appends one entry per human-final-pass attestation per D-10 (compliance layer).
 - `bin/ns-doctor` validates field presence and reports entries missing required fields.
 
@@ -42,7 +42,7 @@ A human-final-pass attestation written by the `publish-readiness` skill (Phase 2
 - links: .studio/gate/03-the-signal.20260717T154022Z.json, EV-0031 (survey figure)
 ```
 
-An editorial outcome written by the `SubagentStop` hook:
+An editorial outcome that will be written by the `SubagentStop` hook (Phase 2, not yet shipped):
 
 ```markdown
 ### 2026-07-17 - outline approved, chapter 04
@@ -54,7 +54,7 @@ An editorial outcome written by the `SubagentStop` hook:
 
 ## Consumed by
 
-- `SubagentStop` hook: appends editorial outcome entries when a named agent completes a drafting or editorial turn.
+- `SubagentStop` hook (Phase 2, not yet shipped): will append editorial outcome entries when a named agent completes a drafting or editorial turn, once built.
 - `publish-readiness` skill (Phase 2, not yet shipped): appends the human-final-pass attestation entry required by D-10 (compliance layer) before clearing the publish gate; part of the TSK-045 era compliance flow.
 - `disclosure-report` skill (Phase 2, not yet shipped): reads the decision log to include editorial decisions and attestations in the AI disclosure report; part of the TSK-045 era compliance flow.
 - `intake-interview` flow: the structured author interview that seeds the initial voice profile; any decision entries from this flow are the earliest entries in the log.

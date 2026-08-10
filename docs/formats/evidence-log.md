@@ -61,7 +61,7 @@ Comparison against `verbatim` is character-for-character with no normalization: 
 - A blank `locator` line (for example, `- locator:`) is valid when no locator is available.
 - `bin/ns-claims` parses the file from top to bottom; entry order does not affect coverage computation.
 - `fact-checker` may update only the `status` field of an existing entry; it never modifies the `claim`, `source`, `locator`, `confidence`, `added-by`, or `date` fields.
-- `SubagentStop` hook writes entries on the same append-only basis as `research-librarian`.
+- `SubagentStop` hook (Phase 2, not yet shipped): will write entries on the same append-only basis as `research-librarian`, once built.
 
 ## Example
 
