@@ -1,6 +1,6 @@
 name: Tier B
 
-# Runs weekly on a schedule, and on demand from the Actions tab (workflow_dispatch). Advisory
+# Runs only on demand from the Actions tab (workflow_dispatch); no schedule trigger. Advisory
 # either way: this workflow has no pull_request trigger at all, so a Tier B failure can never
 # block a merge, but it does hard-block a release, since the tag-triggered release workflow
 # (.github/workflows/release.yml) is a separate, later step in the release ceremony that a
@@ -29,15 +29,10 @@ name: Tier B
 # tests/checks/run-evals.test.mjs. What can only prove on a real GitHub runner: that this
 # workflow's own `secrets.CLAUDE_CODE_OAUTH_TOKEN` interpolation resolves the way the local
 # tests assume, and, once the secret is set, that a live run against the real API succeeds
-# end to end. Both are first proven on this workflow's first scheduled or dispatched execution.
+# end to end. Both are first proven on this workflow's first dispatched execution.
 
 on:
   workflow_dispatch:
-  # 14:37 UTC every Wednesday (roughly 7:37am US Pacific / 10:37am US Eastern). Deliberately not
-  # on the hour and not at midnight UTC: GitHub's scheduler is heavily contended at both, which
-  # delays queued runs.
-  schedule:
-    - cron: '37 14 * * 3'
 
 jobs:
   tier-b:
@@ -89,7 +84,7 @@ jobs:
       # documented and chosen); 3 only on a genuine BUDGET_EXCEEDED (cap sized for the full
       # eval batch; see the script). This tier is advisory to merges only because the trigger
       # above has no pull_request entry, not because any step here suppresses a nonzero exit:
-      # there is no continue-on-error in this file, and a scheduled or dispatched run below the
+      # there is no continue-on-error in this file, and a dispatched run below the
       # dispatch-accuracy threshold now fails the job for real.
       - name: Eval dispatch accuracy
         run: node scripts/run-evals.mjs

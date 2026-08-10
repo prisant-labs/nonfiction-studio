@@ -42,7 +42,7 @@ If you try Nonfiction Studio in Cowork, treat it as "should work" rather than "p
 
 ## Self-sufficiency
 
-**Self-sufficiency.** Nonfiction Studio runs entirely on a working Claude Code or Cowork login: every skill, agent, hook, and CLI in this plugin rides the model access your session already has, none of them call a model API directly, and none require a separate API key, account, or paid service. Tier B (model-integration CI) stays inside that same boundary: it authenticates with `CLAUDE_CODE_OAUTH_TOKEN`, an OAuth token a maintainer mints from their own subscription with `claude setup-token`, not an API key. It runs on a weekly schedule plus manual dispatch, is advisory only, and is never required to open or merge a pull request; when the token secret is not set, the workflow skips green with a named reason instead of failing. Running it yourself needs only your existing `claude` CLI login. See [ADR-0010](docs/adr/ADR-0010-tier-b-trigger-and-credential.md) for the full trigger and credential contract. Optional online research (DOI and URL lookups) uses Claude's own WebSearch and WebFetch tools, stays off by default, and falls back to author-pasted source text whenever it is unavailable or disabled, rather than blocking.
+**Self-sufficiency.** Nonfiction Studio runs entirely on a working Claude Code or Cowork login: every skill, agent, hook, and CLI in this plugin rides the model access your session already has, none of them call a model API directly, and none require a separate API key, account, or paid service. Tier B (model-integration CI) stays inside that same boundary: it authenticates with `CLAUDE_CODE_OAUTH_TOKEN`, an OAuth token a maintainer mints from their own subscription with `claude setup-token`, not an API key. It runs on manual dispatch only, is advisory only, and is never required to open or merge a pull request; when the token secret is not set, the workflow skips green with a named reason instead of failing. Running it yourself needs only your existing `claude` CLI login. See [ADR-0010](docs/adr/ADR-0010-tier-b-trigger-and-credential.md) for the full trigger and credential contract. Optional online research (DOI and URL lookups) uses Claude's own WebSearch and WebFetch tools, stays off by default, and falls back to author-pasted source text whenever it is unavailable or disabled, rather than blocking.
 
 ## Privacy and memory
 
@@ -54,7 +54,7 @@ The [docs/](docs/README.md) folder has a reference page for every agent, skill, 
 
 ## Contributing
 
-Pull requests run a fully keyless, deterministic CI check (Tier A); you never need an API key to develop or test this plugin. A second, model-integration CI check (Tier B) exists for maintainers, runs weekly plus on manual dispatch, and is advisory, never a merge requirement or a trigger on pull requests at all. A fuller contributing guide will follow; for now, open an issue or a pull request.
+Pull requests run a fully keyless, deterministic CI check (Tier A); you never need an API key to develop or test this plugin. A second, model-integration CI check (Tier B) exists for maintainers, runs on manual dispatch only, and is advisory, never a merge requirement or a trigger on pull requests at all. A fuller contributing guide will follow; for now, open an issue or a pull request.
 
 ## License
 
