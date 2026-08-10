@@ -119,7 +119,7 @@ V Validation passed
 
 **Critical observation:** The validator output names only `marketplace.json`. It does not mention `hooks/hooks.json`. Both forms produce byte-for-byte identical output, which confirms that `claude plugin validate --strict .` does not currently read or schema-check `hooks/hooks.json`. Passing validation is not proof of correct hooks.json schema - it is proof the validator does not yet cover that file.
 
-This is the "both forms validate" escalation path described in the task brief.
+This is the "both forms validate" escalation path TSK-007 (SPK-01 hooks.json schema) defined in advance.
 
 ---
 
@@ -127,7 +127,7 @@ This is the "both forms validate" escalation path described in the task brief.
 
 **Adopted form: Form A (wrapper object).**
 
-The brief's decision rule states: "a form that validates AND matches the live official docs example wins." Formal checking against the live documentation at https://code.claude.com/docs/en/hooks (the URL the SKILL.md itself cites as authoritative) shows that every hooks example in the official docs uses the wrapper-object structure exclusively:
+TSK-007 (SPK-01 hooks.json schema)'s decision rule states: "a form that validates AND matches the live official docs example wins." Formal checking against the live documentation at https://code.claude.com/docs/en/hooks (the URL the SKILL.md itself cites as authoritative) shows that every hooks example in the official docs uses the wrapper-object structure exclusively:
 
 **Official docs example - general hooks:**
 

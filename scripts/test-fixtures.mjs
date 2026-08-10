@@ -31,6 +31,7 @@ const NS_STYLOMETRY = join(BIN, 'ns-stylometry');
 const NS_SCRUB = join(BIN, 'ns-scrub');
 const NS_DOCTOR = join(BIN, 'ns-doctor');
 const NS_GATE = join(BIN, 'ns-gate');
+const NS_NOTES = join(BIN, 'ns-notes');
 
 // ---------------------------------------------------------------------------
 // Fixture source directories (committed; never modified)
@@ -62,6 +63,14 @@ const MATRIX = [
       { engine: NS_SCRUB, args: [], expected: 0 },
       { engine: NS_DOCTOR, args: ['--check'], expected: 0 },
       { engine: NS_GATE, args: [], expected: 0 },
+      // ns-notes exits 1, unlike every other row above: EV-0001 and EV-0005 both cite
+      // SRC-0003 with a blank locator, which is real, pre-existing data in the committed
+      // ledger (not a planted defect), so it correctly lands in production/apparatus-
+      // attention.md rather than a malformed note. This row proves ns-notes runs end to
+      // end against the real committed ledger via the shared temp-clone harness and that
+      // the run leaves no residue; tests/engines/notes-cli.test.mjs is the more detailed,
+      // dedicated proof of exit-code mapping and byte-identical regeneration.
+      { engine: NS_NOTES, args: [], expected: 1 },
     ],
   },
   {

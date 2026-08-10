@@ -88,10 +88,15 @@ jobs:
       - name: Component inventory
         run: node scripts/checks/check-inventory.mjs
 
-      # Live step 11: engine, lib, hook, and schema unit test suites (no API key required).
+      # Live step 11: workspace-reference guard - a shipped file must not point at a path that
+      # does not survive a clean checkout (this wave's own scratch workspace included).
+      - name: Workspace reference guard
+        run: node scripts/checks/check-workspace-refs.mjs
+
+      # Live step 12: engine, lib, hook, and schema unit test suites (no API key required).
       - name: Engine unit tests
         run: node scripts/test-engines.mjs
 
-      # Live step 12: bidirectional fixture matrix with temp-clone discipline.
+      # Live step 13: bidirectional fixture matrix with temp-clone discipline.
       - name: Fixture tests
         run: node scripts/test-fixtures.mjs

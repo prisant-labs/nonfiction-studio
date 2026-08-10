@@ -1,20 +1,35 @@
 name: Tier B
 
-# Manual only: runs when dispatched from the Actions tab, never on its own.
-# The push-to-main and nightly cron triggers were removed so this workflow does
-# not demand a credential GitHub does not yet have. Restore them once a secret
-# is set and unattended coverage is wanted. Advisory either way: a Tier B
-# failure never blocks a merge, though it still hard-blocks a release.
+# Runs only on demand from the Actions tab (workflow_dispatch); no schedule trigger. Advisory
+# either way: this workflow has no pull_request trigger at all, so a Tier B failure can never
+# block a merge, but it does hard-block a release, since the tag-triggered release workflow
+# (.github/workflows/release.yml) is a separate, later step in the release ceremony that a
+# maintainer runs only once Tier B is green. See docs/adr/ADR-0010-tier-b-trigger-and-credential.md
+# for the trigger and credential decision this workflow implements.
 #
-# A live run needs a credential ONLY on a GitHub runner, which has no logged-in
-# user. Run locally instead with `node scripts/run-integration.mjs`, which
-# spawns the claude CLI against your existing login and needs no API key.
+# Credential: CLAUDE_CODE_OAUTH_TOKEN, an OAuth token minted with `claude setup-token` and set
+# as a repo secret with `gh secret set` - subscription authentication, not an API key, per the
+# self-sufficiency invariant. The secret may not be set yet; the two live steps below handle
+# that themselves. When neither CLAUDE_CODE_OAUTH_TOKEN nor the legacy ANTHROPIC_API_KEY
+# fallback is present on this unattended runner, scripts/lib/credential-mode.mjs (shared by
+# both live steps' scripts) makes that a NAMED GREEN SKIP, not a failure: it prints which
+# secret is missing and exits 0, so this workflow stays green until the maintainer sets the
+# secret on their own schedule. Once the secret exists, both steps run for real.
+#
+# A live run needs a credential ONLY on a GitHub runner, which has no logged-in user. Run
+# locally instead with `node scripts/run-integration.mjs`, which spawns the claude CLI against
+# your existing login and needs no credential of any kind.
 # Zero validation logic lives in this file. Every step is exactly one node call.
 # See Q-02 (CI pipeline) section 2 for the contract and failure taxonomy.
 #
-# Local proof: node scripts/run-integration.mjs --dry-run runs green locally
-# per TSK-056 (Tier B integration and eval files). Live run deferred to first CI
-# execution where ANTHROPIC_API_KEY is available.
+# Local proof: node scripts/run-integration.mjs --dry-run and node scripts/run-evals.mjs
+# --dry-run both run green locally and keyless. The named-skip path (this file's steps below,
+# run with neither credential set) is also proven locally by spawning the real scripts under a
+# controlled CI=true environment; see tests/checks/run-integration.test.mjs and
+# tests/checks/run-evals.test.mjs. What can only prove on a real GitHub runner: that this
+# workflow's own `secrets.CLAUDE_CODE_OAUTH_TOKEN` interpolation resolves the way the local
+# tests assume, and, once the secret is set, that a live run against the real API succeeds
+# end to end. Both are first proven on this workflow's first dispatched execution.
 
 on:
   workflow_dispatch:
@@ -43,30 +58,35 @@ jobs:
       # Inert scaffolding: installs the claude binary required by live steps 2
       # and 3 below. The npm package is the same binary as the standalone
       # installer and needs Node 22+, which the setup-node step above already
-      # pins.
+      # pins. Installing the binary here is NOT the same thing as having a
+      # credential: scripts/lib/credential-mode.mjs deliberately never treats a
+      # merely-installed, merely-runnable binary as evidence of authentication
+      # (that conflation was F-CI-02's exact defect; see this file's own header).
       - name: Install claude CLI
         run: npm install -g @anthropic-ai/claude-code
 
-      # Live step 2: model integration smoke test against examples/sample-book/
-      # with the haiku model. Exits 1 if a model-call outcome or structural
-      # assertion fails anywhere in the five-step flow, 2 on an operational
-      # error (clone or CLI), 3 on BUDGET_EXCEEDED (cap sized for one full run;
-      # spend > $1.00).
+      # Live step 2: model integration smoke test against examples/sample-book/ with the haiku
+      # model. Exits 0 on every assertion passing OR on the named green skip (no credential on
+      # this unattended runner; see this file's header); 1 if a model-call outcome or structural
+      # assertion fails anywhere in the five-step flow; 2 on an operational error (clone or CLI);
+      # 3 on BUDGET_EXCEEDED (cap sized for one full run; spend > $1.00).
       - name: Model integration
         run: node scripts/run-integration.mjs
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
       # Live step 3: eval dispatch-accuracy batch runner. Real exit contract
-      # (scripts/run-evals.mjs's own taxonomy): 0 once every case has been
-      # graded, whatever the pass rate - dispatch accuracy is advisory signal
-      # only and does not affect the exit code; 1 if an evals/*.eval.json file
-      # is malformed; 2 if no model access is available; 3 only on a genuine
-      # BUDGET_EXCEEDED (cap sized for the full 28-case batch; see the script).
-      # This tier is advisory because the trigger above is workflow_dispatch
-      # only, not because any step here suppresses a nonzero exit - there is
-      # no continue-on-error in this file.
+      # (scripts/run-evals.mjs's own taxonomy): 0 once every case has been graded AND the
+      # dispatch-accuracy threshold is met, OR on the named green skip described in this file's
+      # header; 1 if an evals/*.eval.json file is malformed; 2 if dispatch accuracy falls below
+      # the documented threshold (roadmap row 1.12: a genuinely broken dispatch table must turn
+      # a live run red; scripts/lib/dispatch-threshold.mjs is where that threshold is
+      # documented and chosen); 3 only on a genuine BUDGET_EXCEEDED (cap sized for the full
+      # eval batch; see the script). This tier is advisory to merges only because the trigger
+      # above has no pull_request entry, not because any step here suppresses a nonzero exit:
+      # there is no continue-on-error in this file, and a dispatched run below the
+      # dispatch-accuracy threshold now fails the job for real.
       - name: Eval dispatch accuracy
         run: node scripts/run-evals.mjs
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

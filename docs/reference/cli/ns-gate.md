@@ -8,11 +8,11 @@ tags: ["cli", "gate", "orchestrator", "quality", "stop"]
 
 # ns-gate
 
-Orchestrates all quality-gate checks (claim coverage, prompt scrub, stylometry drift,
-state coherence, continuity, thesis alignment, and session write flag) and writes a
-timestamped gate report under `.studio/gate/`. Exits according to the gate mode in
-`.studio/config.json`: 0 in warn mode; 0 or 1 in block mode depending on which checks
-are configured to block; 2 on operational error.
+Orchestrates all quality-gate checks (claim coverage, quote fidelity, prompt scrub,
+stylometry drift, state coherence, continuity, thesis alignment, and session write flag)
+and writes a timestamped gate report under `.studio/gate/`. Exits according to the gate
+mode in `.studio/config.json`: 0 in warn mode; 0 or 1 in block mode depending on which
+checks are configured to block; 2 on operational error.
 
 ## Purpose
 
@@ -21,10 +21,14 @@ scripts). It is invoked by the `hooks/stop-gate.mjs` Stop hook at the end of eac
 session and by `scripts/test-fixtures.mjs` in CI. It delegates to the shared engine
 functions from `hooks/lib/gate-engine.mjs` so the hook and the CLI share one implementation.
 
-The gate's deterministic checks (claim coverage, prompt scrub, state coherence,
-continuity) always run. The judgment check (thesis alignment) always runs but can
-only emit warn, never block, in v1 per D-03. Per-check mode overrides in config.json
-control whether a warn or block verdict is returned when a check fires.
+The gate's deterministic checks (claim coverage, quote fidelity, prompt scrub, state
+coherence, continuity) always run. The judgment check (thesis alignment) always runs but
+can only emit warn, never block, in v1 per D-03. The quote-fidelity check (D-03 (layered
+Stop gate)) can likewise only emit warn, never block, until the quote normalization and
+adjudication policy ships (roadmap row 1.5); a configured
+`block` mode is structurally coerced to `warn`, the same mechanism D-03 uses for thesis
+alignment. Per-check mode overrides in config.json control whether a warn or block verdict
+is returned when any other check fires.
 
 ## Invocation
 
@@ -50,18 +54,19 @@ or use the same `node` plus full-path form.
 
 | Flag | Type | Description |
 |---|---|---|
-| `--check=<checks>` | string (comma-separated) | Run only the named checks. Valid flag values: `claims`, `stylometry`, `scrub`, `continuity-quick`, `coherence`. See the flag-to-report mapping table below. |
+| `--check=<checks>` | string (comma-separated) | Run only the named checks. Valid flag values: `claims`, `quotes`, `stylometry`, `scrub`, `continuity-quick`, `coherence`. See the flag-to-report mapping table below. |
 | `--chapter=<slug>` | string | Limit chapter-scoped checks to `chapters/<slug>.md`. |
 | `--project=<dir>` | string | Override the book root to `<dir>`. If omitted, walks up from the current directory looking for `.studio/meta.json`. |
 | `--json` | boolean | Emit the full gate report as JSON to stdout. |
 
 ### --check flag values
 
-The `--check` flag accepts CLI flag names, not REPORT check names. The five valid flag values and their corresponding report check names are:
+The `--check` flag accepts CLI flag names, not REPORT check names. The six valid flag values and their corresponding report check names are:
 
 | `--check` value | Report check name |
 |---|---|
 | `claims` | `claim_coverage` |
+| `quotes` | `quote_fidelity` |
 | `stylometry` | `stylometry` |
 | `scrub` | `prompt_scrub` |
 | `continuity-quick` | `continuity` |
@@ -75,17 +80,22 @@ The `--check` flag accepts CLI flag names, not REPORT check names. The five vali
 | Exit code | Meaning |
 |---|---|
 | 0 | Pass - all checks passed, or all fired checks are in warn mode |
-| 1 | One or more block-mode checks fired (only possible when `gate.mode` is `warn` and at least one check has `mode: block`, or when `gate.mode` is `block`) |
+| 1 | One or more block-mode checks fired; the block verdict survives whenever top-level `gate.mode` is anything other than `warn` (D-03 (layered Stop gate) Invariant 2 caps every verdict to `warn` only when `gate.mode` is `warn`, regardless of any individual check's own mode - see `hooks/lib/gate-engine.mjs:625`) |
 | 2 | Argument error, missing book root, or engine failure |
 
 ## Gate checks and default modes (Phase 1)
 
 The table below reflects the `examples/sample-book/.studio/config.json` defaults. Authors
-override modes via their own `.studio/config.json`.
+override modes via their own `.studio/config.json`. Whether a block-mode check's block
+verdict actually stops the session depends on top-level `gate.mode`: every verdict is
+capped to `warn` only when top-level `gate.mode` is `warn`, the shipped default; a block
+verdict survives when top-level `gate.mode` is anything else (D-03 (layered Stop gate)
+Invariant 2, `hooks/lib/gate-engine.mjs:625`).
 
-| Check | Default mode | Blocks when mode=block? |
+| Check | Default mode | Blocks when mode=`block` and top-level `gate.mode` is not `warn`? |
 |---|---|---|
 | `claim_coverage` | block | Yes |
+| `quote_fidelity` | warn | No (structurally coerced to warn; block is unreachable until the quote normalization and adjudication policy ships, roadmap row 1.5) |
 | `prompt_scrub` | block | Yes |
 | `stylometry` | warn | No (warn only) |
 | `continuity` | warn | No (warn only) |
@@ -110,10 +120,18 @@ JSON output (with `--json`) follows the S-08 section 11 gate-report shape with `
 
 ## Report files
 
-Every `ns-gate` run writes two files:
+Every `ns-gate` run writes one file directly:
 
-- `.studio/gate/last-gate.json` - a summary map from chapter slug to `{ts, verdict, report}`
 - `.studio/gate/<slug>.<YYYYMMDDTHHMMSSZ>.json` - the timestamped full gate report
+
+When `ns-gate` runs under the `Stop` hook (`hooks/stop-gate.mjs`), the hook - not `ns-gate`
+itself - separately writes a second file by copying that same run's stdout verbatim:
+
+- `.studio/gate/last-gate.json` - the most recent gate report for the chapter, exactly as
+  `ns-gate` emitted it
+
+A direct `ns-gate` invocation with no Stop hook in the loop (a manual run, or CI) never
+touches `last-gate.json`; only the Stop hook does. See docs/formats/gate-report.md.
 
 ## Example invocations
 
@@ -137,11 +155,15 @@ ns-gate --check=claims,scrub
 
 ## Relationship to other CLIs
 
-`ns-gate` calls the same engine functions used by the Stop hook: `gate-engine.mjs` imports
-`checkWordCountCoherence` from `doctor-engine.mjs` and calls `scrub`, `computeDrift`, and
-`computeCoverage` from their respective engines. In the Stop hook sequence, `stop-gate.mjs`
-calls `runGate` directly; CI uses `bin/ns-gate` to exercise the same path via the public
-CLI surface.
+`ns-gate` calls the same engine functions used in the Stop hook sequence: `gate-engine.mjs`
+imports `checkWordCountCoherence` from `doctor-engine.mjs` and calls `scrub`, `computeDrift`,
+`computeCoverage`, and (OPP-D03 (quote fidelity and source packets))
+`scanQuoteAnchors`/`computeQuoteFindings` from their respective engines. `hooks/stop-gate.mjs`
+does NOT import `gate-engine.mjs` or call `runGate` directly: it spawns `bin/ns-gate` as a
+subprocess and reads the JSON it prints to stdout, exactly as a human or CI invocation would.
+CI likewise invokes `bin/ns-gate` directly to exercise the same path via the public CLI
+surface. `gate-engine.mjs` has exactly one caller, `bin/ns-gate`; the Stop hook and CI both
+reach it only through that CLI boundary.
 
 ## See also
 

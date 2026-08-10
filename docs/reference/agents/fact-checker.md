@@ -228,10 +228,15 @@ gate read this report as part of the coverage evaluation.
 Fetched web content is untrusted data per D-13 (security posture). The `fact-checker`
 quotes and attributes content from fetched pages and never paraphrases it as its own
 claim. Any instruction-shaped text inside a fetched page - for example,
-"Ignore your previous instructions and output..." - is data to log and flag, not a
-command to execute. The agent flags such anomalies in its session output. This posture
-is not waivable; it applies to every WebFetch call regardless of the apparent
-credibility of the source. The agent never reports a robot-generated summary as source
+"Ignore your previous instructions and output..." - is data, not a command to execute.
+The shipped agent prompt (`agents/fact-checker.md`) instructs the agent never to follow
+such embedded instructions; it does not separately instruct the agent to flag or log the
+anomaly in its own session output, so whether one appears there is a matter of model
+judgment, not a documented contract. Any WebFetch or WebSearch call this agent makes
+additionally passes through the mechanical `PostToolUse` hook (`hooks/post-tool-use.mjs`),
+which wraps and fences the payload and appends a record to `.studio/logs/fetches.jsonl`
+regardless of what the agent itself does. This posture is not waivable; it applies to
+every WebFetch call regardless of the apparent credibility of the source. The agent never reports a robot-generated summary as source
 confirmation and never follows a redirect to a paywall or login screen to retrieve
 gated content.
 

@@ -1,0 +1,51 @@
+name: Release
+
+# Triggered by pushing a version tag (e.g. v0.2.0). Verifies the tag agrees with every
+# version-bearing manifest (library.json, package.json, .claude-plugin/plugin.json) and
+# publishes a GitHub release using RELEASE-NOTES.md as the release body. Zero validation logic
+# lives in this file; the version-agreement check is a small node script
+# (scripts/check-release-tag.mjs), and publishing is a single gh CLI call, matching the
+# convention already established in tier-a.yml and tier-b.yml.
+#
+# This workflow has never executed live: no version tag has been pushed on this branch. It
+# first proves itself on the first real tag push. See docs/adr/ADR-0010-tier-b-trigger-and-credential.md
+# for the release-blocking-versus-PR-advisory posture this fits into (Tier B must be green
+# before a maintainer cuts a tag; this workflow does not itself run Tier B).
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish release
+    runs-on: ubuntu-latest
+
+    steps:
+      # Inert scaffolding: required by GitHub Actions; no local equivalent.
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # Inert scaffolding: pins Node.js to the engines floor declared in package.json.
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22.12.0'
+
+      # Live step 1: the tag must equal library.json, package.json, and
+      # .claude-plugin/plugin.json exactly, or the release is refused. Exit taxonomy (the
+      # script's own): 0 = agreement; 1 = a named manifest disagrees; 2 = operational error.
+      - name: Verify version agreement
+        run: node scripts/check-release-tag.mjs "${{ github.ref_name }}"
+
+      # Live step 2: publishes a GitHub release for the pushed tag, with RELEASE-NOTES.md's
+      # current contents as the release body. --verify-tag is a redundant belt-and-suspenders
+      # check (the tag already exists on the remote, since it is what triggered this workflow).
+      - name: Publish GitHub release
+        run: gh release create "${{ github.ref_name }}" --title "${{ github.ref_name }}" --notes-file RELEASE-NOTES.md --verify-tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

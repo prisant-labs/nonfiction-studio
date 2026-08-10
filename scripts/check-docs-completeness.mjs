@@ -25,9 +25,12 @@ const DOCS_AGENTS = join(REPO_ROOT, 'docs', 'reference', 'agents');
 const DOCS_SKILLS = join(REPO_ROOT, 'docs', 'reference', 'skills');
 const DOCS_CLI = join(REPO_ROOT, 'docs', 'reference', 'cli');
 
-// The five shipped CLI binaries per D-05 (five shipped CLIs via bin/).
+// The shipped CLI binaries per D-05 (five shipped CLIs via bin/; ns-statusline is the sixth,
+// added by OPP-P03, studio HUD, see docs/adr/ADR-0008-status-hud.md; ns-notes is the seventh,
+// added by OPP-D05, apparatus generator, see docs/adr/ADR-0009-apparatus-cli.md for the growth
+// decision and the standing growth-policy test for any future CLI).
 // Excludes spike/probe scripts and .cmd Windows shims.
-const SHIPPED_CLIS = ['ns-claims', 'ns-doctor', 'ns-gate', 'ns-scrub', 'ns-stylometry'];
+const SHIPPED_CLIS = ['ns-claims', 'ns-doctor', 'ns-gate', 'ns-notes', 'ns-scrub', 'ns-statusline', 'ns-stylometry'];
 
 // ---------------------------------------------------------------------------
 // Helpers

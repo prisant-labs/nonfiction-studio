@@ -31,11 +31,11 @@ This experiment falsifies that claim for Windows CLI sessions. The plugin loaded
 
 Empirical probe results outrank documentation for this design decision. The outcome (absolute-path fallback required) is grounded in measured behavior, not in the A-02 EF-07 claim.
 
-Action: EF-07 in A-02 (platform baseline) must be corrected to qualify the claim as "unverified on Windows CLI sessions" or updated to note that `bin/` PATH injection does not occur on Windows. EF-07 is added to the A-02 correction queue and watch list. The relevant file is `(local working notes, not published)`, section 12 (Watch list).
+Action: EF-07 in A-02 (platform baseline) must be corrected to qualify the claim as "unverified on Windows CLI sessions" or updated to note that `bin/` PATH injection does not occur on Windows. EF-07 is added to the A-02 correction queue and watch list. A-02 (platform capability baseline) is an internal planning document, not published in this repository; the correction belongs in its section 12 (Watch list).
 
 ---
 
-## Outcome Taxonomy (from task brief)
+## Outcome Taxonomy (from TSK-011 (SPK-05 bin PATH on Windows))
 
 - "confirmed extensionless": bare name resolves without any shim
 - "confirmed with cmd shim": bare name resolves only with `.cmd` shim present (CLIs then ship shims)

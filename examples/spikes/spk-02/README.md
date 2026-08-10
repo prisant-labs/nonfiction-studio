@@ -101,7 +101,7 @@ Back in your terminal (do not close the Cowork session yet):
 cat examples/spikes/spk-02/spk02-evidence.log
 ```
 
-If the file is not found at that path, the hook may have written to the installed plugin root instead (a versioned cache directory, not the repo checkout), since the hook command resolves its write path through `${CLAUDE_PLUGIN_ROOT}`. To find that root, run `claude plugin list` or check the Cowork plugin panel for the installed path of `nonfiction-studio`, then look for `examples/spikes/spk-02/spk02-evidence.log` beneath it. Record whichever path held the file when filling in O2.
+If the file is not found at that path, the hook may have written to the installed plugin root instead (a versioned cache directory, not the repo checkout), since the hook command resolves its write path through the hooks.json plugin-root interpolation variable (ADR-0005, bin PATH on Windows). To find that root, run `claude plugin list` or check the Cowork plugin panel for the installed path of `nonfiction-studio`, then look for `examples/spikes/spk-02/spk02-evidence.log` beneath it. Record whichever path held the file when filling in O2.
 
 Because the hook appends rather than overwrites, this file only counts as fresh evidence if you cleared or noted it in "Before you start." If you skipped that step, check the timestamp on each line against the time you ran Step 7 (session open) before treating a `SPK02-SESSIONSTART-FIRED` line as this run's result.
 

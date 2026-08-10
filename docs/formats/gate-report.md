@@ -48,7 +48,7 @@ Each entry in the `checks` array carries:
 ## Placement and retention rules
 
 - Reports are written atomically by `bin/ns-gate` to `.studio/gate/<slug>.<YYYYMMDDTHHMMSSZ>.json` at the end of every gate run.
-- `bin/ns-gate` also updates `.studio/gate/last-gate.json` with the most recent gate result for the chapter after each run; this file is the gate-debt input read by the `SessionStart` hook per S-07 (hooks and scripts).
+- The `Stop` hook (`hooks/stop-gate.mjs`), not `bin/ns-gate` itself, separately writes `.studio/gate/last-gate.json`: it spawns `bin/ns-gate` as a subprocess and copies the subprocess's stdout verbatim into `last-gate.json` via temp-file-plus-rename. This file carries the most recent gate result for the chapter and is the gate-debt input read by the `SessionStart` hook per S-07 (hooks and scripts). `bin/ns-gate`, run directly (for example from CI or a manual invocation with no Stop hook in the loop), never touches `last-gate.json`.
 - The top-level `verdict` is the most severe per-check verdict, subject to the coercions in `config.json` section 4: judgment checks (`thesis_alignment`) are coerced from `block` to `warn`; the top-level `gate.mode` setting governs whether `block` verdicts actually stop the session.
 - Retention mirrors the snapshot policy: the last 10 reports per chapter slug are kept; older reports are pruned by `bin/ns-gate` at creation time.
 - `progress.json` `last_gate.report` is updated by `bin/ns-gate` to point at the new report's bible-relative path after each run.
@@ -89,6 +89,6 @@ Each entry in the `checks` array carries:
 
 ## Consumed by
 
-- `bin/ns-gate` (TSK-029 (ns-gate orchestrator)): writes one report per gate run; updates `.studio/gate/last-gate.json`; updates `progress.json` `last_gate.report`; prunes to the last 10 reports per chapter slug.
-- `Stop` gate hook (TSK-034 (stop-gate hook)): invokes `bin/ns-gate` at session end and reads the resulting report to determine whether to block the session.
+- `bin/ns-gate` (TSK-029 (ns-gate orchestrator)): writes one report per gate run; updates `progress.json` `last_gate.report`; prunes to the last 10 reports per chapter slug. Does NOT write `.studio/gate/last-gate.json` (see the Stop hook, below).
+- `Stop` gate hook (TSK-034 (stop-gate hook)): invokes `bin/ns-gate` at session end, reads the resulting report to determine whether to block the session, and is the sole writer of `.studio/gate/last-gate.json` (a verbatim copy of that same `bin/ns-gate` run's stdout).
 - `status-dashboard` skill: reads the latest report per chapter to populate the gate status column in the dashboard.

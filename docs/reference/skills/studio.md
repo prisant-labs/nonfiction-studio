@@ -1,6 +1,6 @@
 ---
 title: "studio skill reference"
-description: "Reference for the studio skill - the guided front door dispatcher that presents five numbered paths and routes to the matching Phase 1 skill without requiring the author to know skill names"
+description: "Reference for the studio skill - the guided front door dispatcher that presents six numbered paths and routes to the matching skill without requiring the author to know skill names"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "studio", "dispatcher", "front-door", "routing", "getting-started"]
@@ -8,13 +8,13 @@ tags: ["skill", "studio", "dispatcher", "front-door", "routing", "getting-starte
 
 # studio
 
-The `studio` skill is the guided front door and dispatcher for the Nonfiction Studio plugin per D-17 (guided front door). It reads project state, presents five numbered paths, confirms the author's choice, and routes to the matching Phase 1 skill. It is a Phase 1 skill specified in S-06 3.10 (skills and invocation surface).
+The `studio` skill is the guided front door and dispatcher for the Nonfiction Studio plugin per D-17 (guided front door). It reads project state, presents six numbered paths, confirms the author's choice, and routes to the matching skill. It is a Phase 1 skill specified in S-06 3.10 (skills and invocation surface); its sixth path (OPP-D17, five-minute first win) was added in a later wave and needs no project.
 
 ## Purpose
 
 `studio` removes the need for authors to know skill names. At the start of any session, the author can type `/nonfiction-studio:studio` and receive a numbered menu that routes to the right skill for their current project state. On chat and Cowork, `studio` is the recommended entry point because it loads context before routing per D-17 (guided front door). On CLI, experienced authors skip it and invoke skills directly by name.
 
-**The dispatcher routes to skills only.** Per the TSK-044 (chain contract, Phase 1) reconciliation, `studio` has no chain edges in `agents/_chain-permitted.yaml`. The five paths route to Phase 1 skills; those skills invoke agents as their own contracts specify. Path 5's general-questions half answers directly from inline-loaded bible context without invoking any skill.
+**The dispatcher routes to skills only.** Per the TSK-044 (chain contract, Phase 1) reconciliation, `studio` has no chain edges in `agents/_chain-permitted.yaml`. The six paths route to skills; most of those skills invoke agents as their own contracts specify, though Path 6's targets (`quick-scan` and `tour`) invoke no agent at all. Path 5's general-questions half answers directly from inline-loaded bible context without invoking any skill.
 
 **The skill writes nothing.** No file writes, no `.studio/` mutations. All output is produced by the target skill.
 
@@ -33,7 +33,7 @@ Alternate entry points:
 - Author starts a chat session without a clear intent
 - Author asks "what do I do next" or "where do I start"
 
-## The Five Paths
+## The Six Paths
 
 | Path | When to use | Target skill(s) |
 |---|---|---|
@@ -42,6 +42,7 @@ Alternate entry points:
 | 3 - Research and verify | Gathering sources or checking claims | `research-pass` or `fact-check-pass` |
 | 4 - Review quality and status | Project overview or gate run needed | `status-dashboard`, then `run-quality-gate` |
 | 5 - Troubleshoot or get help | Structural problem or general question | `doctor` or inline answer from bible context |
+| 6 - Quick preview | Fast, no-commitment read on pasted writing, or a demo of the quality gate; no project needed | `quick-scan` or `tour` |
 
 ## Inputs and Outputs
 
@@ -53,6 +54,7 @@ Alternate entry points:
 | Step 2 (all paths) | `.studio/meta.json` | Book title for greeting |
 | Path 2 | `structure/chapter-list.md` | Chapter registry; read after the registry probe confirms it exists |
 | Path 5 general | `context/brief.md`, `context/style-profile.md`, `structure/thesis.md`, `structure/outline.md` | Inline context for direct answers; loaded as applicable |
+| Path 6 | (none) | `quick-scan` and `tour` read no project file; reachable directly from Step 1's `NO_PROGRESS` branch, which skips Step 2's `meta.json` read entirely |
 
 ### Outputs
 
@@ -62,11 +64,11 @@ The skill writes no files and performs no state mutations. All outputs are produ
 
 The skill runs five steps.
 
-1. **Progress file probe (mandatory first tool call).** Uses a Bash probe (`test -f .studio/progress.json`) to detect whether a project exists (`HAS_PROGRESS`/`NO_PROGRESS`). On `NO_PROGRESS`, presents Path 1 as the only option and proceeds to the confirm-before-handoff. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
+1. **Progress file probe (mandatory first tool call).** Uses a Bash probe (`test -f .studio/progress.json`) to detect whether a project exists (`HAS_PROGRESS`/`NO_PROGRESS`). On `NO_PROGRESS`, presents Path 1 and Path 6 (the two paths that need no project) and proceeds to the confirm-before-handoff for whichever the author picks. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
 
 2. **Parse progress.json and read book title.** On `HAS_PROGRESS`, reads `.studio/progress.json`. If the file is present but malformed or unreadable, routes directly to Path 5 naming `doctor`. On a valid parse, reads `.studio/meta.json` for `book_title`; falls back to "your book" if absent.
 
-3. **Greet and present five paths.** Greets the author by book title and presents all five paths as numbered choices with one-line descriptions. Waits for the author's choice.
+3. **Greet and present six paths.** Greets the author by book title and presents all six paths as numbered choices with one-line descriptions. Waits for the author's choice. Skipped when Step 1 already routed via the `NO_PROGRESS` shortcut (see Path 6 below).
 
 4. **Route based on choice.** Implements each path:
    - Path 1: confirms, then proceeds with `init-project`; chains to `intake-interview` on completion.
@@ -74,6 +76,7 @@ The skill runs five steps.
    - Path 3: asks whether to gather research or verify claims; routes to `research-pass` or `fact-check-pass`.
    - Path 4: proceeds with `status-dashboard`; offers `run-quality-gate` for chapters flagged by the dashboard.
    - Path 5: asks whether it is a structural problem (routes to `doctor`) or a general question (answers inline from bible context).
+   - Path 6: asks whether to paste writing for a fast read (`quick-scan`) or see a guided demo of the quality gate (`tour`); routes to the named skill. Neither target reads a project file.
 
 5. **Confirm before handoff.** Before transitioning to any target skill, confirms the author is ready. On cancellation, returns to the path menu.
 
@@ -103,6 +106,15 @@ Path 5 handles two distinct situations:
 **Structural or schema problems** (corrupted progress, orphaned claim IDs, broken cross-references): the `doctor` skill runs `bin/ns-doctor` to diagnose and repair. `doctor` is a Phase 1 skill that arrives with TSK-054 (doctor skill). In v1 it is referenced by name and invoked as `/nonfiction-studio:doctor`.
 
 **General questions about the studio, project, or workflow**: answered directly from bible files loaded inline via the Read tool. No skill or agent is invoked. The Read tool loads `context/brief.md`, `context/style-profile.md`, `structure/thesis.md`, and `structure/outline.md` as applicable before answering.
+
+## Path 6: Quick Preview
+
+Path 6 (OPP-D17, five-minute first win) is the try-before-you-commit path. It asks whether the author wants a fast read on pasted writing (`quick-scan`) or a guided demonstration of the quality gate (`tour`), then routes to the named skill. Neither target reads or requires any project file, which is why Path 6 is the one path reachable two ways:
+
+- Through the normal Step 3 six-path menu, for an author who already has a project but wants a quick read on a new excerpt or wants to show someone else how the gate works.
+- Directly from Step 1's `NO_PROGRESS` branch, alongside Path 1, before any project exists at all. This is deliberate: paths 2 through 5 all assume an existing project and do not apply to a brand-new arrival, so the moment a stranger has nothing yet is exactly the moment this path matters most.
+
+See [quick-scan](./quick-scan.md) and [tour](./tour.md) for the full contract of each target skill.
 
 ## Confirm-Before-Handoff
 
@@ -134,7 +146,7 @@ Path 2 chapter inspection uses the committed status enum from S-08 section 3 ver
 
 ## Failure Behavior
 
-**Missing `progress.json` (no project).** Step 1 detects `NO_PROGRESS` and presents Path 1 as the only option. No other paths are offered.
+**Missing `progress.json` (no project).** Step 1 detects `NO_PROGRESS` and presents Path 1 and Path 6, the two paths that do not require a project. No other paths are offered.
 
 **Malformed or unreadable `progress.json`.** Step 2 detects the parse failure and routes directly to Path 5, naming `doctor`. Never proceeds silently with stale or missing context.
 

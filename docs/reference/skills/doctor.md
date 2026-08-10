@@ -1,6 +1,6 @@
 ---
 title: "doctor skill reference"
-description: "Reference for the doctor skill - the bible integrity front door that wraps bin/ns-doctor in one Bash call per invocation, maps exit codes to grouped findings with routing hints, and writes nothing in v1"
+description: "Reference for the doctor skill - the bible integrity front door that wraps bin/ns-doctor in one Bash call per invocation, maps exit codes to grouped findings with routing hints, and (in its report, migrate, and packs modes) writes nothing; a fourth mode, install-statusline, performs one consented write to the author's own Claude Code settings"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "doctor", "integrity", "schema", "validation", "orphan", "migrate"]
@@ -8,17 +8,19 @@ tags: ["skill", "doctor", "integrity", "schema", "validation", "orphan", "migrat
 
 # doctor
 
-The `doctor` skill is the bible integrity front door per D-12 (versioned bible with a doctor) and S-06 3.11 (skills and invocation surface). It fronts `bin/ns-doctor` with a single Bash call per invocation, maps the exit code to a presented result, and groups findings by check type with routing hints. The skill and engine are both read-only in v1: no file is written in any mode. It is governed by D-05 (five shipped CLIs), D-06 (single-writer state discipline), and D-12 (versioned bible with a doctor).
+The `doctor` skill is the bible integrity front door per D-12 (versioned bible with a doctor) and S-06 3.11 (skills and invocation surface). It fronts `bin/ns-doctor` with a single Bash call per invocation, maps the exit code to a presented result, and groups findings by check type with routing hints. `bin/ns-doctor` and its engine (`hooks/lib/doctor-engine.mjs`) are read-only without exception, in every mode. The skill's `report`, `migrate`, and `packs` modes write nothing either. A fourth mode, `install-statusline` (OPP-P03, studio HUD; ADR-0008, status HUD and CANON 3.5), writes exactly one file, `~/.claude/settings.json`, and only after the author answers an explicit yes; see "Install-statusline Mode" below. It is governed by D-05 (five shipped CLIs), D-06 (single-writer state discipline), and D-12 (versioned bible with a doctor).
 
 ## Purpose
 
 `doctor` bridges the deterministic bible integrity engine and the author conversation. The `bin/ns-doctor` engine it invokes runs up to ten checks (bible structure, progress.json schema, meta.json and config.json shape, EV grammar, SRC grammar, orphan claim markers, orphan SRC references, word-count coherence, config-coercion notice, snapshot naming) composed into a single pass. The skill's role is to select the right mode flag, invoke the engine, and present the verdict honestly with per-group counts and routing hints.
 
-**v1 writes nothing.** The engine is read-only per its READ-ONLY COVENANT (grep-proven at TSK-028 (ns-doctor engine)). The skill adds no log file. The `.studio/logs/doctor-<ts>.json` write and bible mutations that appear in the S-06 3.11 specification predate the built engine and describe the Phase 2 `fix` mode contract.
+**`bin/ns-doctor` is read-only without exception.** Proven by the grep in the engine's own header (`hooks/lib/doctor-engine.mjs:13-14`; TSK-028, ns-doctor engine). The skill's `report`, `migrate`, and `packs` modes add no log file and write nothing. The `.studio/logs/doctor-<ts>.json` write and bible mutations that appear in the S-06 3.11 specification predate the built engine and describe the Phase 2 `fix` mode contract, unrelated to `install-statusline`.
+
+**`install-statusline` is the one exception, narrowly scoped.** It writes `~/.claude/settings.json`'s `statusLine` key, and only that key, and only on an explicit yes to a stated, one-time consent prompt. The write is performed by the skill itself with the Write or Edit tool; `bin/ns-doctor` is not invoked and is not involved in any way. See "Install-statusline Mode" below.
 
 **The fix mode is not in v1.** The skill responds to a `fix` argument by stating it is Phase 2+ scope. The `fix` contract recorded for Phase 2 is: dry-run default, explicit `apply` argument required, fixable-issue list (duplicate EV IDs, malformed JSONL log lines, broken internal cross-references), and a change log written to `.studio/logs/doctor-<ts>.json`.
 
-**No agents invoked.** This is a deterministic-CLI-only skill in Phase 1. No chain edges exist.
+**No agents invoked, in any mode.** This is a deterministic-CLI-only skill for `report`, `migrate`, and `packs`. `install-statusline` uses the Write or Edit tool directly, not an agent. No chain edges exist.
 
 ## Invocation
 
@@ -33,6 +35,7 @@ The mode argument is optional; the default is `report`.
 | `report` (default) | Full 10-check inventory; exit 0 (clean), exit 1 (findings), exit 2 (error or migration-required prelude) |
 | `migrate` | Schema-version diagnosis only; never writes; exit 0 when already current, exit 2 when migration is required (genuinely incompatible version) |
 | `packs` | Craft-pack validity check; exit 0 in all v1 cases (no packs directory or no validator yet) |
+| `install-statusline` | Offers a one-time consented write of the main Claude Code status line into `~/.claude/settings.json`; does not invoke `bin/ns-doctor`; writes only on an explicit yes |
 | `fix` | Not in v1; the skill declines and states the Phase 2 contract |
 | `validate` | Alias for `report`; subsumed in v1 (the check inventory covers all schema validation) |
 
@@ -54,22 +57,28 @@ Alternate entry points:
 | `research/evidence-log.md` | Step 3 (via engine) | EV grammar (required fields, enum values, SRC ID format); orphan-marker cross-reference |
 | `research/sources.md` | Step 3 (via engine) | SRC grammar (type enum, retrieval-status enum); SRC cross-reference check |
 | `chapters/*.md` | Step 3 (via engine) | Scanned for `[claim: EV-nnnn]` markers in the orphan-marker check |
+| `~/.claude/settings.json` | `install-statusline` mode only, by the skill itself (not the engine) | Read first to merge into, never to validate against the bible; a user-scope file, outside any book project |
 
 ### Outputs
 
-The skill writes no files. All reads are performed by `bin/ns-doctor` under its READ-ONLY COVENANT.
+`bin/ns-doctor` writes no files, in any mode, without exception - the engine performs every read
+in `report`, `migrate`, and `packs`. The skill itself writes exactly one file, in exactly one
+mode: `install-statusline` writes `~/.claude/settings.json`'s `statusLine` key, and only after the
+author answers an explicit yes to a stated consent prompt. See "Install-statusline Mode" below.
 
 | Path | Written by | Notes |
 |---|---|---|
-| (none in v1) | - | The `.studio/logs/doctor-<ts>.json` write arrives with `fix` in Phase 2 |
+| `~/.claude/settings.json` | the skill, `install-statusline` mode only, on explicit yes | Merges a `statusLine` entry; every other existing top-level key is preserved; a pre-existing `statusLine` requires a separate explicit confirmation before being replaced |
+| (none, all other modes) | - | The `.studio/logs/doctor-<ts>.json` write arrives with `fix` in Phase 2, unrelated to `install-statusline` |
 
 ## Flow Summary
 
-The skill runs four steps.
+`report`, `migrate`, and `packs` run four steps each. `install-statusline` is a separate four-step
+flow (Steps A-D) that never invokes `bin/ns-doctor` at all; see "Install-statusline Mode" below.
 
-1. **Argument parsing (no tool call).** Extracts the mode from the supplied argument. Default is `report`. Recognizes `report`, `migrate`, `packs`, and `validate` (treated as `report`). Declines `fix` as Phase 2+ scope and halts without any tool calls. Declines unknown tokens and halts.
+1. **Argument parsing (no tool call).** Extracts the mode from the supplied argument. Default is `report`. Recognizes `report`, `migrate`, `packs`, `install-statusline`, and `validate` (treated as `report`). Declines `fix` as Phase 2+ scope and halts without any tool calls. Declines unknown tokens and halts. An `install-statusline` mode skips straight to its own flow, below.
 
-2. **Resolve the plugin root.** Before the engine is invoked, the skill resolves the plugin's installed path: a primary lookup against `extraKnownMarketplaces['nonfiction-studio'].source.path` in `~/.claude/settings.json`, a `~/.claude/plugins/cache` search fallback, and a dev-mode fallback that checks for `bin/ns-doctor` in the current directory. This is the same three-tier convention `init-project` uses to locate its scaffold templates; it exists because a literal relative `bin/ns-doctor` path resolves against the invoking shell's working directory, not the installed plugin, and would silently fail for a marketplace-installed author. If all three lookups fail, the skill halts and names the settings.json and cache paths it attempted.
+2. **Resolve the plugin root.** Before the engine is invoked, the skill resolves the plugin's installed path: a primary lookup against `extraKnownMarketplaces['nonfiction-studio'].source.path` in `~/.claude/settings.json`, a `~/.claude/plugins/cache` search fallback, and a dev-mode fallback that checks for `bin/ns-doctor` in the current directory. This is the same three-tier convention `init-project` uses to locate its scaffold templates; it exists because a literal relative `bin/ns-doctor` path resolves against the invoking shell's working directory, not the installed plugin, and would silently fail for a marketplace-installed author. If all three lookups fail, the skill halts and names the settings.json and cache paths it attempted. (`install-statusline` reuses this same resolution as its own Step A, but for a different purpose: composing the command string it proposes to install, not for locating `bin/ns-doctor`.)
 
 3. **Single Bash invocation (one call per mode).** Runs one Bash call: `node "<plugin-root>/bin/ns-doctor" --project=. [--report|--migrate|--validate-packs] --json`. Captures exit code, stdout (JSON), and stderr. No individual sub-CLI calls are made; the engine composes its checks internally.
 
@@ -90,6 +99,7 @@ The skill runs four steps.
 | `migrate` | 0 | Schema is already current; nothing to migrate | Present the current-schema message; note writes are never performed in v1 |
 | `migrate` | 2 | Migration required (genuinely incompatible version) | Present the migration-required message; note writes are never performed in v1 |
 | `packs` | 0 | Always in v1: no packs directory or no validator yet | Present the stdout message field |
+| `install-statusline` | n/a | This mode never invokes `bin/ns-doctor`, so it produces no CLI exit code; its outcome is binary instead (wrote the file on an explicit yes, or wrote nothing) | See "Install-statusline Mode" below |
 
 ## Check Inventory (Report Mode)
 
@@ -140,9 +150,50 @@ When exit 1 is returned, findings are grouped by the prefix of their `type` fiel
 
 No files are written.
 
+## Install-statusline Mode
+
+OPP-P03 (studio HUD): "the main statusline installs via a one-time consented `doctor` write,
+never silently." This mode is that write, and the only place in this entire plugin any file
+under the author's own Claude Code configuration is ever touched. See
+[ADR-0008 (status HUD)](../../adr/ADR-0008-status-hud.md) for why no other path exists: a plugin
+cannot ship a main status line itself (only `agent` and `subagentStatusLine` are supported plugin
+`settings.json` keys), and there is no plugin-to-user consent API of any kind.
+
+Four steps, none of which invoke `bin/ns-doctor`:
+
+- **Step A - resolve the plugin root.** The same three-tier lookup as the `report`/`migrate`/`packs`
+  flow's own Step 2, used here to compose the command string this mode proposes to install:
+  `node "<plugin-root>/bin/ns-statusline"`. The `CLAUDE_PLUGIN_ROOT` plugin-system interpolation
+  placeholder is never used for this value: that token interpolates only inside a plugin's own manifest files
+  (`hooks/hooks.json`, this plugin's own `settings.json`), not inside the author's unrelated,
+  top-level `~/.claude/settings.json`.
+- **Step B - read the author's existing `~/.claude/settings.json`.** Absent is treated as `{}`.
+  Present and valid JSON continues. Present and invalid JSON halts before anything is written,
+  and directs the author to fix or back up the file, or to use the built-in `/statusline` command
+  instead.
+- **Step C - state exactly what will be written, and ask.** If a `statusLine` key already exists,
+  its current value and the proposed new value are both stated verbatim, and a separate explicit
+  confirmation is required before it would be replaced. If none exists, the proposed value and the
+  fact that every other existing key is left untouched are stated, then the skill asks a plain
+  yes/no question. **This step requires an interactive author.** In a non-interactive (headless)
+  context there is nobody to answer, so the skill states that this mode requires an interactive
+  session, offers `/statusline` as the alternative, and writes nothing - unlike some other
+  skills' low-risk defaults (for example `init-project`'s idempotent re-stamp of missing scaffold
+  files), a top-level settings write is exactly the kind of action OPP-P03 requires an explicit
+  yes for, so no non-interactive default exists here.
+- **Step D - write only on an explicit yes.** A shallow merge of `{"statusLine": {"type":
+  "command", "command": "<the composed command string>"}}` over the author's existing settings
+  object, preserving every other key, written with the Write tool. The Write tool's own
+  permission prompt for this file still appears; the skill does not and cannot suppress it. Any
+  answer other than an explicit yes - a no, silence, an unrelated reply, or a halt in Steps A-C -
+  writes nothing.
+
+"Exactly one consent prompt" (OPP-P03's acceptance language) means exactly one code path in the
+whole plugin can ever write the author's settings, and it cannot run without that explicit yes.
+
 ## Surface Behavior
 
-The doctor skill works identically on all three surfaces per D-14 (three-surface compatibility). All reads use the Bash tool and engine internals, which are available on all surfaces. No surface-conditional behavior exists.
+The doctor skill works identically on all three surfaces per D-14 (three-surface compatibility) for `report`, `migrate`, and `packs`. All reads use the Bash tool and engine internals, which are available on all surfaces. `install-statusline` additionally requires an interactive author able to answer its consent question (see "Install-statusline Mode" above); on a non-interactive surface it states that requirement and writes nothing, rather than guessing at consent.
 
 ## Failure Behavior
 
@@ -157,6 +208,12 @@ The doctor skill works identically on all three surfaces per D-14 (three-surface
 **Exit 2 from `--validate-packs`.** Unexpected in v1. Step 4 surfaces the stderr and halts.
 
 **Project root not found.** `findBookRoot` exits 2 with a `BibleError` on stderr when `.studio/meta.json` is not found at or above the current directory. The skill surfaces the error and notes that `.studio/meta.json` must be present at the project root.
+
+**`install-statusline`: plugin root cannot be resolved.** Step A halts before any read or write; the skill names the settings.json and cache paths it attempted.
+
+**`install-statusline`: existing `~/.claude/settings.json` is not valid JSON.** Step B halts before writing; the skill directs the author to fix or back up the file, or to use `/statusline` instead.
+
+**`install-statusline`: no explicit yes (a no, silence, an unrelated answer, or a non-interactive context).** Step C or D writes nothing; the skill states that `/statusline` and re-running `install-statusline` both remain available.
 
 ## Worked Example
 

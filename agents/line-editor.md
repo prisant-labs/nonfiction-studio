@@ -59,9 +59,11 @@ to `voice-guardian`.
   formulating any proposals. Both reads are required; the agent does not edit
   without reading the style profile first.
 - **Write** - writes the chapter file containing tracked diff proposals to
-  `chapters/`. The PreToolUse path guard per D-13 (security posture) confines
-  writes to `chapters/`. The agent does not write to `context/`, `structure/`,
-  `research/`, or `.studio/`.
+  `chapters/`. The PreToolUse hook confines writes to `chapters/`, per D-13
+  (security posture): it denies any write outside `chapters/` once it identifies
+  `line-editor` from the `agent_type` slug the platform reports in the hook
+  envelope (ADR-0007, agent identity resolution). The agent does not write to
+  `context/`, `structure/`, `research/`, or `.studio/`.
 
 Read and Write are the minimum tool set for sentence-level editing. No web
 access is needed; the agent works from the chapter and the style profile.

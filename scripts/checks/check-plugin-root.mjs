@@ -1,25 +1,38 @@
 // scripts/checks/check-plugin-root.mjs
 // what-it-is:   plugin-root invocation convention checker
 // what-it-does: scans tracked files under skills/**/SKILL.md, agents/*.md (top-level
-//               only), and docs/reference/** and fails on (a) a relative bin
-//               invocation of the form node [./]bin/ns-<name> (resolves against the
-//               caller's cwd, not the installed plugin, so it breaks for every
-//               marketplace-installed user), and (b) the literal string
-//               $CLAUDE_PLUGIN_ROOT or ${CLAUDE_PLUGIN_ROOT} anywhere in those files
-//               (that variable is a hooks.json-only interpolation mechanism; it is
-//               never set in a live Bash shell, per ADR-0005). Naming ADR-0005 in
-//               prose is fine; the literal variable string is not. hooks/,
-//               .github/, and templates/hook-starter legitimately use the braced
-//               form for real hooks.json command strings; they are never in scope
-//               here because the three include globs below never match them.
+//               only), docs/reference/**, docs/formats/**, README.md, and examples/**
+//               and fails on (a) a relative bin invocation of the form
+//               node [./]bin/ns-<name> (resolves against the caller's cwd, not the
+//               installed plugin, so it breaks for every marketplace-installed user),
+//               and (b) the literal string $CLAUDE_PLUGIN_ROOT or ${CLAUDE_PLUGIN_ROOT}
+//               anywhere in those files (that variable is a hooks.json-only
+//               interpolation mechanism; it is never set in a live Bash shell, per
+//               ADR-0005). Naming ADR-0005 in prose is fine; the literal variable
+//               string is not. hooks/, .github/, and templates/hook-starter
+//               legitimately use the braced form for real hooks.json command strings;
+//               they are never in scope here because the include globs below never
+//               match them. examples/ IS in scope (F7, scan-set blind spots: any
+//               shipped instruction a user might copy belongs in this scan, and
+//               examples/ is exactly that kind of surface) but contains its own real
+//               hooks.json-shaped probe files under examples/spikes/ (hooks.json,
+//               hooks.form-a-wrapper.json, hooks.form-b-flat.json); finding (b) exempts
+//               a file shaped like that -- see isHooksJsonShaped below -- for the same
+//               reason hooks/ itself is exempt. Finding (a) has no such exemption: a
+//               relative bin invocation would be equally broken inside a hooks.json
+//               command string.
 // why:          F-SK-01 (broken bin invocation) and F-ST-01 (unbraced env form) -
 //               the house plugin-root convention (skills/init-project/SKILL.md
 //               Step 4: settings.json lookup, plugins-cache search, dev-mode
 //               fallback) is the only form that resolves for an installed user;
-//               this check guards the fix against regression.
+//               this check guards the fix against regression. Widened to README.md,
+//               docs/formats/, and examples/ per F7 (scan-set blind spots): the
+//               original three-directory scope missed the single most-copied surface
+//               in the repo (README.md) and the worked example a new user studies
+//               first.
 // exit taxonomy: 0 = pass; 1 = named finding(s); 2 = operational error
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -89,13 +102,17 @@ if (!trackedFiles) {
     ...walkDir(join(REPO_ROOT, 'skills')),
     ...walkDir(join(REPO_ROOT, 'agents')),
     ...walkDir(join(REPO_ROOT, 'docs', 'reference')),
+    ...walkDir(join(REPO_ROOT, 'docs', 'formats')),
+    ...walkDir(join(REPO_ROOT, 'examples')),
+    ...(existsSync(join(REPO_ROOT, 'README.md')) ? ['README.md'] : []),
   ];
 }
 
 // ---------------------------------------------------------------------------
-// Scan scope: skills/**/SKILL.md, agents/*.md (top-level only), docs/reference/**
-// This include-only design is what keeps hooks/, .github/, and
-// templates/hook-starter out of scope -- they simply never match these globs,
+// Scan scope: skills/**/SKILL.md, agents/*.md (top-level only), docs/reference/**,
+// docs/formats/**, README.md, examples/** (the last three widened per F7,
+// scan-set blind spots). This include-only design is what keeps hooks/, .github/,
+// and templates/hook-starter out of scope -- they simply never match these globs,
 // so no explicit exclusion list is needed.
 // ---------------------------------------------------------------------------
 
@@ -103,20 +120,41 @@ function inScope(rel) {
   if (rel.startsWith('skills/') && rel.endsWith('/SKILL.md')) return true;
   if (rel.startsWith('agents/') && rel.endsWith('.md') && !rel.slice('agents/'.length).includes('/')) return true;
   if (rel.startsWith('docs/reference/')) return true;
+  if (rel.startsWith('docs/formats/')) return true;
+  if (rel === 'README.md') return true;
+  if (rel.startsWith('examples/')) return true;
   return false;
+}
+
+// A file shaped like real hooks.json configuration -- basename "hooks.json" or a
+// "hooks.<descriptor>.json" probe variant, such as examples/spikes/spk-01's
+// form-a/form-b probes and spk-02's own hooks.json -- carries the braced
+// plugin-root form as its correct, required syntax: the same justification that
+// already keeps hooks/, .github/, and templates/hook-starter out of scope
+// entirely (see the file header). Those three directories never reach inScope()
+// at all; examples/ does, so a probe file living there needs the equivalent
+// carve-out applied file-by-file instead of directory-by-directory. Scoped to
+// finding (b) only: a relative bin invocation inside one of these files would be
+// just as broken as anywhere else, so finding (a) still applies to them.
+const HOOKS_JSON_SHAPED_RE = /^hooks(\.[A-Za-z0-9-]+)?\.json$/;
+
+function isHooksJsonShaped(rel) {
+  const base = rel.slice(rel.lastIndexOf('/') + 1);
+  return HOOKS_JSON_SHAPED_RE.test(base);
 }
 
 const filesToScan = trackedFiles.filter(inScope).sort();
 
 // A scan scope of zero is never a legitimate clean pass for this repo shape
-// (skills/, agents/, and docs/reference/ always contain matching files) --
-// it means REPO_ROOT resolved wrong, the checkout is broken, or the three
-// directories are missing. Fail loudly rather than reporting a silent pass.
+// (skills/, agents/, docs/reference/, and README.md always contain matching
+// files) -- it means REPO_ROOT resolved wrong, the checkout is broken, or the
+// scanned directories are missing. Fail loudly rather than reporting a silent
+// pass.
 if (filesToScan.length === 0) {
   process.stderr.write(
     '[check-plugin-root] FATAL: zero files matched skills/**/SKILL.md, agents/*.md, ' +
-    'or docs/reference/** under ' + REPO_ROOT + '. This indicates a broken checkout ' +
-    'or a resolution bug, not a clean pass.\n'
+    'docs/reference/**, docs/formats/**, README.md, or examples/** under ' + REPO_ROOT +
+    '. This indicates a broken checkout or a resolution bug, not a clean pass.\n'
   );
   process.exit(2);
 }
@@ -160,7 +198,7 @@ for (const rel of filesToScan) {
     }
 
     const envMatch = line.match(ENV_VAR_RE);
-    if (envMatch) {
+    if (envMatch && !isHooksJsonShaped(rel)) {
       findings.push(
         rel + ':' + (li + 1) + ': literal plugin-root environment-variable string "' +
         envMatch[0] + '" - that variable interpolates only inside hooks.json command ' +
@@ -178,7 +216,7 @@ for (const rel of filesToScan) {
 if (degradedReason) {
   process.stdout.write('[check-plugin-root] NOTE: degraded mode, scanning the filesystem directly instead of the git-tracked set (' + degradedReason + ')\n');
 } else {
-  process.stdout.write('[check-plugin-root] mode: git-tracked (' + filesToScan.length + ' file(s) in scope under skills/**/SKILL.md, agents/*.md, docs/reference/**)\n');
+  process.stdout.write('[check-plugin-root] mode: git-tracked (' + filesToScan.length + ' file(s) in scope under skills/**/SKILL.md, agents/*.md, docs/reference/**, docs/formats/**, README.md, examples/**)\n');
 }
 
 if (findings.length === 0) {

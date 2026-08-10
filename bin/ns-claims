@@ -5,20 +5,24 @@
 // why:          the CLI is the public surface; all logic lives in claims-engine.mjs so hooks
 //               and CI can share the same computation path per S-07 section 4
 // usage:        ns-claims [--chapter=<slug>|--all] [--online] [--project=<dir>] [--json]
+//               [--quotes] [--packets] (OPP-D03: quote fidelity and source packets)
 
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
 import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
 import { parseEvidenceLog } from '../hooks/lib/ledger.mjs';
 import { makeReport, addFinding, finalize } from '../hooks/lib/report.mjs';
-import { scanChapter, computeCoverage } from '../hooks/lib/claims-engine.mjs';
+import {
+  scanChapter, computeCoverage,
+  scanQuoteAnchors, computeQuoteFindings, buildResearchPacket
+} from '../hooks/lib/claims-engine.mjs';
 
 // ---- arg parsing ---------------------------------------------------------------
 
 let opts;
 try {
-  opts = parseArgs(process.argv.slice(2), ['chapter', 'all', 'online', 'project', 'json']);
+  opts = parseArgs(process.argv.slice(2), ['chapter', 'all', 'online', 'project', 'json', 'quotes', 'packets']);
 } catch (err) {
   if (err.name === 'ArgsError') {
     process.stderr.write('ns-claims: ' + err.message + '\n');
@@ -30,6 +34,14 @@ try {
 // --online is deferred: the DOI/URL resolution pass is out of scope for this task.
 if (opts.online) {
   process.stderr.write('ns-claims: --online is not yet implemented (online pass deferred per TSK-025)\n');
+  process.exit(2);
+}
+
+// --quotes and --packets are each a distinct mode (OPP-D03 (quote fidelity and source
+// packets)); running both together has no defined combined behavior, so reject it rather
+// than silently letting whichever branch runs first win.
+if (opts.quotes && opts.packets) {
+  process.stderr.write('ns-claims: --quotes and --packets are mutually exclusive; run one at a time\n');
   process.exit(2);
 }
 
@@ -88,6 +100,90 @@ if (opts.chapter) {
     .filter(f => f.endsWith('.md'))
     .sort()
     .map(f => join(chapterDir, f));
+}
+
+// ---- --packets: generate per-chapter research packets (OPP-D03: quote fidelity and
+// source packets) -----------------------------------------------------------------
+// Read-only over the ledger; writes only under research/packets/, never .studio/
+// (D-06 (single-writer state discipline) is not implicated: these are author-facing
+// derived artifacts, not machine state). Deterministic: unchanged inputs regenerate
+// byte-identical files (no generation timestamp is stamped).
+if (opts.packets) {
+  const packetsDir = join(root, 'research', 'packets');
+  const written = [];
+
+  for (const absPath of chapterPaths) {
+    let text;
+    try {
+      text = readFileSync(absPath, 'utf8');
+    } catch (err) {
+      process.stderr.write('ns-claims: cannot read chapter ' + absPath + ': ' + err.message + '\n');
+      process.exit(2);
+    }
+    const relFile = relative(root, absPath).replace(/\\/g, '/');
+    const slug = relFile.replace(/^chapters\//, '').replace(/\.md$/, '');
+    const anchors = scanQuoteAnchors(text, ledgerEntries);
+    const packet = buildResearchPacket(slug, anchors);
+
+    try {
+      mkdirSync(packetsDir, { recursive: true });
+      writeFileSync(join(packetsDir, slug + '.md'), packet, 'utf8');
+    } catch (err) {
+      process.stderr.write('ns-claims: cannot write packet for ' + slug + ': ' + err.message + '\n');
+      process.exit(2);
+    }
+    written.push('research/packets/' + slug + '.md');
+  }
+
+  if (opts.json) {
+    process.stdout.write(JSON.stringify({ check: 'quote_fidelity_packets', written }, null, 2) + '\n');
+  } else {
+    process.stdout.write('[quote_fidelity_packets] wrote ' + written.length + ' packet(s)\n');
+    for (const w of written) {
+      process.stdout.write('  ' + w + '\n');
+    }
+  }
+  process.exit(0);
+}
+
+// ---- --quotes: quote-fidelity check (OPP-D03: quote fidelity and source packets) ---
+// Character-for-character comparison against the ledger's verbatim field, with NO
+// normalization: normalization is precisely the deferred adjudication policy
+// (roadmap row 1.5), and silently normalizing here would hide the very mismatch
+// classes that policy has to resolve.
+if (opts.quotes) {
+  const quoteReport = makeReport('quote_fidelity');
+
+  for (const absPath of chapterPaths) {
+    let text;
+    try {
+      text = readFileSync(absPath, 'utf8');
+    } catch (err) {
+      process.stderr.write('ns-claims: cannot read chapter ' + absPath + ': ' + err.message + '\n');
+      process.exit(2);
+    }
+    const relFile = relative(root, absPath).replace(/\\/g, '/');
+    const anchors = scanQuoteAnchors(text, ledgerEntries);
+    const { findings } = computeQuoteFindings([{ file: relFile, anchors }]);
+    for (const finding of findings) {
+      addFinding(quoteReport, finding);
+    }
+  }
+
+  const { exitCode: quoteExitCode, json: quoteJson } = finalize(quoteReport);
+
+  if (opts.json) {
+    process.stdout.write(JSON.stringify(quoteJson, null, 2) + '\n');
+  } else if (quoteReport.findings.length === 0) {
+    process.stdout.write('[quote_fidelity] pass: no quote-fidelity findings\n');
+  } else {
+    process.stdout.write('[quote_fidelity] ' + quoteReport.findings.length + ' finding(s):\n');
+    for (const f of quoteReport.findings) {
+      process.stdout.write('  ' + f.file + ':' + f.line + ' [' + f.type + ']: ' + f.detail + '\n');
+    }
+  }
+
+  process.exit(quoteExitCode);
 }
 
 if (chapterPaths.length === 0) {

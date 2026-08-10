@@ -16,17 +16,24 @@ Evidence entry headings follow this pattern:
 
 ## Field grammar
 
-Each entry is a Markdown bullet list directly under its heading. The parser reads each line as `- key: value`. All keys are lowercase with hyphens. The seven fields below are the complete set; no additional keys are permitted in a valid entry.
+Each entry is a Markdown bullet list directly under its heading. The parser reads each line as `- key: value`. All keys are lowercase with hyphens. The eight fields below are the complete set; no additional keys are permitted in a valid entry.
 
 | Field | Type | Required | Allowed values and notes |
 |---|---|---|---|
 | `claim` | string | required | The factual assertion in the author's own words, as a single line |
 | `source` | SRC-NNNN ID or literal `none` | required | A registered source ID (for example, `SRC-0004`) or the literal `none` when no source is yet identified |
 | `locator` | string | optional | Page, section, timestamp, or paragraph pointer within the cited source; may be left blank |
+| `verbatim` | string | optional | The exact source text for a quoted span, as a single line. Anchored in chapter prose with a `[quote: EV-nnnn]` marker (docs/formats/claim-markers.md form 4) and compared character-for-character, with no normalization, by the quote-fidelity check. An entry without `verbatim` is valid and behaves exactly as an entry predating this field |
 | `confidence` | enum | required | One of `high`, `medium`, `low` |
 | `status` | enum | required | One of `pending`, `verified`, `unverified`, `source-unverifiable`, `interpretation` |
 | `added-by` | roster slug | required | The agent slug or `author` that logged this entry |
 | `date` | YYYY-MM-DD | required | Calendar date the entry was added |
+
+### The `verbatim` field is distinct from `claim`
+
+`claim` is the assertion in the author's own words; it may paraphrase, summarize, or restate the source. `verbatim` is the source's own words, unedited, for the specific span a chapter quotes directly. Logging a `verbatim` excerpt does not change how `claim` is written or evaluated; the two fields serve different checks (`claim` feeds claim-coverage resolution; `verbatim` feeds quote-fidelity comparison) and may both be present on the same entry.
+
+Comparison against `verbatim` is character-for-character with no normalization: typographic quote variants, Unicode normalization, ellipses, bracketed clarifications, and OCR or transcript cleanup are NOT reconciled automatically. This is deliberate. A normalization and adjudication policy for those benign mismatch classes is planned but not yet shipped, so the quote-fidelity check runs in warn mode only until it lands.
 
 ### Status values
 
@@ -54,7 +61,7 @@ Each entry is a Markdown bullet list directly under its heading. The parser read
 - A blank `locator` line (for example, `- locator:`) is valid when no locator is available.
 - `bin/ns-claims` parses the file from top to bottom; entry order does not affect coverage computation.
 - `fact-checker` may update only the `status` field of an existing entry; it never modifies the `claim`, `source`, `locator`, `confidence`, `added-by`, or `date` fields.
-- `SubagentStop` hook writes entries on the same append-only basis as `research-librarian`.
+- `SubagentStop` hook (Phase 2, not yet shipped): will write entries on the same append-only basis as `research-librarian`, once built.
 
 ## Example
 
@@ -65,6 +72,20 @@ A sourced and verified entry:
 - claim: Spaced repetition raises thirty-day recall by roughly forty percent over massed practice.
 - source: SRC-0004
 - locator: pp. 112-114
+- confidence: high
+- status: verified
+- added-by: research-librarian
+- date: 2026-07-17
+```
+
+A sourced and verified entry that also anchors a direct quote, carrying `verbatim`:
+
+```markdown
+### EV-0013 (direct quote)
+- claim: The researchers describe the effect as durable across study populations.
+- source: SRC-0004
+- locator: p. 116
+- verbatim: The effect held across every population we sampled, with no measurable decay at thirty days.
 - confidence: high
 - status: verified
 - added-by: research-librarian
@@ -86,9 +107,10 @@ A pending entry with no source yet identified:
 
 ## Consumed by
 
-- `bin/ns-claims` (TSK-025 (ns-claims engine)): resolves every `[claim: EV-NNNN]` chapter marker against this file, computes per-chapter `open_claim_count`, and produces the coverage report.
+- `bin/ns-claims` (TSK-025 (ns-claims engine)): resolves every `[claim: EV-NNNN]` chapter marker against this file, computes per-chapter `open_claim_count`, and produces the coverage report. With `--quotes` (OPP-D03 (quote fidelity and source packets)), resolves every `[quote: EV-nnnn]` marker against `verbatim` instead; with `--packets`, generates the per-chapter research packets under `research/packets/`.
 - `bin/ns-doctor` (TSK-028 (ns-doctor engine)): validates field presence and value constraints, cross-references every `source` field against `research/sources.md`, and reports orphaned or missing EV IDs.
 - `fact-checker`: reads entries and updates the `status` field only; never modifies claim text.
 - `drafting-partner`: reads entries regardless of status and anchors `[claim: EV-nnnn]` markers to any EV ID that exists in the ledger at drafting time, per the agent's own claim-marking rule; requiring `status: verified` entries only would mark every drafted sentence `[UNVERIFIED]` given the pipeline order.
 - `citation-manager`: reads entries for export-path citation assembly.
 - `Stop` gate (via `bin/ns-claims`): warns or blocks when `open_claim_count` is non-zero, per `config.json` gate settings.
+- `Stop` gate `quote_fidelity` check (D-03 (layered Stop gate), `hooks/lib/gate-engine.mjs`): compares each `[quote: EV-nnnn]` anchor's preceding quoted span against `verbatim` character-for-character. Warn mode only; block mode is structurally coerced to warn until the normalization and adjudication policy ships (roadmap row 1.5).

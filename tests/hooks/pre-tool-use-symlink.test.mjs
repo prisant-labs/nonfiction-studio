@@ -10,7 +10,7 @@
 //
 // Windows note: creating a new symlink can require elevated privileges or Developer
 // Mode. The escape-path and inside-link tests probe capability first and skip cleanly
-// (node:test t.skip) with a stated reason when creation is denied, per the brief. The
+// (node:test t.skip) with a stated reason when creation is denied. The
 // Ubuntu CI leg (unprivileged symlink creation allowed) always proves these cases;
 // Windows proves them whenever the runner has the privilege or Developer Mode enabled.
 // The plain-directory control test needs no symlink capability and always runs.
@@ -56,16 +56,24 @@ function runHook(input) {
   return spawnSync('node', [SCRIPT], { input, encoding: 'utf8', env });
 }
 
-/** Build a synthetic Write event (snake_case shape per TSK-030 firing proof). */
-function makeWriteEvent(cwd, filePath) {
-  return JSON.stringify({
+/** Build a synthetic Write event (snake_case shape per TSK-030 firing proof).
+ *  agentType, when given, adds agent_id/agent_type fields shaped like the
+ *  2026-08-09 platform probe (captured locally, not published; see ADR-0007).
+ *  Omitting it (the default) reproduces today's main-session envelope shape. */
+function makeWriteEvent(cwd, filePath, agentType = null) {
+  const event = {
     session_id: 'test-session-w3-symlink',
     cwd,
     hook_event_name: 'PreToolUse',
     tool_name: 'Write',
     tool_input: { file_path: filePath, content: 'w3 symlink test content' },
     tool_use_id: 'toolu_w3symlink'
-  });
+  };
+  if (agentType) {
+    event.agent_id = 'atest0000agentidentity1';
+    event.agent_type = agentType;
+  }
+  return JSON.stringify(event);
 }
 
 /** Capability probe: attempt to create a real directory symlink. Returns true
@@ -167,5 +175,80 @@ test('F-HK-04 (c) control: plain nested directory (no symlink), new file: still 
   assert.equal(
     result.stdout.trim(), '',
     'empty stdout (allow): a plain nested directory with no symlink involved is unaffected by the fix'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// F-AG-01 (agent write-scope, symlink evasion): the cross-scope-symlink case.
+// A constrained agent's write through a symlink that LEXICALLY looks in-scope
+// (inside chapters/, which drafting-partner may write) but really resolves to
+// a DIFFERENT in-root directory (research/, outside drafting-partner's scope)
+// must be DENIED. This differs from F-HK-04 (a)/(b) above: both the real and
+// lexical paths here stay INSIDE the book root, so the general root-
+// containment guard alone would ALLOW this write - only evaluating the agent
+// constraint against the REAL (symlink-resolved) target, per the Wave 0 park
+// (brief 1c-1), catches it. This proves that specific requirement, not just
+// the general containment guard's own symlink safety already proven above.
+// ---------------------------------------------------------------------------
+test('F-AG-01 (symlink) a constrained agent write through a symlink that lexically looks in-scope but really resolves to a different in-root directory is DENIED', (t) => {
+  const book = cloneSampleBook('agent-scope-cross-link');
+  // drafting-partner's scope is chapters/ only (agents/drafting-partner.md:69-71).
+  // The symlink lives INSIDE chapters/ (lexically in-scope) but points at
+  // research/ - a different, legitimate in-root directory outside drafting-partner's scope.
+  const linkPath = join(book, 'chapters', 'cross-scope-link');
+  const researchDir = join(book, 'research');
+
+  if (!tryCreateDirSymlink(researchDir, linkPath)) {
+    t.skip('cannot create a directory symlink on this host (no privilege / Developer Mode); ' +
+      'the Ubuntu CI leg proves this case unprivileged');
+    return;
+  }
+
+  const target = join(linkPath, 'via-cross-link.md');
+  const result = runHook(makeWriteEvent(book, target, 'nonfiction-studio:drafting-partner'));
+
+  assert.equal(result.status, 0, 'exit code is 0 (deny travels in JSON, not exit code)');
+
+  let out;
+  assert.doesNotThrow(
+    () => { out = JSON.parse(result.stdout.trim()); },
+    'stdout is valid JSON (deny), not empty - evaluating against the lexical path would have allowed this'
+  );
+
+  const hso = out.hookSpecificOutput;
+  assert.equal(
+    hso.permissionDecision, 'deny',
+    'denied: the real target resolves to research/, outside the chapters/-only scope drafting-partner is allowed'
+  );
+  assert.ok(
+    hso.permissionDecisionReason.includes('drafting-partner'),
+    'deny reason names the agent slug'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// F-AG-01 control: the same cross-directory symlink, written by an
+// UNCONSTRAINED caller (no agent_type), still ALLOWS. Without this pair, the
+// test above would pass even if checkAgentWriteConstraint denied every write
+// unconditionally once wired, which is not the behavior being proven here.
+// ---------------------------------------------------------------------------
+test('F-AG-01 (symlink) control: the same cross-directory symlink write with no agent_type still ALLOWS', (t) => {
+  const book = cloneSampleBook('agent-scope-cross-link-control');
+  const linkPath = join(book, 'chapters', 'cross-scope-link-control');
+  const researchDir = join(book, 'research');
+
+  if (!tryCreateDirSymlink(researchDir, linkPath)) {
+    t.skip('cannot create a directory symlink on this host (no privilege / Developer Mode); ' +
+      'capability already probed by the primary test above, which reports the same skip reason');
+    return;
+  }
+
+  const target = join(linkPath, 'via-cross-link-control.md');
+  const result = runHook(makeWriteEvent(book, target));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'empty stdout (allow): main-session writes are never subject to the per-agent write-scope table'
   );
 });

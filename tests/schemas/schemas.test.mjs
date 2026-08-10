@@ -287,7 +287,7 @@ test('gate report: golden fixture last-gate.json parses as valid JSON with expec
 test('gate report: full gate report JSON has verdict, checks, and ts fields', () => {
   const fullReportDir = join(GOLDEN, '.studio', 'gate');
   // Find a full gate report (not last-gate.json, which is a summary)
-  const fullReport = join(fullReportDir, '01-listening-before-speaking.20260718T090000Z.json');
+  const fullReport = join(fullReportDir, '01-listening-before-speaking.20260810T091000Z.json');
   assert.ok(existsSync(fullReport), 'golden fixture must have a full gate report');
   const parsed = JSON.parse(readFileSync(fullReport, 'utf8'));
   assert.ok(typeof parsed.verdict === 'string', 'gate report must have a "verdict" field');

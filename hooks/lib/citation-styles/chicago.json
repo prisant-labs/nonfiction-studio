@@ -1,0 +1,42 @@
+{
+  "style": "chicago-notes-bibliography",
+  "description": "Chicago notes-bibliography style, expressed as data per source `type` (OPP-D05, apparatus generator) so hooks/lib/apparatus-engine.mjs contains no per-style formatting logic. 'required' lists the sources.md fields that must be non-blank before any note or bibliography entry for a source of that type can be built; a source missing one is an attention row, never a guess. 'fullNote' and 'shortNote' are per-citation templates filled with a specific EV entry's locator; 'bibliography' is a per-source template with no locator (a bibliography entry names the work, not one citation of it). Every placeholder a template uses must be a universal field (author-full, author-surname, author-last-first, title, short-title, year, locator, publisher, url, identifier, accessed) or a field named in that slot's own extra 'required' list (see below), so a substitution is never asked to fill a field that might be blank. A template slot ('fullNote', 'shortNote', 'bibliography', or the top-level 'bibliographySuffix') is either a single string, always used, or an array of {required, template} candidates tried in order, the first whose extra 'required' fields are all non-blank on the source record wins; 'web' uses this for its bibliography form because a site name (publisher) is common but not guaranteed, and 'bibliographySuffix' uses it to prefer a stable identifier (DOI, ISBN) over a url, and a url with an access date over a bare url, falling back to nothing when a candidate array is exhausted with none satisfied. Both the field-preference logic and its exact punctuation live here, in style data, specifically so a second style can define a wholly different suffix (or none) as a JSON edit with no change to apparatus-engine.mjs; see ADR-0009 (apparatus CLI). 'shortTitleRule' is the same principle applied to short-title derivation (truncate at a marker, strip one leading article from a declared list): a small, generic transform recipe read as data rather than a hardcoded regex, so a style with different short-title conventions needs no engine change either. Covers the four source types the plugin's own worked example actually cites (book, article, report, web); a type absent from this file (interview, dataset, other, or any future value) produces an attention row rather than a guessed format, and adding one is a pure data edit here, no engine change required.",
+  "shortTitleRule": {
+    "truncateAtFirst": ":",
+    "stripLeadingArticles": ["The ", "A ", "An "]
+  },
+  "types": {
+    "book": {
+      "required": ["author", "title", "year", "publisher"],
+      "fullNote": "{author-full}, *{title}* ({publisher}, {year}), {locator}.",
+      "shortNote": "{author-surname}, *{short-title}*, {locator}.",
+      "bibliography": "{author-last-first}. *{title}*. {publisher}, {year}."
+    },
+    "article": {
+      "required": ["author", "title", "year", "publisher"],
+      "fullNote": "{author-full}, \"{title},\" *{publisher}* ({year}): {locator}.",
+      "shortNote": "{author-surname}, \"{short-title},\" {locator}.",
+      "bibliography": "{author-last-first}. \"{title}.\" *{publisher}*, {year}."
+    },
+    "report": {
+      "required": ["author", "title", "year", "publisher"],
+      "fullNote": "{author-full}, *{title}* ({publisher}, {year}), {locator}.",
+      "shortNote": "{author-surname}, *{short-title}*, {locator}.",
+      "bibliography": "{author-last-first}. *{title}*. {publisher}, {year}."
+    },
+    "web": {
+      "required": ["author", "title", "year", "url"],
+      "fullNote": "{author-full}, \"{title},\" {year}, {locator}, {url}.",
+      "shortNote": "{author-surname}, \"{short-title},\" {locator}.",
+      "bibliography": [
+        { "required": ["publisher"], "template": "{author-last-first}. \"{title}.\" {publisher}, {year}." },
+        { "template": "{author-last-first}. \"{title}.\" {year}." }
+      ]
+    }
+  },
+  "bibliographySuffix": [
+    { "required": ["identifier"], "template": " {identifier}." },
+    { "required": ["url", "accessed"], "template": " {url} (accessed {accessed})." },
+    { "required": ["url"], "template": " {url}." }
+  ]
+}

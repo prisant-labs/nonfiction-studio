@@ -238,6 +238,46 @@ test('(c) golden clone + flag: gate runs, empty stdout (pass), last-gate byte-id
 });
 
 // ---------------------------------------------------------------------------
+// (c2) The Stop hook's --check list must match hooks/lib/gate-engine.mjs's own
+// CHECK_REGISTRY (roadmap row 1.5, quote fidelity and source packets), not a second,
+// independently-hardcoded list. Before this fix, stop-gate.mjs:169 hardcoded
+// "claims,stylometry,scrub,continuity-quick,coherence" and omitted "quotes", so the
+// quote_fidelity check registered in CHECK_REGISTRY never appeared in a Stop-hook-driven
+// gate report even though `bin/ns-gate` (invoked directly, with no --check flag) always
+// included it. Asserted against the real hook and the real gate-engine registry, not a
+// mock: this fails RED if either list is ever hand-edited out of sync with the other again.
+// ---------------------------------------------------------------------------
+test('(c2) Stop-hook-driven gate report includes quote_fidelity (the Stop hook derives its check list from gate-engine.mjs, not a second hardcoded list)', async () => {
+  const book = cloneSampleBook('c2-quote-fidelity');
+  setFlag(book);
+
+  const result = runHook(makeStopEvent(book));
+  assert.strictEqual(result.status, 0, 'hook exit 0');
+
+  const lastGatePath = join(book, '.studio', 'gate', 'last-gate.json');
+  assert.ok(existsSync(lastGatePath), 'last-gate.json written after gate run');
+  const report = JSON.parse(readFileSync(lastGatePath, 'utf8'));
+
+  const checkNames = report.checks.map((c) => c.check);
+  assert.ok(
+    checkNames.includes('quote_fidelity'),
+    'Stop-hook-driven report checks include quote_fidelity; got: ' + checkNames.join(', ')
+  );
+
+  // Cross-check against the gate engine's own registry rather than a second hand
+  // written list, so this test cannot itself drift the way the hook did.
+  const { ALL_FLAGS } = await import('../../hooks/lib/gate-engine.mjs');
+  const { CHECK_REGISTRY } = await import('../../hooks/lib/gate-engine.mjs');
+  const expectedReportNames = CHECK_REGISTRY
+    .filter((r) => ALL_FLAGS.includes(r.flag))
+    .map((r) => r.reportName)
+    .concat('session_write_flag');
+  for (const name of expectedReportNames) {
+    assert.ok(checkNames.includes(name), 'report is missing check "' + name + '" that gate-engine.mjs registers; got: ' + checkNames.join(', '));
+  }
+});
+
+// ---------------------------------------------------------------------------
 // (d) block-mode ai-injection clone + flag: block decision JSON, exit 0, last-gate written, flag consumed
 // ---------------------------------------------------------------------------
 test('(d) block-mode ai-injection + flag: block decision JSON, exit 0, last-gate written, flag consumed', () => {
@@ -393,6 +433,21 @@ test('(f) missing-baseline config + flag: one errors.jsonl line, one-line additi
 
 // ---------------------------------------------------------------------------
 // (g) second event with stop_hook_active true: last-gate.json unchanged (byte-compare)
+//
+// This case also stands as the OQ-14 Stop re-fire confirmation (a 19-turn headless
+// session recorded 26 Stop events; a watch item, not a finding). It exercises both
+// properties: (1) hooks/stop-gate.mjs's stop_hook_active === true short-circuit (the
+// unconditional `if (event.stop_hook_active === true) { process.exit(0); }` placed before
+// cwd/root resolution, the gate spawn, and the flag check) holds on a SECOND firing that
+// follows a real gate run, not only in isolation; and (2) no duplicate gate report is
+// written under re-fire, proven directly by last-gate.json's byte-identical before/after
+// content across the second call. No dedup guard exists in the source, and none is added
+// here: the short-circuit is unconditional and reads no persisted state across separate
+// process invocations, so it cannot behave differently on a third, fourth, or Nth re-fire
+// than it does on this second one - there is no counter or memory for "repeated" to act on
+// beyond the on-disk state this test already covers. Verified by inspection per OPP-P04
+// (untrusted-source envelope); no additional test was added because this one already
+// proves both properties.
 // ---------------------------------------------------------------------------
 test('(g) re-fire after gate run: last-gate.json unchanged on second stop_hook_active:true event', () => {
   const book = cloneSampleBook('g');

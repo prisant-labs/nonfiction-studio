@@ -17,7 +17,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
-import { measureChapter, measureBook, computeDrift } from '../../hooks/lib/stylometry-engine.mjs';
+import { measureChapter, measureBook, computeDrift, countWords } from '../../hooks/lib/stylometry-engine.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -145,6 +145,73 @@ test('synthetic: measureChapter result has all 8 required marker keys', () => {
 });
 
 // ---------------------------------------------------------------------------
+// preprocess: all four claim-marker forms must be stripped, not just [claim:]
+// ---------------------------------------------------------------------------
+//
+// docs/formats/claim-markers.md defines four marker forms: [claim: EV-NNNN],
+// [UNVERIFIED], [SOURCE-UNVERIFIABLE], and [quote: EV-NNNN] (the last added
+// this wave for OPP-D03, quote fidelity and source packets). Before this fix,
+// preprocess() stripped only [claim: EV-NNNN], so a chapter using the other
+// three forms measured differently from the same prose without them: each
+// marker adds spurious word tokens (for example "quote" and "EV" from
+// "[quote: EV-0012]"), which perturbs every rate that divides by totalWords
+// and inflates countWords, the same authority progress.json and the
+// state_coherence check rely on.
+//
+// This section proves a marker-laden chapter measures IDENTICALLY to the
+// same prose with every marker form removed.
+
+const MARKER_FREE_TEXT =
+  'The researchers wrote plainly: "spaced repetition raises recall."\n' +
+  'This claim needs a source.\n' +
+  'It resolved eventually.\n' +
+  'The gain held across cohorts.\n';
+
+const MARKER_LADEN_TEXT =
+  'The researchers wrote plainly: "spaced repetition raises recall." [quote: EV-0012]\n' +
+  'This claim needs a source. [UNVERIFIED]\n' +
+  'It resolved eventually. [claim: EV-0013]\n' +
+  'The gain held across cohorts. [claim: EV-0013] [SOURCE-UNVERIFIABLE]\n';
+
+test('preprocess strips [quote: EV-NNNN] anchors: measureChapter is identical with and without one', () => {
+  const withMarker = measureChapter('A plain sentence. [quote: EV-0012]\n');
+  const withoutMarker = measureChapter('A plain sentence.\n');
+  assert.deepStrictEqual(withMarker, withoutMarker,
+    '[quote: EV-NNNN] must be stripped like [claim: EV-NNNN]; got ' +
+    JSON.stringify(withMarker) + ' vs ' + JSON.stringify(withoutMarker));
+});
+
+test('preprocess strips [UNVERIFIED]: measureChapter is identical with and without one', () => {
+  const withMarker = measureChapter('A plain sentence. [UNVERIFIED]\n');
+  const withoutMarker = measureChapter('A plain sentence.\n');
+  assert.deepStrictEqual(withMarker, withoutMarker,
+    '[UNVERIFIED] must be stripped; got ' +
+    JSON.stringify(withMarker) + ' vs ' + JSON.stringify(withoutMarker));
+});
+
+test('preprocess strips [SOURCE-UNVERIFIABLE]: measureChapter is identical with and without one', () => {
+  const withMarker = measureChapter('A plain sentence. [claim: EV-0013] [SOURCE-UNVERIFIABLE]\n');
+  const withoutMarker = measureChapter('A plain sentence. [claim: EV-0013]\n');
+  assert.deepStrictEqual(withMarker, withoutMarker,
+    '[SOURCE-UNVERIFIABLE] must be stripped; got ' +
+    JSON.stringify(withMarker) + ' vs ' + JSON.stringify(withoutMarker));
+});
+
+test('preprocess strips all four marker forms together: a marker-laden chapter measures identically to the same prose with markers removed', () => {
+  const withMarkers = measureChapter(MARKER_LADEN_TEXT);
+  const withoutMarkers = measureChapter(MARKER_FREE_TEXT);
+  assert.deepStrictEqual(withMarkers, withoutMarkers,
+    'a chapter using [quote:], [UNVERIFIED], and [SOURCE-UNVERIFIABLE] markers must measure ' +
+    'identically to the same prose with no markers at all; got ' +
+    JSON.stringify(withMarkers) + ' vs ' + JSON.stringify(withoutMarkers));
+});
+
+test('countWords is unaffected by [quote:], [UNVERIFIED], or [SOURCE-UNVERIFIABLE] markers', () => {
+  assert.strictEqual(countWords(MARKER_LADEN_TEXT), countWords(MARKER_FREE_TEXT),
+    'countWords feeds progress.json and the state_coherence check; it must not count marker tokens as prose');
+});
+
+// ---------------------------------------------------------------------------
 // computeDrift: zero-baseline rule
 // ---------------------------------------------------------------------------
 
@@ -237,6 +304,65 @@ test('golden sample book CLI: --all --json exits 0', () => {
   assert.strictEqual(out.verdict, 'pass', 'verdict is pass');
   assert.ok(out.driftScore < out.threshold,
     'driftScore ' + out.driftScore.toFixed(2) + ' < threshold ' + out.threshold);
+});
+
+// ---------------------------------------------------------------------------
+// Committed tree: golden sample book, EVERY CHAPTER INDIVIDUALLY (roadmap row 1.7)
+// ---------------------------------------------------------------------------
+//
+// The two "golden sample book" tests above only prove the WHOLE BOOK passes as
+// a combined sample. They do not prove any individual chapter passes on its
+// own, and a per-chapter gate run measures exactly one chapter (measureChapter,
+// a much smaller denominator) against the same book-level baseline -- a
+// materially different computation from measureBook. A book can pass in
+// aggregate while every one of its chapters individually blocks: prior to the
+// chapters being made voice-consistent, both chapters measured well over 200
+// against a threshold of 35 in isolation, driven substantially by a
+// near-zero-baseline instability in deviationPct that is written up for
+// roadmap row 1.7 (voice registers) and the D-08 (hybrid voice scoring)
+// amendment.
+
+test('golden sample book: EVERY chapter passes its own stylometry check individually, not just the combined book', () => {
+  const root = join(EXAMPLES, 'sample-book');
+  const config = JSON.parse(readFileSync(join(root, '.studio', 'config.json'), 'utf8'));
+  const baseline = config.stylometry.baseline.markers;
+  const thresholds = config.thresholds;
+
+  const chapterDir = join(root, 'chapters');
+  const chapterFiles = readdirSync(chapterDir).filter(f => f.endsWith('.md')).sort();
+  assert.ok(chapterFiles.length >= 2, 'golden book must have at least two chapters to exercise this check');
+
+  for (const file of chapterFiles) {
+    const text = readFileSync(join(chapterDir, file), 'utf8');
+    const measured = measureChapter(text);
+    const { score, exceeded } = computeDrift(measured, baseline, thresholds);
+    assert.ok(
+      !exceeded,
+      'chapter ' + file + ' must pass its OWN stylometry check individually; drift score ' +
+      score.toFixed(2) + ' vs threshold ' + thresholds.drift_score_max +
+      ' (a whole-book pass does not guarantee a per-chapter pass)'
+    );
+  }
+});
+
+test('golden sample book CLI: ns-stylometry --chapter=<slug> --json exits 0 for EVERY chapter', () => {
+  const bookRoot = join(EXAMPLES, 'sample-book');
+  const chapterDir = join(bookRoot, 'chapters');
+  const chapterFiles = readdirSync(chapterDir).filter(f => f.endsWith('.md')).sort();
+
+  for (const file of chapterFiles) {
+    const slug = file.replace(/\.md$/, '');
+    const result = spawnSync(
+      process.execPath, [BIN, '--chapter=' + slug, '--json'],
+      { cwd: bookRoot, encoding: 'utf8' }
+    );
+    assert.strictEqual(result.status, 0,
+      'chapter ' + slug + ' CLI must exit 0; stderr: ' + result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.strictEqual(out.verdict, 'pass',
+      'chapter ' + slug + ' verdict must be pass; got ' + out.verdict +
+      ' (drift ' + out.driftScore.toFixed(2) + ' vs threshold ' + out.threshold + ')');
+  }
 });
 
 // ---------------------------------------------------------------------------

@@ -17,6 +17,7 @@
       "voice-capture"
     ],
     "skills": [
+      "build-apparatus",
       "capture-voice",
       "doctor",
       "draft-chapter",
@@ -24,15 +25,18 @@
       "init-project",
       "intake-interview",
       "outline-book",
+      "quick-scan",
       "research-pass",
       "run-quality-gate",
       "status-dashboard",
-      "studio"
+      "studio",
+      "tour"
     ],
     "hooks": [
       "SessionStart",
       "PreToolUse",
       "PostToolBatch",
+      "PostToolUse",
       "Stop",
       "PreCompact"
     ],
@@ -40,7 +44,9 @@
       "ns-claims",
       "ns-doctor",
       "ns-gate",
+      "ns-notes",
       "ns-scrub",
+      "ns-statusline",
       "ns-stylometry"
     ]
   }

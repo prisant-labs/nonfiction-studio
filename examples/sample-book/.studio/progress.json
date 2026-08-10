@@ -1,32 +1,32 @@
 {
   "version": 2,
-  "updated": "2026-07-18T09:05:00Z",
+  "updated": "2026-08-10T09:10:00Z",
   "chapters": [
     {
       "slug": "01-listening-before-speaking",
       "title": "Listening Before Speaking",
       "status": "drafted",
-      "word_count": 422,
-      "drift_score": 0,
+      "word_count": 528,
+      "drift_score": 29.8,
       "open_claim_count": 0,
       "last_gate": {
-        "ts": "2026-07-18T09:00:00Z",
+        "ts": "2026-08-10T09:10:00Z",
         "verdict": "pass",
-        "report": ".studio/gate/01-listening-before-speaking.20260718T090000Z.json"
+        "report": ".studio/gate/01-listening-before-speaking.20260810T091000Z.json"
       }
     },
     {
       "slug": "02-finding-your-network",
       "title": "Finding Your Network",
       "status": "drafted",
-      "word_count": 462,
-      "drift_score": 0,
+      "word_count": 527,
+      "drift_score": 26.84,
       "open_claim_count": 0,
       "last_gate": null
     }
   ],
   "totals": {
-    "word_count": 884,
+    "word_count": 1055,
     "open_claim_count": 0,
     "chapters_final": 0,
     "chapters_total": 6

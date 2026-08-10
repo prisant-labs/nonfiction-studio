@@ -65,8 +65,11 @@ to `drafting-partner`.
   `structure/chapter-list.md` (the slug registry), and append to
   `research/open-questions.md` (one entry per evidence-needed item), all after
   the author confirms the proposed plan. Writes are restricted to `structure/`
-  and `research/`; the PreToolUse path guard blocks writes outside those
-  directories and blocks all writes to `templates/`.
+  and `research/`. The PreToolUse hook enforces this per D-13 (security
+  posture): it denies any write outside those two prefixes, including any
+  write to `templates/`, once it identifies `structure-architect` from the
+  `agent_type` slug the platform reports in the hook envelope (ADR-0007,
+  agent identity resolution).
 
 No web access. No shell tools. Read and Write are the narrowest, least-privilege
 set the behavior contracts below imply, per D-13 (security posture).

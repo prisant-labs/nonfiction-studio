@@ -1,14 +1,42 @@
 // what-it-is:   AI-injection and continuity quick-scan engine
-// what-it-does: exports scanInjection(text), scanContinuity(chapters), and scrub(chapters, modes);
+// what-it-does: exports scanInjection(text), scanContinuity(chapters), and scrub(chapters, modes).
 //               scanInjection detects three finding types: injection.pattern-match (compound
 //               sentence-initial verb + editorial object), scrub.template-marker (unclosed
 //               draft markers), and scrub.agent-self-reference (fixed case-insensitive
-//               phrase lexicon from S-07); scanContinuity detects continuity.name-mismatch
-//               (symmetric cross-chapter case-folded identity mismatches, with sub-phrase
-//               deduplication); scrub combines both passes under a modes parameter
-// why:          the engine logic lives in a lib module so both bin/ns-scrub (CLI) and the Stop
-//               gate hook share the same computation path per S-07 section 4
-// used-by:      bin/ns-scrub, hooks/stop-gate.mjs
+//               phrase lexicon from S-07). It answers "did an AI leave editorial scaffolding
+//               in the AUTHOR'S OWN manuscript prose" and is tuned against that corpus, where
+//               ordinary words like "ignore" and "override" must not false-positive.
+//               scanContinuity detects continuity.name-mismatch (symmetric cross-chapter
+//               case-folded identity mismatches, with sub-phrase deduplication).
+//               scrub combines the scanInjection and scanContinuity passes under a modes
+//               parameter.
+//
+//               A THIRD function, scanPromptInjection(text), was built, adversarially tested,
+//               and REMOVED across four OPP-P04 (untrusted-source envelope) review rounds. It
+//               attempted to detect instruction-override phrasing ("ignore your instructions...")
+//               directed at an assistant, a different question from scanInjection's, over
+//               fetched web content rather than manuscript prose. Every narrowing, down to its
+//               tightest ("your instructions"/"your prompt" adjacency, the one pattern with a
+//               clean record through three rounds of adversarial testing), was shown to
+//               false-positive on realistic content in the exact domains this hook scans
+//               (support FAQs, changelogs, security blogs, and - the case that closed the
+//               question - ordinary developer documentation where "your prompt" means a SHELL
+//               prompt, not an AI one). No pattern-matching design closed the class; each fix
+//               closed the reported cases and a fresh adversarial pass found new ones, four
+//               times in a row. Removed rather than shipped narrower still, per the standing
+//               rule that a flag nobody should trust is worse than no flag. See
+//               hooks/post-tool-use.mjs's header and docs/formats/fetch-log.md for the
+//               consequence (the wrap-and-fence mechanism is unaffected and remains the actual
+//               defense) and git history on this file for the four-round record, if it is ever
+//               useful to a future attempt: know going in that the failure mode was not any one
+//               lexicon choice, it was pattern-matching's inability to distinguish an imperative
+//               ADDRESSED TO an assistant from the same words used to describe, report, or
+//               instruct a HUMAN reader, at any level of narrowing tried.
+// why:          the engine logic lives in a lib module so every caller shares the same
+//               computation path per S-07 section 4 (one implementation, multiple callers,
+//               not independent copies)
+// used-by:      bin/ns-scrub and hooks/stop-gate.mjs (scanInjection, scanContinuity, scrub);
+//               hooks/post-tool-use.mjs (scanInjection)
 
 // ---- HELPERS ------------------------------------------------------------------
 

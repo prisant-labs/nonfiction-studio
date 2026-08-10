@@ -18,7 +18,12 @@ const EV_HEADING = /^### (EV-\d{4}) \(([^)]+)\)$/;
 const SRC_HEADING = /^### (SRC-\d{4}) \(([^)]+)\)$/;
 
 // Known EV fields (in canonical order).
-const EV_KNOWN = new Set(['claim', 'source', 'locator', 'confidence', 'status', 'added-by', 'date']);
+// 'verbatim' (D-07 (claim ledger with stable IDs) amendment, per OPP-D03: quote fidelity
+// and source packets) is OPTIONAL: it holds the exact source text for a quoted span,
+// compared character-for-character with no normalization by the quote-fidelity check in
+// claims-engine.mjs. An entry without it parses and round-trips exactly as it did before
+// this field existed.
+const EV_KNOWN = new Set(['claim', 'source', 'locator', 'verbatim', 'confidence', 'status', 'added-by', 'date']);
 
 // Known SRC fields (in canonical order).
 const SRC_KNOWN = new Set(['type', 'nature', 'author', 'title', 'year', 'publisher', 'identifier', 'url', 'accessed', 'retrieval-status']);
@@ -147,7 +152,7 @@ function serializeEntry(entry, canonical) {
 // --- Evidence Log (S-08 section 6) ---------------------------------------------
 
 // Canonical EV field order for programmatic entries.
-const EV_CANONICAL = ['claim', 'source', 'locator', 'confidence', 'status', 'added-by', 'date'];
+const EV_CANONICAL = ['claim', 'source', 'locator', 'verbatim', 'confidence', 'status', 'added-by', 'date'];
 
 /**
  * Identity coercion for EV fields (all stored as strings; no numeric fields in EV).
@@ -161,7 +166,7 @@ function coerceEv(key, value) {
  * Each entry contains typed known fields and an 'extra' map for unknown fields.
  * The '_fieldOrder' array records the original field sequence for byte-faithful serialization.
  *
- * Known fields: claim, source, locator, confidence, status, added-by, date.
+ * Known fields: claim, source, locator, verbatim, confidence, status, added-by, date.
  * All other fields land in entry.extra.
  *
  * @param {string} text - full content of research/evidence-log.md

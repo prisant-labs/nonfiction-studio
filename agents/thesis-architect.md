@@ -63,7 +63,9 @@ not draft outline content; that boundary belongs to `structure-architect`.
 
 No web access. No shell tools. Read and Write are the narrowest, least-privilege
 set the behavior contracts below imply, per D-13 (security posture). The
-PreToolUse path guard blocks writes outside `context/` and `structure/`.
+PreToolUse hook enforces this: it denies any write outside `context/` and
+`structure/` once it identifies `thesis-architect` from the `agent_type` slug
+the platform reports in the hook envelope (ADR-0007, agent identity resolution).
 
 ## Reads and writes
 

@@ -1,18 +1,18 @@
 ---
 name: doctor
 user-invocable: true
-argument-hint: "[mode: report | migrate | packs]"
-description: "Fronts the read-only bin/ns-doctor engine in one Bash call per invocation: report (default) runs the full bible integrity check inventory (structure, schemas, EV/SRC grammar, orphan markers, cross-references, word-count coherence, config coercion, snapshot naming) and maps exit 0 to a clean pass, exit 1 to findings grouped by check type with counts and routing hints, exit 2 to a surfaced error never treated as a pass; migrate diagnoses schema-version status without writing; packs confirms craft-pack validity; the fix mode is Phase 2+ scope and is not available in v1. Use when the author says 'something is broken in my project,' 'my project structure looks wrong,' or wants to run a diagnostic check separate from a status overview or a quality-gate run."
+argument-hint: "[mode: report | migrate | packs | install-statusline]"
+description: "Fronts the read-only bin/ns-doctor engine in one Bash call per invocation: report (default) runs the full bible integrity check inventory (structure, schemas, EV/SRC grammar, orphan markers, cross-references, word-count coherence, config coercion, snapshot naming) and maps exit 0 to a clean pass, exit 1 to findings grouped by check type with counts and routing hints, exit 2 to a surfaced error never treated as a pass; migrate diagnoses schema-version status without writing; packs confirms craft-pack validity; install-statusline (OPP-P03, studio HUD) offers a one-time consented write of the main Claude Code status line into the author's own settings, never running without an explicit yes; the fix mode is Phase 2+ scope and is not available in v1. Use when the author says 'something is broken in my project,' 'my project structure looks wrong,' wants to run a diagnostic check separate from a status overview or a quality-gate run, or asks to see book status continuously in their status bar."
 when_to_use: "Use when the author types /doctor, reports unexpected structural or schema errors from other skills, studio routes here from Path 5 (Troubleshoot or get help), status-dashboard routes here on a malformed progress.json, or run-quality-gate exits 2 with an engine error. Do not invoke for normal project status overviews (use status-dashboard), quality-gate runs (use run-quality-gate), or new project setup (use init-project)."
 ---
 
-This skill is the bible integrity front door per D-12 (versioned bible with a doctor) and S-06 3.11 (skills and invocation surface). It fronts `bin/ns-doctor` in a single Bash call per invocation, maps the exit code to a presented result, and groups findings by check type with routing hints. The doctor engine and this skill are both read-only in v1: no file is written in any mode per the READ-ONLY COVENANT proven at TSK-028 (ns-doctor engine). The `.studio/logs/doctor-<ts>.json` write and bible mutations arrive with the `fix` mode in Phase 2.
+This skill is the bible integrity front door per D-12 (versioned bible with a doctor) and S-06 3.11 (skills and invocation surface). It fronts `bin/ns-doctor` in a single Bash call per invocation, maps the exit code to a presented result, and groups findings by check type with routing hints. **`bin/ns-doctor` and its engine (`hooks/lib/doctor-engine.mjs`) are read-only without exception, in every mode**, proven by the grep in the engine's own header (D-12, versioned bible with a doctor). The `report`, `migrate`, and `packs` modes of this skill write nothing either. **The one exception is the `install-statusline` mode** (OPP-P03, studio HUD; ADR-0008, status HUD and CANON 3.5), which writes `~/.claude/settings.json`'s `statusLine` key, and only that file, and only after the author answers an explicit yes to a stated, one-time consent prompt; see "Mode `install-statusline`" below. The `.studio/logs/doctor-<ts>.json` write and other bible mutations described for a future `fix` mode remain unimplemented and are unrelated Phase 2 scope.
 
 **The fix mode is not in v1.** The skill responds to a `fix` argument by stating that it is Phase 2+ scope and is not available. The Phase 2 contract (dry-run default, explicit `apply` argument required, fixable-issue list) is recorded in `docs/reference/skills/doctor.md` as the future contract. No files are written; no engine is invoked.
 
-**No agents invoked.** This is a deterministic-CLI-only skill. No chain edges exist.
+**No agents invoked.** This is a deterministic-CLI-only skill in the `report`, `migrate`, and `packs` modes. `install-statusline` invokes no agent either: it uses the Write or Edit tool directly against `~/.claude/settings.json`, the only file any mode of this skill ever writes. No chain edges exist in any mode.
 
-Skill inputs read (by the engine via `--project=.`):
+Skill inputs read (by the engine via `--project=.`, in the `report`, `migrate`, and `packs` modes):
 - `.studio/meta.json` (schema_version for schema-version check and migrate-mode comparison)
 - `.studio/progress.json` (schema-validated against the committed progress.schema.json)
 - `.studio/config.json` (shape check; config-coercion notice for `thesis_alignment.mode: block`)
@@ -21,7 +21,11 @@ Skill inputs read (by the engine via `--project=.`):
 - `research/sources.md` (SRC grammar check and SRC cross-reference check)
 - `chapters/*.md` (scanned for `[claim: EV-nnnn]` markers in the orphan-marker check)
 
-No skill chain edges exist for this skill.
+In `install-statusline` mode only, the skill itself (not the engine, and not via `--project=.`)
+also reads, and conditionally writes, `~/.claude/settings.json` - a user-scope file outside any
+book project. See "Mode `install-statusline`" below.
+
+No skill chain edges exist for this skill, in any mode.
 
 ---
 
@@ -33,6 +37,9 @@ Parse the mode argument from the supplied tokens. The default mode when no argum
 - **`report`:** mode is `report`. Continue to Step 2.
 - **`migrate`:** mode is `migrate`. Continue to Step 2.
 - **`packs`:** mode is `packs`. Continue to Step 2.
+- **`install-statusline`:** mode is `install-statusline`. This mode does not invoke `bin/ns-doctor`
+  at all. Skip Steps 2 through 4 below and go directly to "Mode `install-statusline`" (its own
+  section, immediately after this Step 1).
 - **`validate`:** The `validate` argument is subsumed into `report` in v1. The full check inventory already includes all schema validation. State the following and continue with mode `report`:
 
   > The `validate` argument is an alias for `report` in v1: the full check inventory (structure, schemas, EV/SRC grammar, orphan markers, cross-references, word-count coherence, config coercion, snapshot naming) covers all schema validation. Running `report` now.
@@ -43,7 +50,85 @@ Parse the mode argument from the supplied tokens. The default mode when no argum
 
 - **Any other token:** unrecognized mode. State the following and halt without making any tool calls:
 
-  > Unrecognized mode `[token]`. Valid modes are `report` (default), `migrate`, and `packs`. The `fix` mode is Phase 2+ scope and is not available in v1. Run `/nonfiction-studio:doctor` with no argument to run the full check inventory.
+  > Unrecognized mode `[token]`. Valid modes are `report` (default), `migrate`, `packs`, and `install-statusline`. The `fix` mode is Phase 2+ scope and is not available in v1. Run `/nonfiction-studio:doctor` with no argument to run the full check inventory.
+
+---
+
+## Mode `install-statusline` - consented main-statusline install (OPP-P03, studio HUD)
+
+This mode does not invoke `bin/ns-doctor` and does not touch any book project file. It performs a
+one-time, explicitly consented write of the main Claude Code status line into the author's OWN
+`~/.claude/settings.json`, using the Write or Edit tool directly. This is the only file, and the
+only code path in this entire plugin, that ever writes to the author's own Claude Code settings;
+see ADR-0008 (status HUD), recorded at `docs/adr/ADR-0008-status-hud.md`, for why no other path
+exists or should exist, and why a plugin cannot ship this itself.
+
+### Step A - Resolve the plugin root
+
+Use the same three-tier resolution as Step 2 below (settings.json lookup, plugins-cache search,
+dev-mode fallback) to obtain `<plugin-root>`. If all three lookups fail, halt exactly as Step 2
+describes: report the settings.json path and cache path attempted, write nothing, and ask the
+author how to proceed.
+
+### Step B - Read the author's existing settings
+
+Use the Read tool on `$HOME/.claude/settings.json`. Three outcomes:
+
+- **File does not exist.** Treat the existing settings as an empty object (`{}`). Continue to Step C.
+- **File exists and parses as JSON.** Continue to Step C with the parsed object in hand.
+- **File exists but does not parse as JSON.** Halt. State: "`~/.claude/settings.json` exists but
+  is not valid JSON, so I cannot safely merge into it without risking the rest of your settings.
+  Please fix or back up that file, then run `/nonfiction-studio:doctor install-statusline` again,
+  or run the built-in `/statusline` command instead." Write nothing.
+
+### Step C - State exactly what will be written, and ask
+
+Compose the exact command string this mode proposes: `node "<plugin-root>/bin/ns-statusline"`,
+using the plugin root resolved in Step A as a literal resolved path - NOT the `CLAUDE_PLUGIN_ROOT`
+plugin-system placeholder, which has no meaning inside a user's own top-level
+`~/.claude/settings.json` (that token interpolates only inside a plugin's own manifest files; see
+ADR-0008).
+
+- **If the parsed settings object from Step B already has a `statusLine` key:** state its current
+  value verbatim, state the proposed new value verbatim, and ask: "Your
+  `~/.claude/settings.json` already has a `statusLine` configured: `[existing value]`. Installing
+  this plugin's status line would replace it with: `[proposed value]`. Shall I replace it?
+  (yes/no)" This is the separate explicit confirmation ADR-0008 requires before overwriting an
+  existing `statusLine`; nothing more is asked once this question is answered.
+- **If no `statusLine` key exists yet:** ask: "I will add a `statusLine` entry to
+  `~/.claude/settings.json` so Claude Code shows this book's active chapter, word count, open
+  claims, drift, and gate state continuously in your status bar. The command will be:
+  `[proposed value]`. Every other key already in your settings file is left untouched. May I
+  write this? (yes/no)"
+
+Wait for an explicit answer before continuing to Step D.
+
+**Non-interactive (headless) context.** There is nobody present to answer the question above. Do
+not proceed as though "yes" were implied: a top-level settings write is exactly the kind of
+action that requires an explicit yes (OPP-P03's "exactly one consent prompt"), unlike some other
+skills' low-risk non-interactive defaults (for example `init-project`'s idempotent re-stamp of
+missing scaffold files). State: "Installing the status line needs an explicit yes from you, so it
+is not available in a non-interactive session. Run the built-in `/statusline` command instead, or
+run `/nonfiction-studio:doctor install-statusline` again from an interactive session." Write
+nothing.
+
+### Step D - On an explicit yes: write; on anything else: write nothing
+
+**On an explicit "yes":** merge `{ "statusLine": { "type": "command", "command": "<the composed
+command string>" } }` into the parsed settings object from Step B - a shallow merge at the top
+level, so every other existing top-level key is preserved unchanged and only `statusLine` is set
+or replaced. Use the Write tool to write the merged object back to `$HOME/.claude/settings.json`
+as formatted JSON. Note for the author before writing: the Write tool will show its own
+permission prompt for this file; that is the platform's ordinary behavior for any file write, not
+something this skill suppresses or works around. After a successful write, report:
+"`~/.claude/settings.json` has been updated. The status line takes effect in your next Claude
+Code session, or immediately if you run `/statusline` afterward."
+
+**On anything other than an explicit "yes"** (a "no", silence, an unrelated answer, or any halt
+condition in Steps A-C above): write nothing. State: "No changes were made to
+`~/.claude/settings.json`. You can install the status line yourself at any time by running the
+built-in `/statusline` command and describing what to show, or by running
+`/nonfiction-studio:doctor install-statusline` again."
 
 ---
 
@@ -188,3 +273,9 @@ If the stderr message contains "requires migration", also suggest:
 **Exit 2 from `--validate-packs`.** Unexpected in v1 (the packs mode exits 0 under all normal conditions). Surface the stderr and halt.
 
 **Project root not found.** If `findBookRoot` cannot locate `.studio/meta.json` from the current directory, the CLI exits 2 with a `BibleError` message on stderr. Surface it: "Doctor error: [BibleError message]. Ensure this skill is invoked from within a Nonfiction Studio project bible (`.studio/meta.json` must be present at or above the current directory)."
+
+**`install-statusline`: plugin root cannot be resolved.** Step A halts before any read or write, exactly as Step 2's own failure behavior below: report the settings.json path and cache path attempted, and ask the author how to proceed.
+
+**`install-statusline`: existing `~/.claude/settings.json` is not valid JSON.** Step B halts before writing anything; the author is told to fix or back up the file first, or to use the built-in `/statusline` command instead.
+
+**`install-statusline`: any answer other than an explicit yes (a "no", silence, an unrelated answer, or a non-interactive context with nobody to ask).** Step C or D writes nothing and states that `/statusline` and re-running `/nonfiction-studio:doctor install-statusline` both remain available.

@@ -26,7 +26,7 @@ No argument is required. The skill manages its own flow by reading the resumptio
 
 Alternate entry points:
 - Via the `studio` skill: Path 1 (Start a new book) chains to this skill on completion of `init-project`
-- Legacy verb: `/interview` (deprecated; use the namespaced form)
+- Verb alias: `/interview` (the namespaced `/nonfiction-studio:intake-interview` form also works)
 - Following the `init-project` closing prompt: that prompt names `/nonfiction-studio:intake-interview` as the natural next step
 
 ## Inputs and Outputs

@@ -4,7 +4,8 @@
 //               (the single counting authority per TSK-028), updates .studio/progress.json
 //               atomically via writeProgressAtomic, and appends compliance records to
 //               .studio/ai-use-log.jsonl per D-10 (compliance layer is a feature) and
-//               S-08 section 5.
+//               S-08 section 5. Chapter-write records now carry the real acting agent's
+//               label (resolveAgentLabel, ADR-0007) instead of a fixed placeholder.
 //
 // stdin:  platform PostToolBatch event (snake_case: session_id, transcript_path, cwd,
 //         prompt_id, permission_mode, effort, hook_event_name, tool_calls)
@@ -36,6 +37,7 @@ import { join, resolve, sep, relative, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findBookRoot, readProgress, writeProgressAtomic } from './lib/bible.mjs';
 import { countWords } from './lib/stylometry-engine.mjs';
+import { resolveAgentLabel, foldForCompare } from './lib/agent-identity.mjs';
 
 // ---------------------------------------------------------------------------
 // Drain stdin - the platform delivers event JSON here on every invocation.
@@ -65,6 +67,16 @@ try {
 // Extract snake_case fields resolved live by TSK-030 (hooks.json Phase 1 wiring).
 const toolCalls = Array.isArray(event.tool_calls) ? event.tool_calls : [];
 const cwd = typeof event.cwd === 'string' && event.cwd ? event.cwd : process.cwd();
+
+// Real agent attribution (D-10 compliance layer, brief 1e). resolveAgentLabel
+// is the ATTRIBUTION-facing resolver (keeps the namespace prefix and
+// unnamespaced types like "general-purpose"), NOT the enforcement-facing
+// resolveActiveAgent hooks/pre-tool-use.mjs uses - attribution and
+// enforcement are different questions. Falls back to the existing
+// 'hook:PostToolBatch' literal when the envelope carries no agent_type (a
+// main-session write), unchanged from today's behavior. Resolved once: a
+// PostToolBatch event's agent_type covers the whole batch, not per call.
+const chapterWriteAgent = resolveAgentLabel(event) || 'hook:PostToolBatch';
 
 // ---------------------------------------------------------------------------
 // Book root detection. No root found: no-op (exit 0, empty stdout).
@@ -147,11 +159,15 @@ function appendAiUseLog(record) {
 // filesystem). Folding unconditionally would WIDEN what counts as a chapter
 // path on a case-sensitive filesystem (POSIX) - the wrong direction for a
 // check that feeds the progress/compliance-log write path.
+//
+// foldForCompare is imported from hooks/lib/agent-identity.mjs (ADR-0007, agent identity
+// resolution) rather than defined locally: this file previously carried its own copy,
+// the third independent implementation of the same win32-only-lowercase logic found in
+// this repo (the first two were consolidated into the shared module earlier in this
+// wave). Every call site below omits the platformOverride parameter, so it defaults to
+// the real process.platform exactly as the local copy it replaces did; behavior is
+// unchanged, only the implementation's home moved.
 // ---------------------------------------------------------------------------
-function foldForCompare(p) {
-  return process.platform === 'win32' ? p.toLowerCase() : p;
-}
-
 const chaptersDirNorm = foldForCompare(resolve(bookRoot, 'chapters'));
 const chaptersDirPrefix = chaptersDirNorm + sep;
 
@@ -436,9 +452,10 @@ if (chapterWrites.size > 0) {
 // One entry per unique chapter file (chapterDetails is keyed by abs path).
 //
 // surface is the constant "claude-code" with the following deferred resolution note:
-//   surface detection for Cowork is unresolved until SPK-02 (Cowork production probe);
-//   richer per-agent write attribution is deferred behind OQ-14 (agent identity in hook
-//   events) and the Phase 2 SubagentStop hook.
+//   surface detection for Cowork is unresolved until SPK-02 (Cowork production probe).
+//   Per-agent write attribution (formerly deferred behind OQ-14) is now real: see
+//   chapterWriteAgent above, resolved via resolveAgentLabel per ADR-0007 (agent
+//   identity resolution) and the 2026-08-09 platform probe.
 // ---------------------------------------------------------------------------
 for (const { slug, newCount, relPath } of chapterDetails.values()) {
   const prev = prevCounts.get(slug) ?? 0;
@@ -469,7 +486,7 @@ for (const { absPath, scope } of chapterCallLog) {
 
   appendAiUseLog({
     ts,
-    agent: 'hook:PostToolBatch',
+    agent: chapterWriteAgent,
     surface: 'claude-code',
     scope,
     targets: [relPath],

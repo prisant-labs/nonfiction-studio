@@ -131,15 +131,13 @@ All three files satisfy the `name` equality rule. `library.json` and `plugin.jso
 
 ## References
 
-Planning-doc paths below are code spans, not links: `_local/` is gitignored, so a
-relative link to it resolves in a working tree but breaks in a clean checkout. This
-matches the convention in ADR-0003 (skill invocation ergonomics) and ADR-0005 (bin
-PATH on Windows).
+CANON and its supporting planning documents are internal, gitignored working material, not
+published in this repository; cited below by decision ID and section rather than by path.
 
-- D-22 (packaging corrected): `(local working notes, not published)` - decision establishing authored manifests and requiring this ADR
-- D-11 (toolkit adoption): `(local working notes, not published)` - decision establishing `library.json` as component source of truth
-- T-01 (toolkit assessment): `(local working notes, not published)` - dual source-of-truth tension (section 5) and gen-manifest.mjs adapt note (section 4.2)
+- D-22 (packaging corrected): CANON section 1 - decision establishing authored manifests and requiring this ADR
+- D-11 (toolkit adoption): CANON section 1 - decision establishing `library.json` as component source of truth
+- T-01 (toolkit assessment): the toolkit assessment appendix - dual source-of-truth tension (section 5) and gen-manifest.mjs adapt note (section 4.2)
 - [ADR-0001 (hooks.json schema)](./ADR-0001-hooks-json-schema.md) - evidence that the platform validator ignores hooks.json
 - TSK-003 (packaging manifests) report - `description` required under `--strict` evidence
 - TSK-005 (agent template adaptation) report - platform validator ignores agent files evidence
-- Q-02 (CI pipeline): `(local working notes, not published)` - the release workflow that owns field-equality enforcement
+- Q-02 (CI pipeline): the CI-pipeline planning doc - the release workflow that owns field-equality enforcement

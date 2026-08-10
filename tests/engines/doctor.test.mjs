@@ -373,20 +373,20 @@ test('word-count: countWords from stylometry-engine gives 481 for unsourced-clai
     'stylometry tokenizer gives 481 for unsourced-claim ch2; got ' + count);
 });
 
-test('word-count: countWords gives 462 for golden sample-book ch2', () => {
+test('word-count: countWords gives 527 for golden sample-book ch2', () => {
   const ch2Path = join(EXAMPLES, 'sample-book', 'chapters', '02-finding-your-network.md');
   const text = readFileSync(ch2Path, 'utf8');
   const count = countWords(text);
-  assert.equal(count, 462,
-    'stylometry tokenizer gives 462 for golden ch2 (matches progress.json); got ' + count);
+  assert.equal(count, 527,
+    'stylometry tokenizer gives 527 for golden ch2 (matches progress.json); got ' + count);
 });
 
-test('word-count: countWords gives 422 for golden sample-book ch1', () => {
+test('word-count: countWords gives 528 for golden sample-book ch1', () => {
   const ch1Path = join(EXAMPLES, 'sample-book', 'chapters', '01-listening-before-speaking.md');
   const text = readFileSync(ch1Path, 'utf8');
   const count = countWords(text);
-  assert.equal(count, 422,
-    'stylometry tokenizer gives 422 for golden ch1 (matches updated progress.json); got ' + count);
+  assert.equal(count, 528,
+    'stylometry tokenizer gives 528 for golden ch1 (matches updated progress.json); got ' + count);
 });
 
 // ---------------------------------------------------------------------------

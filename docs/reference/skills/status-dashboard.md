@@ -34,7 +34,7 @@ No argument is accepted or needed.
 
 Alternate entry points:
 - Via the `studio` dispatcher: routes here from Path 4 (Review quality and status) before offering `run-quality-gate`
-- Legacy verb: `/status` (deprecated; use the namespaced form)
+- Verb alias: `/status` (the namespaced `/nonfiction-studio:status-dashboard` form also works)
 - Author asks "how is my book going" or "show me the project status"
 
 ## Inputs and Outputs

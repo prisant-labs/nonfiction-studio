@@ -33,6 +33,11 @@ const FLAG_DEFS = {
   'project':        { type: 'string' },
   'baseline':       { type: 'string' },
   'check':          { type: 'list' },
+  // OPP-D03 (quote fidelity and source packets): ns-claims-only mode flags. 'quotes' runs
+  // the quote-fidelity check; 'packets' generates per-chapter research packets under
+  // research/packets/. Neither changes ns-claims's default behavior when absent.
+  'quotes':         { type: 'boolean' },
+  'packets':        { type: 'boolean' },
 };
 
 /**

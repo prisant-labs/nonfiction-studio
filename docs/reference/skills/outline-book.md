@@ -38,7 +38,7 @@ Alternate entry points:
 - Via `intake-interview` Step 6: that skill suggests `outline-book` after the brief is confirmed
 - Via `capture-voice` Step 6: that skill suggests `outline-book` when a confirmed brief exists
 - Via the `studio` dispatcher: routes here from Path 2 when no chapter list exists
-- Legacy verb: `/outline` (deprecated; use the namespaced form)
+- Verb alias: `/outline` (the namespaced `/nonfiction-studio:outline-book` form also works)
 
 ## Inputs and Outputs
 

@@ -30,7 +30,7 @@ Alternate entry points:
 - Via the `studio` dispatcher: routes here from Path 2 (Continue writing) for the next unstarted or in-progress chapter
 - Via `research-pass` Step 5: that skill suggests `draft-chapter` when a chapter is fully evidenced
 - Via `outline-book` Step 5: that skill suggests `draft-chapter` as a natural next step after the chapter list is confirmed
-- Legacy verb: `/draft <ch>` (deprecated; use the namespaced form)
+- Verb alias: `/draft <ch>` (the namespaced `/nonfiction-studio:draft-chapter` form also works)
 
 ## Inputs and Outputs
 

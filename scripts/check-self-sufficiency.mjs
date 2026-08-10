@@ -1,19 +1,24 @@
 // scripts/check-self-sufficiency.mjs
 // what-it-is:   the no-additional-keys self-sufficiency guard
 // what-it-does: scans every git-tracked file under bin/, hooks/, scripts/, agents/, skills/,
-//               templates/, docs/, .github/workflows/, tests/, evals/, and the root manifests
-//               (every direct child of the repo root, plus the native plugin manifests under
-//               .claude-plugin/ and .codex-plugin/) for five forbidden pattern classes:
+//               templates/, docs/, .github/workflows/, tests/, evals/, examples/, and the root
+//               manifests (every direct child of the repo root, plus the native plugin manifests
+//               under .claude-plugin/ and .codex-plugin/) for five forbidden pattern classes:
 //                 1. raw network calls (fetch(, http(s).request(, axios, new WebSocket(, a
 //                    spawned curl/wget) - ERROR, never waivable via the exceptions file, except
-//                    inside a test-fixture directory (any path with a "/fixtures/" segment):
-//                    synthetic sample content is not a shipped capability.
+//                    inside a test-fixture directory (any path with a "/fixtures/" segment) or
+//                    anywhere under examples/: synthetic sample content is not a shipped
+//                    capability, and a worked example legitimately contains prose about sources
+//                    and URLs (F7 (scan-set blind spots) - this carve-out was only ever justified
+//                    for this class).
 //                 2. non-Anthropic model-provider keys (OPENAI_API_KEY, GEMINI_API_KEY,
 //                    COHERE_API_KEY, MISTRAL_API_KEY, GROQ_API_KEY, AZURE_OPENAI_*) - ERROR,
-//                    never waivable, no fixture carve-out.
+//                    never waivable, no fixture or examples/ carve-out: a leaked key pattern in
+//                    an example is exactly as bad as one in shipped code, and examples get copied.
 //                 3. ANTHROPIC_API_KEY - ERROR unless a matching {file, pattern} entry exists in
 //                    scripts/self-sufficiency-exceptions.json with a real (non-empty) reason.
-//                    This is the ONLY class the exceptions file ever applies to.
+//                    This is the ONLY class the exceptions file ever applies to. No fixture or
+//                    examples/ carve-out, same reasoning as class 2.
 //                 4. workflow trigger guard - any .github/workflows/*.yml whose on: block
 //                    includes pull_request or push while the file references any secrets.NAME
 //                    beyond secrets.GITHUB_TOKEN - ERROR. Parsed textually, line-based, no YAML
@@ -34,10 +39,15 @@
 //               Falls back to a plain filesystem walk of the same scanned paths when git is
 //               unavailable or the tree is not a git repository (mirrors check-links.mjs), which
 //               is how a plain directory copy (no .git) still gets a correct scan.
-// why:          (local working notes, not published) section 5: the
-//               no-additional-keys invariant held on inspection across all 486 tracked files;
+// why:          the 2026-08-07 self-sufficiency audit (an internal report, not published in
+//               this repository), section 5: the no-additional-keys invariant held on
+//               inspection across all 486 tracked files;
 //               this turns that one-time audit finding into permanent, deterministic CI
-//               machinery instead of a claim that can silently rot as the tree changes.
+//               machinery instead of a claim that can silently rot as the tree changes. examples/
+//               added to the scanned set per F7 (scan-set blind spots): the directory was
+//               entirely unscanned before, which incidentally exempted provider-key patterns
+//               there with no stated reason - only the network-pattern exemption was ever
+//               justified.
 // used-by:      runs as a Tier A step (wired into .github/workflows/tier-a.yml at lines 83-85)
 // exit taxonomy: 0 = pass; 1 = named finding(s) (forbidden pattern, stale or invalid exception);
 //                2 = operational error (unreadable root, malformed exceptions file)
@@ -62,7 +72,7 @@ const EXCLUDED_PATHS = new Set([SELF_PATH, 'scripts/checks/mcp-valid.mjs']);
 
 const SCANNED_PREFIXES = [
   'bin/', 'hooks/', 'scripts/', 'agents/', 'skills/', 'templates/',
-  'docs/', '.github/workflows/', 'tests/', 'evals/',
+  'docs/', '.github/workflows/', 'tests/', 'evals/', 'examples/',
   '.claude-plugin/', '.codex-plugin/',
 ];
 
@@ -78,6 +88,18 @@ function inScannedSet(rel) {
 
 function isFixturePath(rel) {
   return rel.split('/').includes('fixtures');
+}
+
+function isExamplesPath(rel) {
+  return rel.startsWith('examples/');
+}
+
+// Class 1 (network patterns) only: exempts test-fixture directories and examples/,
+// per each one's own stated reason above. Never exempts classes 2 or 3 (provider
+// keys) -- F7 (scan-set blind spots) narrowed the examples/ carve-out to exactly
+// this class, which is the only one it was ever justified for.
+function isNetworkExempt(rel) {
+  return isFixturePath(rel) || isExamplesPath(rel);
 }
 
 function isDocScope(rel) {
@@ -183,9 +205,10 @@ const NON_ANTHROPIC_KEY_PATTERNS = [
 // Class 3: ANTHROPIC_API_KEY. ERROR unless a matching exceptions-file entry exists.
 // Scoped to a LIVE reference (process.env.ANTHROPIC_API_KEY, process.env['ANTHROPIC_API_KEY'],
 // or the GitHub Actions secrets.ANTHROPIC_API_KEY form), not a bare textual mention: a comment
-// explaining the mechanism, or a log/error string that tells a user what to set, is the audit's
-// own "test, fixture, or doc mention" bucket ((local working notes, not published) section 3.1 row (c)),
-// already reviewed as accurate and never meant to require its own exceptions-file entry. Only the
+// explaining the mechanism, or a log/error string that tells a user what to set, is the
+// 2026-08-07 self-sufficiency audit's own "test, fixture, or doc mention" bucket (an internal
+// report, not published in this repository; section 3.1 row (c)), already reviewed as accurate
+// and never meant to require its own exceptions-file entry. Only the
 // four sites that actually read the credential (tier-b.yml:48,55, run-integration.mjs:559,
 // run-evals.mjs:173) are section 3.1 row (b)'s "hard reference" sites this class exists to gate.
 const ANTHROPIC_KEY_PATTERN = /(?:process\.env\.|process\.env\[['"`]|secrets\.)ANTHROPIC_API_KEY/;
@@ -324,14 +347,14 @@ for (const rel of scannedFiles) {
     continue; // unreadable entry (e.g. a broken symlink) - skip, not fatal
   }
   const lines = text.split('\n');
-  const inFixture = isFixturePath(rel);
+  const networkExempt = isNetworkExempt(rel);
   const docScope = isDocScope(rel);
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const lineNo = i + 1;
 
-    if (!inFixture) {
+    if (!networkExempt) {
       for (const re of NETWORK_PATTERNS) {
         if (re.test(line)) {
           forbiddenCount++;

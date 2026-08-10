@@ -1,0 +1,56 @@
+#!/usr/bin/env node
+// what-it-is:   the ns-statusline CLI (thin shell over hooks/lib/statusline-engine.mjs)
+// what-it-does: reads a status-line JSON event from stdin and prints either the main status
+//               line (default mode) or, with --subagent, one {id, content} JSON line per
+//               subagent row this plugin owns
+// why:          the CLI is the public surface; all logic lives in statusline-engine.mjs so the
+//               behavior is unit-testable without a live Claude Code session, per S-07 section 4
+// usage:        ns-statusline            < statusLine-event.json           (main status line)
+//               ns-statusline --subagent < subagentStatusLine-event.json   (subagent rows)
+//
+// ABSOLUTE FAIL-SAFE: this script always exits 0 and never writes to stderr. A status line
+// command runs on every assistant message (per docs/adr/ADR-0008-status-hud.md and the platform
+// statusline documentation); a stack trace or a non-zero exit here would be far more disruptive
+// than in a one-shot CLI, so the entire body below is wrapped in a catch that swallows any
+// unexpected error and falls through to silence. This is intentionally broader than the other
+// six CLIs' error handling (which do report named errors on stderr with exit 2): ns-statusline
+// has no operator watching its exit code, only a status bar that must never show a stack trace.
+
+import { readFileSync } from 'node:fs';
+import { buildMainStatusLine, buildSubagentLines } from '../hooks/lib/statusline-engine.mjs';
+
+try {
+  let raw = '';
+  try {
+    raw = readFileSync(0, 'utf8');
+  } catch {
+    raw = '';
+  }
+
+  let event = {};
+  try {
+    event = raw ? JSON.parse(raw) : {};
+  } catch {
+    event = {};
+  }
+
+  const isSubagent = process.argv.slice(2).includes('--subagent');
+
+  if (isSubagent) {
+    const lines = buildSubagentLines(event);
+    for (const line of lines) {
+      process.stdout.write(line + '\n');
+    }
+  } else {
+    const line = buildMainStatusLine(event);
+    if (line) {
+      process.stdout.write(line);
+    }
+  }
+} catch {
+  // Never let an unexpected error surface as a stack trace in the user's status bar.
+  // Silence is always the correct degradation here: not being in a book project is a
+  // normal state, not an error, and this command has no operator watching its exit code.
+}
+
+process.exit(0);
