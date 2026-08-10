@@ -80,15 +80,18 @@ The `--check` flag accepts CLI flag names, not REPORT check names. The six valid
 | Exit code | Meaning |
 |---|---|
 | 0 | Pass - all checks passed, or all fired checks are in warn mode |
-| 1 | One or more block-mode checks fired (only possible when `gate.mode` is `warn` and at least one check has `mode: block`, or when `gate.mode` is `block`) |
+| 1 | One or more block-mode checks fired; reachable only when top-level `gate.mode` is `block` (D-03 (layered Stop gate) Invariant 2 caps every verdict to `warn` whenever `gate.mode` is `warn`, regardless of any individual check's own mode - see `hooks/lib/gate-engine.mjs:625`) |
 | 2 | Argument error, missing book root, or engine failure |
 
 ## Gate checks and default modes (Phase 1)
 
 The table below reflects the `examples/sample-book/.studio/config.json` defaults. Authors
-override modes via their own `.studio/config.json`.
+override modes via their own `.studio/config.json`. Whether a block-mode check's block
+verdict actually stops the session additionally requires top-level `gate.mode` to be
+`block`: every verdict is capped to `warn` when top-level `gate.mode` is `warn`, the
+shipped default (D-03 (layered Stop gate) Invariant 2, `hooks/lib/gate-engine.mjs:625`).
 
-| Check | Default mode | Blocks when mode=block? |
+| Check | Default mode | Blocks when mode=`block` and top-level `gate.mode` is `block`? |
 |---|---|---|
 | `claim_coverage` | block | Yes |
 | `quote_fidelity` | warn | No (structurally coerced to warn; block is unreachable until the quote normalization and adjudication policy ships, roadmap row 1.5) |
