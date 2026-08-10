@@ -3,8 +3,9 @@
 //               task 1, agent identity enforcement, for F-AG-01/F-AG-02/F8)
 // what-it-does: spawns the real script with crafted snake_case PreToolUse events and
 //               imports the exported guard functions directly, covering the TSK-032
-//               brief cases plus the 13 cases from (local working notes, not published) (agent write-scope,
-//               web gate, and the F8 corrupt-config-suppresses-the-caution carry)
+//               brief cases plus 13 further cases covering agent write-scope enforcement
+//               (F-AG-01), the web-research gate (F-AG-02), and the F8
+//               corrupt-config-suppresses-the-caution carry
 // runner:       node --test "tests/hooks/*.test.mjs"
 //
 // Synthetic events copy the shape captured live in the TSK-030 report (snake_case stdin):
@@ -538,7 +539,10 @@ test('agent write-scope containment: a traversal that escapes the book root is d
 // Roadmap row 1.1's "no false denies under ambiguity" acceptance criterion is
 // a first-class requirement here, not a footnote: absent, unnamespaced, and
 // untabled agent_type values must all leave today's verdict unchanged.
-// Case numbering below matches the 13 required cases in (local working notes, not published).
+// The numbered cases below exercise AGENT_WRITE_SCOPES per agent slug, each agent's
+// allowed-prefix boundary in both directions (denied outside it, allowed inside it), and
+// the agents deliberately absent from the table (unconstrained, per roadmap row 1.1's
+// "no false denies under ambiguity").
 // ---------------------------------------------------------------------------
 
 test('case 1: research-librarian write to chapters/ DENIES, reason names the slug', () => {
@@ -1344,7 +1348,10 @@ test('F-HK-13 (c) containment guard on a case-sensitive filesystem: a case-diffe
 // docs/reference/agents/research-librarian.md:135-149: an absent key, the
 // string "true", false, and null all leave the gate CLOSED. Main-session
 // calls and non-gated agents are entirely unaffected regardless of config.
-// Case numbering below matches the 13 required cases in (local working notes, not published).
+// The numbered cases below exercise the gate per web-gated agent slug (research-librarian,
+// fact-checker, citation-manager), each of the closed-gate config shapes (absent, string
+// "true", false, null), the open-gate boolean-true shape, and confirm main-session calls
+// and non-gated agents are unaffected regardless of config.
 // ---------------------------------------------------------------------------
 
 /** Build a synthetic WebSearch/WebFetch event, optionally carrying agent_type

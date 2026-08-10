@@ -179,7 +179,7 @@ test('F-HK-04 (c) control: plain nested directory (no symlink), new file: still 
 });
 
 // ---------------------------------------------------------------------------
-// F-AG-01 (agent write-scope, symlink evasion): case 7 from (local working notes, not published).
+// F-AG-01 (agent write-scope, symlink evasion): the cross-scope-symlink case.
 // A constrained agent's write through a symlink that LEXICALLY looks in-scope
 // (inside chapters/, which drafting-partner may write) but really resolves to
 // a DIFFERENT in-root directory (research/, outside drafting-partner's scope)
