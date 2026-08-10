@@ -63,9 +63,14 @@ function runHook(input, extraEnv = {}) {
   return spawnSync('node', [SCRIPT], { input, encoding: 'utf8', env });
 }
 
-/** Build a synthetic PostToolBatch event (snake_case shape per TSK-030 firing proof). */
-function makeBatchEvent(cwd, toolCalls) {
-  return JSON.stringify({
+/** Build a synthetic PostToolBatch event (snake_case shape per TSK-030 firing proof).
+ *  agentType, when given, adds agent_id/agent_type fields shaped like the
+ *  2026-08-09 platform probe ((local working notes, not published)); the
+ *  controller confirmed by grep that agent_type appears on PostToolBatch
+ *  envelopes too, not only PreToolUse (the probe residual this file asserts
+ *  below). Omitting it (the default) reproduces today's envelope shape. */
+function makeBatchEvent(cwd, toolCalls, agentType = null) {
+  const event = {
     session_id: 'test-session-033',
     transcript_path: '/tmp/t.jsonl',
     cwd,
@@ -74,7 +79,12 @@ function makeBatchEvent(cwd, toolCalls) {
     effort: { level: 'medium' },
     hook_event_name: 'PostToolBatch',
     tool_calls: toolCalls
-  });
+  };
+  if (agentType) {
+    event.agent_id = 'atest0000agentidentity1';
+    event.agent_type = agentType;
+  }
+  return JSON.stringify(event);
 }
 
 /** Count JSONL lines in a file (filters blank trailing line). */
@@ -337,6 +347,90 @@ test('(c2) Write then Edit same chapter: two log records in order, one recount, 
   assert.ok(
     out.hookSpecificOutput.additionalContext.includes('01-listening-before-speaking'),
     'additionalContext names the touched chapter'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Probe residual (D-10 compliance layer, real agent attribution, brief 1e):
+// PF-2/PF-3 from the 2026-08-09 platform probe
+// ((local working notes, not published)) established agent_type on
+// PreToolUse envelopes; the controller separately grepped the archived probe
+// traces and confirmed agent_type also appears on PostToolBatch envelopes,
+// not only PreToolUse - these cases assert that residual with a synthetic
+// envelope (the unit-test harness cannot re-run the live probe). They prove
+// the chapter-write record's "agent" field now comes from
+// resolveAgentLabel(event) (the ATTRIBUTION-facing resolver, which keeps the
+// namespace prefix and unnamespaced types) instead of the hardcoded
+// 'hook:PostToolBatch' literal, falling back to that literal only when
+// agent_type is absent (a main-session write).
+// ---------------------------------------------------------------------------
+
+test('probe residual: PostToolBatch chapter write with agent_type writes that raw label into the ai-use-log record', () => {
+  const book = cloneSampleBook('agent-label-with-type');
+  const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
+  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
+  const content = 'Agent-attributed chapter content for the probe-residual test.\n';
+  writeFileSync(ch1Path, content, 'utf8');
+
+  const result = runHook(makeBatchEvent(book, [{
+    tool_name: 'Write',
+    tool_input: { file_path: ch1Path, content },
+    tool_use_id: 'toolu_agentlabel',
+    tool_response: 'Written.'
+  }], 'nonfiction-studio:voice-capture'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  const logLines = readJsonlLines(logPath);
+  const rec = JSON.parse(logLines[logLines.length - 1]);
+  assert.equal(
+    rec.agent, 'nonfiction-studio:voice-capture',
+    'chapter-write record carries the raw agent_type label, namespace included (attribution, not enforcement)'
+  );
+});
+
+test('probe residual: PostToolBatch chapter write with agent_type "general-purpose" writes that raw label too', () => {
+  const book = cloneSampleBook('agent-label-general-purpose');
+  const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
+  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
+  const content = 'Generic-subagent chapter content for the probe-residual test.\n';
+  writeFileSync(ch1Path, content, 'utf8');
+
+  const result = runHook(makeBatchEvent(book, [{
+    tool_name: 'Write',
+    tool_input: { file_path: ch1Path, content },
+    tool_use_id: 'toolu_generalpurpose',
+    tool_response: 'Written.'
+  }], 'general-purpose'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  const logLines = readJsonlLines(logPath);
+  const rec = JSON.parse(logLines[logLines.length - 1]);
+  assert.equal(
+    rec.agent, 'general-purpose',
+    'resolveAgentLabel deliberately keeps unnamespaced types, unlike the enforcement-facing resolver'
+  );
+});
+
+test('probe residual: PostToolBatch chapter write with NO agent_type still writes hook:PostToolBatch', () => {
+  const book = cloneSampleBook('agent-label-without-type');
+  const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
+  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
+  const content = 'Main-session chapter content for the probe-residual test.\n';
+  writeFileSync(ch1Path, content, 'utf8');
+
+  const result = runHook(makeBatchEvent(book, [{
+    tool_name: 'Write',
+    tool_input: { file_path: ch1Path, content },
+    tool_use_id: 'toolu_nolabel',
+    tool_response: 'Written.'
+  }])); // no agentType -> no agent_type field, matches today's main-session shape
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  const logLines = readJsonlLines(logPath);
+  const rec = JSON.parse(logLines[logLines.length - 1]);
+  assert.equal(
+    rec.agent, 'hook:PostToolBatch',
+    'no agent_type on the envelope: falls back to the hook literal, unchanged from today'
   );
 });
 
