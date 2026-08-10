@@ -141,11 +141,11 @@ for (const event of eventNames) {
       findings.push(event + '[' + gi + ']: group must be an object');
       continue;
     }
-    // A group may carry "hooks" (required) and, per the platform matcher contract
-    // ((local working notes, not published) Q2, confirmed against current docs for CLI 2.1.225),
-    // an optional "matcher" string that scopes the group to specific tool names.
-    // OPP-P04 (untrusted-source envelope)'s PostToolUse registration is the first matcher
-    // in this repo's hooks.json.
+    // A group may carry "hooks" (required) and, per the platform's documented matcher
+    // contract (a matcher scopes a hook group to specific tool names; see
+    // https://code.claude.com/docs/en/hooks), an optional "matcher" string. OPP-P04
+    // (untrusted-source envelope)'s PostToolUse registration is the first matcher in this
+    // repo's hooks.json.
     const gkeys = Object.keys(group);
     const ALLOWED_GROUP_KEYS = new Set(['hooks', 'matcher']);
     const hasUnknownGroupKey = gkeys.some((k) => !ALLOWED_GROUP_KEYS.has(k));

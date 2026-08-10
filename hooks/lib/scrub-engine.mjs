@@ -1,14 +1,27 @@
-// what-it-is:   AI-injection and continuity quick-scan engine
-// what-it-does: exports scanInjection(text), scanContinuity(chapters), and scrub(chapters, modes);
+// what-it-is:   AI-injection, prompt-injection, and continuity quick-scan engine
+// what-it-does: exports scanInjection(text), scanPromptInjection(text), scanContinuity(chapters),
+//               and scrub(chapters, modes).
 //               scanInjection detects three finding types: injection.pattern-match (compound
 //               sentence-initial verb + editorial object), scrub.template-marker (unclosed
 //               draft markers), and scrub.agent-self-reference (fixed case-insensitive
-//               phrase lexicon from S-07); scanContinuity detects continuity.name-mismatch
-//               (symmetric cross-chapter case-folded identity mismatches, with sub-phrase
-//               deduplication); scrub combines both passes under a modes parameter
-// why:          the engine logic lives in a lib module so both bin/ns-scrub (CLI) and the Stop
-//               gate hook share the same computation path per S-07 section 4
-// used-by:      bin/ns-scrub, hooks/stop-gate.mjs
+//               phrase lexicon from S-07). It answers "did an AI leave editorial scaffolding
+//               in the AUTHOR'S OWN manuscript prose" and is tuned against that corpus, where
+//               ordinary words like "ignore" and "override" must not false-positive.
+//               scanPromptInjection answers a DIFFERENT question over a DIFFERENT corpus
+//               (fetched web content, not the author's prose): does the text contain
+//               imperative instruction-override phrasing directed at an assistant (see its
+//               own doc comment for the four pattern categories and the false-positive
+//               guards). It is advisory defense in depth, not a security boundary; see
+//               docs/formats/fetch-log.md.
+//               scanContinuity detects continuity.name-mismatch (symmetric cross-chapter
+//               case-folded identity mismatches, with sub-phrase deduplication).
+//               scrub combines the scanInjection and scanContinuity passes under a modes
+//               parameter; scanPromptInjection is not part of scrub (it has its own caller).
+// why:          the engine logic lives in a lib module so every caller shares the same
+//               computation path per S-07 section 4 (one implementation, multiple callers,
+//               not independent copies)
+// used-by:      bin/ns-scrub and hooks/stop-gate.mjs (scanInjection, scanContinuity, scrub);
+//               hooks/post-tool-use.mjs (scanPromptInjection, alongside scanInjection)
 
 // ---- HELPERS ------------------------------------------------------------------
 
@@ -105,6 +118,88 @@ const SELF_REF_PHRASES = [
 
 // Pre-built lowercase forms for case-insensitive matching
 const SELF_REF_PHRASES_LOWER = SELF_REF_PHRASES.map(p => p.toLowerCase());
+
+// ---- PROMPT INJECTION (INSTRUCTION-OVERRIDE) DETECTION ------------------------
+//
+// Added per the OPP-P04 (untrusted-source envelope) review round: scanInjection above does
+// NOT catch classic "ignore your instructions" style prompt injection, and reusing its
+// lexicon (or widening it to catch that phrasing) would cause false positives on ordinary
+// book prose, where "ignore", "disregard", and "override" are everyday words. This is a
+// SEPARATE detector answering a SEPARATE question, over a SEPARATE corpus (fetched web
+// content, not the author's manuscript). Two functions, two questions, one module.
+//
+// ADVISORY DEFENSE IN DEPTH, NOT A SECURITY BOUNDARY. Pattern matching cannot enumerate
+// every phrasing an injection attempt could take; this is a signal surfaced to a human
+// (the flag line, the fetch log), not a gate, and it does not block anything. The actual
+// defense against a hostile fetched page is the wrapping and fencing
+// hooks/post-tool-use.mjs applies to EVERY fetch unconditionally: the preamble and the
+// per-fetch random-nonce fence make it structurally true that the content arrives labeled
+// and boundaried regardless of what it says, whether or not this scanner recognizes it. A
+// false negative here does not weaken that fence, and this comment (plus the one repeated
+// in docs/formats/fetch-log.md) exists specifically so nothing about this function is ever
+// read as a stronger claim than that.
+//
+// Four pattern categories, each independently sufficient to produce a finding. Each is
+// built from a STRUCTURAL shape (an imperative verb in a specific role, combined with an
+// object that scopes it to the assistant's own instruction/configuration state), not a flat
+// "bad word" list, because the shape is what a benign sentence sharing the same vocabulary
+// is unlikely to also share:
+//
+//   A. injection.prompt-override.countermand - a sentence-initial imperative verb from
+//      COUNTERMAND_VERBS (ignore, disregard, forget, discard, override, bypass, disable)
+//      whose object names the assistant's OWN instruction state (INSTRUCTION_OBJECT_RE:
+//      "your/the system/all previous/prior/... instructions/prompt/rules/..."). Requiring
+//      BOTH the verb to be sentence-initial (an imperative reads as a command; the same verb
+//      mid-sentence in a narrative report, "the committee voted to disregard prior
+//      guidelines," does not) AND the object to specifically name an instruction/prompt/rule
+//      (not any noun) is what keeps "Ignore the noise and focus on the signal" or "Disregard
+//      rumors and focus on verified primary sources" from flagging: neither sentence's
+//      object matches INSTRUCTION_OBJECT_RE.
+//   B. injection.prompt-override.role-redefinition - the text asserts the assistant now
+//      operates under a different persona, mode, or rule set: ROLE_REDEFINITION_RE ("you are
+//      now [in a/an] ... mode/persona/...") or a short list of highly specific standalone
+//      phrases (ROLE_PHRASES: "developer mode", "jailbreak", "DAN mode", ...) that have no
+//      plausible benign reading, the same technique SELF_REF_PHRASES above already uses for
+//      a different lexicon. Checked on every sentence fragment, not gated to sentence-initial
+//      position, since "you are now in developer mode" does not read as ordinary narrative in
+//      ANY position within a sentence.
+//   C. injection.prompt-override.extraction - a sentence-initial imperative verb from
+//      EXTRACTION_VERBS (reveal, output, print, disclose, leak, expose) whose object names a
+//      secret or the assistant's own configuration (SECRET_OBJECT_RE: "system prompt", "api
+//      key", "password", "credentials", ...).
+//   D. injection.prompt-override.forged-role - a line beginning with "System:", "Assistant:",
+//      or "Admin:" (FORGED_ROLE_PREFIX_RE), mimicking a real conversation-role message. This
+//      is checked per LINE, not per sentence, since it is a formatting convention (how a
+//      forged message announces itself), not a grammatical sentence.
+//
+// Lexicons here are NOT under the same "fixed by adjudication" governance the scanInjection
+// lexicons carry (that governance is specific to scanInjection's own manuscript-prose
+// corpus and false-positive history); they may be extended by a future task with test
+// evidence for both a new true positive and no new false positive, the same bar this file's
+// existing self-reference lexicon was held to.
+
+const COUNTERMAND_VERBS = new Set(['ignore', 'disregard', 'forget', 'discard', 'override', 'bypass', 'disable']);
+
+const INSTRUCTION_OBJECT_RE =
+  /\b(your|my|the system'?s?|the original|all previous|the previous|prior|earlier|above|these|those|all)\b[^.!?]{0,25}\b(instructions?|prompts?|directives?|rules?|guidelines?|programming|guardrails|system prompt)\b/i;
+
+const ROLE_REDEFINITION_RE =
+  /\byou('re| are) now\b[^.!?]{0,30}\b(mode|persona|character|assistant|unrestricted|unfiltered|unbound)\b/i;
+
+const ROLE_PHRASES = [
+  'developer mode', 'jailbreak', 'dan mode', 'no longer bound by',
+  'without any restrictions', 'without restrictions', 'act as if you have no',
+  'pretend you are not', 'ignore your programming', 'this is a system override',
+  'system override:', 'admin override', 'you have no restrictions'
+];
+const ROLE_PHRASES_LOWER = ROLE_PHRASES.map(p => p.toLowerCase());
+
+const EXTRACTION_VERBS = new Set(['reveal', 'output', 'print', 'disclose', 'leak', 'expose']);
+
+const SECRET_OBJECT_RE =
+  /\b(system prompt|api keys?|passwords?|credentials?|secret keys?|configuration|your instructions|your prompt)\b/i;
+
+const FORGED_ROLE_PREFIX_RE = /^(system|assistant|admin)\s*:/i;
 
 // ---- CONTINUITY MECHANISM -----------------------------------------------------
 //
@@ -385,6 +480,98 @@ export function scanInjection(text) {
     // Update sentence-start state for the next line:
     // true when this line's prose ends with sentence-final punctuation
     atSentenceStart = /[.!?]\s*$/.test(cleanedProse);
+  }
+
+  return findings;
+}
+
+/**
+ * Scans text for instruction-override prompt-injection phrasing (see the "PROMPT INJECTION
+ * (INSTRUCTION-OVERRIDE) DETECTION" section above for the four pattern categories and the
+ * false-positive reasoning). A SEPARATE detector from scanInjection: it answers a different
+ * question (does this text try to hijack an assistant reading it) over a different corpus
+ * (fetched web content, not the author's own manuscript prose).
+ *
+ * ADVISORY DEFENSE IN DEPTH, NOT A SECURITY BOUNDARY: pattern matching cannot enumerate every
+ * phrasing an injection attempt could take. This is a signal for a human, surfaced via the
+ * caller's flag line and fetch log; it never blocks anything. The actual defense against a
+ * hostile fetched page is the wrapping and fencing hooks/post-tool-use.mjs applies to every
+ * fetch unconditionally, independent of whether this function recognizes the content.
+ *
+ * Like scanInjection, this deliberately does not guard against `text` being a non-string: a
+ * throw here is expected to propagate to the caller's own fail-open boundary (this mirrors
+ * scanInjection's own established behavior, and hooks/post-tool-use.mjs's fail-open path is
+ * already proven against exactly this shape of failure).
+ *
+ * Finding types: injection.prompt-override.countermand, injection.prompt-override.role-redefinition,
+ * injection.prompt-override.extraction, injection.prompt-override.forged-role.
+ *
+ * @param {string} text - raw text to scan (fetched web content, not manuscript prose)
+ * @returns {{line: number, type: string, excerpt: string}[]} findings
+ */
+export function scanPromptInjection(text) {
+  const findings = [];
+  const lines = text.split('\n');
+
+  // Sentence-initial tracking mirrors scanInjection's own technique: position matters for
+  // the imperative-verb categories (A and C below), since the same verb read as a command
+  // (sentence-initial) versus embedded in a narrative report means something different.
+  let atSentenceStart = true;
+
+  for (let i = 0; i < lines.length; i++) {
+    const lineNum = i + 1;
+    // Strip Markdown block-quote prefix: injected text hides here too (the same Darkhollow
+    // failure class scanInjection's own comments describe).
+    const line = lines[i].replace(/^(>\s*)+/, '');
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      atSentenceStart = true;
+      continue;
+    }
+
+    // Category D: forged role-prefix, checked per line (a formatting convention, not a
+    // sentence).
+    if (FORGED_ROLE_PREFIX_RE.test(trimmed)) {
+      findings.push({ line: lineNum, type: 'injection.prompt-override.forged-role', excerpt: makeExcerpt(trimmed) });
+    }
+
+    // Category B (phrase-list form): position-independent standalone phrases with no
+    // plausible benign reading in any sentence position.
+    const lowerLine = trimmed.toLowerCase();
+    for (const phrase of ROLE_PHRASES_LOWER) {
+      if (lowerLine.includes(phrase)) {
+        findings.push({ line: lineNum, type: 'injection.prompt-override.role-redefinition', excerpt: makeExcerpt(trimmed) });
+        break;
+      }
+    }
+
+    // Sentence-fragment scan for categories A, B (regex form), and C.
+    const fragments = trimmed.split(/(?<=[.!?])\s+/);
+    for (let j = 0; j < fragments.length; j++) {
+      const frag = fragments[j].trim();
+      if (!frag) continue;
+      const isSentInit = (j === 0) ? atSentenceStart : true;
+
+      // Category B (regex form): position-independent, checked on every fragment (see the
+      // section comment above for why sentence-initial gating is not needed here).
+      if (ROLE_REDEFINITION_RE.test(frag)) {
+        findings.push({ line: lineNum, type: 'injection.prompt-override.role-redefinition', excerpt: makeExcerpt(frag) });
+      }
+
+      if (!isSentInit) continue;
+
+      const firstWordMatch = frag.match(/^([a-zA-Z]+)/);
+      const firstWord = firstWordMatch ? firstWordMatch[1].toLowerCase() : '';
+
+      if (COUNTERMAND_VERBS.has(firstWord) && INSTRUCTION_OBJECT_RE.test(frag)) {
+        findings.push({ line: lineNum, type: 'injection.prompt-override.countermand', excerpt: makeExcerpt(frag) });
+      } else if (EXTRACTION_VERBS.has(firstWord) && SECRET_OBJECT_RE.test(frag)) {
+        findings.push({ line: lineNum, type: 'injection.prompt-override.extraction', excerpt: makeExcerpt(frag) });
+      }
+    }
+
+    atSentenceStart = /[.!?]\s*$/.test(trimmed);
   }
 
   return findings;

@@ -2,6 +2,8 @@
 
 **Purpose.** This is the normative grammar for `.studio/logs/fetches.jsonl`, the append-only record of every WebFetch and WebSearch call the `PostToolUse` hook wraps. It exists per OPP-P04 (untrusted-source envelope): AR-07 (security, privacy and safety) and D-13 (security posture) treat fetched web content as untrusted data, and this log is the audit trail proving every fetch was scanned and wrapped before Claude saw it. D-06 (single-writer state discipline) is satisfied by construction: the hook only ever appends one JSON line per fetch with a single `appendFileSync` call, never a read-modify-write.
 
+**The `flagged`/`signatures` fields are advisory defense in depth, not a security boundary.** They record the output of two pattern-matching scanners (below); pattern matching cannot enumerate every phrasing an injection attempt could take, so a `flagged: false` record is not a guarantee the fetched body was safe, only that neither scanner recognized anything. The actual defense against a hostile fetched page is the wrapping and fencing the `PostToolUse` hook applies to the payload itself (a preamble stating the content is data, not instructions, and a per-fetch random-nonce boundary a hostile body cannot forge), applied unconditionally to every fetch regardless of what either scanner finds. This log is a signal for a human auditing fetch history, never a gate; the hook never blocks a fetch on either scanner's result.
+
 ## Record structure
 
 `fetches.jsonl` is a newline-delimited JSON file (JSONL). Each line is a self-contained JSON object. The file is strictly append-only; no line is ever edited or deleted. A partial final line from an interrupted write is discarded by every reader; the file is never parsed as a single JSON document.
@@ -14,8 +16,13 @@ Each record carries six fields:
 | `tool` | enum | required | One of `WebFetch`, `WebSearch` |
 | `source` | string | required | The fetched URL (`WebFetch`) or the search query (`WebSearch`); the join key for future reconciliation against `research/sources.md` entries |
 | `bytes` | number | required | UTF-8 byte length of the original, unwrapped body that was scanned |
-| `flagged` | boolean | required | Whether `hooks/lib/scrub-engine.mjs`'s `scanInjection(text)` found any signature in the body |
-| `signatures` | array of strings | required | The distinct finding types `scanInjection` returned; an empty array when `flagged` is `false` |
+| `flagged` | boolean | required | Whether either shared scanner found any signature in the body (see below; advisory only) |
+| `signatures` | array of strings | required | The distinct finding types returned across both scanners, combined; an empty array when `flagged` is `false` |
+
+Two scanners run, both from `hooks/lib/scrub-engine.mjs`, answering different questions over the fetched body:
+
+- `scanInjection(text)` detects AI-editorial-residue phrasing (finding types `injection.pattern-match`, `scrub.template-marker`, `scrub.agent-self-reference`). It is tuned against manuscript prose, not fetched content, but the same pattern classes can appear in a fetched page.
+- `scanPromptInjection(text)` detects instruction-override phrasing directed at an assistant (finding types `injection.prompt-override.countermand`, `injection.prompt-override.role-redefinition`, `injection.prompt-override.extraction`, `injection.prompt-override.forged-role`): attempts to countermand prior instructions, redefine the assistant's role or mode, extract configuration or secrets, or assert authority over the system prompt.
 
 ## Placement and append rules
 
@@ -33,10 +40,16 @@ A record for a benign fetch:
 {"ts":"2026-08-09T14:32:08Z","tool":"WebFetch","source":"https://example.org/lighthouse-history","bytes":842,"flagged":false,"signatures":[]}
 ```
 
-A record for a fetch the shared scanner flagged:
+A record for a fetch `scanInjection` flagged:
 
 ```json
 {"ts":"2026-08-09T14:35:01Z","tool":"WebFetch","source":"https://evil.example.com/planted","bytes":120,"flagged":true,"signatures":["injection.pattern-match"]}
+```
+
+A record for a fetch `scanPromptInjection` flagged (a planted "ignore your instructions" style page):
+
+```json
+{"ts":"2026-08-09T14:37:12Z","tool":"WebFetch","source":"https://evil.example.com/override","bytes":58,"flagged":true,"signatures":["injection.prompt-override.countermand"]}
 ```
 
 A record for a search:
