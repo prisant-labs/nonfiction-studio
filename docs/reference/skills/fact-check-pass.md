@@ -32,7 +32,7 @@ Alternate entry points:
 - Via the `studio` dispatcher: routes here from Path 3 (Research and verify) when the author says they want to verify existing claims
 - Via `draft-chapter` Step 6: that skill closes with an explicit prompt to run `fact-check-pass` or `run-quality-gate`
 - Via `run-quality-gate`: when the gate reports unresolved claims it suggests re-invoking `fact-check-pass`
-- Legacy verb: `/factcheck <ch>` (deprecated; use the namespaced form)
+- Verb alias: `/factcheck <ch>` (the namespaced `/nonfiction-studio:fact-check-pass` form also works)
 
 ## Inputs and Outputs
 

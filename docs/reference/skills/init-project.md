@@ -28,7 +28,7 @@ Modes:
 
 Alternate entry points:
 - Via the `studio` skill: choose Path 1 ("Start a new book")
-- Legacy verb: `/book-init` (deprecated; use the namespaced form)
+- Verb alias: `/book-init` (the namespaced `/nonfiction-studio:init-project` form also works)
 
 ## Inputs
 
