@@ -19,10 +19,24 @@ The blocker was OQ-14 (agent identity in hook events): the live PreToolUse envel
 
 ## Probe evidence
 
-A live platform probe on 2026-08-09 (`(local working notes, not published)`, raw traces archived at `(local working notes, not published)`) removed the blocker directly, without needing the ledger fallback. Method: a temporary user-scope install of the plugin from the local checkout, a scratch book outside the repo, headless haiku sessions with `NS_HOOK_TRACE` capturing raw hook stdin, full uninstall and registry-restore verified after. Findings:
+A live platform probe on 2026-08-09 removed the blocker directly, without needing the ledger fallback. Method: a temporary user-scope install of the plugin from the local checkout, a scratch book outside the repo, headless haiku sessions with `NS_HOOK_TRACE` capturing raw hook stdin, full uninstall and registry-restore verified after. The full method and raw traces are recorded at `(local working notes, not published)` (raw traces archived at `(local working notes, not published)`); both paths are gitignored local working notes, so the two decisive envelope fragments are quoted directly below, not only pointed at, so this decision's evidence is inspectable from the published repo itself.
 
-- **PF-1.** A generic subagent's Write fired the plugin's PreToolUse hook carrying the PARENT session_id plus two fields the 2026-07 A-02 (platform capability baseline) said did not exist: `"agent_id":"a92169de485c46c7b","agent_type":"general-purpose"`.
-- **PF-2.** The same probe against a real plugin agent yielded `"agent_type":"nonfiction-studio:voice-capture"` - the namespaced form.
+Generic (non-plugin) subagent, captured PreToolUse envelope fragment (PF-1):
+
+```
+"agent_id":"a92169de485c46c7b","agent_type":"general-purpose"
+```
+
+Plugin agent, captured PreToolUse envelope fragment (PF-2):
+
+```
+"agent_id":"a78c1243d1613944b","agent_type":"nonfiction-studio:voice-capture"
+```
+
+Findings:
+
+- **PF-1.** A generic subagent's Write fired the plugin's PreToolUse hook carrying the PARENT session_id plus the two fields quoted above, which the 2026-07 A-02 (platform capability baseline) said did not exist.
+- **PF-2.** The same probe against a real plugin agent yielded the namespaced form quoted above.
 - **PF-3.** The parent session's own Write envelope carried neither `agent_id` nor `agent_type`. Absence of the fields identifies a main-session action; there is no false-attribution ambiguity.
 - **PF-4.** The parent's Task/Agent dispatch itself fires PreToolUse with `"tool_name":"Agent"` and the full instruction in `tool_input` (relevant to OPP-P05, routing enforced at dispatch, out of scope for this task).
 
@@ -76,7 +90,7 @@ Main-session `WebSearch`/`WebFetch` calls and calls from non-gated agents are en
 
 ## Testing limitation (honest)
 
-`agent_type` is a platform-provided field: this repository's own code never constructs it, and cannot generate it in a way a unit test could exercise short of actually invoking the platform. The tests added by this task (`tests/hooks/agent-identity.test.mjs`, and the agent-envelope cases in `tests/hooks/pre-tool-use.test.mjs`, `tests/hooks/pre-tool-use-symlink.test.mjs`, and `tests/hooks/post-tool-batch.test.mjs`) all use SYNTHETIC envelopes - JSON objects shaped like the probe traces, constructed by the test harness itself, not captured live. That the platform actually sends `agent_id`/`agent_type` in this shape, on both PreToolUse and PostToolBatch, is evidenced only by the archived probe traces at `(local working notes, not published)` (gitignored, referenced here for the record) and the PF-1 through PF-4 findings above, not by anything the automated test suite itself re-verifies on every run. A future platform change to the envelope shape would not be caught by this test suite; it would require a new live probe, the same way OQ-14 itself was resolved.
+`agent_type` is a platform-provided field: this repository's own code never constructs it, and cannot generate it in a way a unit test could exercise short of actually invoking the platform. The tests added by this task (`tests/hooks/agent-identity.test.mjs`, and the agent-envelope cases in `tests/hooks/pre-tool-use.test.mjs`, `tests/hooks/pre-tool-use-symlink.test.mjs`, and `tests/hooks/post-tool-batch.test.mjs`) all use SYNTHETIC envelopes - JSON objects shaped like the probe traces, constructed by the test harness itself, not captured live. That the platform actually sends `agent_id`/`agent_type` in this shape, on both PreToolUse and PostToolBatch, is evidenced by the two captured fragments quoted in the Probe evidence section above (PF-1, PF-2) and the PF-1 through PF-4 findings generally, not by anything the automated test suite itself re-verifies on every run. The full raw traces at `(local working notes, not published)` are gitignored local working notes, kept only as supplementary detail beyond the fragments already quoted above; a reader of the published repo does not need access to them to see the decisive evidence this decision rests on. A future platform change to the envelope shape would not be caught by this test suite; it would require a new live probe, the same way OQ-14 itself was resolved.
 
 ## Consequences
 

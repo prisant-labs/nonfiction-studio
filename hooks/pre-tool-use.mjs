@@ -38,7 +38,17 @@ import {
 import { join, resolve, sep, basename, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findBookRoot } from './lib/bible.mjs';
-import { resolveActiveAgent, checkAgentWriteConstraint, isWebGatedAgent } from './lib/agent-identity.mjs';
+import {
+  resolveActiveAgent,
+  checkAgentWriteConstraint,
+  isWebGatedAgent,
+  foldForCompare
+} from './lib/agent-identity.mjs';
+
+// Re-exported so existing callers importing foldForCompare from this file
+// (e.g. tests/hooks/pre-tool-use.test.mjs) are unaffected by the move to
+// hooks/lib/agent-identity.mjs, the single home for this helper.
+export { foldForCompare };
 
 // ---------------------------------------------------------------------------
 // Helper: compact UTC timestamp for snapshot filenames (YYYYMMDDTHHMMSSmmmZ)
@@ -139,18 +149,14 @@ function realpathNearestExisting(absPath) {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: case-fold a path for comparison only on case-insensitive
-// filesystems (F-HK-13). Folding unconditionally WIDENS matching on a
-// case-sensitive filesystem (POSIX), which is the wrong direction for a
-// security guard: a path that differs only in case from an allowed prefix
-// is a DIFFERENT path on Linux/macOS and must not be treated as contained.
-// platformOverride is injectable so tests can drive both branches
-// deterministically regardless of the host OS; production call sites omit
-// it and get the real process.platform. Exported for direct testing.
+// foldForCompare (F-HK-13 case-fold helper) now lives in
+// hooks/lib/agent-identity.mjs, the single home for it, imported above and
+// re-exported below under the same name so existing callers of
+// `import('../../hooks/pre-tool-use.mjs')` are unaffected. It used to be
+// defined here and re-implemented (not imported) inside
+// checkAgentWriteConstraint in agent-identity.mjs; that duplication is what
+// moving it here fixes - one definition, both call sites.
 // ---------------------------------------------------------------------------
-export function foldForCompare(p, platformOverride = process.platform) {
-  return platformOverride === 'win32' ? p.toLowerCase() : p;
-}
 
 // ---------------------------------------------------------------------------
 // Helper: identify the shallowest path component between rootPath and

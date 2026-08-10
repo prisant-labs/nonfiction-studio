@@ -15,7 +15,29 @@
 //               ("general-purpose") and the parent session carries neither
 //               field. See docs/adr/ADR-0007-agent-identity-resolution.md.
 
-import { sep } from 'node:path';
+import { sep, resolve } from 'node:path';
+
+// ---------------------------------------------------------------------------
+// foldForCompare: case-fold a path for comparison only on case-insensitive
+// filesystems (F-HK-13). Folding unconditionally WIDENS matching on a
+// case-sensitive filesystem (POSIX), which is the wrong direction for a
+// security guard: a path that differs only in case from an allowed prefix is
+// a DIFFERENT path on Linux/macOS and must not be treated as contained.
+// platformOverride is injectable so tests can drive both branches
+// deterministically regardless of the host OS; production call sites omit it
+// and get the real process.platform.
+//
+// This is the single home for this helper (previously duplicated: this
+// module's own checkAgentWriteConstraint re-implemented the same
+// win32-only-lowercase logic inline rather than importing it, which is
+// exactly the class of drift this module exists to prevent per the header
+// comment above). hooks/pre-tool-use.mjs imports it from here and re-exports
+// it under the same name so existing callers of
+// `import('../../hooks/pre-tool-use.mjs')` are unaffected.
+// ---------------------------------------------------------------------------
+export function foldForCompare(p, platformOverride = process.platform) {
+  return platformOverride === 'win32' ? p.toLowerCase() : p;
+}
 
 // ---------------------------------------------------------------------------
 // PLUGIN_NAMESPACE: the plugin slug prefix the platform prepends to agent_type
@@ -120,26 +142,32 @@ export function isWebGatedAgent(agentSlug) {
 // realTargetAbsPath MUST be the REAL (symlink-resolved) target, not the
 // lexical one - callers pass the F-HK-04 realpath value so a symlink cannot
 // carry a constrained agent's write outside its scope while passing only a
-// lexical check.
+// lexical check. Both realTargetAbsPath and bibleRoot are also run through
+// resolve() before the prefix check (matching the resolve() normalization
+// the replaced checkResearchAgentConstraint performed), so a lexically
+// unnormalized path containing ".." cannot pass the containment check via a
+// naive string-prefix match while really resolving outside the agent's
+// scope - resolve() is defense in depth here: production callers already
+// pass a realpathed target, but this function is an exported member of a
+// shared lib and must not trust every future caller to have done that first.
 //
-// platformOverride defaults to process.platform and is folded exactly like
-// foldForCompare elsewhere in this hook family (F-HK-13): case-fold only on
-// win32, never on a case-sensitive filesystem, since unconditional folding
-// would widen containment the wrong way on POSIX.
+// platformOverride defaults to process.platform and is folded via
+// foldForCompare (F-HK-13): case-fold only on win32, never on a
+// case-sensitive filesystem, since unconditional folding would widen
+// containment the wrong way on POSIX.
 // ---------------------------------------------------------------------------
 export function checkAgentWriteConstraint(agentSlug, realTargetAbsPath, bibleRoot, platformOverride = process.platform) {
   if (!agentSlug || !Object.prototype.hasOwnProperty.call(AGENT_WRITE_SCOPES, agentSlug)) {
     return null;
   }
 
-  const fold = (p) => (platformOverride === 'win32' ? p.toLowerCase() : p);
-  const rootNorm = fold(bibleRoot);
-  const targetNorm = fold(realTargetAbsPath);
+  const rootNorm = foldForCompare(resolve(bibleRoot), platformOverride);
+  const targetNorm = foldForCompare(resolve(realTargetAbsPath), platformOverride);
   const prefixes = AGENT_WRITE_SCOPES[agentSlug];
 
   const inScope = prefixes.some((prefix) => {
     const bare = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix;
-    const full = rootNorm + sep + fold(bare);
+    const full = rootNorm + sep + foldForCompare(bare, platformOverride);
     return targetNorm === full || targetNorm.startsWith(full + sep);
   });
 

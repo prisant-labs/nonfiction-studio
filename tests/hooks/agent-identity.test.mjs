@@ -11,7 +11,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { join, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -32,7 +33,21 @@ const SAMPLE_BOOK = join(REPO_ROOT, 'examples', 'sample-book');
 // ---------------------------------------------------------------------------
 
 test('PLUGIN_NAMESPACE is the exact plugin.json name field', () => {
-  assert.equal(PLUGIN_NAMESPACE, 'nonfiction-studio', 'namespace matches .claude-plugin/plugin.json "name"');
+  // Reads the real file rather than comparing against a second hardcoded
+  // literal: a hardcoded-vs-hardcoded comparison never catches the cross-file
+  // drift this test exists to guard against. If .claude-plugin/plugin.json's
+  // "name" ever changes without PLUGIN_NAMESPACE changing to match, the
+  // platform starts sending a prefix resolveActiveAgent no longer matches,
+  // and the entire write-scope and web-gate enforcement layer silently
+  // reverts to the dormant F-AG-01 (agents claim enforcement that does not
+  // exist) condition this task was created to eliminate - with every
+  // "allow" test in this suite still passing, since the code path this
+  // constant feeds is designed to fail open on any mismatch.
+  const pluginManifest = JSON.parse(readFileSync(join(REPO_ROOT, '.claude-plugin', 'plugin.json'), 'utf8'));
+  assert.equal(
+    PLUGIN_NAMESPACE, pluginManifest.name,
+    'PLUGIN_NAMESPACE must equal the real .claude-plugin/plugin.json "name" field, not merely a string literal chosen to match it'
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -263,4 +278,29 @@ test('checkAgentWriteConstraint: platform folding does not affect an already-mat
   const target = join(SAMPLE_BOOK, 'chapters', 'x.md');
   assert.equal(checkAgentWriteConstraint('drafting-partner', target, root, 'win32'), null);
   assert.equal(checkAgentWriteConstraint('drafting-partner', target, root, 'linux'), null);
+});
+
+test('checkAgentWriteConstraint: normalizes a ".." traversal before the prefix check, so a lexically in-scope-looking path that really resolves out of scope is denied', () => {
+  // Built with raw string concatenation, NOT path.join/path.resolve, so the
+  // literal ".." segment survives into the argument exactly as a careless
+  // future caller (one that does not realpath first) might pass it. This
+  // reproduces the review finding: without resolve() before the prefix
+  // check, targetNorm.startsWith(root + sep + "chapters" + sep) is a naive
+  // STRING match that succeeds on this unnormalized text even though the
+  // path really resolves to research/, outside drafting-partner's
+  // chapters/-only scope.
+  const chaptersPrefix = join(SAMPLE_BOOK, 'chapters');
+  const rawTraversal = chaptersPrefix + sep + '..' + sep + 'research' + sep + 'x.md';
+
+  assert.ok(
+    rawTraversal.startsWith(chaptersPrefix + sep),
+    'precondition: the unnormalized string textually looks like a chapters/ path'
+  );
+
+  const result = checkAgentWriteConstraint('drafting-partner', rawTraversal, SAMPLE_BOOK);
+  assert.ok(
+    typeof result === 'string' && result.length > 0,
+    'a ".." traversal that really resolves outside the agent scope must be denied, ' +
+    'not silently allowed by a naive string-prefix match on the unnormalized path'
+  );
 });

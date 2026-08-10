@@ -232,13 +232,15 @@ test('F-AG-01 (symlink) a constrained agent write through a symlink that lexical
 // test above would pass even if checkAgentWriteConstraint denied every write
 // unconditionally once wired, which is not the behavior being proven here.
 // ---------------------------------------------------------------------------
-test('F-AG-01 (symlink) control: the same cross-directory symlink write with no agent_type still ALLOWS', () => {
+test('F-AG-01 (symlink) control: the same cross-directory symlink write with no agent_type still ALLOWS', (t) => {
   const book = cloneSampleBook('agent-scope-cross-link-control');
   const linkPath = join(book, 'chapters', 'cross-scope-link-control');
   const researchDir = join(book, 'research');
 
   if (!tryCreateDirSymlink(researchDir, linkPath)) {
-    return; // capability-probed and covered by the primary test above; no need to assert twice.
+    t.skip('cannot create a directory symlink on this host (no privilege / Developer Mode); ' +
+      'capability already probed by the primary test above, which reports the same skip reason');
+    return;
   }
 
   const target = join(linkPath, 'via-cross-link-control.md');
