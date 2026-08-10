@@ -18,11 +18,13 @@ const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, '..');
 const HOOKS_JSON = join(REPO_ROOT, 'hooks', 'hooks.json');
 
-// Known Phase 1 platform event names (A-02 platform capability baseline).
+// Known platform event names (A-02 platform capability baseline; PostToolUse added
+// per OPP-P04 (untrusted-source envelope), roadmap row 1.2).
 const KNOWN_EVENTS = new Set([
   'SessionStart',
   'PreToolUse',
   'PostToolBatch',
+  'PostToolUse',
   'Stop',
   'PreCompact',
 ]);
@@ -139,12 +141,23 @@ for (const event of eventNames) {
       findings.push(event + '[' + gi + ']: group must be an object');
       continue;
     }
+    // A group may carry "hooks" (required) and, per the platform matcher contract
+    // ((local working notes, not published) Q2, confirmed against current docs for CLI 2.1.225),
+    // an optional "matcher" string that scopes the group to specific tool names.
+    // OPP-P04 (untrusted-source envelope)'s PostToolUse registration is the first matcher
+    // in this repo's hooks.json.
     const gkeys = Object.keys(group);
-    if (gkeys.length !== 1 || gkeys[0] !== 'hooks') {
+    const ALLOWED_GROUP_KEYS = new Set(['hooks', 'matcher']);
+    const hasUnknownGroupKey = gkeys.some((k) => !ALLOWED_GROUP_KEYS.has(k));
+    if (!gkeys.includes('hooks') || hasUnknownGroupKey) {
       findings.push(
-        event + '[' + gi + ']: group must have exactly one key "hooks"; got: ' + gkeys.join(', ')
+        event + '[' + gi + ']: group must have "hooks" and may optionally have "matcher"; got: ' + gkeys.join(', ')
       );
       continue;
+    }
+    if (Object.prototype.hasOwnProperty.call(group, 'matcher') &&
+        (typeof group.matcher !== 'string' || group.matcher.trim() === '')) {
+      findings.push(event + '[' + gi + ']: group "matcher" must be a non-empty string when present');
     }
     if (!Array.isArray(group.hooks)) {
       findings.push(event + '[' + gi + ']: group.hooks must be an array');

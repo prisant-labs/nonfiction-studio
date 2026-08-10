@@ -1,0 +1,30 @@
+{
+  "covers": { "hook": "PostToolUse" },
+  "description": "The PostToolUse hook wraps every WebFetch and WebSearch result in an untrusted-content envelope (preamble, source, retrieval timestamp, injection-signature flag line, nonce-fenced body) before Claude sees it, scans the body with the shared scanInjection engine, and appends one record per fetch to .studio/logs/fetches.jsonl. It never blocks a fetch.",
+  "cases": [
+    {
+      "given": "PostToolUse fires for a WebFetch result whose body contains an injected editorial instruction the shared scanner recognizes",
+      "expect": "post-tool-use.mjs replaces tool_response.result with the wrapped, fenced text; the flag line names the flagged signature type; the original body is preserved verbatim inside the fence; exits 0"
+    },
+    {
+      "given": "PostToolUse fires for a benign WebFetch result",
+      "expect": "post-tool-use.mjs still wraps and fences the body; the flag line states no known injection signatures were found; exits 0"
+    },
+    {
+      "given": "PostToolUse fires for a WebSearch result",
+      "expect": "post-tool-use.mjs wraps the rendered results with the search query recorded as the source rather than a URL; exits 0"
+    },
+    {
+      "given": "PostToolUse fires for a WebFetch result whose body contains a forged closing-fence string",
+      "expect": "the forged string stays inside the real, randomly-nonced fence boundary; only one real end marker appears in the output"
+    },
+    {
+      "given": "PostToolUse fires for a Read tool call (a tool the WebFetch|WebSearch matcher does not select)",
+      "expect": "post-tool-use.mjs is a no-op; empty stdout; no line appended to .studio/logs/fetches.jsonl"
+    },
+    {
+      "given": "PostToolUse fires with a malformed tool_response that makes the injection scanner throw",
+      "expect": "post-tool-use.mjs fails open: exits 0 with empty stdout, so the platform leaves the tool's original output unmodified; a best-effort record is appended to .studio/logs/errors.jsonl"
+    }
+  ]
+}

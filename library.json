@@ -33,6 +33,7 @@
       "SessionStart",
       "PreToolUse",
       "PostToolBatch",
+      "PostToolUse",
       "Stop",
       "PreCompact"
     ],
