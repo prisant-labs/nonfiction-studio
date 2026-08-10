@@ -18,12 +18,14 @@ const REPO_ROOT = resolve(__dirname, '..');
 
 // Test glob patterns in the order they should run.
 // engines: bin CLI unit tests; lib: shared lib tests; hooks: hook script tests;
-// schemas: schema round-trip tests (Q-01 section 4).
+// schemas: schema round-trip tests (Q-01 section 4); checks: planted-violation tests for the
+// standalone scripts/checks/*.mjs and scripts/*.mjs checkers (F6 (checker negative tests)).
 const TEST_GLOBS = [
   'tests/engines/*.test.mjs',
   'tests/lib/*.test.mjs',
   'tests/hooks/*.test.mjs',
   'tests/schemas/*.test.mjs',
+  'tests/checks/*.test.mjs',
 ];
 
 // Build a single node --test invocation with all globs.
