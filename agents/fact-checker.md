@@ -47,8 +47,12 @@ checker agents). The cache is stored in the platform directory
 frontmatter field - not any body-text path literal - causes the platform to create and
 provide. The cache records previously verified EV entries and the session in which they
 were confirmed, reducing re-verification cost on long books where most evidence is
-stable. The memory directory sits under the project root; the PreToolUse containment
-guard per D-13 (security posture) permits writes there.
+stable. The memory directory sits under the project root. No PreToolUse containment guard
+evaluates this agent's writes: `fact-checker` is deliberately absent from the write-scope
+containment table (`AGENT_WRITE_SCOPES`, `hooks/lib/agent-identity.mjs:99-103`), on the
+documented reasoning that absence means unconstrained, not denied, per roadmap row 1.1 (no
+false denies under ambiguity). This file's own prose is what states the agent's write
+scope; D-13 (security posture) is not machine-enforced for this agent.
 
 ## When to invoke
 

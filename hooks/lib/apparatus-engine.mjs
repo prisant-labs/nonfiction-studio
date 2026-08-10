@@ -24,14 +24,18 @@
 // missing locator blocks only that one note, named separately in attention, per OPP-D05's "every
 // SRC actually cited" bibliography rule).
 //
-// Everything that varies by citation STYLE (not by source type) lives in the style object passed
-// in here, never hardcoded in this module: a template slot's exact wording and punctuation, the
+// Most of what varies by citation STYLE (not by source type) lives in the style object passed
+// in here, not hardcoded in this module: a template slot's exact wording and punctuation, the
 // short-title truncation and leading-article rule, and the bibliography's identifier-vs-url
 // suffix preference. A second style is a JSON file with its own `types`, `shortTitleRule`, and
-// `bibliographySuffix`; nothing in this module names "Chicago" or "chicago.json" anywhere in its
-// logic. See resolveTemplateSlot below for the one mechanism that makes an optional, style-
-// specific field (a web source's site name; an identifier preferred over a URL) a data edit
-// rather than an engine change.
+// `bibliographySuffix`. Two things are NOT yet data-driven and remain hardcoded here instead:
+// the " and " author-joiner/reordering separator (splitAuthors and authorFullForm above), and
+// the literal strings "chicago.json" and "for Chicago style" inside describeSourceFailure's two
+// attention-reason messages below. A second citation style needing different name-joining
+// conventions, or wanting its own name in those two messages, would need a code change here,
+// not a data edit. See resolveTemplateSlot below for the one mechanism that DOES make an
+// optional, style-specific field (a web source's site name; an identifier preferred over a URL)
+// a data edit rather than an engine change.
 
 // ---- Chicago short-title derivation ------------------------------------------------------
 

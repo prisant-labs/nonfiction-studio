@@ -3,14 +3,16 @@
 //               "WebFetch|WebSearch" in hooks/hooks.json). Replaces the tool's result
 //               with a wrapped form before Claude sees it: a preamble stating the content
 //               is retrieved data and not instructions, the source (URL or search query),
-//               a retrieval timestamp, an injection-signature flag line, and the original
-//               body inside a nonce-fenced boundary a hostile payload cannot forge. Scans
-//               the body with the shared hooks/lib/scrub-engine.mjs scanInjection(text)
-//               (AI-editorial-residue phrasing), rather than writing a new scanner of its
-//               own. Appends one append-only JSONL record per fetch to
-//               .studio/logs/fetches.jsonl. This makes mechanical the promise AR-07
-//               (security, privacy and safety) and D-13 (security posture) already make in
-//               prose: fetched content is untrusted data, never instruction.
+//               a retrieval timestamp, a content-scan flag line (AI-editorial-residue
+//               patterns only, explicitly not an injection check; see formatFlagLine
+//               below), and the original body inside a nonce-fenced boundary a hostile
+//               payload cannot forge. Scans the body with the shared
+//               hooks/lib/scrub-engine.mjs scanInjection(text) (AI-editorial-residue
+//               phrasing), rather than writing a new scanner of its own. Appends one
+//               append-only JSONL record per fetch to .studio/logs/fetches.jsonl. This
+//               makes mechanical the promise AR-07 (security, privacy and safety) and
+//               D-13 (security posture) already make in prose: fetched content is
+//               untrusted data, never instruction.
 //
 // WHAT THIS HOOK DOES NOT DO: it does not attempt to detect classic "ignore your
 // instructions" style prompt injection. A dedicated detector (scanPromptInjection) was

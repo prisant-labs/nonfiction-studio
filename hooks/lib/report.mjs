@@ -1,9 +1,11 @@
 // what-it-is:   the shared gate report builder for all engine CLIs
 // what-it-does: provides makeReport, addFinding, finalize, and emit so every CLI produces
 //               the same JSON shape and the same exit-code contract
-// why:          all five CLIs share identical exit-code semantics (0 clean, 1 findings, 2 error);
-//               one module eliminates drift and keeps the JSON shape consistent with gate-report.md
-// used-by:      imported by bin/ns-claims, bin/ns-stylometry, bin/ns-scrub, bin/ns-doctor, bin/ns-gate
+// why:          ns-claims, ns-notes, and ns-scrub share identical exit-code semantics through
+//               this module (0 clean, 1 findings, 2 error); one shared module keeps their JSON
+//               shape consistent with gate-report.md and stops the three from drifting apart.
+//               ns-doctor, ns-gate, ns-stylometry, and ns-statusline do not import this module.
+// used-by:      imported by bin/ns-claims, bin/ns-notes, bin/ns-scrub
 
 // Exit-code contract per S-07 section 4:
 //   0 - no findings (checks passed)
