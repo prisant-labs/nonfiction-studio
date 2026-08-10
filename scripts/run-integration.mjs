@@ -11,7 +11,9 @@
 // used-by:      .github/workflows/tier-b.yml; local: node scripts/run-integration.mjs
 //
 // Exit taxonomy:
-//   0  - all assertions pass (live or dry-run)
+//   0  - all assertions pass (live or dry-run), OR a named green skip when neither credential
+//        is configured on an unattended CI runner (expected until the maintainer sets the
+//        CLAUDE_CODE_OAUTH_TOKEN repo secret; see scripts/lib/credential-mode.mjs)
 //   1  - functional assertion failure
 //   2  - operational error (clone failed, CLI unavailable, etc.)
 //   3  - BUDGET_EXCEEDED: cumulative haiku spend exceeded $1.00
@@ -54,6 +56,7 @@ import { mkdtempSync, cpSync, rmSync, existsSync, statSync, readFileSync, readdi
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { decideCredentialMode } from './lib/credential-mode.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -628,33 +631,59 @@ function fatal(msg) { exitWithCode(2, msg); }
 
 const { dryRun, model } = parseArgs(process.argv.slice(2));
 
-// Live mode needs working model access, which is NOT the same thing as an API
-// key. The claude CLI authenticates from the active account when one is logged
-// in, so an authenticated CLI is sufficient. A GitHub runner has no logged-in
-// account, which is the only place ANTHROPIC_API_KEY is actually required.
+// Live mode needs working model access, which is NOT the same thing as an API key. The claude
+// CLI authenticates from the active account when one is logged in, so an authenticated CLI
+// session is sufficient on a developer machine, with no credential env var required at all.
+// scripts/lib/credential-mode.mjs is the shared, three-state decision that both this script and
+// scripts/run-evals.mjs now call: a credential present means live; no credential on an
+// unattended CI runner (process.env.CI truthy) means a named green skip; no credential and not
+// CI means "developer machine," where the probe below decides between live (on an
+// already-authenticated local session) and a dry-run fallback. See that module's header for
+// the full precedence and why CI-truthiness alone -- never this probe's result -- is what
+// triggers the skip.
 //
-// Corrected 2026-08-07: this gated solely on ANTHROPIC_API_KEY and so forced
-// dry-run on every developer machine, which is why runLiveMode had never once
-// executed and the broken cost field above went unnoticed.
+// Corrected 2026-08-07: this gated solely on ANTHROPIC_API_KEY and so forced dry-run on every
+// developer machine, which is why runLiveMode had never once executed and the broken cost
+// field above went unnoticed.
+//
+// Corrected again in this task (F-CI-02, Tier B trigger contradicts D-20): this probe proves
+// only that the claude binary EXISTS (`claude --version` exits 0), never that anyone is
+// authenticated. Tier B's own workflow installs that binary before the live steps run, so on a
+// keyless GitHub runner this probe used to report "usable," the old gate below proceeded into
+// live mode, and the run failed on ordinary model-call errors instead of skipping cleanly. The
+// probe is now consulted ONLY on a non-CI developer machine with neither credential set --
+// never when CI is truthy, so a binary that merely exists can no longer masquerade as
+// "authenticated."
 function claudeCliUsable() {
   const probe = spawnSync('claude', ['--version'], { encoding: 'utf8', timeout: 20000 });
   return !probe.error && probe.status === 0;
 }
 
-const hasApiKey = !!(process.env.ANTHROPIC_API_KEY);
-const hasUsableCli = hasApiKey ? true : claudeCliUsable();
-const forcedDryRun = !hasApiKey && !hasUsableCli && !dryRun;
-
-if (forcedDryRun) {
-  log('[run-integration] LIVE RUN BLOCKER: no model access available');
-  log('[run-integration]   ANTHROPIC_API_KEY is not set, and the claude CLI is not runnable');
-  log('[run-integration]   (an authenticated claude CLI is sufficient; a key is only needed');
-  log('[run-integration]    where no account is logged in, such as a CI runner)');
-  log('[run-integration] falling back to dry-run mode');
-  log('');
-  runDryMode(model);
-} else if (dryRun) {
+if (dryRun) {
+  // An explicit developer request always wins, regardless of credential or CI state -- the
+  // same precedence the pre-existing --dry-run flag always had.
   runDryMode(model);
 } else {
-  runLiveMode(model);
+  // The two process.env reads immediately below are intentionally the only literal
+  // `ANTHROPIC_API_KEY`- and `CLAUDE_CODE_OAUTH_TOKEN`-shaped access in this file;
+  // scripts/lib/credential-mode.mjs takes already-read values instead, so it never touches
+  // process.env itself. See scripts/self-sufficiency-exceptions.json for the reviewed,
+  // still-current reason the ANTHROPIC_API_KEY read is allowed.
+  const decision = decideCredentialMode(
+    {
+      oauthToken: process.env.CLAUDE_CODE_OAUTH_TOKEN,
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      ci: process.env.CI,
+    },
+    claudeCliUsable
+  );
+  log('[run-integration] credential decision: ' + decision.mode + ' (' + decision.reason + ')');
+
+  if (decision.mode === 'skip') {
+    exitWithCode(0, 'SKIP -- ' + decision.reason);
+  } else if (decision.mode === 'dry-run') {
+    runDryMode(model);
+  } else {
+    runLiveMode(model);
+  }
 }

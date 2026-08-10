@@ -3,19 +3,31 @@
 // what-it-does: reads every evals/*.eval.json file, sends each case's "given"
 //               trigger to the Claude API using haiku, and grades whether the
 //               response routes to the declared callee; produces a
-//               dispatch-accuracy report per Q-01 section 5.3.
-// why:          Q-01 section 5.3; the batch runner measures routing accuracy
-//               as advisory signal (a chain edge with 100% dispatch but poor
-//               output quality is addressed separately by behavioral evals or
-//               deterministic checkers). OQ-002 (batch eval runner ownership)
-//               resolved: toolkit v1.6.0 does not ship a runner; this is the
-//               in-house Node.js + haiku implementation.
+//               dispatch-accuracy report per Q-01 section 5.3, and fails the
+//               run if the pass rate drops below scripts/lib/dispatch-threshold.mjs's
+//               documented threshold (roadmap row 1.12: a genuinely broken
+//               dispatch table must turn a live run red).
+// why:          Q-01 section 5.3; the batch runner measures routing accuracy.
+//               A chain edge with 100% dispatch but poor output quality is a
+//               separate concern, addressed by behavioral evals or
+//               deterministic checkers, not this gate. OQ-002 (batch eval
+//               runner ownership) resolved: toolkit v1.6.0 does not ship a
+//               runner; this is the in-house Node.js + haiku implementation.
 // used-by:      .github/workflows/tier-b.yml
 //
 // Exit taxonomy:
-//   0  - all cases graded (pass or fail; the runner always completes)
+//   0  - every case graded AND the dispatch-accuracy threshold was met, OR a named green skip
+//        when neither credential is configured on an unattended CI runner (expected until the
+//        maintainer sets the CLAUDE_CODE_OAUTH_TOKEN repo secret; see
+//        scripts/lib/credential-mode.mjs), OR --dry-run / auto dry-run fallback validated every
+//        eval file with zero model calls
 //   1  - one or more eval files are malformed; runner aborted
-//   2  - operational error (no model access: no API key and no usable claude CLI)
+//   2  - dispatch accuracy below scripts/lib/dispatch-threshold.mjs's threshold: a genuinely
+//        broken dispatch table (roadmap row 1.12). RETIRED meaning, as of this task: this code
+//        used to mean "operational error: no model access (no API key and no usable claude
+//        CLI)" -- that situation no longer reaches an error at all, since it now resolves to
+//        either the named skip above (unattended CI) or an automatic dry-run fallback
+//        (developer machine); see scripts/lib/credential-mode.mjs.
 //   3  - BUDGET_EXCEEDED: cumulative spend exceeded the $1.50 cap
 //
 // Budget note (recalibrated 2026-08-08): 28 eval cases across 15 files at a
@@ -30,6 +42,8 @@ import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { decideCredentialMode } from './lib/credential-mode.mjs';
+import { DISPATCH_ACCURACY_THRESHOLD, meetsDispatchThreshold } from './lib/dispatch-threshold.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -167,20 +181,50 @@ function log(msg) { process.stdout.write(msg + '\n'); }
 
 const { dryRun } = parseArgs(process.argv.slice(2));
 
-// Live grading needs working model access, not an API key specifically. The
-// claude CLI authenticates from the active account when one is logged in, so an
-// authenticated CLI is sufficient. A key is required only where no account
-// exists, which is a CI runner. Corrected 2026-08-07 alongside the same gate in
-// run-integration.mjs.
+// Live grading needs working model access, which is NOT the same thing as an API key. The
+// claude CLI authenticates from the active account when one is logged in, so an authenticated
+// CLI session is sufficient on a developer machine, with no credential env var required at
+// all. scripts/lib/credential-mode.mjs is the shared, three-state decision that both this
+// script and scripts/run-integration.mjs now call -- see that module's header for the full
+// precedence and why CI-truthiness alone -- never this probe's result -- is what triggers the
+// skip. Corrected 2026-08-07 alongside the same gate in run-integration.mjs.
+//
+// Corrected again in this task (F-CI-02, Tier B trigger contradicts D-20): this probe proves
+// only that the claude binary EXISTS, never that anyone is authenticated, and this script's
+// prior gate treated "no model access" as a hard exit(2) with no CI-awareness at all --
+// disagreeing with run-integration.mjs's own (also broken) dry-run fallback for the identical
+// situation. Both scripts now call the same decision function and can never disagree again.
+// The probe below is consulted ONLY on a non-CI developer machine with neither credential set.
 function claudeCliUsable() {
   const probe = spawnSync('claude', ['--version'], { encoding: 'utf8', timeout: 20000 });
   return !probe.error && probe.status === 0;
 }
 
-if (!dryRun && !process.env.ANTHROPIC_API_KEY && !claudeCliUsable()) {
-  log('[run-evals] ERROR: no model access available. Set ANTHROPIC_API_KEY, or log in');
-  log('[run-evals]        with the claude CLI, or run with --dry-run to validate files only.');
-  process.exit(2);
+// An explicit --dry-run always wins, regardless of credential or CI state -- the same
+// precedence the pre-existing flag always had; the credential decision is not even computed.
+let decisionMode;
+if (dryRun) {
+  decisionMode = 'dry-run';
+} else {
+  // The two process.env reads immediately below are intentionally the only literal
+  // `ANTHROPIC_API_KEY`- and `CLAUDE_CODE_OAUTH_TOKEN`-shaped access in this file;
+  // scripts/lib/credential-mode.mjs takes already-read values instead, so it never touches
+  // process.env itself. See scripts/self-sufficiency-exceptions.json for the reviewed,
+  // still-current reason the ANTHROPIC_API_KEY read is allowed.
+  const decision = decideCredentialMode(
+    {
+      oauthToken: process.env.CLAUDE_CODE_OAUTH_TOKEN,
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      ci: process.env.CI,
+    },
+    claudeCliUsable
+  );
+  log('[run-evals] credential decision: ' + decision.mode + ' (' + decision.reason + ')');
+  if (decision.mode === 'skip') {
+    log('[run-evals] SKIP -- ' + decision.reason);
+    process.exit(0);
+  }
+  decisionMode = decision.mode;
 }
 
 log('[run-evals] loading eval files from ' + EVALS_DIR);
@@ -195,7 +239,7 @@ if (malformed.length > 0) {
 }
 
 log('[run-evals] found ' + sets.length + ' eval file(s)');
-if (dryRun) {
+if (decisionMode === 'dry-run') {
   log('[run-evals] DRY-RUN: files validated (zero model calls)');
   for (const s of sets) {
     log('  ok: ' + s.file + ' (' + describeCovers(s.data.covers) + ', ' + s.data.cases.length + ' case(s))');
@@ -272,5 +316,23 @@ if (failedResults.length > 0) {
   }
 }
 
-log('[run-evals] advisory: dispatch accuracy is signal only; failures here do not block the gate');
+// Posture (F-CI-02, Tier B trigger contradicts D-20): advisory to merges, because this tier
+// never runs on pull requests at all (.github/workflows/tier-b.yml has no pull_request
+// trigger, so it cannot block one); blocking to releases, because a scheduled or manually
+// dispatched run that falls below the threshold below now exits nonzero. Both hold at once --
+// neither line here contradicts the other. This replaces the old unconditional "failures here
+// do not block the gate" claim, which stopped being true the moment the threshold gate below
+// was added.
+log('[run-evals] posture: advisory to merges (this tier never runs on pull requests); blocking to a scheduled or dispatched run below the threshold');
+
+if (!meetsDispatchThreshold(passedCases, totalCases)) {
+  log(
+    '[run-evals] DISPATCH ACCURACY BELOW THRESHOLD: ' + passedCases + '/' + totalCases +
+    ' < the required ' + Math.round(DISPATCH_ACCURACY_THRESHOLD * 100) +
+    '% (roadmap row 1.12: a genuinely broken dispatch table must turn a live run red)'
+  );
+  process.exit(2);
+}
+
+log('[run-evals] dispatch accuracy meets the ' + Math.round(DISPATCH_ACCURACY_THRESHOLD * 100) + '% threshold');
 process.exit(0);
