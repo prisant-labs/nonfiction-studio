@@ -119,6 +119,37 @@ Measure a chapter's raw vector for baseline capture:
 ns-stylometry --measure=chapters/01-listening-before-speaking.md,chapters/02-finding-your-network.md
 ```
 
+## Per-chapter drift versus the book-level baseline
+
+The Stop gate's per-chapter stylometry check (roadmap row 1.7, voice registers) compares
+ONE chapter's marker vector against the book-level baseline stored in `.studio/config.json`.
+That baseline is fit to the combined word-population of every chapter sampled when it was
+captured, so a single chapter is being measured against a population it only partially
+represents. This structurally inflates `type_token_ratio` in particular: vocabulary
+repeats less over a short single-chapter sample than it does once the chapter is folded
+into a larger combined text, so a chapter measured alone reads as more lexically varied
+than the baseline expects, and that gap shows up as drift the chapter did not actually
+introduce.
+
+The shipped sample book makes this concrete rather than theoretical. Its baseline (`.studio/config.json`
+`stylometry.baseline.markers`) was captured from `chapters/01-listening-before-speaking.md`
+and `chapters/02-finding-your-network.md` combined, after both chapters were rewritten for
+voice consistency. That makes the baseline a fit against itself, not an independent
+measurement: book-level drift against it measures 0.02, near zero, because the population
+being measured and the population defining the baseline are the same two chapters. Measured
+individually, chapter 1's `type_token_ratio` is 0.5057 and chapter 2's is 0.4934, against
+0.4171 for the two combined; that gap alone accounts for the majority of chapter 1's 29.80
+per-chapter drift score (of a 35 budget). Both facts are disclosed in the `method` field
+of the baseline itself.
+
+This is stated plainly, not as a defect verdict: the per-chapter check still runs and still
+provides real regression protection (a chapter that drifts from the shipped voice registers
+a check would still flag), and the number it produces is a legitimate reading of a
+self-derived baseline compared against a smaller population, not a wrong number. Correcting
+the underlying metric so a single chapter can be scored without the sample-size penalty, and
+reducing the sample book's own prose padding to buy back headroom, are both scheduled as
+tranche 2 work against roadmap row 1.7 (voice registers); they are not done here.
+
 ## Relationship to other CLIs
 
 `ns-stylometry` shares the `countWords` tokenizer with `ns-doctor` (the single-tokenizer
