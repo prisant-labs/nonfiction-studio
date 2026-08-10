@@ -4,11 +4,12 @@ name: REPLACE-with-kebab-case-name-matching-this-file
 description: REPLACE - Use this agent when [conditions]. Typical triggers include [scenario-A in prose], [scenario-B in prose], and [scenario-C in prose]. See "When to invoke" in the agent body for worked scenarios.
 model: REPLACE-model
 # model choices: inherit (recommended default) | haiku | sonnet | opus
-# Per D-18 (in-plugin model routing) in (local working notes, not published): default inherit; haiku for lightweight
-# scan passes; sonnet for drafting and editing work; opus for deep synthesis only.
+# Per D-18 (in-plugin model routing), this plugin's own convention: default inherit; haiku
+# for lightweight scan passes; sonnet for drafting and editing work; opus for deep synthesis only.
 color: REPLACE-color
 # color choices - all eight valid values: red, blue, green, yellow, purple, orange, pink, cyan
-# Pillar mapping per D-19 (colors by pillar) in (local working notes, not published):
+# Pillar mapping per D-19 (colors by pillar), this plugin's own convention - follow it so a
+# custom agent stays visually consistent with the shipped roster:
 #   Intake: blue | Structure: purple | Research: cyan | Drafting/Voice: orange
 #   Production: green | Governance: yellow | safety agents: red
 # pink is available for agents without a clear pillar alignment.

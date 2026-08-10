@@ -12,7 +12,7 @@
 //   { session_id, transcript_path, cwd, prompt_id, permission_mode, effort,
 //     hook_event_name, tool_name, tool_input, tool_use_id }
 //   plus agent_id/agent_type when a subagent fired the call, shaped like the
-//   2026-08-09 platform probe ((local working notes, not published)).
+//   2026-08-09 platform probe (captured locally, not published; see ADR-0007).
 //
 // Never mutates committed fixtures. Temp clones are used for write-tool cases.
 // pickSnapshotName and foldForCompare are imported directly from
@@ -86,7 +86,7 @@ function runHook(input, extraEnv = {}) {
 
 /** Build a synthetic Write/Edit event (snake_case shape per TSK-030 firing proof).
  *  agentType, when given, adds agent_id/agent_type fields shaped like the
- *  2026-08-09 platform probe ((local working notes, not published)): present
+ *  2026-08-09 platform probe (captured locally, not published; see ADR-0007): present
  *  on subagent-fired envelopes, absent on main-session ones. Omitting it (the
  *  default) reproduces today's main-session envelope shape exactly. */
 function makeWriteEvent(cwd, filePath, toolName = 'Write', agentType = null) {
@@ -530,7 +530,7 @@ test('agent write-scope containment: a traversal that escapes the book root is d
 // ---------------------------------------------------------------------------
 // AGENT WRITE-SCOPE GUARD, integration (F-AG-01, agents claim enforcement
 // that does not exist): now LIVE per ADR-0007 (agent identity resolution) and
-// the 2026-08-09 platform probe ((local working notes, not published)).
+// the 2026-08-09 platform probe (captured locally, not published; see ADR-0007).
 // These cases spawn the real hook with a synthetic agent_type field on the
 // envelope, proving resolveActiveAgent + checkAgentWriteConstraint are wired
 // at the Step 5 call site, not just directly callable (the (j) test and the

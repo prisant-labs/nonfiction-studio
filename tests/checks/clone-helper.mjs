@@ -14,7 +14,8 @@
 //               Also exposes snapshotPaths(paths)/diffPathSnapshots(before, after), so a test can
 //               prove -- not just claim -- that planting a violation into a clone never touched the
 //               real working tree. Two design choices, both forced by running inside this wave's
-//               shared, actively-edited tree ((local working notes, not published) section 6):
+//               shared, actively-edited tree (this wave's own house rules for concurrent
+//               implementers sharing one tree: stage exact paths only, never a whole-tree add):
 //                 (1) scoped to an explicit path list, not the whole tracked tree, because a
 //                     whole-tree snapshot observes another task's legitimate, unrelated commits
 //                     landing mid-run and reports them as residue (confirmed in practice: a

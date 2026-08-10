@@ -166,9 +166,9 @@ title without a promise clause, and the word count without a target suffix. No p
 and parsing it reliably would be exactly the kind of fragile, undocumented inference this
 plugin's schema-driven design otherwise avoids everywhere else.
 
-**Planning-doc amendment earned, not landed here** (`(local working notes, not published)` is owned by
-item 8, planning-doc sync, this wave): OPP-P03's "words versus target" and "active chapter and
-its promise" language should be amended to name `config.json`'s `targets.word_count` and
+**Planning-doc amendment earned, not landed here** (CANON is an internal, gitignored planning
+document maintained separately from this ADR): OPP-P03's "words versus target" and "active
+chapter and its promise" language should be amended to name `config.json`'s `targets.word_count` and
 `progress.json`'s `chapters[].promise` as the specific fields the HUD reads, note that neither is
 populated by any shipped writer as of this task, and record that populating either is a distinct,
 not-yet-scheduled follow-on (a candidate for whichever future task next touches `outline-book`,

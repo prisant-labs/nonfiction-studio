@@ -8,8 +8,8 @@
 //               four independent hardcoded CLI lists elsewhere in the repo, and
 //               this module is what prevents that class of drift here.
 //
-// evidence:     (local working notes, not published) (2026-08-09 live platform
-//               probe). PF-2 established that plugin agents report a namespaced
+// evidence:     a 2026-08-09 live platform probe, captured locally and not
+//               published. PF-2 established that plugin agents report a namespaced
 //               agent_type ("nonfiction-studio:<slug>"); PF-1/PF-3 established
 //               that generic subagents report an unnamespaced type
 //               ("general-purpose") and the parent session carries neither

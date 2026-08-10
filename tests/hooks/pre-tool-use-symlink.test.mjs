@@ -58,7 +58,7 @@ function runHook(input) {
 
 /** Build a synthetic Write event (snake_case shape per TSK-030 firing proof).
  *  agentType, when given, adds agent_id/agent_type fields shaped like the
- *  2026-08-09 platform probe ((local working notes, not published)).
+ *  2026-08-09 platform probe (captured locally, not published; see ADR-0007).
  *  Omitting it (the default) reproduces today's main-session envelope shape. */
 function makeWriteEvent(cwd, filePath, agentType = null) {
   const event = {

@@ -291,10 +291,15 @@ Users running headless Bash probes on Windows Git Bash should use `MSYS_NO_PATHC
 
 ## References
 
-- D-01 (skills-first surface): `(local working notes, not published)` section 1
-- R-04 (scope boundaries) W-07 (commands alias layer): `(local working notes, not published)`
-- D-17 (guided front door): `(local working notes, not published)` section 1
-- D-12 (versioned bible with a doctor): `(local working notes, not published)` section 1
-- TSK-011 (SPK-05 bin PATH on Windows): `(local working notes, not published)`
+CANON and the requirements set are internal, gitignored planning documents, not published in
+this repository; cited below by decision ID and section rather than by path. TSK-011's own task
+brief lived only in this wave's scratch workspace and does not survive it; ADR-0005 (bin PATH on
+Windows) is the durable, committed record of that same spike's evidence.
+
+- D-01 (skills-first surface): CANON section 1
+- R-04 (scope boundaries) W-07 (commands alias layer): the scope-boundaries-and-deferrals requirements doc
+- D-17 (guided front door): CANON section 1
+- D-12 (versioned bible with a doctor): CANON section 1
+- TSK-011 (SPK-05 bin PATH on Windows): see ADR-0005 (bin PATH on Windows)
 - Spike stub files (permanent evidence): `skills/spike-echo/SKILL.md`, `skills/spike-status/SKILL.md`
 - ADR-0001 (hooks.json schema): `docs/adr/ADR-0001-hooks-json-schema.md`

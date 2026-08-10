@@ -11,7 +11,7 @@
 //         permission_mode, effort, hook_event_name, tool_name, tool_input, tool_use_id,
 //         and agent_id/agent_type when a plugin or generic subagent fired the call)
 //         - field names verified live by TSK-030 (hooks.json Phase 1 wiring); agent_id/agent_type
-//         verified live by the 2026-08-09 probe, (local working notes, not published)
+//         verified live by the 2026-08-09 probe; see ADR-0007 (agent identity resolution)
 // stdout: EMPTY for the allow path (platform treats empty stdout as allow per the convention
 //         confirmed at TSK-030); JSON deny envelope when a guard fires;
 //         JSON additionalContext envelope for Bash/PowerShell destructive-pattern cautions.

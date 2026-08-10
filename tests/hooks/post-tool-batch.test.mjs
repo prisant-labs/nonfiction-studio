@@ -65,7 +65,7 @@ function runHook(input, extraEnv = {}) {
 
 /** Build a synthetic PostToolBatch event (snake_case shape per TSK-030 firing proof).
  *  agentType, when given, adds agent_id/agent_type fields shaped like the
- *  2026-08-09 platform probe ((local working notes, not published)); the
+ *  2026-08-09 platform probe (captured locally, not published; see ADR-0007); the
  *  controller confirmed by grep that agent_type appears on PostToolBatch
  *  envelopes too, not only PreToolUse (the probe residual this file asserts
  *  below). Omitting it (the default) reproduces today's envelope shape. */
@@ -352,8 +352,8 @@ test('(c2) Write then Edit same chapter: two log records in order, one recount, 
 
 // ---------------------------------------------------------------------------
 // Probe residual (D-10 compliance layer, real agent attribution, brief 1e):
-// PF-2/PF-3 from the 2026-08-09 platform probe
-// ((local working notes, not published)) established agent_type on
+// PF-2/PF-3 from the 2026-08-09 platform probe (captured locally, not
+// published; see ADR-0007) established agent_type on
 // PreToolUse envelopes; the controller separately grepped the archived probe
 // traces and confirmed agent_type also appears on PostToolBatch envelopes,
 // not only PreToolUse - these cases assert that residual with a synthetic

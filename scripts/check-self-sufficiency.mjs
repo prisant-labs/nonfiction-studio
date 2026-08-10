@@ -39,8 +39,9 @@
 //               Falls back to a plain filesystem walk of the same scanned paths when git is
 //               unavailable or the tree is not a git repository (mirrors check-links.mjs), which
 //               is how a plain directory copy (no .git) still gets a correct scan.
-// why:          (local working notes, not published) section 5: the
-//               no-additional-keys invariant held on inspection across all 486 tracked files;
+// why:          the 2026-08-07 self-sufficiency audit (an internal report, not published in
+//               this repository), section 5: the no-additional-keys invariant held on
+//               inspection across all 486 tracked files;
 //               this turns that one-time audit finding into permanent, deterministic CI
 //               machinery instead of a claim that can silently rot as the tree changes. examples/
 //               added to the scanned set per F7 (scan-set blind spots): the directory was
@@ -204,9 +205,10 @@ const NON_ANTHROPIC_KEY_PATTERNS = [
 // Class 3: ANTHROPIC_API_KEY. ERROR unless a matching exceptions-file entry exists.
 // Scoped to a LIVE reference (process.env.ANTHROPIC_API_KEY, process.env['ANTHROPIC_API_KEY'],
 // or the GitHub Actions secrets.ANTHROPIC_API_KEY form), not a bare textual mention: a comment
-// explaining the mechanism, or a log/error string that tells a user what to set, is the audit's
-// own "test, fixture, or doc mention" bucket ((local working notes, not published) section 3.1 row (c)),
-// already reviewed as accurate and never meant to require its own exceptions-file entry. Only the
+// explaining the mechanism, or a log/error string that tells a user what to set, is the
+// 2026-08-07 self-sufficiency audit's own "test, fixture, or doc mention" bucket (an internal
+// report, not published in this repository; section 3.1 row (c)), already reviewed as accurate
+// and never meant to require its own exceptions-file entry. Only the
 // four sites that actually read the credential (tier-b.yml:48,55, run-integration.mjs:559,
 // run-evals.mjs:173) are section 3.1 row (b)'s "hard reference" sites this class exists to gate.
 const ANTHROPIC_KEY_PATTERN = /(?:process\.env\.|process\.env\[['"`]|secrets\.)ANTHROPIC_API_KEY/;
