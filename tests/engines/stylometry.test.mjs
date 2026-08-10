@@ -17,7 +17,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
-import { measureChapter, measureBook, computeDrift } from '../../hooks/lib/stylometry-engine.mjs';
+import { measureChapter, measureBook, computeDrift, countWords } from '../../hooks/lib/stylometry-engine.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -142,6 +142,73 @@ test('synthetic: measureChapter result has all 8 required marker keys', () => {
       'missing key: ' + key);
     assert.ok(typeof v[key] === 'number', key + ' must be a number');
   }
+});
+
+// ---------------------------------------------------------------------------
+// preprocess: all four claim-marker forms must be stripped, not just [claim:]
+// ---------------------------------------------------------------------------
+//
+// docs/formats/claim-markers.md defines four marker forms: [claim: EV-NNNN],
+// [UNVERIFIED], [SOURCE-UNVERIFIABLE], and [quote: EV-NNNN] (the last added
+// this wave for OPP-D03, quote fidelity and source packets). Before this fix,
+// preprocess() stripped only [claim: EV-NNNN], so a chapter using the other
+// three forms measured differently from the same prose without them: each
+// marker adds spurious word tokens (for example "quote" and "EV" from
+// "[quote: EV-0012]"), which perturbs every rate that divides by totalWords
+// and inflates countWords, the same authority progress.json and the
+// state_coherence check rely on.
+//
+// This section proves a marker-laden chapter measures IDENTICALLY to the
+// same prose with every marker form removed.
+
+const MARKER_FREE_TEXT =
+  'The researchers wrote plainly: "spaced repetition raises recall."\n' +
+  'This claim needs a source.\n' +
+  'It resolved eventually.\n' +
+  'The gain held across cohorts.\n';
+
+const MARKER_LADEN_TEXT =
+  'The researchers wrote plainly: "spaced repetition raises recall." [quote: EV-0012]\n' +
+  'This claim needs a source. [UNVERIFIED]\n' +
+  'It resolved eventually. [claim: EV-0013]\n' +
+  'The gain held across cohorts. [claim: EV-0013] [SOURCE-UNVERIFIABLE]\n';
+
+test('preprocess strips [quote: EV-NNNN] anchors: measureChapter is identical with and without one', () => {
+  const withMarker = measureChapter('A plain sentence. [quote: EV-0012]\n');
+  const withoutMarker = measureChapter('A plain sentence.\n');
+  assert.deepStrictEqual(withMarker, withoutMarker,
+    '[quote: EV-NNNN] must be stripped like [claim: EV-NNNN]; got ' +
+    JSON.stringify(withMarker) + ' vs ' + JSON.stringify(withoutMarker));
+});
+
+test('preprocess strips [UNVERIFIED]: measureChapter is identical with and without one', () => {
+  const withMarker = measureChapter('A plain sentence. [UNVERIFIED]\n');
+  const withoutMarker = measureChapter('A plain sentence.\n');
+  assert.deepStrictEqual(withMarker, withoutMarker,
+    '[UNVERIFIED] must be stripped; got ' +
+    JSON.stringify(withMarker) + ' vs ' + JSON.stringify(withoutMarker));
+});
+
+test('preprocess strips [SOURCE-UNVERIFIABLE]: measureChapter is identical with and without one', () => {
+  const withMarker = measureChapter('A plain sentence. [claim: EV-0013] [SOURCE-UNVERIFIABLE]\n');
+  const withoutMarker = measureChapter('A plain sentence. [claim: EV-0013]\n');
+  assert.deepStrictEqual(withMarker, withoutMarker,
+    '[SOURCE-UNVERIFIABLE] must be stripped; got ' +
+    JSON.stringify(withMarker) + ' vs ' + JSON.stringify(withoutMarker));
+});
+
+test('preprocess strips all four marker forms together: a marker-laden chapter measures identically to the same prose with markers removed', () => {
+  const withMarkers = measureChapter(MARKER_LADEN_TEXT);
+  const withoutMarkers = measureChapter(MARKER_FREE_TEXT);
+  assert.deepStrictEqual(withMarkers, withoutMarkers,
+    'a chapter using [quote:], [UNVERIFIED], and [SOURCE-UNVERIFIABLE] markers must measure ' +
+    'identically to the same prose with no markers at all; got ' +
+    JSON.stringify(withMarkers) + ' vs ' + JSON.stringify(withoutMarkers));
+});
+
+test('countWords is unaffected by [quote:], [UNVERIFIED], or [SOURCE-UNVERIFIABLE] markers', () => {
+  assert.strictEqual(countWords(MARKER_LADEN_TEXT), countWords(MARKER_FREE_TEXT),
+    'countWords feeds progress.json and the state_coherence check; it must not count marker tokens as prose');
 });
 
 // ---------------------------------------------------------------------------

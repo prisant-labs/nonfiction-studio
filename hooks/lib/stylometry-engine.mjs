@@ -8,7 +8,7 @@
 
 // ---------------------------------------------------------------------------
 // Closed-class function word set (deterministic; changing this set changes the
-// function_word_rate marker value, which triggers reconciliation per the brief).
+// function_word_rate marker value, which triggers reconciliation per TSK-026 (ns-stylometry engine)).
 // Set size: 128 entries covering articles, prepositions, conjunctions, pronouns,
 // auxiliaries, modals, negation, and high-frequency adverbs.
 // ---------------------------------------------------------------------------
@@ -89,16 +89,20 @@ const SENTENCE_END_RE = /[.!?]+(?:\s|$)/g;
 // ---------------------------------------------------------------------------
 
 /**
- * Strips markdown headings and claim markers from chapter text.
- * Heading lines (starting with #) and [claim: EV-NNNN] tags are removed.
- * All other whitespace is preserved until normalization.
+ * Strips markdown headings and all four claim-marker forms from chapter text.
+ * Heading lines (starting with #) and the [claim: EV-NNNN], [quote: EV-NNNN],
+ * [UNVERIFIED], and [SOURCE-UNVERIFIABLE] tags (docs/formats/claim-markers.md)
+ * are removed. All other whitespace is preserved until normalization.
  *
  * @param {string} text - raw chapter file content
- * @returns {string} prose with headings and claim markers removed
+ * @returns {string} prose with headings and all four marker forms removed
  */
 function preprocess(text) {
   let t = text.replace(/^#{1,6}\s.*$/gm, '');
   t = t.replace(/\[claim:\s*EV-\d{4}\]/g, '');
+  t = t.replace(/\[quote:\s*EV-\d{4}\]/g, '');
+  t = t.replace(/\[UNVERIFIED\]/g, '');
+  t = t.replace(/\[SOURCE-UNVERIFIABLE\]/g, '');
   return t;
 }
 
@@ -216,8 +220,9 @@ function ratiosFromCounts(counts) {
 /**
  * Measures the eight-marker stylometry vector for a single chapter.
  *
- * Preprocessing: markdown headings (lines beginning with #) and
- * [claim: EV-NNNN] markers are stripped before any measurement.
+ * Preprocessing: markdown headings (lines beginning with #) and all four
+ * claim-marker forms ([claim: EV-NNNN], [quote: EV-NNNN], [UNVERIFIED], and
+ * [SOURCE-UNVERIFIABLE]) are stripped before any measurement.
  *
  * @param {string} text - full chapter file content
  * @returns {object} eight-marker vector with keys matching config.json
@@ -274,8 +279,9 @@ export function measureBook(chapters) {
  * Returns the word count for a chapter text using the canonical tokenizer.
  * This is the SINGLE word-counting authority for the doctor-engine word-count
  * coherence check (TSK-028 banked adjudication 2).
- * Preprocessing: headings and [claim: EV-NNNN] markers are stripped first,
- * matching the tokenization path used by measureChapter.
+ * Preprocessing: headings and all four claim-marker forms ([claim: EV-NNNN],
+ * [quote: EV-NNNN], [UNVERIFIED], and [SOURCE-UNVERIFIABLE]) are stripped
+ * first, matching the tokenization path used by measureChapter.
  *
  * @param {string} rawText - full chapter file content
  * @returns {number} integer word count
