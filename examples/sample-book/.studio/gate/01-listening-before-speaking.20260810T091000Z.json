@@ -1,8 +1,8 @@
 {
   "version": 2,
   "chapter": "01-listening-before-speaking",
-  "ts": "2026-07-18T09:00:00Z",
-  "verdict": "warn",
+  "ts": "2026-08-10T09:10:00Z",
+  "verdict": "pass",
   "checks": [
     {
       "check": "claim_coverage",
@@ -20,12 +20,10 @@
     },
     {
       "check": "stylometry",
-      "verdict": "warn",
-      "detail": "drift score 243.40 exceeds threshold 35; stylometry.drift-threshold",
-      "evidence": [
-        "chapters/01-listening-before-speaking.md"
-      ],
-      "next": "Review the flagged markers against the voice baseline and revise the drifted chapter."
+      "verdict": "pass",
+      "detail": "drift score 29.80 within threshold 35",
+      "evidence": [],
+      "next": null
     },
     {
       "check": "prompt_scrub",

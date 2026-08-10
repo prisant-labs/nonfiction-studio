@@ -240,6 +240,65 @@ test('golden sample book CLI: --all --json exits 0', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Committed tree: golden sample book, EVERY CHAPTER INDIVIDUALLY (roadmap row 1.7)
+// ---------------------------------------------------------------------------
+//
+// The two "golden sample book" tests above only prove the WHOLE BOOK passes as
+// a combined sample. They do not prove any individual chapter passes on its
+// own, and a per-chapter gate run measures exactly one chapter (measureChapter,
+// a much smaller denominator) against the same book-level baseline -- a
+// materially different computation from measureBook. A book can pass in
+// aggregate while every one of its chapters individually blocks: prior to the
+// chapters being made voice-consistent, both chapters measured well over 200
+// against a threshold of 35 in isolation, driven substantially by a
+// near-zero-baseline instability in deviationPct that is written up for
+// roadmap row 1.7 (voice registers) and the D-08 (hybrid voice scoring)
+// amendment.
+
+test('golden sample book: EVERY chapter passes its own stylometry check individually, not just the combined book', () => {
+  const root = join(EXAMPLES, 'sample-book');
+  const config = JSON.parse(readFileSync(join(root, '.studio', 'config.json'), 'utf8'));
+  const baseline = config.stylometry.baseline.markers;
+  const thresholds = config.thresholds;
+
+  const chapterDir = join(root, 'chapters');
+  const chapterFiles = readdirSync(chapterDir).filter(f => f.endsWith('.md')).sort();
+  assert.ok(chapterFiles.length >= 2, 'golden book must have at least two chapters to exercise this check');
+
+  for (const file of chapterFiles) {
+    const text = readFileSync(join(chapterDir, file), 'utf8');
+    const measured = measureChapter(text);
+    const { score, exceeded } = computeDrift(measured, baseline, thresholds);
+    assert.ok(
+      !exceeded,
+      'chapter ' + file + ' must pass its OWN stylometry check individually; drift score ' +
+      score.toFixed(2) + ' vs threshold ' + thresholds.drift_score_max +
+      ' (a whole-book pass does not guarantee a per-chapter pass)'
+    );
+  }
+});
+
+test('golden sample book CLI: ns-stylometry --chapter=<slug> --json exits 0 for EVERY chapter', () => {
+  const bookRoot = join(EXAMPLES, 'sample-book');
+  const chapterDir = join(bookRoot, 'chapters');
+  const chapterFiles = readdirSync(chapterDir).filter(f => f.endsWith('.md')).sort();
+
+  for (const file of chapterFiles) {
+    const slug = file.replace(/\.md$/, '');
+    const result = spawnSync(
+      process.execPath, [BIN, '--chapter=' + slug, '--json'],
+      { cwd: bookRoot, encoding: 'utf8' }
+    );
+    assert.strictEqual(result.status, 0,
+      'chapter ' + slug + ' CLI must exit 0; stderr: ' + result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.strictEqual(out.verdict, 'pass',
+      'chapter ' + slug + ' verdict must be pass; got ' + out.verdict +
+      ' (drift ' + out.driftScore.toFixed(2) + ' vs threshold ' + out.threshold + ')');
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Committed tree: voice-drift fixture (exit 1, first_person_rate flagged)
 // ---------------------------------------------------------------------------
 //

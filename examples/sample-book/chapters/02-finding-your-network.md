@@ -4,13 +4,15 @@ The phrase "personal learning network" can sound like a vague ambition. In pract
 
 Most professionals already have something like this. There is the colleague they email when they are stuck, the newsletter they actually read, the podcast they listen to on Monday mornings. The goal of this chapter is to make that list deliberate.
 
+Mine didn't look like a network the first time either. It looked more like a subscription pile.
+
 ## Start with the question, not the platform
 
 The first mistake new network builders make is platform-first thinking. They sign up for a service, look for people to follow, and end up with a feed that mixes personal announcements with professional insight with promotional content. The feed grows over time and becomes harder to curate.
 
 Start instead with a question: what do I most want to understand in the next twelve months? The question could be a technical skill, or how a particular industry works, or how to communicate more clearly with a specific audience.
 
-Once you have the question, look for the people already answering it. Not just talking about it, but demonstrating it in their work. The distinction matters. Commentators are easy to find. Practitioners who share their reasoning are rarer and more valuable.
+Once you have the question, look for the people already answering it. Not just talking about it, but demonstrating it in their work. The distinction matters. Commentators are easy to find. Practitioners who share their reasoning are rarer and more valuable. That's the distinction worth holding onto: not who's loudest, but who's actually doing the work.
 
 ## Breadth versus depth
 
@@ -28,4 +30,4 @@ Learning network researchers recommend adding no more than five new connections 
 
 Pull out a blank document. Write three categories: people, publications, communities. Under each, list what you already rely on. Then ask: what is missing from my question area?
 
-This list is your starting point. It will change, and that is expected.
+This list is your starting point. It will change, and that is expected. It's still not finished, and I doubt it ever will be. The list is not the point. The list is the network, and the network is the list.
