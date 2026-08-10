@@ -670,6 +670,163 @@ test('T18: --check= (empty list) exits 2 and names the valid check flags', () =>
   }
 });
 
+// ============================================================================
+// Task 4 (quote fidelity and research packets, warn mode) tests
+// T19: golden --check=quotes with no anchors (pass); T20: planted mismatch warn
+// mode; T21: planted mismatch block-mode coercion (structural guarantee, required
+// case 9); T22: quote_fidelity disabled (required case 10)
+// ============================================================================
+
+/**
+ * Plants a quote-fidelity mismatch into a CLONED book only (never the committed
+ * GOLDEN fixture): appends a new EV entry carrying a verbatim excerpt, then
+ * appends a paragraph to chapter 1 quoting a one-word-altered version of that
+ * excerpt, anchored with [quote: EV-0011] (docs/formats/claim-markers.md form 4).
+ */
+function plantQuoteMismatch(tmpDir) {
+  const ledgerPath = join(tmpDir, 'research', 'evidence-log.md');
+  const ledgerText = readFileSync(ledgerPath, 'utf8');
+  const newEntry = [
+    '### EV-0011 (planted quote-fidelity test entry)',
+    '- claim: A claim added only to test quote-fidelity gate wiring.',
+    '- source: SRC-0001',
+    '- locator: p. 99',
+    '- confidence: high',
+    '- status: verified',
+    '- added-by: research-librarian',
+    '- date: 2026-07-18',
+    '- verbatim: The planted excerpt must match this exact sentence precisely.',
+  ].join('\n');
+  writeFileSync(ledgerPath, ledgerText.replace(/\n+$/, '') + '\n\n' + newEntry + '\n', 'utf8');
+
+  const chapterPath = join(tmpDir, 'chapters', '01-listening-before-speaking.md');
+  const chapterText = readFileSync(chapterPath, 'utf8');
+  const plantedParagraph =
+    '\nA planted test quote: "The planted excerpt must match this exact sentence exactly." [quote: EV-0011]\n';
+  writeFileSync(chapterPath, chapterText.replace(/\n+$/, '') + '\n' + plantedParagraph, 'utf8');
+}
+
+test('T19: golden book --check=quotes: exit 0; report has quote_fidelity pass (no anchors) and session_write_flag only', () => {
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    const result = spawnGate(tmp, ['--check=quotes', '--json']);
+    assert.strictEqual(result.status, 0,
+      '--check=quotes on golden book must exit 0; stderr: ' + result.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    const names = report.checks.map(c => c.check);
+    assert.ok(names.includes('quote_fidelity'), 'quote_fidelity must be present');
+    assert.ok(names.includes('session_write_flag'), 'session_write_flag must always be present');
+    assert.strictEqual(
+      names.length, 2,
+      'exactly 2 checks for --check=quotes: quote_fidelity and session_write_flag; got: ' + JSON.stringify(names)
+    );
+
+    const qfEntry = report.checks.find(c => c.check === 'quote_fidelity');
+    assert.strictEqual(qfEntry.verdict, 'pass',
+      'quote_fidelity must pass on the golden book (no quote anchors); got: ' + qfEntry.verdict);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('T20: planted quote mismatch, warn mode: quote_fidelity verdict warn; top-level not block (required case 8)', () => {
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    plantQuoteMismatch(tmp);
+    const result = spawnGate(tmp, ['--check=quotes', '--json']);
+    assert.strictEqual(result.status, 0,
+      'planted mismatch in default warn mode must exit 0; stderr: ' + result.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    const qfEntry = report.checks.find(c => c.check === 'quote_fidelity');
+    assert.ok(qfEntry, 'quote_fidelity must appear in checks');
+    assert.strictEqual(qfEntry.verdict, 'warn',
+      'quote_fidelity verdict must be warn when a mismatch is found in warn mode; got: ' + qfEntry.verdict);
+    assert.notStrictEqual(report.verdict, 'block', 'top-level verdict must not be block');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('T21: planted quote mismatch, quote_fidelity.mode=block coerced to warn (structural guarantee, required case 9)', () => {
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    plantQuoteMismatch(tmp);
+
+    const configPath = join(tmp, '.studio', 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.gate = config.gate || {};
+    config.gate.checks = config.gate.checks || {};
+    config.gate.checks.quote_fidelity = { enabled: true, mode: 'block' };
+    writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+
+    const result = spawnGate(tmp, ['--check=quotes', '--json']);
+    assert.strictEqual(result.status, 0,
+      'quote_fidelity cannot block (structural coercion): exit must be 0; stderr: ' + result.stderr);
+
+    assert.ok(
+      result.stderr.includes('quote_fidelity') && result.stderr.includes('coerced'),
+      'stderr must carry a coercion notice naming quote_fidelity; got: ' + result.stderr
+    );
+
+    const report = readLatestReport(tmp, 'all');
+    const qfEntry = report.checks.find(c => c.check === 'quote_fidelity');
+    assert.ok(qfEntry, 'quote_fidelity must appear in checks');
+    assert.strictEqual(qfEntry.verdict, 'warn',
+      'quote_fidelity verdict must be warn even though config requested block; got: ' + qfEntry.verdict);
+    assert.notStrictEqual(report.verdict, 'block', 'top-level verdict must never be block for quote_fidelity');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('T22: quote_fidelity disabled in config: verdict skip (required case 10)', () => {
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    const configPath = join(tmp, '.studio', 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.gate = config.gate || {};
+    config.gate.checks = config.gate.checks || {};
+    config.gate.checks.quote_fidelity = { enabled: false, mode: 'warn' };
+    writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+
+    const result = spawnGate(tmp, ['--check=quotes', '--json']);
+    assert.strictEqual(result.status, 0, 'disabled check must exit 0; stderr: ' + result.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    const qfEntry = report.checks.find(c => c.check === 'quote_fidelity');
+    assert.ok(qfEntry, 'quote_fidelity must appear in checks (as skip)');
+    assert.strictEqual(qfEntry.verdict, 'skip',
+      'quote_fidelity verdict must be skip when disabled; got: ' + qfEntry.verdict);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('T22b: quote_fidelity mode=off in config: verdict skip (required case 10, off variant)', () => {
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    const configPath = join(tmp, '.studio', 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.gate = config.gate || {};
+    config.gate.checks = config.gate.checks || {};
+    config.gate.checks.quote_fidelity = { enabled: true, mode: 'off' };
+    writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+
+    const result = spawnGate(tmp, ['--check=quotes', '--json']);
+    assert.strictEqual(result.status, 0, 'mode=off must exit 0; stderr: ' + result.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    const qfEntry = report.checks.find(c => c.check === 'quote_fidelity');
+    assert.ok(qfEntry, 'quote_fidelity must appear in checks (as skip)');
+    assert.strictEqual(qfEntry.verdict, 'skip',
+      'quote_fidelity verdict must be skip when mode is off; got: ' + qfEntry.verdict);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('T18b: --check=claims, (trailing comma, one real item) still runs the named check', () => {
   // Guards against an over-eager fix: a list with at least one real item must
   // not be rejected just because split(",") produces an empty trailing token.

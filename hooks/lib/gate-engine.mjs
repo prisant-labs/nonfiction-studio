@@ -24,7 +24,7 @@ import {
   readdirSync, unlinkSync
 } from 'node:fs';
 import { join, relative } from 'node:path';
-import { computeCoverage, scanChapter } from './claims-engine.mjs';
+import { computeCoverage, scanChapter, scanQuoteAnchors, computeQuoteFindings } from './claims-engine.mjs';
 import { measureBook, computeDrift } from './stylometry-engine.mjs';
 import { scrub } from './scrub-engine.mjs';
 import { parseEvidenceLog } from './ledger.mjs';
@@ -35,6 +35,11 @@ import { checkWordCountCoherence } from './doctor-engine.mjs';
 
 // Check registry: CLI flag -> report check name
 // 'claims'           -> 'claim_coverage'  -> computeCoverage
+// 'quotes'           -> 'quote_fidelity'  -> scanQuoteAnchors + computeQuoteFindings
+//   [Task 4 (quote fidelity and research packets, warn mode) 2026-08-09 per OPP-D03
+//    (quote fidelity and source packets), roadmap row 1.5: block mode is structurally
+//    coerced to warn in loadGateConfig below until the normalization and adjudication
+//    policy ships]
 // 'stylometry'       -> 'stylometry'      -> measureBook + computeDrift
 // 'scrub'            -> 'prompt_scrub'    -> scrub(chapters, 'injection')
 // 'continuity-quick' -> 'continuity'      -> scrub(chapters, 'continuity')
@@ -43,6 +48,7 @@ import { checkWordCountCoherence } from './doctor-engine.mjs';
 // 'session_write_flag' is always evaluated (not in --check list)
 export const CHECK_REGISTRY = [
   { flag: 'claims',           reportName: 'claim_coverage' },
+  { flag: 'quotes',           reportName: 'quote_fidelity' },
   { flag: 'stylometry',       reportName: 'stylometry' },
   { flag: 'scrub',            reportName: 'prompt_scrub' },
   { flag: 'continuity-quick', reportName: 'continuity' },
@@ -64,6 +70,12 @@ const DEFAULT_GATE = {
   mode: 'warn',
   checks: {
     claim_coverage:     { enabled: true, mode: 'block' },
+    // [Task 4 (quote fidelity and research packets, warn mode) 2026-08-09 per roadmap row 1.5:
+    //  default mode is warn, and loadGateConfig below structurally coerces any configured
+    //  'block' back down to 'warn' -- block mode is not reachable until the quote normalization
+    //  and adjudication policy ships. This mirrors the D-03 Invariant 1 mechanism used for
+    //  thesis_alignment, just below.]
+    quote_fidelity:     { enabled: true, mode: 'warn' },
     prompt_scrub:       { enabled: true, mode: 'block' },
     stylometry:         { enabled: true, mode: 'warn' },
     continuity:         { enabled: true, mode: 'warn' },
@@ -131,6 +143,20 @@ export function loadGateConfig(root, stderrFn) {
       'ns-gate: coercion notice: thesis_alignment.mode coerced from "block" to "warn"' +
       ' per D-03 (judgment checks cannot block in v1)\n';
     stderr(coercionNotice);
+  }
+
+  // Structural guarantee (Task 4: quote fidelity and research packets, warn mode; roadmap
+  // row 1.5): quote_fidelity cannot block until the quote normalization and adjudication
+  // policy ships. Mirrors the D-03 Invariant 1 mechanism above exactly, so no one can promote
+  // this check to blocking by editing config alone -- warn-mode-first is a property of the
+  // code, not a convention.
+  if (gate.checks.quote_fidelity && gate.checks.quote_fidelity.mode === 'block') {
+    gate.checks.quote_fidelity = Object.assign({}, gate.checks.quote_fidelity, { mode: 'warn' });
+    const quoteCoercionNotice =
+      'ns-gate: coercion notice: quote_fidelity.mode coerced from "block" to "warn"' +
+      ' per roadmap row 1.5 (quote fidelity requires the normalization and adjudication policy, not yet shipped)\n';
+    stderr(quoteCoercionNotice);
+    coercionNotice = (coercionNotice || '') + quoteCoercionNotice;
   }
 
   return { gate, thresholds, coercionNotice };
@@ -307,6 +333,61 @@ export function runGate(root, opts = {}) {
             .filter(f => f.file && f.line != null)
             .map(f => f.file + '#L' + f.line);
           next = 'Add a [claim: EV-nnnn] marker or tag the sentence [UNVERIFIED] to resolve each open claim.';
+        }
+
+        checkEntries.push(makeEntry(reportName, verdict, detail, evidence, next));
+      } catch (err) {
+        checkEntries.push(makeEntry(reportName, 'skip', 'engine error: ' + err.message, [], null));
+        hasEngineError = true;
+      }
+    }
+  }
+
+  // ---- QUOTE FIDELITY ----
+  // [Task 4 (quote fidelity and research packets, warn mode) 2026-08-09 per OPP-D03 (quote
+  //  fidelity and source packets), roadmap row 1.5: comparison is character-for-character with
+  //  NO normalization -- normalizing here would hide exactly the mismatch classes the deferred
+  //  normalization and adjudication policy has to adjudicate. Block mode is structurally
+  //  coerced to warn in loadGateConfig above, regardless of what config.json requests.]
+  if (requestedReportNames.has('quote_fidelity')) {
+    const reportName = 'quote_fidelity';
+    const qfConfig = gate.checks[reportName];
+
+    if (!qfConfig || qfConfig.enabled === false) {
+      checkEntries.push(makeEntry(reportName, 'skip', 'check disabled in config', [], null));
+    } else if ((qfConfig.mode || 'warn') === 'off') {
+      checkEntries.push(makeEntry(reportName, 'skip', 'check mode is off in config', [], null));
+    } else if (chapters.length === 0) {
+      checkEntries.push(makeEntry(reportName, 'pass', 'no chapters to scan; quote_fidelity.pass', [], null));
+    } else {
+      try {
+        const ledgerPath = join(root, 'research', 'evidence-log.md');
+        let ledgerEntries = [];
+        if (existsSync(ledgerPath)) {
+          ledgerEntries = parseEvidenceLog(readFileSync(ledgerPath, 'utf8'));
+        }
+
+        const scannedQuotes = chapters.map(c => ({
+          file: c.file,
+          anchors: scanQuoteAnchors(c.text, ledgerEntries),
+        }));
+
+        const { findings: quoteFindings, totalAnchors } = computeQuoteFindings(scannedQuotes);
+        const hasFindings = quoteFindings.length > 0;
+        const verdict = deriveVerdict(qfConfig, hasFindings);
+
+        let detail, evidence, next;
+        if (!hasFindings) {
+          detail = totalAnchors + ' quote anchor(s) checked; all match verbatim excerpts exactly';
+          evidence = [];
+          next = null;
+        } else {
+          const firstType = quoteFindings[0].type;
+          detail = quoteFindings.length + ' quote finding(s); ' + firstType;
+          evidence = quoteFindings
+            .filter(f => f.file && f.line != null)
+            .map(f => f.file + '#L' + f.line);
+          next = 'Compare the quoted span against the verbatim excerpt in research/evidence-log.md and correct the mismatch.';
         }
 
         checkEntries.push(makeEntry(reportName, verdict, detail, evidence, next));
