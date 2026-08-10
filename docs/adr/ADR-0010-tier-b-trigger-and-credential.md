@@ -5,7 +5,7 @@
 - Status: Accepted
 - Date: 2026-08-09
 - Task: Wave 1 item 7 (release ceremony and Tier B weekly), roadmap row 1.12
-- Decision: WEEKLY SCHEDULE PLUS MANUAL DISPATCH, on `CLAUDE_CODE_OAUTH_TOKEN` - `.github/workflows/tier-b.yml`'s `on:` block gains a `schedule` trigger (`37 14 * * 3`, chosen off the hour and off midnight UTC) alongside the existing `workflow_dispatch`; both live steps' `env:` block reads `secrets.CLAUDE_CODE_OAUTH_TOKEN` instead of `secrets.ANTHROPIC_API_KEY`
+- Decision: WEEKLY SCHEDULE PLUS MANUAL DISPATCH, on `CLAUDE_CODE_OAUTH_TOKEN` - `.github/workflows/tier-b.yml`'s `on:` block gains a `schedule` trigger (`37 14 * * 3`, chosen off the hour and off midnight UTC) alongside the existing `workflow_dispatch`; both live steps' `env:` block reads `secrets.CLAUDE_CODE_OAUTH_TOKEN` in place of the API-key secret it previously read
 - Amends: D-20 (two-tier CI) - its "on main or nightly" trigger language is superseded by weekly plus manual dispatch; the credential and skip-versus-fail posture described here are new ground D-20 did not cover at all
 - PA resolved: F-CI-02 (Tier B trigger contradicts D-20) closed; the "named green skip" design element of roadmap row 1.12, previously assumed already built, is built by this decision, not merely wired
 

@@ -12,5 +12,12 @@
     "reason": "legacy optional fallback only, never the documented path; CLAUDE_CODE_OAUTH_TOKEN is the documented Tier B credential per ADR-0010",
     "addedBy": "wave-1",
     "date": "2026-08-09"
+  },
+  {
+    "file": "docs/adr/ADR-0010-tier-b-trigger-and-credential.md",
+    "pattern": "ANTHROPIC_API_KEY",
+    "reason": "verbatim historical quotation of the pre-fix credential gate this ADR documents as a defect; not a live reference",
+    "addedBy": "wave-1",
+    "date": "2026-08-09"
   }
 ]
