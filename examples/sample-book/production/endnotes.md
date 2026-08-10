@@ -10,8 +10,8 @@ Chicago-style endnotes generated from `research/evidence-log.md` and `research/s
 
 ## Chapter 2: Finding Your Network
 
-1. R. I. M. Dunbar, "Neocortex size as a constraint on group size in primates," *Journal of Human Evolution* (1992), pp. 469-493.
+1. R. I. M. Dunbar, "Neocortex size as a constraint on group size in primates," *Journal of Human Evolution* (1992): pp. 469-493.
 2. John B. Horrigan, *Lifelong Learning and Technology* (Pew Research Center, 2016), pp. 12-14.
-3. Mark S. Granovetter, "The Strength of Weak Ties," *American Journal of Sociology* (1973), pp. 1370-1373.
+3. Mark S. Granovetter, "The Strength of Weak Ties," *American Journal of Sociology* (1973): pp. 1370-1373.
 4. Horrigan, *Lifelong Learning and Technology*, p. 8.
 5. Jane Hart, *The New Learning Architect: Building Learning Into the Workflow of Business* (Workforce Performance Group, 2015), p. 78.

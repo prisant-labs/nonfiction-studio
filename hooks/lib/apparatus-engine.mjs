@@ -23,25 +23,51 @@
 // anchored in a chapter names it, whether or not that EV's own locator is filled in yet -- the
 // missing locator blocks only that one note, named separately in attention, per OPP-D05's "every
 // SRC actually cited" bibliography rule).
+//
+// Everything that varies by citation STYLE (not by source type) lives in the style object passed
+// in here, never hardcoded in this module: a template slot's exact wording and punctuation, the
+// short-title truncation and leading-article rule, and the bibliography's identifier-vs-url
+// suffix preference. A second style is a JSON file with its own `types`, `shortTitleRule`, and
+// `bibliographySuffix`; nothing in this module names "Chicago" or "chicago.json" anywhere in its
+// logic. See resolveTemplateSlot below for the one mechanism that makes an optional, style-
+// specific field (a web source's site name; an identifier preferred over a URL) a data edit
+// rather than an engine change.
 
 // ---- Chicago short-title derivation ------------------------------------------------------
 
-const LEADING_ARTICLE_RE = /^(The|A|An) /;
+// Used only when a caller omits the rule (defensive default, e.g. a direct unit-test call);
+// chicago.json's own `shortTitleRule` is what production code paths actually pass. Keeping a
+// hardcoded default here is not the same defect the review named in the suffix and article-note
+// cases: those fixed the FORMATTING of shipped output regardless of style, where this is a
+// fallback for callers that supply no style at all.
+const DEFAULT_SHORT_TITLE_RULE = { truncateAtFirst: ':', stripLeadingArticles: ['The ', 'A ', 'An '] };
 
 /**
- * Deterministic Chicago short-title derivation, used identically for short-form notes and for
+ * Deterministic short-title derivation, used identically for short-form notes and for
  * index-candidate title terms so the same title always shortens the same way (OPP-D05's
- * "short-form consistency" requirement): the text before the title's first colon (or the whole
- * title if there is none), trimmed, with one leading "The ", "A ", or "An " stripped.
+ * "short-form consistency" requirement): the text before the rule's truncation marker (or the
+ * whole title if the marker is absent), trimmed, with one leading article from the rule's list
+ * stripped. The rule itself is data (chicago.json's `shortTitleRule`, or an equivalent from a
+ * future style), not a hardcoded regex, so a style with different short-title conventions needs
+ * no engine change.
  *
  * @param {string} title
+ * @param {{truncateAtFirst?: string, stripLeadingArticles?: string[]}} [rule]
  * @returns {string}
  */
-export function shortTitle(title) {
+export function shortTitle(title, rule = DEFAULT_SHORT_TITLE_RULE) {
   const text = String(title == null ? '' : title);
-  const colonIdx = text.indexOf(':');
-  const base = colonIdx === -1 ? text : text.slice(0, colonIdx);
-  return base.trim().replace(LEADING_ARTICLE_RE, '');
+  const marker = rule && rule.truncateAtFirst;
+  const cutIdx = marker ? text.indexOf(marker) : -1;
+  const base = cutIdx === -1 ? text : text.slice(0, cutIdx);
+  let result = base.trim();
+  for (const article of (rule && rule.stripLeadingArticles) || []) {
+    if (article && result.startsWith(article)) {
+      result = result.slice(article.length);
+      break;
+    }
+  }
+  return result;
 }
 
 // ---- author name helpers -----------------------------------------------------------------
@@ -229,16 +255,64 @@ function fillTemplate(template, fields) {
   return squeezePeriods(filled);
 }
 
-function noteFields(entry, locator) {
+/**
+ * Resolves a chicago.json template slot to one literal template string, or null.
+ *
+ * A slot is either:
+ *   - a plain string: always used, unconditionally (the common case: a form with no optional
+ *     fields, like every fullNote/shortNote shipped today).
+ *   - an array of `{required?: string[], template: string}` candidates, tried in order: the
+ *     first candidate whose own extra `required` fields (raw source-record field names, e.g.
+ *     "publisher", not template placeholder names) are all non-blank on `entry` is used. A
+ *     candidate with no `required` (or an empty one) always matches, so it is a safe default
+ *     placed last. If the slot is an array and no candidate matches, returns null (used for
+ *     `bibliographySuffix`, where "nothing matched" legitimately means "no suffix").
+ *
+ * This is the one mechanism that makes an optional, style-specific field (a web source's site
+ * name; an identifier preferred over a URL; a different style's own preferences entirely) a data
+ * edit in chicago.json rather than a hardcoded branch in this module.
+ *
+ * @param {string|{required?: string[], template: string}[]} slot
+ * @param {object} entry - the raw parsed source record (parseSources shape)
+ * @returns {string|null}
+ */
+function resolveTemplateSlot(slot, entry) {
+  if (typeof slot === 'string') return slot;
+  if (!Array.isArray(slot)) return null;
+  for (const candidate of slot) {
+    const need = (candidate && candidate.required) || [];
+    const satisfied = need.every((field) => entry[field] != null && String(entry[field]).trim() !== '');
+    if (satisfied) return candidate.template;
+  }
+  return null;
+}
+
+/**
+ * Builds the full field map a chicago.json template (note, bibliography, or suffix) may draw
+ * from: the universal computed fields (author forms, short title, via the style's own
+ * shortTitleRule) plus every raw source-record field a template might reference directly
+ * (title, year, publisher, url, identifier, accessed) plus the citing locator, when there is one.
+ *
+ * @param {object} entry    - the raw parsed source record
+ * @param {object} style    - parsed chicago.json (or a compatible style object)
+ * @param {string} [locator] - the citing EV entry's locator; '' for bibliography rendering,
+ *                              which carries no locator (a bibliography entry names the work,
+ *                              not one citation of it)
+ * @returns {object}
+ */
+function buildFields(entry, style, locator) {
   return {
     'author-full': authorFullForm(entry.author),
     'author-surname': authorSurname(entry.author),
+    'author-last-first': entry.author,
     'title': entry.title,
-    'short-title': shortTitle(entry.title),
+    'short-title': shortTitle(entry.title, style && style.shortTitleRule),
     'year': String(entry.year),
     'publisher': entry.publisher,
     'url': entry.url,
-    'locator': locator,
+    'identifier': entry.identifier,
+    'accessed': entry.accessed,
+    'locator': locator == null ? '' : locator,
   };
 }
 
@@ -248,49 +322,41 @@ function noteFields(entry, locator) {
  * @param {object} resolved - an ok:true result from resolveSource
  * @param {string} locator  - the citing EV entry's locator (already confirmed non-blank)
  * @param {'full'|'short'} form
+ * @param {object} style    - parsed chicago.json (or a compatible style object)
  * @returns {string}
  */
-export function renderNote(resolved, locator, form) {
-  const template = form === 'full' ? resolved.typeDef.fullNote : resolved.typeDef.shortNote;
-  return fillTemplate(template, noteFields(resolved.entry, locator));
-}
-
-// Uniform bibliography suffix: prefer a stable identifier (DOI, ISBN) over a URL; fall back to
-// the URL with an access date in parens when present; append nothing when the source carries
-// neither. Applies identically to every type, so it lives here rather than in chicago.json.
-function bibliographySuffix(entry) {
-  const identifier = String(entry.identifier == null ? '' : entry.identifier).trim();
-  if (identifier) return ' ' + identifier + '.';
-  const url = String(entry.url == null ? '' : entry.url).trim();
-  if (!url) return '';
-  const accessed = String(entry.accessed == null ? '' : entry.accessed).trim();
-  return accessed ? ' ' + url + ' (accessed ' + accessed + ').' : ' ' + url + '.';
+export function renderNote(resolved, locator, form, style) {
+  const slot = form === 'full' ? resolved.typeDef.fullNote : resolved.typeDef.shortNote;
+  const template = resolveTemplateSlot(slot, resolved.entry);
+  return fillTemplate(template, buildFields(resolved.entry, style, locator));
 }
 
 /**
  * Renders one Chicago bibliography entry for a resolved (renderable) source. No locator: a
- * bibliography entry names the work, not one citation of it.
+ * bibliography entry names the work, not one citation of it. The trailing identifier-or-url
+ * suffix is itself a style-data template slot (`style.bibliographySuffix`), resolved the same
+ * way as any other slot, so a second style's own preference and wording is a JSON edit, not a
+ * change to this function.
  *
  * @param {object} resolved - an ok:true result from resolveSource
+ * @param {object} style    - parsed chicago.json (or a compatible style object)
  * @returns {string}
  */
-export function renderBibliographyEntry(resolved) {
+export function renderBibliographyEntry(resolved, style) {
   const entry = resolved.entry;
-  const fields = {
-    'author-full': authorFullForm(entry.author),
-    'author-surname': authorSurname(entry.author),
-    'author-last-first': entry.author,
-    'title': entry.title,
-    'short-title': shortTitle(entry.title),
-    'year': String(entry.year),
-    'publisher': entry.publisher,
-    'url': entry.url,
-  };
-  // squeezePeriods again at this outer seam: fillTemplate already squeezed its own output, but
-  // the suffix is concatenated afterward and is not itself template-filled, so a source whose
-  // identifier field happened to end in a period would otherwise reintroduce the same doubling
-  // fillTemplate already guards against.
-  return squeezePeriods(fillTemplate(resolved.typeDef.bibliography, fields) + bibliographySuffix(entry));
+  const fields = buildFields(entry, style, '');
+  const mainTemplate = resolveTemplateSlot(resolved.typeDef.bibliography, entry);
+  const suffixSlot = (style && style.bibliographySuffix) || [];
+  const suffixTemplate = resolveTemplateSlot(suffixSlot, entry);
+  const body = fillTemplate(mainTemplate, fields);
+  const suffix = suffixTemplate ? fillTemplate(suffixTemplate, fields) : '';
+  // squeezePeriods again at this outer seam: fillTemplate already squeezed each piece on its
+  // own, but the suffix is concatenated afterward, so a period at the exact seam between the
+  // main body and the suffix (for example a body ending "...2015." followed by a suffix
+  // beginning " ISBN...") is not itself a double period, but a source whose own field values
+  // happen to place two periods immediately adjacent across that seam would not be caught by
+  // either piece's own internal squeeze alone.
+  return squeezePeriods(body + suffix);
 }
 
 // ---- deterministic, locale-independent sort helpers ----------------------------------------
@@ -327,10 +393,10 @@ function finalizeIndexCandidates(map) {
 
 // ---- bibliography finalization ---------------------------------------------------------------
 
-function finalizeBibliography(citedRenderable) {
+function finalizeBibliography(citedRenderable, style) {
   const rows = [...citedRenderable.values()].map((resolved) => ({
     srcId: resolved.srcId,
-    text: renderBibliographyEntry(resolved),
+    text: renderBibliographyEntry(resolved, style),
     _authorSurname: authorSurname(resolved.entry.author),
     _title: resolved.entry.title,
     _year: Number(resolved.entry.year) || 0,
@@ -426,7 +492,7 @@ export function computeApparatus(chapters, ledgerEntries, sourceEntries, style) 
         for (const surname of authorSurnames(srcResolution.entry.author)) {
           addIndexTerm(indexMap, 'author', surname, file);
         }
-        addIndexTerm(indexMap, 'title', shortTitle(srcResolution.entry.title), file);
+        addIndexTerm(indexMap, 'title', shortTitle(srcResolution.entry.title, style.shortTitleRule), file);
       }
 
       if (locator === '') {
@@ -451,7 +517,7 @@ export function computeApparatus(chapters, ledgerEntries, sourceEntries, style) 
       noteNumber++;
       notes.push({
         number: noteNumber,
-        text: renderNote(srcResolution, locator, firstInChapter ? 'full' : 'short'),
+        text: renderNote(srcResolution, locator, firstInChapter ? 'full' : 'short', style),
       });
     }
 
@@ -460,7 +526,7 @@ export function computeApparatus(chapters, ledgerEntries, sourceEntries, style) 
 
   return {
     chapters: chapterResults,
-    bibliography: finalizeBibliography(citedRenderable),
+    bibliography: finalizeBibliography(citedRenderable, style),
     indexCandidates: finalizeIndexCandidates(indexMap),
     attention,
   };

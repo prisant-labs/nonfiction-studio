@@ -85,6 +85,22 @@ test('shortTitle: is a pure function of the title text (same input, same output)
   assert.equal(shortTitle(title), shortTitle(title));
 });
 
+test('shortTitle: the derivation rule is data, not a hardcoded regex: a custom rule changes the result for the same title', () => {
+  const title = 'The Great Example: A Study in Testing';
+  const defaultResult = shortTitle(title);
+  const customRule = { truncateAtFirst: ':', stripLeadingArticles: [] };
+  const customResult = shortTitle(title, customRule);
+  assert.equal(defaultResult, 'Great Example', 'default rule strips the leading article');
+  assert.equal(customResult, 'The Great Example', 'a rule with no articles to strip leaves it');
+  assert.notEqual(defaultResult, customResult);
+});
+
+test('shortTitle: chicago.json declares its own shortTitleRule, and computeApparatus uses it for index-candidate title terms', () => {
+  const style = loadStyle();
+  assert.ok(style.shortTitleRule, 'chicago.json declares a shortTitleRule');
+  assert.equal(shortTitle('The New Learning Architect: Building It', style.shortTitleRule), 'New Learning Architect');
+});
+
 // ==== authorSurname / authorSurnames / authorFullForm ================================
 
 test('authorSurname: single author "Surname, First"', () => {
@@ -159,9 +175,75 @@ test('renderBibliographyEntry: an author ending in a period-terminated initial d
   ]);
   const resolved = resolveSource('SRC-0001', sourceMap, style);
   assert.equal(resolved.ok, true);
-  const text = renderBibliographyEntry(resolved);
+  const text = renderBibliographyEntry(resolved, style);
   assert.doesNotMatch(text, /\.\./, 'no two consecutive periods anywhere in the entry; got: ' + text);
   assert.match(text, /^Doe, John Q\. "A Study/, 'exactly one period between the abbreviation and the title; got: ' + text);
+});
+
+test('renderBibliographyEntry: the identifier-vs-url suffix (which field wins, its punctuation, its wording) is read from style data, not hardcoded in the engine: a second style renders the same source differently', () => {
+  const chicagoStyle = loadStyle();
+  // A synthetic, test-only style object: NOT a second shipped citation style (OPP-D05, apparatus
+  // generator, scopes the shipped generator to Chicago only). It exists only in this test, to
+  // prove the suffix genuinely comes from whichever style object is passed to
+  // renderBibliographyEntry, by giving it different preference and wording than chicago.json's
+  // own bibliographySuffix.
+  const alternateStyle = {
+    ...chicagoStyle,
+    bibliographySuffix: [
+      { required: ['url'], template: ' Available at {url}.' },
+      { required: ['identifier'], template: ' [{identifier}]' },
+    ],
+  };
+  const sourceMap = new Map([
+    ['SRC-0001', {
+      id: 'SRC-0001', type: 'book', author: 'Doe, Jane',
+      title: 'A Source With Both an Identifier and a URL', year: 2021,
+      publisher: 'Example Press', identifier: 'ISBN 000-0000000001',
+      url: 'https://example.test/book', accessed: '',
+    }],
+  ]);
+  const resolved = resolveSource('SRC-0001', sourceMap, chicagoStyle);
+  assert.equal(resolved.ok, true);
+
+  const chicagoText = renderBibliographyEntry(resolved, chicagoStyle);
+  const altText = renderBibliographyEntry(resolved, alternateStyle);
+
+  assert.match(chicagoText, /ISBN 000-0000000001\.$/, 'Chicago style prefers the identifier; got: ' + chicagoText);
+  assert.doesNotMatch(chicagoText, /Available at/);
+
+  assert.match(altText, /Available at https:\/\/example\.test\/book\.$/, 'the alternate style prefers the url, with its own wording; got: ' + altText);
+  assert.doesNotMatch(altText, /ISBN/);
+
+  assert.notEqual(chicagoText, altText, 'the same resolved citation renders differently under a different style');
+});
+
+test('web bibliography includes the publisher (site name) when sources.md populates it, and omits it gracefully when blank', () => {
+  const style = loadStyle();
+  const sourceMap = new Map([
+    ['SRC-0001', {
+      id: 'SRC-0001', type: 'web', author: 'Site, Sam', title: 'A Web Source With a Named Site',
+      year: 2022, publisher: 'Example Blog', identifier: '', url: 'https://example.test/a', accessed: '',
+    }],
+    ['SRC-0002', {
+      id: 'SRC-0002', type: 'web', author: 'Blank, Bea', title: 'A Web Source With No Named Site',
+      year: 2022, publisher: '', identifier: '', url: 'https://example.test/b', accessed: '',
+    }],
+  ]);
+
+  const withPublisher = resolveSource('SRC-0001', sourceMap, style);
+  const withoutPublisher = resolveSource('SRC-0002', sourceMap, style);
+  assert.equal(withPublisher.ok, true);
+  assert.equal(withoutPublisher.ok, true);
+
+  const textWith = renderBibliographyEntry(withPublisher, style);
+  const textWithout = renderBibliographyEntry(withoutPublisher, style);
+
+  assert.match(textWith, /Example Blog, 2022\./, 'publisher appears when populated; got: ' + textWith);
+  assert.equal(
+    textWithout,
+    'Blank, Bea. "A Web Source With No Named Site." 2022. https://example.test/b.',
+    'falls back to the no-publisher form when blank, with no stray comma or blank slot'
+  );
 });
 
 test('resolveSource: a source missing a type-required field is incomplete-source', () => {
@@ -201,6 +283,15 @@ test('computeApparatus: first citation of a source in a chapter is full form, a 
   assert.match(shortNote, /p\. 45/, 'short form still carries this citation\'s own locator');
 });
 
+test('computeApparatus: an article full note uses a colon before the locator, per Chicago Manual of Style (regression: reviewer-caught defect; book and report correctly use a comma there, only article did not)', () => {
+  const { ledgerEntries, sourceEntries, chapters, style } = loadHappy();
+  const result = computeApparatus(chapters, ledgerEntries, sourceEntries, style);
+  const chapterOne = result.chapters.find((c) => c.file === 'chapters/one.md');
+  const articleNote = chapterOne.notes.find((n) => n.text.includes('Zhang')).text;
+  assert.match(articleNote, /Journal of Cognitive Studies\* \(2021\): p\. 5\./, 'a colon separates the year-parenthetical from the locator; got: ' + articleNote);
+  assert.doesNotMatch(articleNote, /\(2021\), p\. 5/, 'must not use a comma there; got: ' + articleNote);
+});
+
 test('computeApparatus: full/short state resets per chapter, not per book', () => {
   const { ledgerEntries, sourceEntries, chapters, style } = loadHappy();
   const result = computeApparatus(chapters, ledgerEntries, sourceEntries, style);
@@ -225,6 +316,15 @@ test('computeApparatus: a source cited from three EV entries across two chapters
   const result = computeApparatus(chapters, ledgerEntries, sourceEntries, style);
   const hits = result.bibliography.filter((b) => b.srcId === 'SRC-0002');
   assert.equal(hits.length, 1, 'SRC-0002 (cited by EV-0002, EV-0005, and EV-0006) appears exactly once');
+});
+
+test('computeApparatus: bibliography entries built through the full orchestrator carry the identifier suffix, not just renderBibliographyEntry called directly (regression: style was not threaded through finalizeBibliography, so every real bibliography entry silently lost its identifier/url suffix)', () => {
+  const { ledgerEntries, sourceEntries, chapters, style } = loadHappy();
+  const result = computeApparatus(chapters, ledgerEntries, sourceEntries, style);
+  const baker = result.bibliography.find((b) => b.srcId === 'SRC-0002');
+  const zhang = result.bibliography.find((b) => b.srcId === 'SRC-0003');
+  assert.match(baker.text, /ISBN 000-0000000000\.$/, 'SRC-0002\'s identifier reaches the bibliography via computeApparatus; got: ' + baker.text);
+  assert.match(zhang.text, /DOI 10\.9999\/example\.$/, 'SRC-0003\'s identifier reaches the bibliography via computeApparatus; got: ' + zhang.text);
 });
 
 test('computeApparatus: a source cited by no EV entry is absent from the bibliography', () => {
