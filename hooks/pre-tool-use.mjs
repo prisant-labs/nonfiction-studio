@@ -2,22 +2,25 @@
 // what-it-does: (a) denies writes outside the bible root (containment guard, fail-closed per D-13),
 //               (b) exempts .studio/ from snapshot and flag writes,
 //               (c) writes the session-write flag and a pre-write snapshot for chapters/ overwrites,
-//               (d) injects an additionalContext caution for destructive Bash patterns,
-//               (e) exports resolveActiveAgent (dormant OQ-14 seam) and checkResearchAgentConstraint
-//               (dormant path; tested directly so it is proven wired).
+//               (d) injects an additionalContext caution for destructive Bash/PowerShell patterns,
+//               (e) enforces the per-agent write-scope constraint (F-AG-01) and the web research
+//               gate (F-AG-02) using shared identity resolution from hooks/lib/agent-identity.mjs,
+//               now LIVE per ADR-0007 (agent identity resolution) and the 2026-08-09 platform probe.
 //
 // stdin:  platform PreToolUse event (snake_case: session_id, transcript_path, cwd, prompt_id,
-//         permission_mode, effort, hook_event_name, tool_name, tool_input, tool_use_id)
-//         - field names verified live by TSK-030 (hooks.json Phase 1 wiring)
+//         permission_mode, effort, hook_event_name, tool_name, tool_input, tool_use_id,
+//         and agent_id/agent_type when a plugin or generic subagent fired the call)
+//         - field names verified live by TSK-030 (hooks.json Phase 1 wiring); agent_id/agent_type
+//         verified live by the 2026-08-09 probe, (local working notes, not published)
 // stdout: EMPTY for the allow path (platform treats empty stdout as allow per the convention
-//         confirmed at TSK-030); JSON deny envelope when the containment guard fires;
-//         JSON additionalContext envelope for Bash destructive-pattern cautions.
+//         confirmed at TSK-030); JSON deny envelope when a guard fires;
+//         JSON additionalContext envelope for Bash/PowerShell destructive-pattern cautions.
 //
 // NS_HOOK_TRACE: when set, appends one trace line (event, own path, raw stdin) to the named file
 //                before any other logic; inert when unset (preserved from TSK-030 stub convention)
 //
 // Failure modes:
-//   - Path guard violations: FAIL-CLOSED (emit deny JSON, exit 0) per D-13 (security posture)
+//   - Path guard and web gate violations: FAIL-CLOSED (emit deny JSON, exit 0) per D-13 (security posture)
 //   - Snapshot and session-write flag errors: FAIL-OPEN (append to .studio/logs/errors.jsonl, allow)
 //   - Malformed stdin: FAIL-OPEN (exit 0, empty stdout; cannot identify a write)
 
@@ -35,6 +38,7 @@ import {
 import { join, resolve, sep, basename, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findBookRoot } from './lib/bible.mjs';
+import { resolveActiveAgent, checkAgentWriteConstraint, isWebGatedAgent } from './lib/agent-identity.mjs';
 
 // ---------------------------------------------------------------------------
 // Helper: compact UTC timestamp for snapshot filenames (YYYYMMDDTHHMMSSmmmZ)
@@ -219,64 +223,49 @@ function logError(root, msg, err) {
 }
 
 // ---------------------------------------------------------------------------
-// OQ-14 seam: resolveActiveAgent(event) - dormant, returns null today.
-//
-// Context: the live PreToolUse envelope captured by TSK-030 (hooks.json Phase 1
-// wiring) carries no agent identity field. OQ-14 (agent identity in hook events)
-// defers resolution to Phase 1 agent tasks (TSK-036 onward): extend the firing
-// probe to a subagent-spawned session and confirm whether the envelope gains
-// an agent identity field. When that field is confirmed, wire it here so the
-// research-agent constraint below activates without further changes downstream.
-// The seam is exported and the constraint function is tested directly with an
-// injected slug so the dormant path is proven wired per the TSK-032 brief.
+// Web gate (F-AG-02, web gate unenforced): decides whether WebSearch/WebFetch
+// may proceed for a web-gated agent, given the book-root lookup outcome and
+// its parsed config (both already computed by the caller via findBookRoot,
+// which is also this hook's own book-root authority, so this reads no file
+// of its own). Fail-closed per D-13 (security posture): every ambiguous or
+// error case denies. The rule for "open" is binding and documented at
+// docs/reference/agents/research-librarian.md:135-149 (see ADR-0007,
+// agent identity resolution): research.web_enabled must be exactly the
+// boolean true; an absent key, the string "true", false, and null all leave
+// the gate CLOSED.
 // ---------------------------------------------------------------------------
-export function resolveActiveAgent(_event) {
-  // OQ-14: no agent identity field in the live PreToolUse envelope today.
-  return null;
-}
-
-// ---------------------------------------------------------------------------
-// Research-agent constraint guard (D-13 security posture).
-// Exported so tests can drive the dormant path directly with an injected slug
-// without needing resolveActiveAgent to return a non-null value.
-//
-// agentSlug:     string|null - active agent slug (from resolveActiveAgent)
-// targetAbsPath: string      - absolute resolved write target path
-// bibleRoot:     string      - absolute bible root directory
-// returns:       string (deny reason) when the constraint fires, null to allow
-//
-// Research-facing agents (research-librarian, fact-checker, citation-manager)
-// may only write under research/ or .studio/. Writes anywhere else are denied
-// per D-13 (security posture).
-// ---------------------------------------------------------------------------
-export function checkResearchAgentConstraint(agentSlug, targetAbsPath, bibleRoot) {
-  const RESEARCH_AGENTS = new Set(['research-librarian', 'fact-checker', 'citation-manager']);
-  if (!agentSlug || !RESEARCH_AGENTS.has(agentSlug)) return null;
-
-  const rootNorm = resolve(bibleRoot).toLowerCase();
-  const targetNorm = resolve(targetAbsPath).toLowerCase();
-
-  const inResearch =
-    targetNorm === rootNorm + sep + 'research' ||
-    targetNorm.startsWith(rootNorm + sep + 'research' + sep);
-  const inStudio =
-    targetNorm === rootNorm + sep + '.studio' ||
-    targetNorm.startsWith(rootNorm + sep + '.studio' + sep);
-
-  if (!inResearch && !inStudio) {
+function checkWebGateConstraint(agentSlug, bookRootError, bookConfig) {
+  if (bookRootError) {
     return (
-      'Agent ' + agentSlug + ' (research-facing) may only write under research/ or ' +
-      '.studio/; attempted write to ' + targetAbsPath + ' denied per D-13 (security posture)'
+      'Web gate closed for agent ' + agentSlug + ': ' +
+      (bookRootError.code === 'NO_BOOK_ROOT'
+        ? 'no book root could be found'
+        : 'bible files are corrupt (' + bookRootError.message + ')') +
+      ', so research.web_enabled cannot be verified. Set research.web_enabled to the boolean ' +
+      'true in .studio/config.json once the book project is available. Denied per D-13 ' +
+      '(security posture, fail-closed).'
     );
   }
-  return null;
+
+  const research = bookConfig && typeof bookConfig === 'object' ? bookConfig.research : undefined;
+  const webEnabled = research && typeof research === 'object' ? research.web_enabled : undefined;
+
+  if (webEnabled === true) return null;
+
+  return (
+    'Web gate closed for agent ' + agentSlug + ': research.web_enabled must be exactly the ' +
+    'boolean true in .studio/config.json (got ' + JSON.stringify(webEnabled) + '). Denied per ' +
+    'D-13 (security posture, fail-closed).'
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Main logic block. Guard: runs only when this script is the direct entry point,
 // not when the module is imported. This lets tests import the exported functions
-// (resolveActiveAgent, checkResearchAgentConstraint) without triggering stdin
-// reads or process.exit() calls.
+// (pickSnapshotName, foldForCompare) without triggering stdin reads or
+// process.exit() calls. resolveActiveAgent and checkAgentWriteConstraint are
+// no longer defined or exported here; they live in hooks/lib/agent-identity.mjs
+// and are imported above like any other dependency.
 // ---------------------------------------------------------------------------
 const isMain =
   Boolean(process.argv[1]) &&
@@ -322,34 +311,79 @@ if (isMain) {
   const WRITE_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit']);
 
   // -------------------------------------------------------------------------
-  // Book root detection. No root found: no-op (exit 0, empty stdout).
+  // Book root detection. Captures the root, its config, and any lookup error
+  // without exiting yet - the WEB GATE branch immediately below needs to see
+  // a NO_BOOK_ROOT or corrupt-config error too (it fails closed on both,
+  // unlike every other tool family), so the exit decision for those errors is
+  // deferred to the book-root error handling block that follows the web gate.
+  // -------------------------------------------------------------------------
+  let bookRoot = null;
+  let bookConfig = null;
+  let bookRootError = null;
+  try {
+    const found = findBookRoot(cwd);
+    bookRoot = found.root;
+    bookConfig = found.config;
+  } catch (err) {
+    bookRootError = err;
+  }
+
+  // -------------------------------------------------------------------------
+  // WEB GATE (F-AG-02, web gate unenforced): WebSearch/WebFetch from a
+  // web-gated agent (isWebGatedAgent) are denied unless research.web_enabled
+  // is exactly the boolean true in .studio/config.json. Runs before the
+  // generic book-root error handling below because "no book root" is itself a
+  // fail-closed DENY for a web-gated agent here (unlike the silent no-op
+  // every other tool gets for NO_BOOK_ROOT): there is no config to read, so
+  // the gate cannot be verified open, and D-13 (security posture) says fail
+  // closed rather than guess. Main-session calls and non-gated agents are
+  // entirely unaffected: this whole branch is a no-op for them.
+  // -------------------------------------------------------------------------
+  if (toolName === 'WebSearch' || toolName === 'WebFetch') {
+    const webGateAgent = resolveActiveAgent(event);
+    if (isWebGatedAgent(webGateAgent)) {
+      const webGateDenyReason = checkWebGateConstraint(webGateAgent, bookRootError, bookConfig);
+      if (webGateDenyReason) {
+        emitDeny(webGateDenyReason);
+      }
+    }
+    process.exit(0);
+  }
+
+  // -------------------------------------------------------------------------
+  // Book-root error handling for the remaining tool families (write tools,
+  // Bash/PowerShell caution, and everything else).
   //
   // Error discrimination (F-HK-01; mirrors hooks/stop-gate.mjs and
   // hooks/session-start.mjs): BibleError code NO_BOOK_ROOT is normal (no book
   // project anywhere in the ancestor chain) and stays silent. Any other code
   // (CONFIG_READ_ERROR, META_READ_ERROR, ...) means a book root WAS found but
   // its bible files are corrupt, so containment cannot be verified. Write
-  // tools fail closed (deny) per D-13 (security posture); non-write tools and
-  // Bash are unaffected (exit 0, unchanged from today).
+  // tools fail closed (deny) per D-13 (security posture). F8 (corrupt config
+  // suppresses the shell caution): non-write tools (Bash/PowerShell) fall
+  // through to the destructive-command caution logic below instead of exiting
+  // here, so a corrupt config no longer silently swallows that caution.
   // -------------------------------------------------------------------------
-  let bookRoot = null;
-  try {
-    const found = findBookRoot(cwd);
-    bookRoot = found.root;
-  } catch (err) {
-    if (err && err.code && err.code !== 'NO_BOOK_ROOT' && WRITE_TOOLS.has(toolName)) {
-      emitDeny(
-        'Cannot verify write safety: bible files are corrupt (' + err.message + '). ' +
-        'Repair .studio/config.json then retry; bin/ns-doctor reports the parse error. ' +
-        'Denied per D-13 (security posture, fail-closed).'
-      );
+  if (bookRootError) {
+    if (bookRootError.code && bookRootError.code !== 'NO_BOOK_ROOT') {
+      if (WRITE_TOOLS.has(toolName)) {
+        emitDeny(
+          'Cannot verify write safety: bible files are corrupt (' + bookRootError.message + '). ' +
+          'Repair .studio/config.json then retry; bin/ns-doctor reports the parse error. ' +
+          'Denied per D-13 (security posture, fail-closed).'
+        );
+      }
+      // Non-write tools (Bash/PowerShell) fall through to the caution logic
+      // below; anything else falls through to the generic no-op check next.
+    } else {
+      process.exit(0);
     }
-    process.exit(0);
   }
 
   // -------------------------------------------------------------------------
   // No-op for tools this hook does not handle.
-  // Read, Grep, Glob, WebFetch and others exit here with empty stdout.
+  // Read, Grep, Glob and others exit here with empty stdout.
+  // (WebSearch/WebFetch are handled and always exit in the branch above.)
   // F-HK-07: PowerShell is a first-class peer of Bash on Windows sessions, so
   // it must reach the destructive-op caution below rather than bypass it here.
   // -------------------------------------------------------------------------
@@ -498,13 +532,23 @@ if (isMain) {
     );
   }
 
-  // Step 5: OQ-14 dormant research-agent constraint (S-07 step 5).
-  // resolveActiveAgent returns null today; the constraint fires automatically
-  // when it returns a slug, so the path is proven live even before OQ-14 resolves.
+  // Step 5: agent write-scope constraint (F-AG-01), now LIVE per ADR-0007
+  // (agent identity resolution) and the 2026-08-09 platform probe. Runs AFTER
+  // the lexical and real-path containment checks above, so a write already
+  // denied for escaping the book root keeps that deny reason (brief 1c-3).
+  // Evaluated against realTarget AND realRoot, the F-HK-04 symlink-resolved
+  // values computed above, not resolvedTarget/resolvedRoot (the lexical ones)
+  // - per the Wave 0 park (brief 1c-1), so a symlink cannot carry a
+  // constrained agent's write outside its scope while passing only a lexical
+  // check. Both sides must be real, matching the realRootNorm/realTargetNorm
+  // comparison immediately above: comparing a real target against a lexical
+  // root would misfire if the book root itself is reached via a symlink.
+  // checkAgentWriteConstraint's platformOverride defaults to process.platform
+  // (F-HK-13 convention).
   const activeAgent = resolveActiveAgent(event);
-  const researchDenyReason = checkResearchAgentConstraint(activeAgent, resolvedTarget, resolvedRoot);
-  if (researchDenyReason) {
-    emitDeny(researchDenyReason);
+  const agentDenyReason = checkAgentWriteConstraint(activeAgent, realTarget, realRoot);
+  if (agentDenyReason) {
+    emitDeny(agentDenyReason);
   }
 
   // Step 3c: .studio/ targets are machine state.

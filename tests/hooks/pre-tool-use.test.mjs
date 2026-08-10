@@ -1,17 +1,24 @@
 // tests/hooks/pre-tool-use.test.mjs
-// what-it-is:   behaviour tests for hooks/pre-tool-use.mjs (TSK-032)
+// what-it-is:   behaviour tests for hooks/pre-tool-use.mjs (TSK-032; extended by
+//               task 1, agent identity enforcement, for F-AG-01/F-AG-02/F8)
 // what-it-does: spawns the real script with crafted snake_case PreToolUse events and
-//               imports the exported guard function directly, covering the twelve cases
-//               from the TSK-032 brief
+//               imports the exported guard functions directly, covering the TSK-032
+//               brief cases plus the 13 cases from (local working notes, not published) (agent write-scope,
+//               web gate, and the F8 corrupt-config-suppresses-the-caution carry)
 // runner:       node --test "tests/hooks/*.test.mjs"
 //
 // Synthetic events copy the shape captured live in the TSK-030 report (snake_case stdin):
 //   { session_id, transcript_path, cwd, prompt_id, permission_mode, effort,
 //     hook_event_name, tool_name, tool_input, tool_use_id }
+//   plus agent_id/agent_type when a subagent fired the call, shaped like the
+//   2026-08-09 platform probe ((local working notes, not published)).
 //
 // Never mutates committed fixtures. Temp clones are used for write-tool cases.
-// The exported checkResearchAgentConstraint is imported directly (top-level await)
-// so the isMain guard in pre-tool-use.mjs prevents stdin/exit side-effects.
+// pickSnapshotName and foldForCompare are imported directly from
+// hooks/pre-tool-use.mjs (top-level await; the isMain guard there prevents
+// stdin/exit side-effects on import). checkAgentWriteConstraint is imported
+// the same way from hooks/lib/agent-identity.mjs, where it and
+// resolveActiveAgent/resolveAgentLabel/isWebGatedAgent now live (ADR-0007).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -39,7 +46,11 @@ const SAMPLE_BOOK = join(REPO_ROOT, 'examples', 'sample-book');
 // isMain is false here (process.argv[1] is the test runner, not the hook script)
 // so no stdin reads or process.exit() calls happen during import.
 // ---------------------------------------------------------------------------
-const { checkResearchAgentConstraint, pickSnapshotName, foldForCompare } = await import('../../hooks/pre-tool-use.mjs');
+const { pickSnapshotName, foldForCompare } = await import('../../hooks/pre-tool-use.mjs');
+// checkResearchAgentConstraint was renamed checkAgentWriteConstraint and moved to
+// hooks/lib/agent-identity.mjs (brief 1c): its contract widened from three
+// hardcoded research agents to the five-agent AGENT_WRITE_SCOPES table (brief 1b).
+const { checkAgentWriteConstraint } = await import('../../hooks/lib/agent-identity.mjs');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -72,9 +83,13 @@ function runHook(input, extraEnv = {}) {
   return spawnSync('node', [SCRIPT], { input, encoding: 'utf8', env });
 }
 
-/** Build a synthetic Write/Edit event (snake_case shape per TSK-030 firing proof). */
-function makeWriteEvent(cwd, filePath, toolName = 'Write') {
-  return JSON.stringify({
+/** Build a synthetic Write/Edit event (snake_case shape per TSK-030 firing proof).
+ *  agentType, when given, adds agent_id/agent_type fields shaped like the
+ *  2026-08-09 platform probe ((local working notes, not published)): present
+ *  on subagent-fired envelopes, absent on main-session ones. Omitting it (the
+ *  default) reproduces today's main-session envelope shape exactly. */
+function makeWriteEvent(cwd, filePath, toolName = 'Write', agentType = null) {
+  const event = {
     session_id: 'test-session-032',
     transcript_path: '/tmp/t.jsonl',
     cwd,
@@ -85,7 +100,12 @@ function makeWriteEvent(cwd, filePath, toolName = 'Write') {
     tool_name: toolName,
     tool_input: { file_path: filePath, content: 'test content from tsk-032 test suite' },
     tool_use_id: 'toolu_test032'
-  });
+  };
+  if (agentType) {
+    event.agent_id = 'atest0000agentidentity1';
+    event.agent_type = agentType;
+  }
+  return JSON.stringify(event);
 }
 
 /** Build a synthetic Bash event. */
@@ -395,44 +415,59 @@ test('(i) no book root: empty stdout, exit 0', () => {
 });
 
 // ---------------------------------------------------------------------------
-// (j) exported research-agent guard function: direct call with injected slug
-// Tests the dormant OQ-14 seam by driving checkResearchAgentConstraint directly,
-// proving the constraint logic is wired even while resolveActiveAgent returns null.
+// (j) exported agent write-scope guard function: direct call with injected slug.
+//
+// Ported from the OQ-14 dormant-seam version of this test. The function was
+// renamed checkResearchAgentConstraint -> checkAgentWriteConstraint and moved
+// to hooks/lib/agent-identity.mjs (brief 1c) because its contract widened
+// from three hardcoded research agents to the five-agent AGENT_WRITE_SCOPES
+// table (brief 1b). fact-checker and citation-manager, used by the original
+// version of this test, are now DELIBERATELY absent from that table (their
+// prose cites no path guard), so the deny-side assertions are ported to
+// research-librarian and drafting-partner, which preserve the same
+// denied/allowed verdicts this test always meant to prove; fact-checker is
+// kept as the untabled-agent example, now expected to ALLOW rather than deny.
+// Full coverage of checkAgentWriteConstraint itself lives in
+// tests/hooks/agent-identity.test.mjs; this test's own purpose is narrower:
+// pinning that this file's fixtures exercise the same function the shipped
+// hook now calls at its Step 5 call site.
 // ---------------------------------------------------------------------------
-test('(j) research-agent guard: fact-checker denied chapters/, allowed research/', () => {
+test('(j) agent write-scope guard: research-librarian denied chapters/, allowed research/ and .studio/', () => {
   const chaptersTarget = join(SAMPLE_BOOK, 'chapters', '01-listening-before-speaking.md');
   const researchTarget = join(SAMPLE_BOOK, 'research', 'evidence-log.md');
   const studioTarget = join(SAMPLE_BOOK, '.studio', 'progress.json');
 
-  // fact-checker trying to write to chapters/ must be denied
-  const denyReason = checkResearchAgentConstraint('fact-checker', chaptersTarget, SAMPLE_BOOK);
+  // research-librarian trying to write to chapters/ must be denied
+  const denyReason = checkAgentWriteConstraint('research-librarian', chaptersTarget, SAMPLE_BOOK);
   assert.ok(
     typeof denyReason === 'string' && denyReason.length > 0,
-    'fact-checker gets a deny reason for chapters/ write'
+    'research-librarian gets a deny reason for chapters/ write'
   );
-  assert.ok(denyReason.includes('fact-checker'), 'deny reason names the agent slug');
+  assert.ok(denyReason.includes('research-librarian'), 'deny reason names the agent slug');
 
-  // fact-checker writing to research/ must be allowed (null)
-  const researchAllow = checkResearchAgentConstraint('fact-checker', researchTarget, SAMPLE_BOOK);
-  assert.equal(researchAllow, null, 'fact-checker allowed (null) for research/ write');
+  // research-librarian writing to research/ must be allowed (null)
+  const researchAllow = checkAgentWriteConstraint('research-librarian', researchTarget, SAMPLE_BOOK);
+  assert.equal(researchAllow, null, 'research-librarian allowed (null) for research/ write');
 
-  // fact-checker writing to .studio/ must also be allowed (null)
-  const studioAllow = checkResearchAgentConstraint('fact-checker', studioTarget, SAMPLE_BOOK);
-  assert.equal(studioAllow, null, 'fact-checker allowed (null) for .studio/ write');
+  // research-librarian writing to .studio/ must also be allowed (null)
+  const studioAllow = checkAgentWriteConstraint('research-librarian', studioTarget, SAMPLE_BOOK);
+  assert.equal(studioAllow, null, 'research-librarian allowed (null) for .studio/ write');
 
-  // Non-research agent (drafting-partner) always returns null regardless of target
-  const nonResearch = checkResearchAgentConstraint('drafting-partner', chaptersTarget, SAMPLE_BOOK);
-  assert.equal(nonResearch, null, 'non-research agent returns null (always allowed)');
+  // An untabled agent (fact-checker, deliberately absent from AGENT_WRITE_SCOPES)
+  // always returns null regardless of target: unconstrained, not denied.
+  const untabled = checkAgentWriteConstraint('fact-checker', chaptersTarget, SAMPLE_BOOK);
+  assert.equal(untabled, null, 'untabled agent (fact-checker) returns null: always allowed, unconstrained');
 
   // Null agent slug always returns null
-  const nullAgent = checkResearchAgentConstraint(null, chaptersTarget, SAMPLE_BOOK);
+  const nullAgent = checkAgentWriteConstraint(null, chaptersTarget, SAMPLE_BOOK);
   assert.equal(nullAgent, null, 'null agentSlug returns null (always allowed)');
 
-  // citation-manager denied for chapters/ too (all three research agents covered)
-  const citationDeny = checkResearchAgentConstraint('citation-manager', chaptersTarget, SAMPLE_BOOK);
+  // drafting-partner (a DIFFERENT table agent, chapters/-only) is denied for a
+  // research/ write: proves the table is per-agent, not one shared scope.
+  const draftingDeny = checkAgentWriteConstraint('drafting-partner', researchTarget, SAMPLE_BOOK);
   assert.ok(
-    typeof citationDeny === 'string' && citationDeny.length > 0,
-    'citation-manager also denied for chapters/ write'
+    typeof draftingDeny === 'string' && draftingDeny.length > 0,
+    'drafting-partner (chapters/-only) is denied for a research/ write'
   );
 });
 
@@ -447,10 +482,10 @@ test('(j) research-agent guard: fact-checker denied chapters/, allowed research/
 // Windows and the forward slash on the CI ubuntu leg.
 // ---------------------------------------------------------------------------
 
-test('research-agent containment: a sibling whose name merely prefixes an allowed directory is denied', () => {
+test('agent write-scope containment: a sibling whose name merely prefixes an allowed directory is denied', () => {
   // "research-notes" shares the "research" prefix but is a different directory.
   const prefixCollision = join(SAMPLE_BOOK, 'research-notes', 'scratch.md');
-  const denied = checkResearchAgentConstraint('research-librarian', prefixCollision, SAMPLE_BOOK);
+  const denied = checkAgentWriteConstraint('research-librarian', prefixCollision, SAMPLE_BOOK);
   assert.ok(
     typeof denied === 'string' && denied.length > 0,
     'research-notes/ must be denied; it is a sibling of research/, not inside it'
@@ -458,7 +493,7 @@ test('research-agent containment: a sibling whose name merely prefixes an allowe
 
   // Same boundary on the .studio side.
   const studioCollision = join(SAMPLE_BOOK, '.studio-backup', 'progress.json');
-  const studioDenied = checkResearchAgentConstraint('research-librarian', studioCollision, SAMPLE_BOOK);
+  const studioDenied = checkAgentWriteConstraint('research-librarian', studioCollision, SAMPLE_BOOK);
   assert.ok(
     typeof studioDenied === 'string' && studioDenied.length > 0,
     '.studio-backup/ must be denied; it is a sibling of .studio/, not inside it'
@@ -468,26 +503,121 @@ test('research-agent containment: a sibling whose name merely prefixes an allowe
   // everything. Without this pair the assertions above would survive a guard
   // that denied all writes.
   assert.equal(
-    checkResearchAgentConstraint('research-librarian', join(SAMPLE_BOOK, 'research', 'sources.md'), SAMPLE_BOOK),
+    checkAgentWriteConstraint('research-librarian', join(SAMPLE_BOOK, 'research', 'sources.md'), SAMPLE_BOOK),
     null,
     'research/ itself is still allowed'
   );
   assert.equal(
-    checkResearchAgentConstraint('research-librarian', join(SAMPLE_BOOK, '.studio', 'progress.json'), SAMPLE_BOOK),
+    checkAgentWriteConstraint('research-librarian', join(SAMPLE_BOOK, '.studio', 'progress.json'), SAMPLE_BOOK),
     null,
     '.studio/ itself is still allowed'
   );
 });
 
-test('research-agent containment: a traversal that escapes the book root is denied', () => {
+test('agent write-scope containment: a traversal that escapes the book root is denied', () => {
   // Resolves to a sibling of the book root, reached by climbing out of research/.
+  // Uses research-librarian (a table agent); fact-checker (used here before the
+  // table narrowed) is now deliberately untabled and would allow, not deny.
   const escape = join(SAMPLE_BOOK, 'research', '..', '..', 'outside-the-book.md');
-  const denied = checkResearchAgentConstraint('fact-checker', escape, SAMPLE_BOOK);
+  const denied = checkAgentWriteConstraint('research-librarian', escape, SAMPLE_BOOK);
   assert.ok(
     typeof denied === 'string' && denied.length > 0,
     'a path resolving outside the book root must be denied even though it is written through research/'
   );
 });
+
+// ---------------------------------------------------------------------------
+// AGENT WRITE-SCOPE GUARD, integration (F-AG-01, agents claim enforcement
+// that does not exist): now LIVE per ADR-0007 (agent identity resolution) and
+// the 2026-08-09 platform probe ((local working notes, not published)).
+// These cases spawn the real hook with a synthetic agent_type field on the
+// envelope, proving resolveActiveAgent + checkAgentWriteConstraint are wired
+// at the Step 5 call site, not just directly callable (the (j) test and the
+// two containment tests above prove the function itself; these prove the
+// hook actually calls it with the right arguments in the right order).
+// Roadmap row 1.1's "no false denies under ambiguity" acceptance criterion is
+// a first-class requirement here, not a footnote: absent, unnamespaced, and
+// untabled agent_type values must all leave today's verdict unchanged.
+// Case numbering below matches the 13 required cases in (local working notes, not published).
+// ---------------------------------------------------------------------------
+
+test('case 1: research-librarian write to chapters/ DENIES, reason names the slug', () => {
+  const book = cloneSampleBook('scope-rl-deny-chapters');
+  const target = join(book, 'chapters', '01-listening-before-speaking.md');
+  const result = runHook(makeWriteEvent(book, target, 'Write', 'nonfiction-studio:research-librarian'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON (deny)');
+  const hso = out.hookSpecificOutput;
+  assert.equal(hso.permissionDecision, 'deny', 'research-librarian denied for a chapters/ write');
+  assert.ok(hso.permissionDecisionReason.includes('research-librarian'), 'deny reason names the agent slug');
+});
+
+test('case 2: research-librarian write under research/ ALLOWS, and under .studio/ ALLOWS', () => {
+  const bookA = cloneSampleBook('scope-rl-allow-research');
+  const targetA = join(bookA, 'research', 'sources.md');
+  const resultA = runHook(makeWriteEvent(bookA, targetA, 'Write', 'nonfiction-studio:research-librarian'));
+  assert.equal(resultA.status, 0, 'exit code is 0');
+  assert.equal(resultA.stdout.trim(), '', 'empty stdout: research-librarian allowed under research/');
+
+  const bookB = cloneSampleBook('scope-rl-allow-studio');
+  const targetB = join(bookB, '.studio', 'progress.json');
+  const resultB = runHook(makeWriteEvent(bookB, targetB, 'Write', 'nonfiction-studio:research-librarian'));
+  assert.equal(resultB.status, 0, 'exit code is 0');
+  assert.equal(resultB.stdout.trim(), '', 'empty stdout: research-librarian allowed under .studio/');
+});
+
+test('case 3: drafting-partner write to structure/ DENIES (proves the generalization beyond research paths)', () => {
+  const book = cloneSampleBook('scope-dp-deny-structure');
+  const target = join(book, 'structure', 'outline.md');
+  const result = runHook(makeWriteEvent(book, target, 'Write', 'nonfiction-studio:drafting-partner'));
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON (deny)');
+  const hso = out.hookSpecificOutput;
+  assert.equal(hso.permissionDecision, 'deny', 'drafting-partner denied for a structure/ write');
+  assert.ok(hso.permissionDecisionReason.includes('drafting-partner'), 'deny reason names the agent slug');
+});
+
+test('case 4: main-session write (no agent_type) to structure/ ALLOWS (contrast with the drafting-partner deny in case 3)', () => {
+  const book = cloneSampleBook('scope-main-session-structure');
+  const target = join(book, 'structure', 'outline.md');
+  const result = runHook(makeWriteEvent(book, target));
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'empty stdout: main session is never subject to the per-agent write-scope table'
+  );
+});
+
+test('case 5: generic subagent (agent_type "general-purpose") write to structure/ is unaffected', () => {
+  const book = cloneSampleBook('scope-generic-subagent');
+  const target = join(book, 'structure', 'outline.md');
+  const result = runHook(makeWriteEvent(book, target, 'Write', 'general-purpose'));
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'empty stdout: an unnamespaced agent_type is never a plugin agent, regardless of target'
+  );
+});
+
+test('case 6: nonfiction-studio:interviewer (namespaced but absent from the table) write to chapters/ is unaffected', () => {
+  const book = cloneSampleBook('scope-interviewer-untabled');
+  const target = join(book, 'chapters', '01-listening-before-speaking.md');
+  const result = runHook(makeWriteEvent(book, target, 'Write', 'nonfiction-studio:interviewer'));
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'empty stdout: interviewer is a namespaced plugin agent but absent from AGENT_WRITE_SCOPES, so it stays unconstrained'
+  );
+});
+
+// Case 7 (symlink evasion) lives in tests/hooks/pre-tool-use-symlink.test.mjs,
+// alongside the other symlink-capability-probed cases it is modeled on.
+// Case 8 (platform folding) is a direct-call unit test of checkAgentWriteConstraint
+// in tests/hooks/agent-identity.test.mjs, portable to any host OS without needing
+// a real case-insensitive filesystem.
 
 // ---------------------------------------------------------------------------
 // (k) NS_HOOK_TRACE inert when unset, one line written when set
@@ -627,19 +757,6 @@ test('F-HK-01 (d) corrupt config.json + Read: exit 0, empty stdout (non-write to
   assert.equal(result.stdout.trim(), '', 'stdout is empty for Read tool even with corrupt config (unchanged)');
 });
 
-test('F-HK-01 (e) corrupt config.json + benign Bash: exit 0, empty stdout ("today\'s" caution behavior unchanged)', () => {
-  const book = cloneSampleBook('fhk01-e-bash');
-  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
-
-  const result = runHook(makeBashEvent(book, 'rm -rf /tmp/foo'));
-
-  assert.equal(result.status, 0, 'exit code is 0');
-  assert.equal(
-    result.stdout.trim(), '',
-    'stdout is empty for Bash with corrupt config; no deny on corrupt config per the brief'
-  );
-});
-
 test('F-HK-01 (f) NO_BOOK_ROOT (no book project at all) stays silent exit 0 for Write, unlike a corrupt config', () => {
   const emptyDir = makeTmpDir('fhk01-f-no-root');
   const target = join(emptyDir, 'chapters', 'test.md');
@@ -650,6 +767,90 @@ test('F-HK-01 (f) NO_BOOK_ROOT (no book project at all) stays silent exit 0 for 
   assert.equal(
     result.stdout.trim(), '',
     'NO_BOOK_ROOT is a normal no-op (no book project here at all), not a corrupt-config deny'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// F8 (corrupt config suppresses the shell caution): carried from Wave 0's
+// final review into this task (brief section 1f). findBookRoot's catch block
+// used to call process.exit(0) unconditionally right after the write-tool
+// deny check, so when .studio/config.json was corrupt, Bash and PowerShell
+// never reached the destructive-command caution logic below - the safety
+// message vanished exactly when the project was already in a bad state. The
+// fix lets non-write tools fall through to the caution logic instead of
+// exiting early; the write-tool deny behavior proven in F-HK-01 (a)/(b)/(c)
+// above is unchanged.
+//
+// The test that occupied this slot before the fix was titled "benign Bash"
+// but its command was `rm -rf /tmp/foo` and it asserted EMPTY stdout - that
+// was the bug manifesting as a passing test, not a benign case. It is
+// retitled and re-asserted below to prove the caution now fires; a genuinely
+// benign case is added alongside it, since retitling revealed that coverage
+// was missing.
+// ---------------------------------------------------------------------------
+
+test('F8 (a) corrupt config.json + Bash rm -rf: caution still fires (corrupt config must not suppress the shell caution)', () => {
+  const book = cloneSampleBook('f8-a-bash-rmrf');
+  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+
+  const result = runHook(makeBashEvent(book, 'rm -rf /tmp/foo'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(
+    () => { out = JSON.parse(result.stdout.trim()); },
+    'stdout is valid JSON (caution), NOT empty - the pre-fix bug produced empty stdout here'
+  );
+  const hso = out.hookSpecificOutput;
+  assert.equal(hso.hookEventName, 'PreToolUse', 'hookEventName is PreToolUse');
+  assert.ok(
+    typeof hso.additionalContext === 'string' && hso.additionalContext.includes('rm -rf'),
+    'additionalContext still names the rm -rf pattern even with a corrupt config'
+  );
+  assert.equal(hso.permissionDecision, undefined, 'still a caution, never a deny (write-tool deny behavior is unchanged)');
+});
+
+test('F8 (b) corrupt config.json + genuinely benign Bash: exit 0, empty stdout (coverage added; the old test at this name was not actually benign)', () => {
+  const book = cloneSampleBook('f8-b-bash-benign');
+  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+
+  const result = runHook(makeBashEvent(book, 'ls -la'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'stdout is empty for a genuinely benign Bash command even with corrupt config: no caution, no deny'
+  );
+});
+
+test('F8 (c) corrupt config.json + PowerShell destructive command: caution still fires (PowerShell is a first-class peer of Bash per F-HK-07)', () => {
+  const book = cloneSampleBook('f8-c-powershell');
+  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+
+  const result = runHook(makePowerShellEvent(book, 'Remove-Item -Recurse -Force C:\\Temp\\scratch'));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON (caution)');
+  assert.ok(
+    typeof out.hookSpecificOutput.additionalContext === 'string' && out.hookSpecificOutput.additionalContext.length > 0,
+    'PowerShell caution also survives a corrupt config, same as Bash'
+  );
+});
+
+test('F8 (d) regression: corrupt config.json + Write still DENIES exactly as before (write-tool behavior untouched)', () => {
+  const book = cloneSampleBook('f8-d-write-regression');
+  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  const target = join(book, 'chapters', '01-listening-before-speaking.md');
+
+  const result = runHook(makeWriteEvent(book, target));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON (deny)');
+  assert.equal(
+    out.hookSpecificOutput.permissionDecision, 'deny',
+    'a write tool still denies on corrupt config, unchanged from F-HK-01 (a)/(b)/(c) above'
   );
 });
 
@@ -1131,5 +1332,165 @@ test('F-HK-13 (c) containment guard on a case-sensitive filesystem: a case-diffe
   assert.equal(
     out.hookSpecificOutput.permissionDecision, 'deny',
     'non-win32: case-widened matching must NOT occur - a case-differing path is a different, uncontained path'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// WEB GATE (F-AG-02, web gate unenforced): now LIVE per ADR-0007 (agent
+// identity resolution). WebSearch and WebFetch from a web-gated agent
+// (isWebGatedAgent: research-librarian, fact-checker, citation-manager) are
+// denied unless research.web_enabled is exactly the boolean true in
+// .studio/config.json. The rule for what counts as open is binding at
+// docs/reference/agents/research-librarian.md:135-149: an absent key, the
+// string "true", false, and null all leave the gate CLOSED. Main-session
+// calls and non-gated agents are entirely unaffected regardless of config.
+// Case numbering below matches the 13 required cases in (local working notes, not published).
+// ---------------------------------------------------------------------------
+
+/** Build a synthetic WebSearch/WebFetch event, optionally carrying agent_type
+ *  shaped like the platform probe (see makeWriteEvent above for the same
+ *  convention). */
+function makeWebEvent(cwd, toolName, agentType = null) {
+  const event = {
+    session_id: 'test-session-032',
+    cwd,
+    hook_event_name: 'PreToolUse',
+    tool_name: toolName,
+    tool_input: toolName === 'WebSearch'
+      ? { query: 'test query from the web-gate test suite' }
+      : { url: 'https://example.invalid/source', prompt: 'summarize the page' },
+    tool_use_id: 'toolu_webgate'
+  };
+  if (agentType) {
+    event.agent_id = 'atest0000agentidentity1';
+    event.agent_type = agentType;
+  }
+  return JSON.stringify(event);
+}
+
+/** Overwrite .studio/config.json in a cloned book, adding a "research" block
+ *  whose web_enabled value is exactly the given rawValue (JSON-serialized
+ *  as-is, so passing the JS string "true" produces the JSON STRING "true",
+ *  deliberately exercising the wrong-type case from the brief). */
+function setWebEnabled(book, rawValue) {
+  const configPath = join(book, '.studio', 'config.json');
+  const config = JSON.parse(readFileSync(configPath, 'utf8'));
+  config.research = { web_enabled: rawValue };
+  writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n', 'utf8');
+}
+
+test('case 9 (a): WebFetch from research-librarian with no research key DENIES', () => {
+  const book = cloneSampleBook('webgate-rl-no-key');
+  // Sample-book config.json has no "research" key at all (precondition; matches
+  // the scaffold template default, per the brief).
+  const result = runHook(makeWebEvent(book, 'WebFetch', 'nonfiction-studio:research-librarian'));
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON (deny)');
+  const hso = out.hookSpecificOutput;
+  assert.equal(hso.permissionDecision, 'deny', 'no research key: gate is closed by default');
+  assert.ok(
+    /web_enabled/i.test(hso.permissionDecisionReason),
+    'deny reason names the research.web_enabled config key'
+  );
+});
+
+test('case 9 (b): WebFetch from research-librarian with research.web_enabled: true ALLOWS', () => {
+  const book = cloneSampleBook('webgate-rl-true');
+  setWebEnabled(book, true);
+  const result = runHook(makeWebEvent(book, 'WebFetch', 'nonfiction-studio:research-librarian'));
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(result.stdout.trim(), '', 'empty stdout: gate is open, boolean true');
+});
+
+test('case 9 (c): WebFetch from research-librarian with the STRING "true" DENIES (wrong type, not the boolean)', () => {
+  const book = cloneSampleBook('webgate-rl-string-true');
+  setWebEnabled(book, 'true');
+  const result = runHook(makeWebEvent(book, 'WebFetch', 'nonfiction-studio:research-librarian'));
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON (deny)');
+  assert.equal(
+    out.hookSpecificOutput.permissionDecision, 'deny',
+    'the STRING "true" is not the boolean true; gate stays closed'
+  );
+});
+
+test('case 9 (d): WebFetch from research-librarian with web_enabled: false DENIES', () => {
+  const book = cloneSampleBook('webgate-rl-false');
+  setWebEnabled(book, false);
+  const result = runHook(makeWebEvent(book, 'WebFetch', 'nonfiction-studio:research-librarian'));
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON (deny)');
+  assert.equal(out.hookSpecificOutput.permissionDecision, 'deny', 'false leaves the gate closed');
+});
+
+test('case 9 (e): WebFetch from research-librarian with web_enabled: null DENIES', () => {
+  const book = cloneSampleBook('webgate-rl-null');
+  setWebEnabled(book, null);
+  const result = runHook(makeWebEvent(book, 'WebFetch', 'nonfiction-studio:research-librarian'));
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON (deny)');
+  assert.equal(out.hookSpecificOutput.permissionDecision, 'deny', 'null leaves the gate closed');
+});
+
+test('case 10: WebSearch from the main session (no agent_type) ALLOWS regardless of config', () => {
+  const book = cloneSampleBook('webgate-mainsession-nokey');
+  // No research key at all: would deny a gated agent, but main session is unaffected.
+  const result = runHook(makeWebEvent(book, 'WebSearch'));
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(result.stdout.trim(), '', 'empty stdout: main-session WebSearch is never gated');
+});
+
+test('case 10 (b): WebSearch from the main session ALLOWS even with web_enabled explicitly false', () => {
+  const book = cloneSampleBook('webgate-mainsession-false');
+  setWebEnabled(book, false);
+  const result = runHook(makeWebEvent(book, 'WebSearch'));
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(result.stdout.trim(), '', 'empty stdout: main-session WebSearch is never gated, regardless of config');
+});
+
+test('case 11: WebFetch from nonfiction-studio:drafting-partner (not web-gated) ALLOWS regardless of config', () => {
+  const book = cloneSampleBook('webgate-draftingpartner-nokey');
+  // No research key: would deny a gated agent, but drafting-partner does not ship web tools.
+  const result = runHook(makeWebEvent(book, 'WebFetch', 'nonfiction-studio:drafting-partner'));
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'empty stdout: drafting-partner is not in the web-gated agent set, so the gate never applies to it'
+  );
+});
+
+test('web gate: no book root found DENIES a web-gated agent (fail-closed; there is no config to verify open)', () => {
+  const emptyDir = makeTmpDir('webgate-no-root');
+  const result = runHook(makeWebEvent(emptyDir, 'WebFetch', 'nonfiction-studio:research-librarian'));
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON (deny)');
+  assert.equal(
+    out.hookSpecificOutput.permissionDecision, 'deny',
+    'no book root means no config.json to verify open, so a web-gated agent is denied (D-13 fail-closed)'
+  );
+});
+
+test('web gate: no book root found ALLOWS a non-gated call (main session) unaffected', () => {
+  const emptyDir = makeTmpDir('webgate-no-root-mainsession');
+  const result = runHook(makeWebEvent(emptyDir, 'WebSearch'));
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(result.stdout.trim(), '', 'empty stdout: main session is unaffected even with no book root');
+});
+
+test('web gate: corrupt config.json DENIES a web-gated agent (fail-closed, same posture as F-HK-01)', () => {
+  const book = cloneSampleBook('webgate-corrupt-config');
+  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  const result = runHook(makeWebEvent(book, 'WebFetch', 'nonfiction-studio:fact-checker'));
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON (deny)');
+  assert.equal(
+    out.hookSpecificOutput.permissionDecision, 'deny',
+    'a corrupt config.json cannot be verified open, so a web-gated agent is denied'
   );
 });
