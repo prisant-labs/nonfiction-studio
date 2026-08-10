@@ -17,6 +17,7 @@
       "voice-capture"
     ],
     "skills": [
+      "build-apparatus",
       "capture-voice",
       "doctor",
       "draft-chapter",
@@ -41,6 +42,7 @@
       "ns-claims",
       "ns-doctor",
       "ns-gate",
+      "ns-notes",
       "ns-scrub",
       "ns-statusline",
       "ns-stylometry"

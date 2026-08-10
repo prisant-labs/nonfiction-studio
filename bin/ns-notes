@@ -1,0 +1,190 @@
+#!/usr/bin/env node
+// what-it-is:   the ns-notes apparatus-generator CLI (thin shell over hooks/lib/apparatus-engine.mjs)
+// what-it-does: reads the evidence ledger, the sources registry, the citation style, and chapter
+//               files; computes Chicago-style endnotes, a deduplicated bibliography, index
+//               candidates, and an attention list; writes all four under production/; emits a
+//               gate-shaped report
+// why:          the CLI is the public surface; all logic lives in apparatus-engine.mjs so the
+//               build-apparatus skill and any future caller share the same computation path,
+//               matching the pattern the other six CLIs already use (ADR-0009, apparatus CLI)
+// usage:        ns-notes [--project=<dir>] [--json]
+
+import { readFileSync, readdirSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join, relative, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
+import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
+import { parseEvidenceLog, parseSources } from '../hooks/lib/ledger.mjs';
+import { makeReport, addFinding, finalize } from '../hooks/lib/report.mjs';
+import {
+  computeApparatus, buildEndnotesMarkdown, buildBibliographyMarkdown,
+  buildIndexCandidatesMarkdown, buildAttentionMarkdown,
+} from '../hooks/lib/apparatus-engine.mjs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// ---- arg parsing ---------------------------------------------------------------
+
+let opts;
+try {
+  opts = parseArgs(process.argv.slice(2), ['project', 'json']);
+} catch (err) {
+  if (err.name === 'ArgsError') {
+    process.stderr.write('ns-notes: ' + err.message + '\n');
+    process.exit(2);
+  }
+  throw err;
+}
+
+// ---- book root discovery -------------------------------------------------------
+
+const startDir = opts.project ? resolve(opts.project) : process.cwd();
+
+let root;
+try {
+  ({ root } = findBookRoot(startDir));
+} catch (err) {
+  if (err.name === 'BibleError') {
+    process.stderr.write('ns-notes: ' + err.message + '\n');
+    process.exit(2);
+  }
+  throw err;
+}
+
+// ---- citation style (OPP-D05: Chicago style as data, not code) -----------------
+
+const stylePath = join(__dirname, '..', 'hooks', 'lib', 'citation-styles', 'chicago.json');
+let style;
+try {
+  style = JSON.parse(readFileSync(stylePath, 'utf8'));
+} catch (err) {
+  process.stderr.write('ns-notes: cannot read citation style at ' + stylePath + ': ' + err.message + '\n');
+  process.exit(2);
+}
+
+// ---- evidence ledger and sources registry ---------------------------------------
+
+const ledgerPath = join(root, 'research', 'evidence-log.md');
+if (!existsSync(ledgerPath)) {
+  process.stderr.write('ns-notes: evidence log not found at ' + ledgerPath + '\n');
+  process.exit(2);
+}
+
+const sourcesPath = join(root, 'research', 'sources.md');
+if (!existsSync(sourcesPath)) {
+  process.stderr.write('ns-notes: sources registry not found at ' + sourcesPath + '\n');
+  process.exit(2);
+}
+
+let ledgerEntries;
+let sourceEntries;
+try {
+  ledgerEntries = parseEvidenceLog(readFileSync(ledgerPath, 'utf8'));
+  sourceEntries = parseSources(readFileSync(sourcesPath, 'utf8'));
+} catch (err) {
+  process.stderr.write('ns-notes: cannot read ledger: ' + err.message + '\n');
+  process.exit(2);
+}
+
+// ---- chapter discovery -----------------------------------------------------------
+
+const chapterDir = join(root, 'chapters');
+if (!existsSync(chapterDir)) {
+  process.stderr.write('ns-notes: chapters/ directory not found at ' + chapterDir + '\n');
+  process.exit(2);
+}
+
+const chapterFiles = readdirSync(chapterDir).filter((f) => f.endsWith('.md')).sort();
+
+let chapters;
+try {
+  chapters = chapterFiles.map((f) => {
+    const absPath = join(chapterDir, f);
+    const text = readFileSync(absPath, 'utf8');
+    const relFile = relative(root, absPath).replace(/\\/g, '/');
+    return { file: relFile, text };
+  });
+} catch (err) {
+  process.stderr.write('ns-notes: cannot read chapter file: ' + err.message + '\n');
+  process.exit(2);
+}
+
+// ---- compute (hooks/lib/apparatus-engine.mjs; read-then-emit, no ledger writes) -----
+
+const result = computeApparatus(chapters, ledgerEntries, sourceEntries, style);
+
+// ---- write outputs -----------------------------------------------------------------
+// production/ only, per OPP-D05: this is the author-facing directory that already holds
+// front-matter.md and back-matter.md, not .studio/ machine state, so D-06 (single-writer state
+// discipline) is not implicated. Deterministic: an unchanged ledger regenerates byte-identical
+// files (no generation timestamp is stamped into any of the four).
+
+const productionDir = join(root, 'production');
+try {
+  mkdirSync(productionDir, { recursive: true });
+  writeFileSync(join(productionDir, 'endnotes.md'), buildEndnotesMarkdown(result), 'utf8');
+  writeFileSync(join(productionDir, 'bibliography.md'), buildBibliographyMarkdown(result), 'utf8');
+  writeFileSync(join(productionDir, 'index-candidates.md'), buildIndexCandidatesMarkdown(result), 'utf8');
+  writeFileSync(join(productionDir, 'apparatus-attention.md'), buildAttentionMarkdown(result), 'utf8');
+} catch (err) {
+  process.stderr.write('ns-notes: cannot write production/ output: ' + err.message + '\n');
+  process.exit(2);
+}
+
+// ---- report building ----------------------------------------------------------------
+
+const report = makeReport('apparatus');
+
+for (const row of result.attention) {
+  addFinding(report, {
+    file: row.chapter,
+    line: row.line,
+    type: 'apparatus.' + row.type,
+    excerpt: row.evId,
+    detail: row.reason,
+  });
+}
+
+const { exitCode, json } = finalize(report);
+
+const totalNotes = result.chapters.reduce((n, c) => n + c.notes.length, 0);
+
+// Extend the gate-report shape with apparatus-specific fields, mirroring how ns-claims extends
+// it with coverage fields.
+const fullJson = Object.assign({}, json, {
+  chapters: result.chapters.length,
+  totalNotes,
+  bibliographyCount: result.bibliography.length,
+  indexCandidateCount: result.indexCandidates.length,
+  written: [
+    'production/endnotes.md',
+    'production/bibliography.md',
+    'production/index-candidates.md',
+    'production/apparatus-attention.md',
+  ],
+});
+
+// ---- emit ----------------------------------------------------------------------------
+
+if (opts.json) {
+  process.stdout.write(JSON.stringify(fullJson, null, 2) + '\n');
+} else {
+  const prefix = '[apparatus]';
+  if (result.attention.length === 0) {
+    process.stdout.write(
+      prefix + ' pass: ' + totalNotes + ' note(s), ' + result.bibliography.length +
+      ' bibliography entr' + (result.bibliography.length === 1 ? 'y' : 'ies') + ', ' +
+      result.indexCandidates.length + ' index candidate(s); production/ written\n'
+    );
+  } else {
+    process.stdout.write(
+      prefix + ' ' + result.attention.length + ' item(s) need attention (see production/apparatus-attention.md):\n'
+    );
+    for (const row of result.attention) {
+      process.stdout.write('  ' + row.chapter + ':' + row.line + ' [' + row.type + ']: ' + row.reason + '\n');
+    }
+  }
+}
+
+process.exit(exitCode);

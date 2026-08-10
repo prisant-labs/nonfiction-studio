@@ -1,0 +1,30 @@
+{
+  "style": "chicago-notes-bibliography",
+  "description": "Chicago notes-bibliography style, expressed as data per source `type` (OPP-D05, apparatus generator) so hooks/lib/apparatus-engine.mjs contains no per-style formatting logic. 'required' lists the sources.md fields that must be non-blank before any note or bibliography entry for a source of that type can be built; a source missing one is an attention row, never a guess. 'fullNote' and 'shortNote' are per-citation templates filled with a specific EV entry's locator; 'bibliography' is a per-source template with no locator (a bibliography entry names the work, not one citation of it). Every placeholder a template uses must be a universal field (author-full, author-surname, author-last-first, title, short-title, year, locator) or a field named in that type's own 'required' list, so a substitution is never asked to fill a field that might be blank. The bibliography form's identifier-or-url suffix (prefer a stable identifier such as a DOI or ISBN; otherwise the url, with an access date if present; otherwise nothing) is uniform across every type and is applied by the engine, not written here, because it does not vary by type. Covers the four source types the plugin's own worked example actually cites (book, article, report, web); a type absent from this file (interview, dataset, other, or any future value) produces an attention row rather than a guessed format, and adding one is a pure data edit here, no engine change required, per ADR-0009 (apparatus CLI).",
+  "types": {
+    "book": {
+      "required": ["author", "title", "year", "publisher"],
+      "fullNote": "{author-full}, *{title}* ({publisher}, {year}), {locator}.",
+      "shortNote": "{author-surname}, *{short-title}*, {locator}.",
+      "bibliography": "{author-last-first}. *{title}*. {publisher}, {year}."
+    },
+    "article": {
+      "required": ["author", "title", "year", "publisher"],
+      "fullNote": "{author-full}, \"{title},\" *{publisher}* ({year}), {locator}.",
+      "shortNote": "{author-surname}, \"{short-title},\" {locator}.",
+      "bibliography": "{author-last-first}. \"{title}.\" *{publisher}*, {year}."
+    },
+    "report": {
+      "required": ["author", "title", "year", "publisher"],
+      "fullNote": "{author-full}, *{title}* ({publisher}, {year}), {locator}.",
+      "shortNote": "{author-surname}, *{short-title}*, {locator}.",
+      "bibliography": "{author-last-first}. *{title}*. {publisher}, {year}."
+    },
+    "web": {
+      "required": ["author", "title", "year", "url"],
+      "fullNote": "{author-full}, \"{title},\" {year}, {locator}, {url}.",
+      "shortNote": "{author-surname}, \"{short-title},\" {locator}.",
+      "bibliography": "{author-last-first}. \"{title}.\" {year}."
+    }
+  }
+}
