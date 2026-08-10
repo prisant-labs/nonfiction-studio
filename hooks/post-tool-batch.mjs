@@ -37,7 +37,7 @@ import { join, resolve, sep, relative, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findBookRoot, readProgress, writeProgressAtomic } from './lib/bible.mjs';
 import { countWords } from './lib/stylometry-engine.mjs';
-import { resolveAgentLabel } from './lib/agent-identity.mjs';
+import { resolveAgentLabel, foldForCompare } from './lib/agent-identity.mjs';
 
 // ---------------------------------------------------------------------------
 // Drain stdin - the platform delivers event JSON here on every invocation.
@@ -159,11 +159,15 @@ function appendAiUseLog(record) {
 // filesystem). Folding unconditionally would WIDEN what counts as a chapter
 // path on a case-sensitive filesystem (POSIX) - the wrong direction for a
 // check that feeds the progress/compliance-log write path.
+//
+// foldForCompare is imported from hooks/lib/agent-identity.mjs (ADR-0007, agent identity
+// resolution) rather than defined locally: this file previously carried its own copy,
+// the third independent implementation of the same win32-only-lowercase logic found in
+// this repo (the first two were consolidated into the shared module earlier in this
+// wave). Every call site below omits the platformOverride parameter, so it defaults to
+// the real process.platform exactly as the local copy it replaces did; behavior is
+// unchanged, only the implementation's home moved.
 // ---------------------------------------------------------------------------
-function foldForCompare(p) {
-  return process.platform === 'win32' ? p.toLowerCase() : p;
-}
-
 const chaptersDirNorm = foldForCompare(resolve(bookRoot, 'chapters'));
 const chaptersDirPrefix = chaptersDirNorm + sep;
 
