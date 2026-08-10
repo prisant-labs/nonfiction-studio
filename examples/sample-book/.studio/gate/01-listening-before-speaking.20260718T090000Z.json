@@ -2,50 +2,56 @@
   "version": 2,
   "chapter": "01-listening-before-speaking",
   "ts": "2026-07-18T09:00:00Z",
-  "verdict": "pass",
+  "verdict": "warn",
   "checks": [
     {
       "check": "claim_coverage",
       "verdict": "pass",
-      "detail": "5 markers found; all resolve to verified or interpretation-status ledger entries; open_claim_count = 0",
-      "evidence": [
-        "chapters/01-listening-before-speaking.md",
-        "research/evidence-log.md"
-      ],
+      "detail": "claim coverage 100%; no open markers",
+      "evidence": [],
       "next": null
     },
     {
-      "check": "prompt_scrub",
+      "check": "quote_fidelity",
       "verdict": "pass",
-      "detail": "No agent scaffolding, prompt residue, or template placeholders found.",
+      "detail": "0 quote anchor(s) checked; all match verbatim excerpts exactly",
       "evidence": [],
       "next": null
     },
     {
       "check": "stylometry",
+      "verdict": "warn",
+      "detail": "drift score 243.40 exceeds threshold 35; stylometry.drift-threshold",
+      "evidence": [
+        "chapters/01-listening-before-speaking.md"
+      ],
+      "next": "Review the flagged markers against the voice baseline and revise the drifted chapter."
+    },
+    {
+      "check": "prompt_scrub",
       "verdict": "pass",
-      "detail": "drift_score 0 is within threshold 35; chapter prose matches the baseline voice profile.",
-      "evidence": [".studio/progress.json#/chapters/0/drift_score"],
+      "detail": "no agent scaffolding or prompt residue found",
+      "evidence": [],
       "next": null
     },
     {
       "check": "continuity",
       "verdict": "pass",
-      "detail": "No continuity breaks detected against prior chapters.",
+      "detail": "no name consistency issues found",
       "evidence": [],
       "next": null
     },
     {
-      "check": "thesis_alignment",
+      "check": "state_coherence",
       "verdict": "pass",
-      "detail": "Chapter argument serves the controlling idea: deliberate listening as the foundation of a personal learning network.",
-      "evidence": ["structure/thesis.md"],
+      "detail": "word-count coherence pass; no mismatch between chapters and progress.json",
+      "evidence": [],
       "next": null
     },
     {
       "check": "session_write_flag",
-      "verdict": "pass",
-      "detail": "No uncommitted writes detected at gate time.",
+      "verdict": "skip",
+      "detail": "no chapter writes detected in this session; gate.no-write",
       "evidence": [],
       "next": null
     }
