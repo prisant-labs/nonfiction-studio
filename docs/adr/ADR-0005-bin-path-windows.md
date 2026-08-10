@@ -35,7 +35,7 @@ Action: EF-07 in A-02 (platform baseline) must be corrected to qualify the claim
 
 ---
 
-## Outcome Taxonomy (from task brief)
+## Outcome Taxonomy (from TSK-011 (SPK-05 bin PATH on Windows))
 
 - "confirmed extensionless": bare name resolves without any shim
 - "confirmed with cmd shim": bare name resolves only with `.cmd` shim present (CLIs then ship shims)

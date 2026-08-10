@@ -153,11 +153,11 @@ function countSnapshots(bookRoot, slug) {
   return readdirSync(dir).filter(f => f.startsWith(slug + '.') && f.endsWith('.md')).length;
 }
 
-/** F-HK-13: flip the case of an ASCII drive letter (if present, e.g. "C:" -> "c:")
- *  and invert the case of every other ASCII letter in the path. Produces a path
- *  that refers to the SAME file on a case-insensitive filesystem but differs
- *  textually in both the drive letter and the rest of the path, per the brief's
- *  "case-differing drive letter or path" wording. */
+/** F-HK-13 (case-differing drive letter or path): flip the case of an ASCII drive
+ *  letter (if present, e.g. "C:" -> "c:") and invert the case of every other ASCII
+ *  letter in the path. Produces a path that refers to the SAME file on a
+ *  case-insensitive filesystem but differs textually in both the drive letter and
+ *  the rest of the path, matching that scenario. */
 function flipCase(p) {
   const driveMatch = p.match(/^([a-zA-Z]):(.*)$/);
   let drive = '';
@@ -1389,7 +1389,8 @@ function setWebEnabled(book, rawValue) {
 test('case 9 (a): WebFetch from research-librarian with no research key DENIES', () => {
   const book = cloneSampleBook('webgate-rl-no-key');
   // Sample-book config.json has no "research" key at all (precondition; matches
-  // the scaffold template default, per the brief).
+  // templates/book-scaffold/.studio/config.json's own default, which also carries no
+  // research key).
   const result = runHook(makeWebEvent(book, 'WebFetch', 'nonfiction-studio:research-librarian'));
   assert.equal(result.status, 0, 'exit code is 0');
   let out;

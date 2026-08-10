@@ -10,7 +10,7 @@
 //
 // Windows note: creating a new symlink can require elevated privileges or Developer
 // Mode. The escape-path and inside-link tests probe capability first and skip cleanly
-// (node:test t.skip) with a stated reason when creation is denied, per the brief. The
+// (node:test t.skip) with a stated reason when creation is denied. The
 // Ubuntu CI leg (unprivileged symlink creation allowed) always proves these cases;
 // Windows proves them whenever the runner has the privilege or Developer Mode enabled.
 // The plain-directory control test needs no symlink capability and always runs.

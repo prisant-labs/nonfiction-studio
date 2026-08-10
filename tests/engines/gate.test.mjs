@@ -49,7 +49,7 @@ function makeTempClone(sourceDir) {
 /**
  * Writes a block-mode gate config to the clone's .studio/config.json.
  * Sets gate.mode=block and all four deterministic checks to mode=block,
- * preserving the source config's thresholds and baseline per the brief.
+ * preserving the source config's thresholds and baseline per TSK-029 (ns-gate orchestrator).
  */
 function writeBlockConfig(tmpDir) {
   const configPath = join(tmpDir, '.studio', 'config.json');
@@ -351,7 +351,7 @@ test('T08: config-coercion: D-03 coercion notice on stderr; exit 0; thesis_align
     const report = readLatestReport(tmp, 'all');
     const thesisEntry = report.checks.find(c => c.check === 'thesis_alignment');
     assert.strictEqual(thesisEntry, undefined,
-      'thesis_alignment must be absent from the checks array per the brief');
+      'thesis_alignment must be absent from the checks array per D-03 (layered Stop gate)');
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

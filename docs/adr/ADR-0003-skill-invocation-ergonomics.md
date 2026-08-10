@@ -1,6 +1,6 @@
 # ADR-0003: Skill Invocation Ergonomics - Bare Verb Invocation is ACCEPTABLE; Headless Git Bash Path-Expansion Quirk Documented
 
-**TL;DR:** Bare-verb invocation (`/spike-echo hello`) resolves to skill content when an argument follows. The original headless Bash probe without an argument (`/spike-status`) failed due to Git-for-Windows path emulation expanding the slash token - not due to the skill invocation system. Three controls run 2026-07-18 all resolved with `SPIKE-STATUS-OK`: (a) Bash with `MSYS_NO_PATHCONV=1`, (b) PowerShell invocation, (c) doubled-slash `//spike-status`. The original Probe C failure is attributed to the headless Git Bash probe route; interactive sessions pass slash strings without shell expansion. `intake-interview` was removed from the no-argument subset (not a brief-named pivot; never tested). Rating: ACCEPTABLE. W-07 (commands alias layer) trigger in R-04 (scope boundaries) is NOT observed.
+**TL;DR:** Bare-verb invocation (`/spike-echo hello`) resolves to skill content when an argument follows. The original headless Bash probe without an argument (`/spike-status`) failed due to Git-for-Windows path emulation expanding the slash token - not due to the skill invocation system. Three controls run 2026-07-18 all resolved with `SPIKE-STATUS-OK`: (a) Bash with `MSYS_NO_PATHCONV=1`, (b) PowerShell invocation, (c) doubled-slash `//spike-status`. The original Probe C failure is attributed to the headless Git Bash probe route; interactive sessions pass slash strings without shell expansion. `intake-interview` was removed from the no-argument subset (not one of TSK-009 (SPK-03 skill invocation)'s named pivots; never tested). Rating: ACCEPTABLE. W-07 (commands alias layer) trigger in R-04 (scope boundaries) is NOT observed.
 
 - Status: Accepted
 - Date: 2026-07-18
@@ -21,7 +21,7 @@ This ADR records the probe evidence and the decision it drives.
 
 ---
 
-## Rating Rubric (from task brief, applied to evidence)
+## Rating Rubric (from TSK-009 (SPK-03 skill invocation), applied to evidence)
 
 - "Acceptable": the bare form resolves, OR a form no longer than plugin-prefix plus name resolves and tab-completion or listing makes it discoverable.
 - "Hostile": only the fully namespaced form works AND it is over 25 characters of typing for common verbs. Apply to evidence, not hopes.
@@ -222,7 +222,7 @@ All eleven namespaced forms exceed the 25-character hostile threshold. The short
 
 **Argument-bearing skills (most Phase 1 skills):** Probe A shows the bare form resolves. Rating for this subset: ACCEPTABLE.
 
-**No-argument skills (`studio`, `doctor`, and `status-dashboard` - the front-door, diagnostic, and session-status verbs named in the task brief):** Original Probe C showed the bare form failing. Controls A, B, and C (2026-07-18) all resolved with `SPIKE-STATUS-OK`. The failure in Probe C is attributed to Git-for-Windows path expansion in the headless Bash probe route, not to the skill invocation system. `intake-interview` was listed in the original draft of this subset but was never tested and is not among the brief-named pivots (`studio`, `doctor`, `status-dashboard`); it is excluded. Rubric chain: the brief-named common verbs `studio`, `doctor`, and `status-dashboard` were tested; the original headless Bash probe showed only the namespaced form appearing to work and all namespaced forms exceed 25 characters; however, the controls show the bare form DOES resolve when the shell-expansion artifact is removed, which means "only the fully namespaced form works" is false; therefore the rubric condition for HOSTILE ("only the fully namespaced form works AND it is over 25 characters of typing for common verbs") is NOT met. Rating for this subset: ACCEPTABLE.
+**No-argument skills (`studio`, `doctor`, and `status-dashboard` - the front-door, diagnostic, and session-status verbs TSK-009 (SPK-03 skill invocation) named):** Original Probe C showed the bare form failing. Controls A, B, and C (2026-07-18) all resolved with `SPIKE-STATUS-OK`. The failure in Probe C is attributed to Git-for-Windows path expansion in the headless Bash probe route, not to the skill invocation system. `intake-interview` was listed in the original draft of this subset but was never tested and is not among its named pivots (`studio`, `doctor`, `status-dashboard`); it is excluded. Rubric chain: the same three named common verbs `studio`, `doctor`, and `status-dashboard` were tested; the original headless Bash probe showed only the namespaced form appearing to work and all namespaced forms exceed 25 characters; however, the controls show the bare form DOES resolve when the shell-expansion artifact is removed, which means "only the fully namespaced form works" is false; therefore the rubric condition for HOSTILE ("only the fully namespaced form works AND it is over 25 characters of typing for common verbs") is NOT met. Rating for this subset: ACCEPTABLE.
 
 **Overall Phase 1 rating: ACCEPTABLE.**
 

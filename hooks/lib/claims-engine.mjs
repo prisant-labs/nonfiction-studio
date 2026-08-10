@@ -309,7 +309,8 @@ function buildQuoteDiff(expected, actual) {
  * the evidence ledger and its preceding quoted span, per docs/formats/claim-markers.md
  * (marker form 4) and the OPP-D03 quote-fidelity check.
  *
- * Evaluation order per anchor (matches the task-4 brief's finding table exactly):
+ * Evaluation order per anchor (first failing check wins, so every anchor produces exactly
+ * one status):
  *   1. EV entry absent from the ledger          -> status 'missing-entry'
  *   2. EV entry present but has no verbatim      -> status 'no-excerpt'
  *   3. No quoted span precedes the anchor        -> status 'no-span'

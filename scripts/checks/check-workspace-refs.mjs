@@ -6,8 +6,8 @@
 //               glob-wildcard directory patterns are not supported and are skipped, since none
 //               occur in this repo's .gitignore today), then scans every git-tracked file under
 //               the shipped scan scope (bin/, hooks/, scripts/, skills/, agents/, docs/,
-//               examples/, templates/, evals/, tests/, and root-level files) for two forms of
-//               plain-text reference into a forbidden directory:
+//               examples/, templates/, evals/, tests/, and root-level files) for three forms of
+//               plain-text reference to content that will not survive a clean checkout:
 //                 form 1 (path reference): a forbidden directory name immediately followed by "/"
 //                 and at least one more non-whitespace path segment, anywhere in the file's text
 //                 (not only inside Markdown link syntax - scripts/check-links.mjs already covers
@@ -18,7 +18,14 @@
 //                 on disk, under a forbidden directory, AND does not exist anywhere in the
 //                 git-tracked tree (i.e. it exists ONLY inside a forbidden directory), mentioned on
 //                 its own with no preceding "/" (a "/"-preceded occurrence is form 1's territory,
-//                 so the two forms never double-report the same text).
+//                 so the two forms never double-report the same text);
+//                 form 3 (task-workspace prose citation): one of four unambiguous literal shapes
+//                 naming this wave's own internal scratch-task numbering ("task-N brief", "task-N
+//                 report", "the task brief", "the task report", case-insensitive), independent of
+//                 the .gitignore-derived forbidden-directory set entirely - these four are
+//                 recognized by their own wording, not by naming a forbidden directory or an
+//                 existing basename. See the scope note below for why general prose citation
+//                 ("per the brief") stays out of scope while these four specific shapes do not.
 //               A small, explicitly-named subtraction is applied to the .gitignore-derived set
 //               before either form runs: directories gitignored because they hold reproducible,
 //               machine-generated content (an installed dependency tree, build output, test-
@@ -33,14 +40,15 @@
 //               with no code change here; only a new directory in the same reproducible-artifact
 //               category would ever need adding to the exclusion.
 // scope note:   this checker does not attempt to catch every shape a workspace reference can take.
-//               Two shapes it deliberately does not attempt: an internal task-number label (e.g. a
-//               capitalized "Task" plus a digit) carries no path or filename at all, so there is
-//               nothing here to derive it from without hardcoding wave-specific vocabulary, which
-//               is exactly what this checker's design is built to avoid; and a prose citation that
-//               names no file ("per the brief", "the kickoff plan for this wave") is not
-//               distinguishable from ordinary English by any pattern this checker could apply
-//               without an unacceptable false-positive rate on normal prose. Both are out of scope
-//               by design, not by oversight; see the task report for the full reasoning.
+//               An internal task-number label used OUTSIDE form 3's four shapes (for example, a
+//               bare "Task 4" with no "brief" or "report" following it) carries no path or
+//               filename at all, so there is nothing to derive it from without hardcoding
+//               wave-specific vocabulary beyond the four literal shapes form 3 already hardcodes;
+//               and a prose citation that names no file and uses none of form 3's four shapes
+//               ("per the brief", "the kickoff plan for this wave") is not distinguishable from
+//               ordinary English by any pattern this checker could apply without an unacceptable
+//               false-positive rate on normal prose. Both remain out of scope by design, not by
+//               oversight, for everything outside form 3's four shapes above.
 // why:          C2 (enforcement theater) - a policy asserted in prose and enforced by nothing is
 //               not a control. Applied here to this wave's own process: the rule that a shipped
 //               file must not reference this wave's scratch workspace was restated in the shared
@@ -320,6 +328,35 @@ const dirRefRegex = buildDirRefRegex(scratchDirs);
 const basenameRegex = buildBasenameRegex([...basenameOrigin.keys()]);
 
 // ---------------------------------------------------------------------------
+// Form 3: task-workspace prose citation (four unambiguous literal shapes)
+// ---------------------------------------------------------------------------
+//
+// Independent of the .gitignore-derived forbidden-directory set: these four shapes are
+// recognized by their own wording, not by naming a scratch directory or an existing basename.
+// "task-N brief" and "task-N report" match this wave's per-task scratch filename convention
+// (task-N-brief.md, task-N-report.md) used as a noun phrase in prose; "the task brief" and
+// "the task report" match the same citation with the number dropped. All four are
+// case-insensitive. See the scope note above for why a general
+// prose citation ("per the brief") stays out of scope while these four specific shapes do not:
+// no shipped file has a legitimate reason to say "task-4 brief" or "the task report", since
+// "task" here can only mean this wave's own internal scratch numbering.
+const FORM3_PATTERNS = [
+  { label: 'task-N brief', re: /\btask-\d+\s+brief\b/gi },
+  { label: 'task-N report', re: /\btask-\d+\s+report\b/gi },
+  { label: 'the task brief', re: /\bthe task brief\b/gi },
+  { label: 'the task report', re: /\bthe task report\b/gi },
+];
+
+// Form 3 self-source exemption: this file's own "what-it-does" header and scope note above
+// necessarily write out the four literal shapes form 3 matches, in order to describe them to a
+// reader. Scanning this file for form 3 would therefore always find its own documentation. This
+// file (scripts/checks/check-workspace-refs.mjs) is the one explicitly named exemption from form
+// 3 scanning; nothing else is exempted, and forms 1 and 2 still scan this file exactly as before
+// (they do not self-match today, incidentally, because this file's source contains no reference
+// to its own forbidden-directory set).
+const FORM3_SELF_SOURCE_REL_PATH = 'scripts/checks/check-workspace-refs.mjs';
+
+// ---------------------------------------------------------------------------
 // Scan
 // ---------------------------------------------------------------------------
 
@@ -365,6 +402,21 @@ for (const rel of filesToScan) {
           '/" and will not exist after a clean checkout'
         );
         if (m2.index === basenameRegex.lastIndex) basenameRegex.lastIndex++;
+      }
+    }
+
+    if (rel !== FORM3_SELF_SOURCE_REL_PATH) {
+      for (const { label, re } of FORM3_PATTERNS) {
+        re.lastIndex = 0;
+        let m3;
+        while ((m3 = re.exec(line)) !== null) {
+          findings.push(
+            rel + ':' + lineNo + ': task-workspace prose citation "' + m3[0] + '" - names this ' +
+            'wave\'s internal scratch-task numbering (' + label + ' shape), which does not survive ' +
+            'a clean checkout'
+          );
+          if (m3.index === re.lastIndex) re.lastIndex++;
+        }
       }
     }
   }

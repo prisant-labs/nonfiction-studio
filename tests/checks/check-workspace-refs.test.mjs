@@ -235,6 +235,78 @@ test('real-repo scope, form 2: a bare mention of a basename that exists only und
 });
 
 // ---------------------------------------------------------------------------
+// Form 3 (task-workspace prose citation): four unambiguous literal shapes,
+// independent of the .gitignore-derived forbidden-directory set, added per
+// item 6 of the fix wave (C2, enforcement theater). Planted strings are
+// assembled from separate parts at runtime, per this file's self-matching
+// discipline above, so this file's own source text never contains one of the
+// four shapes contiguously.
+// ---------------------------------------------------------------------------
+
+test('form 3: "task-N brief" and "task-N report" shapes are caught', () => {
+  const { root, cleanup } = buildSyntheticRoot('form3-tasknum', ['node_modules/', 'planning-scratch/'], {
+    'docs/example.md':
+      'Evaluation order matches the ' + 'task-4' + ' ' + 'brief' + '\'s finding table.\n' +
+      'See ' + 'task-9' + ' ' + 'report' + ' for the full write-up.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 1, 'must exit 1; got: ' + result.combined);
+    assert.match(result.combined, /docs\/example\.md:1:/, 'line 1 finding present');
+    assert.match(result.combined, /docs\/example\.md:2:/, 'line 2 finding present');
+    assert.match(result.combined, /task-workspace prose citation/, 'message must name the violation type');
+  } finally {
+    cleanup();
+  }
+});
+
+test('form 3: the two "the task" + brief/report shapes are caught', () => {
+  const { root, cleanup } = buildSyntheticRoot('form3-thetask', ['node_modules/', 'planning-scratch/'], {
+    'docs/example.md':
+      'Reasoning is detailed in ' + 'the task' + ' brief' + '.\n' +
+      'See ' + 'the task' + ' report' + ' for the full reasoning.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 1, 'must exit 1; got: ' + result.combined);
+    assert.match(result.combined, /docs\/example\.md:1:/, 'line 1 finding present');
+    assert.match(result.combined, /docs\/example\.md:2:/, 'line 2 finding present');
+    assert.match(result.combined, /task-workspace prose citation/, 'message must name the violation type');
+  } finally {
+    cleanup();
+  }
+});
+
+test('form 3 false-positive guard: bare "per the brief", a bare "task-4" with no brief/report word, and "the task force" are not flagged', () => {
+  const { root, cleanup } = buildSyntheticRoot('form3-fp', ['node_modules/', 'planning-scratch/'], {
+    'docs/example.md':
+      'This behavior is documented per the brief.\n' +
+      'See task-4 for the earlier discussion.\n' +
+      'The task force met yesterday to plan the release.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 0,
+      'ordinary prose that is not one of the four form-3 shapes must not be flagged; got: ' + result.combined);
+  } finally {
+    cleanup();
+  }
+});
+
+test('form 3 self-source exemption: the checker does not flag its own scope-note description of the four form-3 shapes', () => {
+  const { root, cleanup } = cloneRealRepo('self-non-matching-form3');
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.doesNotMatch(
+      result.combined, /check-workspace-refs\.mjs:\d+:.*task-workspace prose citation/,
+      'the checker must never cite its own source as a form-3 finding site'
+    );
+  } finally {
+    cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
 // False-positive guards: each of these targets a specific over-broad-matching
 // risk found while designing this checker against this repo's real content.
 // ---------------------------------------------------------------------------
