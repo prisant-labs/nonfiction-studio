@@ -10,14 +10,18 @@ CLI (D-05, five shipped CLIs, grown by one) that renders either shape depending 
 invoked, plus a plugin-root `settings.json` that ships only the `subagentStatusLine` default; and
 a one-time, explicitly consented write of the MAIN status line into the author's own
 `~/.claude/settings.json`, performed by the `doctor` skill on an explicit yes and never by the
-read-only `bin/ns-doctor` engine. Measured render time and the full verification-suite run are in
-the task implementation report.
+read-only `bin/ns-doctor` engine. Measured render time against the committed sample book: a full
+invocation (Node.js process start, stdin pipe, and render, `process.hrtime.bigint()` around 15
+samples) medians 44.6ms (range 42.7-47.7ms); the engine's own computation alone, called
+in-process with no process spawn (200 samples), medians 0.23ms. Both are under OPP-P03's "renders
+under 50ms" bar.
 
 - Status: Accepted
 - Date: 2026-08-10
-- Recon: `(local working notes, not published)` sections Q3, Q4, Q5 (platform contracts: PostToolUse
-  rewriting, matchers, statusline, plugin settings), verified against the official docs for CLI
-  2.1.225
+- Docs: `https://code.claude.com/docs/en/plugins.md`, `https://code.claude.com/docs/en/plugins-reference.md`,
+  and `https://code.claude.com/docs/en/statusline.md` (plugin `settings.json` keys, the
+  `subagentStatusLine` contract, and the main `statusLine` contract respectively), read against
+  the docs as they stood for local CLI 2.1.225
 - Task: Wave 1 item 3 (Studio HUD), roadmap row 1.3
 - Decision: TWO-PIECE HUD - a plugin-shipped `subagentStatusLine` default (in-plugin, no consent
   needed) plus a consented one-time write of the main `statusLine` into the user's own settings
@@ -97,13 +101,13 @@ explicit yes.
 
 ## The doctor read-only covenant: carve-out, not erosion
 
-`bin/ns-doctor` and the `doctor` skill shipped a documented read-only guarantee in four places
-(`skills/doctor/SKILL.md:9,13` and `docs/reference/skills/doctor.md:11,17,60,64` as they stood
-before this task), including the specific claim "The skill writes no files. All reads are
+`bin/ns-doctor` and the `doctor` skill shipped a documented read-only guarantee in at least four
+places (`skills/doctor/SKILL.md:9,13` and `docs/reference/skills/doctor.md:11,17,60,64` as they
+stood before this task), including the specific claim "The skill writes no files. All reads are
 performed by `bin/ns-doctor` under its READ-ONLY COVENANT." This task adds a consented write to
 the `doctor` skill, which would make that blanket claim false if left standing unchanged - exactly
 the enforcement-theater pattern (a claim in the repository that the product does not actually
-keep) this wave exists to close, and explicitly forbidden by the task brief's own instructions.
+keep) this wave exists to close.
 
 The resolution keeps the covenant true by narrowing it precisely, not by weakening it:
 
@@ -116,10 +120,17 @@ The resolution keeps the covenant true by narrowing it precisely, not by weakeni
   the write itself, via the Write or Edit tool, never by shelling out to the engine and never by
   any other mode. Every other mode (`report`, `migrate`, `packs`) is unchanged and still writes
   nothing.
-- **Every place the covenant was asserted was updated** to state the narrowed, still-true claim:
-  the engine is read-only without exception; the skill writes nothing except this one explicitly
-  consented settings install, performed only in `install-statusline` mode, only after an explicit
-  yes.
+- **Every site naming the covenant was updated to state the narrowed, still-true claim** (the
+  engine is read-only without exception; the skill writes nothing except this one explicitly
+  consented settings install, only in `install-statusline` mode, only after an explicit yes) - in
+  two passes, not one. The four sites named above were updated when `install-statusline` was
+  built. A fifth site was missed in that pass and found only on review:
+  `docs/reference/skills/doctor.example.md`'s "Key assertions from this transcript" section
+  carried its own standalone, bolded, unqualified "The skill writes nothing" line - a worked
+  example that this task's original file-ownership list did not include, and so was not part of
+  the four-site sweep above. It is fixed as part of this same task once found, not deferred. A
+  repo-wide grep for `READ-ONLY COVENANT`, `writes no files`, and `writes nothing`, re-run after
+  that fifth site was fixed, confirms no other site remains.
 
 This is the same shape of decision D-06 (single-writer state discipline) already makes elsewhere
 in this plugin: a write is fine when it is scoped, attributed, and honestly documented; what is
@@ -127,10 +138,10 @@ not fine is a write that contradicts a standing claim the shipped prose still ma
 
 ## Content sourcing: three files, and two fields with an honest gap
 
-The brief assigns each HUD segment to a source file: active chapter, word counts, and open claims
-from `.studio/progress.json`; targets and thresholds from `.studio/config.json`; gate state and
-drift from `.studio/gate/last-gate.json` (the Stop hook's verbatim copy of `ns-gate`'s last
-output). Implementing this against the ACTUAL shipped schemas surfaced two gaps the planning
+OPP-P03 (studio HUD) assigns each HUD segment to a source file: active chapter, word counts, and
+open claims from `.studio/progress.json`; targets and thresholds from `.studio/config.json`; gate
+state and drift from `.studio/gate/last-gate.json` (the Stop hook's verbatim copy of `ns-gate`'s
+last output). Implementing this against the ACTUAL shipped schemas surfaced two gaps the planning
 language did not anticipate:
 
 - **No word-count target exists in `config.json` today.** `templates/config-defaults.json` has no
@@ -142,7 +153,7 @@ language did not anticipate:
   reference documentation describes as carrying "one-line promise" per chapter - does not
   actually have a promise column in its shipped form.
 
-Both gaps are resolved the same way the brief already resolves every OTHER missing-data case
+Both gaps are resolved the same way every other missing-data case in this design already is
 (missing `last-gate.json`, malformed `progress.json`): graceful, silent omission of that one
 segment, never an error and never invented data. `hooks/lib/statusline-engine.mjs` reads an
 optional `chapters[].promise` string and an optional `config.targets.word_count` number; both
@@ -190,8 +201,9 @@ it from behavior.
 
 ## Verification gap: `${CLAUDE_PLUGIN_ROOT}` inside a plugin's own settings.json is unverified
 
-The recon flagged this specifically: `${CLAUDE_PLUGIN_ROOT}` demonstrably expands inside
-`hooks/hooks.json` command strings (ADR-0005 proved this live, for hooks specifically), but the
+This was checked directly against the platform documentation before implementation:
+`${CLAUDE_PLUGIN_ROOT}` demonstrably expands inside `hooks/hooks.json` command strings (ADR-0005,
+bin PATH on Windows, proved this live, for hooks specifically), but the
 official statusline documentation's own worked example for a plugin's `subagentStatusLine` uses a
 bare absolute path (`~/.claude/subagent-statusline.sh`), not a plugin-relative one, and no worked
 example anywhere shows the interpolation inside a plugin `settings.json` file specifically.
@@ -205,8 +217,8 @@ manifest files generally, not as a `hooks.json`-specific feature. No implementer
 access to a live Claude Code session with workspace trust accepted, so this remains **unverified,
 not confirmed** - a materially different evidentiary status than ADR-0005's hooks.json finding,
 which rests on an actual measured probe. `claude plugin validate --strict .` was run as part of
-this task's verification suite and its output is quoted in the task implementation report;
-structural validation of this kind does not exercise runtime variable interpolation, so it cannot
+this task's verification suite and passed, validating the marketplace manifest structurally;
+that kind of structural validation does not exercise runtime variable interpolation, so it cannot
 resolve this question either way.
 
 **If a future live session shows the variable does not expand here:** there is no code-level
@@ -225,15 +237,22 @@ to avoid.
 - `library.json` and `scripts/check-docs-completeness.mjs` (`SHIPPED_CLIS`) register the sixth
   CLI. A second task this wave also adds a CLI and owns the D-05 (five shipped CLIs) growth
   decision record; this ADR states the fact of growth to six but defers the D-05 amendment
-  itself to that task's coordination, per the brief.
-- `skills/doctor/SKILL.md` and `docs/reference/skills/doctor.md` gain the narrowly scoped
-  `install-statusline` mode and updated, still-true read-only covenant language.
+  itself to that task's coordination.
+- `skills/doctor/SKILL.md`, `docs/reference/skills/doctor.md`, and
+  `docs/reference/skills/doctor.example.md` gain the narrowly scoped `install-statusline` mode
+  and updated, still-true read-only covenant language; see "The doctor read-only covenant" above
+  for the exact site list and how it was verified complete.
 - This ADR is the basis for a new CANON section 3.5 (statusline and output styles as component
   classes), landed separately by item 8 (planning-doc sync); it is written precisely enough to
-  amend a governing document from, per the task brief.
+  amend a governing document from.
 - Output styles as a component class are explicitly out of scope for this task; CANON 3.5 will
   cover them when that work is scheduled.
 - The end-to-end rendering of either statusline inside a real, trust-accepted Claude Code session
-  was not observed by this task; the task implementation report states plainly which behaviors are
-  proven by the automated test suite against the documented stdin/stdout contracts, and which
-  first prove in a live session.
+  was not observed by this task. The automated test suite proves the engine's behavior against
+  the documented stdin/stdout contracts: project-directory resolution from stdin JSON rather than
+  `process.cwd()`, per-segment graceful degradation on missing or malformed source data, the
+  BLOCK token rendering within one refresh, `--subagent` namespace matching, and measured
+  performance (see the TL;DR above). Two things first prove only in a live session: whether the
+  main status line and the `subagentStatusLine` row actually render as designed inside the
+  interface, and whether `${CLAUDE_PLUGIN_ROOT}` truly expands inside this plugin's own
+  `settings.json` (see "Verification gap" above).

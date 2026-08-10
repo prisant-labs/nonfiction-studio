@@ -5,8 +5,8 @@
 //               against synthetic objects, and the filesystem-touching functions
 //               (readJsonSafe, findRootSafe, buildMainStatusLine, buildSubagentLines) against
 //               small temp book roots built per test. No process spawning here; CLI-level,
-//               end-to-end behavior (including the required test-case enumeration from the
-//               brief) is covered separately in tests/engines/statusline-cli.test.mjs.
+//               end-to-end behavior (including the eight required cases from OPP-P03, studio
+//               HUD) is covered separately in tests/engines/statusline-cli.test.mjs.
 // runner:       node --test tests/engines/statusline.test.mjs
 
 import { test } from 'node:test';
@@ -249,7 +249,7 @@ test('renderStatusLine: never throws on a completely empty context object', () =
   assert.doesNotThrow(() => renderStatusLine({}));
 });
 
-// Self-review fix (not in the brief's required-case list): a chapters[] entry that is missing
+// Self-review fix (not in the original required-case list): a chapters[] entry that is missing
 // its (schema-required, but not schema-GUARANTEED against a hand-edited file) slug must never
 // render the literal text "undefined" into the status bar.
 test('renderStatusLine: a chapter entry with no slug is omitted, never rendered as "undefined"', () => {

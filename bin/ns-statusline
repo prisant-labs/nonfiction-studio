@@ -49,7 +49,8 @@ try {
   }
 } catch {
   // Never let an unexpected error surface as a stack trace in the user's status bar.
-  // Silence is always the correct degradation here ((local working notes, not published) section 3a).
+  // Silence is always the correct degradation here: not being in a book project is a
+  // normal state, not an error, and this command has no operator watching its exit code.
 }
 
 process.exit(0);

@@ -126,10 +126,14 @@ chapter slug and the gate token when its `cwd` resolves to a book root with data
 
 Designed to read three to four small JSON files and print, with no subprocess spawned and no
 directory walk beyond the bounded upward walk that locates the book root. Measured wall-clock
-time (a full Node.js process start of this CLI, stdin pipe, and render, against the committed
-sample book) is documented with the method used to measure it in the task implementation report;
-see [ADR-0008](../../adr/ADR-0008-status-hud.md) for the acceptance bar this was designed against
-(OPP-P03: "renders under 50ms on the sample book").
+time against the committed sample book: a full invocation (Node.js process start, stdin pipe, and
+render, timed end to end with `process.hrtime.bigint()` around 15 samples) medians 44.6ms (range
+42.7-47.7ms); the engine's own computation alone, called in-process with no process spawn (200
+samples), medians 0.23ms. Both are under OPP-P03 (studio HUD)'s acceptance bar, "renders under
+50ms on the sample book" - the full-invocation figure is what a real status-line refresh actually
+costs, dominated by Node.js process startup rather than by this engine's own work. See
+[ADR-0008](../../adr/ADR-0008-status-hud.md) for the full method and the reasoning behind
+measuring both figures.
 
 ## Two fields not yet populated by any shipped writer
 
@@ -150,9 +154,9 @@ fixture, in `tests/engines/statusline-cli.test.mjs`. See ADR-0008 for the full r
 `ns-gate`, `ns-scrub`, and `ns-stylometry` (D-05, five shipped CLIs). It is the only one of the
 six that is never invoked by a hook or another CLI: `hooks/stop-gate.mjs` writes
 `.studio/gate/last-gate.json`, and `ns-statusline` only ever reads that file, never runs
-`ns-gate` itself. This is a deliberate performance boundary (task brief section 3b): spawning
-`ns-gate` as a subprocess on every assistant message would make the status line as slow as a full
-gate run, defeating the reason it exists.
+`ns-gate` itself. This is a deliberate performance boundary: spawning `ns-gate` as a subprocess
+on every assistant message would make the status line as slow as a full gate run, defeating the
+reason it exists.
 
 ## See also
 

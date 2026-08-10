@@ -13,8 +13,8 @@
 // DESIGN INVARIANT: every exported function here is defensive by construction. A missing file,
 // malformed JSON, an absent book root, or an unexpected shape in any of the three source files
 // (.studio/progress.json, .studio/config.json, .studio/gate/last-gate.json) must never throw past
-// this module's boundary. Not in a book project is a normal state, not an error ((local working notes, not published)
-// section 3a); this module has no code path that prints a stack trace or an error string.
+// this module's boundary. Not in a book project is a normal state, not an error; this module has
+// no code path that prints a stack trace or an error string.
 //
 // PERFORMANCE INVARIANT: this module spawns no subprocesses and performs no network I/O. It reads
 // at most four small files total (meta.json and config.json via findBookRoot's own loadBible, plus
@@ -38,13 +38,14 @@ export const PLUGIN_NAMESPACE = 'nonfiction-studio';
 const PROMISE_MAX_CHARS = 60;
 
 /**
- * Resolves the directory the status line should treat as "current" from a parsed stdin event,
- * per (local working notes, not published) section 3a ("never rely on the process working directory") and recon
- * section Q4 ("read cwd or workspace.current_dir out of the stdin JSON"). Prefers
- * workspace.current_dir (the more specifically named field for "where the session currently is")
- * and falls back to the top-level cwd field; both are documented to carry the same value in the
- * common case. Returns null when neither is a non-empty string, so the caller can degrade to
- * silence rather than falling back to process.cwd().
+ * Resolves the directory the status line should treat as "current" from a parsed stdin event.
+ * The platform's own statusline documentation does not state what OS-level working directory a
+ * spawned status-line process inherits, so this reads the location out of the event JSON instead
+ * of ever calling process.cwd(). Prefers workspace.current_dir (the more specifically named field
+ * for "where the session currently is") and falls back to the top-level cwd field; both are
+ * documented to carry the same value in the common case. Returns null when neither is a
+ * non-empty string, so the caller can degrade to silence rather than falling back to
+ * process.cwd().
  *
  * @param {object|null} event - parsed status-line stdin JSON
  * @returns {string|null}
@@ -80,10 +81,10 @@ export function readJsonSafe(absPath) {
  * Wraps findBookRoot so that ANY failure - no book root found (BibleError NO_BOOK_ROOT), a
  * corrupt meta.json or config.json (BibleError META_READ_ERROR / CONFIG_READ_ERROR), or any
  * other unexpected error - returns null rather than throwing. "Not in a book project is a
- * normal state, not an error" ((local working notes, not published) section 3a) is generalized here to cover every
- * failure mode this function can hit, not only the documented BibleError cases: a status line
- * script runs on every assistant message, so an uncaught exception here would be far more
- * disruptive than in a one-shot CLI invocation.
+ * normal state, not an error" is generalized here to cover every failure mode this function can
+ * hit, not only the documented BibleError cases: a status line script runs on every assistant
+ * message, so an uncaught exception here would be far more disruptive than in a one-shot CLI
+ * invocation.
  *
  * @param {string} startDir
  * @returns {{root: string, meta: object, config: object|null}|null}
@@ -123,11 +124,12 @@ export function deriveActiveChapter(progress) {
 /**
  * Reads an optional whole-book word-count target from config.json's `targets.word_count` field.
  *
- * HONEST GAP (see docs/adr/ADR-0008-status-hud.md and the task-3 report): no shipped writer in
- * this codebase populates config.json's `targets` object today. The brief's own worked example
- * of a book-wide target ("Target word count: 30,000 words (full book)") lives as free prose in
- * context/brief.md, not in any JSON file, and config.json's committed shape
- * (templates/config-defaults.json) has no target field at all. This function reads a specific,
+ * HONEST GAP (see docs/adr/ADR-0008-status-hud.md, "Content sourcing" section, for the full
+ * reasoning): no shipped writer in this codebase populates config.json's `targets` object today.
+ * The book-wide target an author actually sets during intake (for example "Target word count:
+ * 30,000 words (full book)") lives as free prose in context/brief.md, not in any JSON file, and
+ * config.json's committed shape (templates/config-defaults.json) has no target field at all.
+ * This function reads a specific,
  * documented, optional field that config.json's schema already permits
  * (additionalProperties: true is not declared on config.json itself, but nothing validates
  * config.json's shape as closed either) so that a future writer populating it is picked up with
@@ -171,12 +173,11 @@ export function formatWords(wordCount, target) {
 /**
  * Derives the gate state token and the drift band from a parsed last-gate.json.
  *
- * Both come from the SAME file by design ((local working notes, not published): "Gate state and drift... from
- * .studio/gate/last-gate.json"): the HUD's job is to surface the verdict AS OF THE LAST GATE
- * RUN continuously between runs, not to recompute a live verdict from progress.json's raw
- * drift_score - recomputing live would defeat the "the studio does work the author cannot see...
- * surfaces only when someone runs a command" motivation this task exists to fix, by silently
- * substituting a different, un-run judgment for the one the author actually asked for.
+ * Both come from the SAME file (.studio/gate/last-gate.json) by design: the HUD's job (OPP-P03,
+ * studio HUD) is to surface the verdict AS OF THE LAST GATE RUN continuously between runs, not
+ * to recompute a live verdict from progress.json's raw drift_score - recomputing live would
+ * defeat the whole point of a HUD that makes work the author cannot otherwise see visible, by
+ * silently substituting a different, un-run judgment for the one the author actually asked for.
  *
  *   - gateToken: the top-level `verdict` field, upper-cased ("pass" -> "PASS", "block" -> "BLOCK").
  *   - driftBand: the `verdict` of the `checks[]` entry whose `check` is "stylometry", lower-cased.
@@ -298,7 +299,7 @@ export function renderStatusLine(ctx) {
  * Top-level orchestration for the main status line: resolve the directory from the stdin event,
  * find the book root, read the three small JSON files defensively, and render. Returns the empty
  * string on any failure path (no usable directory, no book root, or an unexpected error while
- * rendering) - the CLI treats an empty string as "print nothing" per (local working notes, not published) section 3a.
+ * rendering); the CLI treats an empty string as "print nothing".
  *
  * @param {object} event - parsed status-line stdin JSON
  * @returns {string}
@@ -322,17 +323,19 @@ export function buildMainStatusLine(event) {
 
 /**
  * Builds the --subagent mode output: one JSON-serialized {id, content} row per task this
- * plugin's own agents own, per (local working notes, not published) section 3a ("annotate this plugin's own agents
- * with something book-relevant, and leave other agents' rows alone by not emitting for them").
+ * plugin's own agents own, annotating this plugin's own agents with something book-relevant and
+ * leaving every other agent's row alone by not emitting for it.
  *
  * Ownership match: a task is "ours" when its `type` field (falling back to `name` when `type`
  * is absent) is a string starting with the `nonfiction-studio:` namespace prefix - the same
  * convention ADR-0007 (agent identity resolution) established for hook envelopes' `agent_type`
- * field. UNVERIFIED (see docs/adr/ADR-0008-status-hud.md and the task-3 report): this repo has
- * no live probe of the subagentStatusLine `tasks[]` shape the way ADR-0007 had for hook
- * envelopes; the field names are taken from (local working notes, not published)'s documented list.
+ * field. UNVERIFIED (see docs/adr/ADR-0008-status-hud.md, "Content sourcing" and surrounding
+ * sections, for the full discussion): this repo has no live probe of the subagentStatusLine
+ * `tasks[]` shape the way ADR-0007 had for hook envelopes; the field names (`id`, `type`, `name`,
+ * `cwd`) are taken from the platform's own statusline documentation
+ * (https://code.claude.com/docs/en/statusline.md).
  *
- * Row content, kept modest per the brief: the agent's own slug (the part after the namespace
+ * Row content, kept deliberately modest: the agent's own slug (the part after the namespace
  * prefix), plus the active chapter slug and the gate token when that task's own `cwd` resolves
  * to a book root with data to show. A task with no book root under its cwd, or no `id` string,
  * is skipped entirely (no row emitted) rather than emitting an empty-content row, so the

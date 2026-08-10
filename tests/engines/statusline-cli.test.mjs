@@ -2,12 +2,12 @@
 // what-it-is:   CLI-level tests for bin/ns-statusline (OPP-P03, studio HUD; ADR-0008)
 // what-it-does: spawns the real bin/ns-statusline binary against temp clones of the golden
 //               sample book, piping stdin JSON exactly as the platform's statusLine and
-//               subagentStatusLine contracts document, and asserts the eight required cases
-//               from the task brief plus a measured-performance case. Never mutates the
+//               subagentStatusLine contracts document, and asserts eight required cases
+//               (OPP-P03, studio HUD) plus a measured-performance case. Never mutates the
 //               committed examples/sample-book fixture (temp-clone discipline).
 // runner:       node --test "tests/engines/*.test.mjs"
 //
-// Required cases (brief section "Testing"):
+// Required cases:
 //   1. full render: active chapter, words vs. target, open claims, drift band, gate token
 //   2. BLOCK within one refresh
 //   3. no book root: exit 0, empty stdout, no error text
@@ -248,8 +248,8 @@ test('case 7b: --subagent mode with no tasks emits no output', () => {
 test('case 8: renders well under a generous ceiling with no subprocess spawned', () => {
   const tmp = makeTempClone(GOLDEN);
   try {
-    // Warm-up run (first Node process start on some runners is slower; the brief
-    // asks for a generous ceiling that tolerates normal variance, not a cold-start
+    // Warm-up run (first Node process start on some runners is slower, and the point
+    // is a generous ceiling that tolerates normal variance, not a cold-start
     // measurement), then five measured runs, reporting the median.
     spawnStatusline(os.tmpdir(), { cwd: tmp });
 
@@ -269,7 +269,7 @@ test('case 8: renders well under a generous ceiling with no subprocess spawned',
       'startup, spawnSync overhead, and stdin pipe): ' + samples.map(s => s.toFixed(1)).join(', ') +
       '; median=' + median.toFixed(1) + 'ms');
 
-    // Generous ceiling per the brief (3b): this measures a full `node <script>` process
+    // Generous ceiling, deliberately: this measures a full `node <script>` process
     // spawn plus stdin pipe plus three small file reads, NOT the in-process engine cost
     // alone, so it must tolerate real OS process-start variance on a loaded CI runner.
     // It is sized to catch a pathological regression (an accidental subprocess spawn
