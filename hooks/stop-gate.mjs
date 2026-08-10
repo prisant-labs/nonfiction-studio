@@ -47,6 +47,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { findBookRoot } from './lib/bible.mjs';
+import { ALL_FLAGS } from './lib/gate-engine.mjs';
 
 // ---------------------------------------------------------------------------
 // Drain stdin - the platform delivers event JSON here on every invocation.
@@ -162,11 +163,21 @@ const nsGatePath = resolve(ownDir, '..', 'bin', 'ns-gate');
 // The hook passes --project to avoid relying on cwd; --json for machine-readable output.
 // The hook reads NO gate config and resolves NO check modes: the policy layer lives inside
 // ns-gate per TSK-029 (ns-gate orchestrator). Grep-proof: no config.json read in this file.
+//
+// --check is DERIVED from hooks/lib/gate-engine.mjs's own ALL_FLAGS (CHECK_REGISTRY's flag
+// column), not a second, independently-hardcoded list. Before this fix the list here was
+// "claims,stylometry,scrub,continuity-quick,coherence", written by hand and never updated
+// when the quote_fidelity check (flag "quotes", roadmap row 1.5, quote fidelity and source
+// packets) was registered in CHECK_REGISTRY: bin/ns-gate invoked with no --check flag always
+// ran every registered check, but this hook's hardcoded copy silently fell out of sync, so
+// quote_fidelity never fired in the actual product flow, only via a direct bin/ns-gate call.
+// Deriving the list here closes that drift class the same way ADR-0007 (agent identity
+// resolution) closed the platform's independent agent-list duplication.
 const gateResult = spawnSync(
   process.execPath,
   [
     nsGatePath,
-    '--check=claims,stylometry,scrub,continuity-quick,coherence',
+    '--check=' + ALL_FLAGS.join(','),
     '--project=' + bookRoot,
     '--json'
   ],
