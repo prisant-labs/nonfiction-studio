@@ -12,7 +12,7 @@ Scans chapter files for `[claim: EV-nnnn]` markers and computes coverage against
 evidence ledger. Exits 0 when all markers resolve to ledger entries; exits 1 when
 unresolved markers remain; exits 2 on argument or operational error.
 
-With `--quotes` or `--packets` (Task 4: quote fidelity and research packets, warn mode),
+With `--quotes` or `--packets` (OPP-D03 (quote fidelity and source packets)),
 `ns-claims` also scans `[quote: EV-nnnn]` anchors and checks or exports them against the
 ledger's `verbatim` field; see "Quote fidelity and research packets" below.
 
@@ -58,8 +58,8 @@ or use the same `node` plus full-path form.
 | `--project=<dir>` | string | Override the book root to `<dir>`. If omitted, the tool walks up from the current directory looking for `.studio/meta.json`. |
 | `--json` | boolean | Emit the full gate report as JSON to stdout instead of the human-readable summary. |
 | `--online` | boolean | (Not yet implemented; reserved for a future DOI/URL resolution pass.) |
-| `--quotes` | boolean | Run the quote-fidelity check instead of claim coverage (Task 4: quote fidelity and research packets, warn mode). Read-only. |
-| `--packets` | boolean | Generate per-chapter research packets under `research/packets/` instead of claim coverage (Task 4: quote fidelity and research packets, warn mode). Writes only under `research/`, never `.studio/`. |
+| `--quotes` | boolean | Run the quote-fidelity check instead of claim coverage (OPP-D03 (quote fidelity and source packets)). Read-only. |
+| `--packets` | boolean | Generate per-chapter research packets under `research/packets/` instead of claim coverage (OPP-D03 (quote fidelity and source packets)). Writes only under `research/`, never `.studio/`. |
 
 `--quotes` and `--packets` are each a distinct mode: exactly one runs per invocation, in place
 of the default claim-coverage report. Neither flag changes `ns-claims`'s behavior when absent;
@@ -93,7 +93,7 @@ With `--json`, the output is the S-08 section 11 gate-report shape extended with
 
 ## Quote fidelity and research packets
 
-Task 4 (quote fidelity and research packets, warn mode) adds a fourth chapter marker,
+OPP-D03 (quote fidelity and source packets) adds a fourth chapter marker,
 `[quote: EV-nnnn]` (docs/formats/claim-markers.md form 4), which anchors a directly quoted
 span of chapter prose to an EV entry's `verbatim` field.
 
@@ -156,8 +156,8 @@ ns-claims --packets
 `ns-claims` is one of the five shipped CLIs per D-05 (five shipped CLIs via bin/). In
 the Stop gate sequence, `bin/ns-gate` calls the claims engine internally so the same
 coverage computation runs in both interactive sessions and CI; the gate's `quote_fidelity`
-check (Task 4: quote fidelity and research packets, warn mode) shares the same quote-scanning
-functions `--quotes` uses. The `fact-checker` agent reads `ns-claims` JSON output to locate
+check (D-03 (layered Stop gate)) shares the same quote-scanning functions `--quotes` uses.
+The `fact-checker` agent reads `ns-claims` JSON output to locate
 markers that need adversarial verification.
 
 ## See also

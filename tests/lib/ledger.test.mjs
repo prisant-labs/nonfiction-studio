@@ -270,7 +270,7 @@ test('parseSources handles the committed sample book sources.md', () => {
   assert.equal(entries[0].year, 2015);
 });
 
-// ---- verbatim field (Task 4: quote fidelity and research packets, warn mode) ---
+// ---- verbatim field (OPP-D03: quote fidelity and source packets) ---------------
 // D-07 (claim ledger with stable IDs) amendment: verbatim is an OPTIONAL, named,
 // validated EV field holding the exact source text for quote-fidelity checking.
 // An EV entry without it must parse and round-trip exactly as before (case 2).

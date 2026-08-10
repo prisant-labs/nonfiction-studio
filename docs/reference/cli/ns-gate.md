@@ -23,9 +23,9 @@ functions from `hooks/lib/gate-engine.mjs` so the hook and the CLI share one imp
 
 The gate's deterministic checks (claim coverage, quote fidelity, prompt scrub, state
 coherence, continuity) always run. The judgment check (thesis alignment) always runs but
-can only emit warn, never block, in v1 per D-03. The quote-fidelity check (Task 4: quote
-fidelity and research packets, warn mode) can likewise only emit warn, never block, until
-the quote normalization and adjudication policy ships (roadmap row 1.5); a configured
+can only emit warn, never block, in v1 per D-03. The quote-fidelity check (D-03 (layered
+Stop gate)) can likewise only emit warn, never block, until the quote normalization and
+adjudication policy ships (roadmap row 1.5); a configured
 `block` mode is structurally coerced to `warn`, the same mechanism D-03 uses for thesis
 alignment. Per-check mode overrides in config.json control whether a warn or block verdict
 is returned when any other check fires.
@@ -153,7 +153,7 @@ ns-gate --check=claims,scrub
 
 `ns-gate` calls the same engine functions used in the Stop hook sequence: `gate-engine.mjs`
 imports `checkWordCountCoherence` from `doctor-engine.mjs` and calls `scrub`, `computeDrift`,
-`computeCoverage`, and (Task 4: quote fidelity and research packets, warn mode)
+`computeCoverage`, and (OPP-D03 (quote fidelity and source packets))
 `scanQuoteAnchors`/`computeQuoteFindings` from their respective engines. `hooks/stop-gate.mjs`
 does NOT import `gate-engine.mjs` or call `runGate` directly: it spawns `bin/ns-gate` as a
 subprocess and reads the JSON it prints to stdout, exactly as a human or CI invocation would.

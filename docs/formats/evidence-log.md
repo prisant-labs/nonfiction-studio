@@ -107,10 +107,10 @@ A pending entry with no source yet identified:
 
 ## Consumed by
 
-- `bin/ns-claims` (TSK-025 (ns-claims engine)): resolves every `[claim: EV-NNNN]` chapter marker against this file, computes per-chapter `open_claim_count`, and produces the coverage report. With `--quotes` (Task 4: quote fidelity and research packets, warn mode), resolves every `[quote: EV-nnnn]` marker against `verbatim` instead; with `--packets`, generates the per-chapter research packets under `research/packets/`.
+- `bin/ns-claims` (TSK-025 (ns-claims engine)): resolves every `[claim: EV-NNNN]` chapter marker against this file, computes per-chapter `open_claim_count`, and produces the coverage report. With `--quotes` (OPP-D03 (quote fidelity and source packets)), resolves every `[quote: EV-nnnn]` marker against `verbatim` instead; with `--packets`, generates the per-chapter research packets under `research/packets/`.
 - `bin/ns-doctor` (TSK-028 (ns-doctor engine)): validates field presence and value constraints, cross-references every `source` field against `research/sources.md`, and reports orphaned or missing EV IDs.
 - `fact-checker`: reads entries and updates the `status` field only; never modifies claim text.
 - `drafting-partner`: reads entries regardless of status and anchors `[claim: EV-nnnn]` markers to any EV ID that exists in the ledger at drafting time, per the agent's own claim-marking rule; requiring `status: verified` entries only would mark every drafted sentence `[UNVERIFIED]` given the pipeline order.
 - `citation-manager`: reads entries for export-path citation assembly.
 - `Stop` gate (via `bin/ns-claims`): warns or blocks when `open_claim_count` is non-zero, per `config.json` gate settings.
-- `Stop` gate `quote_fidelity` check (Task 4, `hooks/lib/gate-engine.mjs`): compares each `[quote: EV-nnnn]` anchor's preceding quoted span against `verbatim` character-for-character. Warn mode only; block mode is structurally coerced to warn until the normalization and adjudication policy ships (roadmap row 1.5).
+- `Stop` gate `quote_fidelity` check (D-03 (layered Stop gate), `hooks/lib/gate-engine.mjs`): compares each `[quote: EV-nnnn]` anchor's preceding quoted span against `verbatim` character-for-character. Warn mode only; block mode is structurally coerced to warn until the normalization and adjudication policy ships (roadmap row 1.5).

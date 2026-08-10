@@ -1,5 +1,5 @@
 // tests/engines/claims-cli.test.mjs
-// what-it-is:   CLI-level tests for bin/ns-claims (Task 4: quote fidelity and research packets)
+// what-it-is:   CLI-level tests for bin/ns-claims (OPP-D03: quote fidelity and source packets)
 // what-it-does: spawns the real bin/ns-claims binary to verify --quotes and --packets, and to
 //               prove the pre-existing default (no new flag) behavior is unchanged (required case 13)
 // runner:       node --test "tests/engines/*.test.mjs"
@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  readFileSync, writeFileSync, mkdirSync, cpSync, mkdtempSync, rmSync, existsSync
+  readFileSync, writeFileSync, mkdirSync, cpSync, mkdtempSync, rmSync, existsSync, readdirSync
 } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -128,6 +128,39 @@ test('--quotes: existing default (--chapter etc.) argument handling still applie
     assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
     const json = JSON.parse(result.stdout);
     assert.strictEqual(json.check, 'quote_fidelity');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---- --quotes and --packets are mutually exclusive (minor 3) -------------------
+
+test('--quotes and --packets together: exit 2 with a named argument error, not a silent pick', () => {
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    // The golden clone already ships committed research/packets/*.md content (this task's
+    // own 4e output); snapshot it so the assertion below proves no write happened as a
+    // RESULT of this invocation, rather than merely that the directory exists.
+    const packetsDir = join(tmp, 'research', 'packets');
+    const before = existsSync(packetsDir)
+      ? readdirSync(packetsDir).sort().map(f => f + ':' + readFileSync(join(packetsDir, f), 'utf8'))
+      : null;
+
+    const result = spawnClaims(tmp, ['--quotes', '--packets']);
+    assert.strictEqual(result.status, 2,
+      'passing both flags together must exit 2; stdout: ' + result.stdout + ' stderr: ' + result.stderr);
+    assert.ok(
+      result.stderr.includes('--quotes') && result.stderr.includes('--packets') &&
+        result.stderr.includes('mutually exclusive'),
+      'stderr must name both flags and say they are mutually exclusive; got: ' + result.stderr
+    );
+
+    // Proves the rejection happens before either mode runs: research/packets/ is untouched.
+    const after = existsSync(packetsDir)
+      ? readdirSync(packetsDir).sort().map(f => f + ':' + readFileSync(join(packetsDir, f), 'utf8'))
+      : null;
+    assert.deepStrictEqual(after, before,
+      'research/packets/ content must be unchanged when the flags are rejected together');
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

@@ -192,7 +192,7 @@ function buildExcerpt(marker) {
   return '[SOURCE-UNVERIFIABLE]';
 }
 
-// --- Quote fidelity (Task 4: quote fidelity and research packets, warn mode) ----
+// --- Quote fidelity ---------------------------------------------------------------
 // OPP-D03 (quote fidelity and source packets). Fourth marker form, [quote: EV-NNNN]
 // (docs/formats/claim-markers.md), anchors a quoted span in chapter prose to the
 // verbatim excerpt stored on the referenced EV entry. Comparison is character-for-
@@ -387,7 +387,7 @@ export function scanQuoteAnchors(text, ledgerEntries) {
  *
  * @param {object[]} chapters - array of { file: string, anchors: object[] }
  *   where anchors is the return value of scanQuoteAnchors
- * @returns {{ findings: object[], totalAnchors: number, mismatchCount: number }}
+ * @returns {{ findings: object[], totalAnchors: number }}
  */
 export function computeQuoteFindings(chapters) {
   const findings = [];
@@ -408,7 +408,7 @@ export function computeQuoteFindings(chapters) {
     }
   }
 
-  return { findings, totalAnchors, mismatchCount: findings.length };
+  return { findings, totalAnchors };
 }
 
 /**

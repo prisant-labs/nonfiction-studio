@@ -671,7 +671,7 @@ test('T18: --check= (empty list) exits 2 and names the valid check flags', () =>
 });
 
 // ============================================================================
-// Task 4 (quote fidelity and research packets, warn mode) tests
+// OPP-D03 (quote fidelity and source packets) tests
 // T19: golden --check=quotes with no anchors (pass); T20: planted mismatch warn
 // mode; T21: planted mismatch block-mode coercion (structural guarantee, required
 // case 9); T22: quote_fidelity disabled (required case 10)

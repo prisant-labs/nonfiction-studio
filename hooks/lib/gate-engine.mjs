@@ -36,10 +36,9 @@ import { checkWordCountCoherence } from './doctor-engine.mjs';
 // Check registry: CLI flag -> report check name
 // 'claims'           -> 'claim_coverage'  -> computeCoverage
 // 'quotes'           -> 'quote_fidelity'  -> scanQuoteAnchors + computeQuoteFindings
-//   [Task 4 (quote fidelity and research packets, warn mode) 2026-08-09 per OPP-D03
-//    (quote fidelity and source packets), roadmap row 1.5: block mode is structurally
-//    coerced to warn in loadGateConfig below until the normalization and adjudication
-//    policy ships]
+//   [OPP-D03 (quote fidelity and source packets) 2026-08-09, roadmap row 1.5: block mode
+//    is structurally coerced to warn in loadGateConfig below until the normalization and
+//    adjudication policy ships]
 // 'stylometry'       -> 'stylometry'      -> measureBook + computeDrift
 // 'scrub'            -> 'prompt_scrub'    -> scrub(chapters, 'injection')
 // 'continuity-quick' -> 'continuity'      -> scrub(chapters, 'continuity')
@@ -70,7 +69,7 @@ const DEFAULT_GATE = {
   mode: 'warn',
   checks: {
     claim_coverage:     { enabled: true, mode: 'block' },
-    // [Task 4 (quote fidelity and research packets, warn mode) 2026-08-09 per roadmap row 1.5:
+    // [OPP-D03 (quote fidelity and source packets) 2026-08-09 per roadmap row 1.5:
     //  default mode is warn, and loadGateConfig below structurally coerces any configured
     //  'block' back down to 'warn' -- block mode is not reachable until the quote normalization
     //  and adjudication policy ships. This mirrors the D-03 Invariant 1 mechanism used for
@@ -145,9 +144,9 @@ export function loadGateConfig(root, stderrFn) {
     stderr(coercionNotice);
   }
 
-  // Structural guarantee (Task 4: quote fidelity and research packets, warn mode; roadmap
-  // row 1.5): quote_fidelity cannot block until the quote normalization and adjudication
-  // policy ships. Mirrors the D-03 Invariant 1 mechanism above exactly, so no one can promote
+  // Structural guarantee (D-03 layered Stop gate; roadmap row 1.5): quote_fidelity cannot
+  // block until the quote normalization and adjudication policy ships. Mirrors the D-03
+  // Invariant 1 mechanism above exactly, so no one can promote
   // this check to blocking by editing config alone -- warn-mode-first is a property of the
   // code, not a convention.
   if (gate.checks.quote_fidelity && gate.checks.quote_fidelity.mode === 'block') {
@@ -344,11 +343,11 @@ export function runGate(root, opts = {}) {
   }
 
   // ---- QUOTE FIDELITY ----
-  // [Task 4 (quote fidelity and research packets, warn mode) 2026-08-09 per OPP-D03 (quote
-  //  fidelity and source packets), roadmap row 1.5: comparison is character-for-character with
-  //  NO normalization -- normalizing here would hide exactly the mismatch classes the deferred
-  //  normalization and adjudication policy has to adjudicate. Block mode is structurally
-  //  coerced to warn in loadGateConfig above, regardless of what config.json requests.]
+  // [OPP-D03 (quote fidelity and source packets) 2026-08-09, roadmap row 1.5: comparison
+  //  is character-for-character with NO normalization -- normalizing here would hide
+  //  exactly the mismatch classes the deferred normalization and adjudication policy has
+  //  to adjudicate. Block mode is structurally coerced to warn in loadGateConfig above,
+  //  regardless of what config.json requests.]
   if (requestedReportNames.has('quote_fidelity')) {
     const reportName = 'quote_fidelity';
     const qfConfig = gate.checks[reportName];

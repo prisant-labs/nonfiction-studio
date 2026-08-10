@@ -38,7 +38,7 @@ Signals that the online resolution pass failed to confirm the source for a linke
 [quote: EV-NNNN]
 ```
 
-Anchors a directly quoted span of chapter prose to the `verbatim` field of a specific evidence ledger entry (Task 4: quote fidelity and research packets, warn mode; OPP-D03 quote fidelity and source packets). `NNNN` is a four-digit zero-padded EV ID that must carry a `verbatim` field in `research/evidence-log.md` (for example, `[quote: EV-0013]`).
+Anchors a directly quoted span of chapter prose to the `verbatim` field of a specific evidence ledger entry (OPP-D03 (quote fidelity and source packets)). `NNNN` is a four-digit zero-padded EV ID that must carry a `verbatim` field in `research/evidence-log.md` (for example, `[quote: EV-0013]`).
 
 **Span definition, authoritative.** The quoted span is the text between the nearest preceding pair of straight double quotation marks that closes immediately before the anchor, allowing only whitespace and sentence-terminal punctuation between the closing quotation mark and the anchor. Place the anchor immediately after the closing `"`, with at most whitespace and a period, question mark, or exclamation mark in between; anything else between the closing quote and the anchor means no span is found for that anchor.
 
@@ -106,7 +106,7 @@ The per-chapter `open_claim_count` in `.studio/progress.json` is this total. Cov
 
 ## Consumed by
 
-- `bin/ns-claims` (TSK-025 (ns-claims engine)): scans chapter files for the three claim-coverage marker forms and resolves them against `research/evidence-log.md`. Does not detect unmarked sentences; that judgment belongs to the fact-checker agent and the gate's judgment layer. State-coherence drift is caught by bin/ns-doctor per `docs/formats/gate-report.md`. Computes the per-chapter `open_claim_count`; the PostToolBatch hook persists it to `.studio/progress.json` per D-06 (single-writer state discipline). With `--quotes` (Task 4: quote fidelity and research packets, warn mode), scans for form 4 instead and resolves each against the referenced entry's `verbatim` field.
+- `bin/ns-claims` (TSK-025 (ns-claims engine)): scans chapter files for the three claim-coverage marker forms and resolves them against `research/evidence-log.md`. Does not detect unmarked sentences; that judgment belongs to the fact-checker agent and the gate's judgment layer. State-coherence drift is caught by bin/ns-doctor per `docs/formats/gate-report.md`. Computes the per-chapter `open_claim_count`; the PostToolBatch hook persists it to `.studio/progress.json` per D-06 (single-writer state discipline). With `--quotes` (OPP-D03 (quote fidelity and source packets)), scans for form 4 instead and resolves each against the referenced entry's `verbatim` field.
 - `bin/ns-doctor` (TSK-028 (ns-doctor engine)): validates that every `[claim: EV-NNNN]` references an existing EV entry; reports broken markers and orphan `[SOURCE-UNVERIFIABLE]` tags (tags with no paired `[claim: EV-NNNN]` on the same sentence).
 - `fact-checker`: writes `[UNVERIFIED]` and `[SOURCE-UNVERIFIABLE]` tags, and replaces `[UNVERIFIED]` with `[claim: EV-NNNN]` once a claim is sourced and verified; never removes `[claim: EV-NNNN]` markers.
 - `Stop` gate: reads the `open_claim_count` derived from marker resolution to compute the `claim_coverage` gate verdict. Its `quote_fidelity` check separately resolves every `[quote: EV-nnnn]` anchor and warns on a mismatch; block mode is structurally unreachable until the quote normalization and adjudication policy ships (roadmap row 1.5).

@@ -18,10 +18,11 @@ const EV_HEADING = /^### (EV-\d{4}) \(([^)]+)\)$/;
 const SRC_HEADING = /^### (SRC-\d{4}) \(([^)]+)\)$/;
 
 // Known EV fields (in canonical order).
-// 'verbatim' (Task 4: quote fidelity and research packets, warn mode; D-07 amendment) is
-// OPTIONAL: it holds the exact source text for a quoted span, compared character-for-character
-// with no normalization by the quote-fidelity check in claims-engine.mjs. An entry without it
-// parses and round-trips exactly as it did before this field existed.
+// 'verbatim' (D-07 (claim ledger with stable IDs) amendment, per OPP-D03: quote fidelity
+// and source packets) is OPTIONAL: it holds the exact source text for a quoted span,
+// compared character-for-character with no normalization by the quote-fidelity check in
+// claims-engine.mjs. An entry without it parses and round-trips exactly as it did before
+// this field existed.
 const EV_KNOWN = new Set(['claim', 'source', 'locator', 'verbatim', 'confidence', 'status', 'added-by', 'date']);
 
 // Known SRC fields (in canonical order).
