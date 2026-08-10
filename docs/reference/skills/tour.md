@@ -63,7 +63,7 @@ The skill runs nine steps:
 
 ## Why Block Mode
 
-The shipped `examples/sample-book/.studio/config.json` sets the top-level `gate.mode` to `warn`. Under that setting, `ns-gate`'s own D-03 Invariant 2 caps every check's verdict at `warn`, even a check individually configured to `mode: "block"`, so the CLI always exits 0. This is intentional default behavior, not a defect: it means the gate never silently stops an author who has not opted in. To make Step 6's block genuine rather than a capped warning, `tour` opts the disposable copy into `gate.mode: "block"` in Step 3, exactly the setting an author can choose for their own project's `.studio/config.json` at any time. See the [ns-gate CLI reference](../cli/ns-gate.md) for the full mode-capping contract.
+The shipped `examples/sample-book/.studio/config.json` sets the top-level `gate.mode` to `warn`. Under that setting, `ns-gate`'s own D-03 (layered Stop gate) Invariant 2 caps every check's verdict at `warn`, even a check individually configured to `mode: "block"`, so the CLI always exits 0. This is intentional default behavior, not a defect: it means the gate never silently stops an author who has not opted in. To make Step 6's block genuine rather than a capped warning, `tour` opts the disposable copy into `gate.mode: "block"` in Step 3, exactly the setting an author can choose for their own project's `.studio/config.json` at any time. See the [ns-gate CLI reference](../cli/ns-gate.md) for the full mode-capping contract.
 
 ## The Planted Defect
 

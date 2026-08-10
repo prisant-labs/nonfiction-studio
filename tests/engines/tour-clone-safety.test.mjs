@@ -2,22 +2,26 @@
 // what-it-is:   safety proof for the tour skill's copy-before-demonstrate procedure
 // what-it-does: (1) proves the content-hash snapshot/diff helper this suite defines
 //               correctly DETECTS a write into a source tree, using a disposable
-//               synthetic fixture (never examples/) -- this is the suite's real
+//               synthetic fixture (never examples/); this is the suite's real
 //               red-then-green target, since the helper is new code written for this
-//               task; (2) proves the tour's actual documented procedure -- clone
+//               suite; (2) proves the tour's actual documented procedure: clone
 //               examples/sample-book to a fresh temp directory with fs.cpSync, then
 //               edit the gate mode, plant a defect, and revert it, all inside the
-//               clone only -- leaves the real, committed examples/sample-book tree
+//               clone only, leaves the real, committed examples/sample-book tree
 //               byte-for-byte unmodified. Mirrors the content-hash technique in
-//               scripts/test-fixtures.mjs (the brief names that script as "your model
-//               for doing this safely").
-// why:          task-6 brief, Testing section: "The tour's clone step leaves examples/
-//               unmodified. Assert it the way scripts/test-fixtures.mjs does. This
-//               protects a shipped artifact." Two implementers earlier in this wave
-//               polluted examples/ by forgetting to clone before writing; this suite
-//               never writes into examples/sample-book at any point, including during
-//               its own RED-phase development (see the task report for the RED/GREEN
-//               transcript captured while writing snapshotDir/diffSnapshots below).
+//               scripts/test-fixtures.mjs's own temp-clone pattern.
+// why:          OPP-D17 (five-minute first win): the tour skill copies examples/sample-book
+//               to a disposable location and plants a defect there, so the copy step itself
+//               needs a proof that it never writes into the source tree, since a direct write
+//               into a shipped example is a realistic mistake for any tour-like procedure to
+//               make and would corrupt the shipped example for every later user. It never
+//               writes into examples/sample-book at any point, including during its own
+//               development: diffSnapshots was deliberately run first against a stubbed,
+//               broken implementation (a stub returning an empty array unconditionally),
+//               which correctly failed to detect a planted change in a disposable synthetic
+//               fixture, before the real implementation below was restored and re-verified.
+//               That RED-then-GREEN cycle was recorded at implementation time and never
+//               touched the real examples/ tree.
 // runner:       node --test tests/engines/tour-clone-safety.test.mjs
 
 import { test } from 'node:test';
@@ -79,9 +83,11 @@ function diffSnapshots(before, after) {
 
 // ---------------------------------------------------------------------------
 // Part A: prove the detection helper itself works, entirely on a disposable
-// synthetic fixture. This is the suite's genuine red-then-green target -- see
-// the task report for the RED transcript captured against a deliberately
-// broken first draft of diffSnapshots (a stub returning [] unconditionally).
+// synthetic fixture. This is the suite's genuine red-then-green target: a
+// deliberately broken first draft of diffSnapshots (a stub returning an
+// empty array unconditionally) failed the two "CATCHES" tests below for the
+// correct reason, unable to detect the planted change, before the real
+// implementation above replaced it and both tests passed.
 // ---------------------------------------------------------------------------
 
 test('detection sanity: diffSnapshots reports no residue when nothing changed', () => {

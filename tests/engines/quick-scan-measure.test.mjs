@@ -8,17 +8,15 @@
 //               named markers. Also proves the boundary data (totalWords) quick-scan
 //               reads to decide which word-count band applies is accurate at three
 //               sizes: under 500, the 500-1000 target band, and well over 1000.
-// why:          task-6 brief, Testing section: "The --measure invocation path works on a
-//               temp file containing pasted prose and returns named markers. This is the
-//               load-bearing mechanism of quick-scan, and it should not be assumed."
-//               bin/ns-stylometry and hooks/lib/stylometry-engine.mjs are unmodified by
-//               this task (out of scope per the task-6 brief); this suite is therefore a
-//               characterization/regression proof of pre-existing, unmodified engine
-//               behavior against a NEW input shape (pasted prose, arbitrary temp path),
-//               not a red-then-green test of new production code. It passed on first run
-//               because the --measure mode (TSK-037) already generalizes to any readable
-//               text file; the point of this suite is to make that fact verified rather
-//               than assumed, per the brief's own instruction.
+// why:          OPP-D17 (five-minute first win): quick-scan's voice profile must be a real
+//               measurement, not a model impression, so the --measure invocation path it
+//               depends on needs verification rather than assumption. bin/ns-stylometry and
+//               hooks/lib/stylometry-engine.mjs are unmodified here; this suite is therefore
+//               a characterization/regression proof of pre-existing engine behavior against
+//               a NEW input shape (pasted prose, arbitrary temp path), not a red-then-green
+//               test of new production code. It passed on first run because the --measure
+//               mode (TSK-037) already generalizes to any readable text file; the point of
+//               this suite is to make that fact verified rather than assumed.
 // runner:       node --test tests/engines/quick-scan-measure.test.mjs
 
 import { test } from 'node:test';
@@ -60,7 +58,8 @@ test('quick-scan mechanism: pasted prose written to an os.tmpdir() file measures
 
   try {
     // The temp file must resolve outside the repo checkout and outside
-    // examples/ specifically -- the brief's explicit constraint.
+    // examples/ specifically: quick-scan's pasted text must never be
+    // written inside either location.
     assert.ok(
       !resolve(tmpFile).startsWith(REPO_ROOT + sep),
       'temp file must not resolve inside the repo checkout'
@@ -117,8 +116,8 @@ test('quick-scan mechanism: markers key set matches the golden config baseline v
 });
 
 test('quick-scan mechanism: two runs of the same pasted text are deterministic', () => {
-  // Reinforces the honesty line the brief draws: this is a measurement, not
-  // a model improvisation, so it must be perfectly reproducible.
+  // Reinforces quick-scan's engine-versus-model distinction: this is a
+  // measurement, not a model improvisation, so it must be perfectly reproducible.
   const pastedText = readFileSync(FIXTURE, 'utf8');
   const dir = mkdtempSync(join(tmpdir(), 'ns-quick-scan-test-'));
   const tmpFile = join(dir, 'sample.md');
