@@ -25,10 +25,12 @@
       "init-project",
       "intake-interview",
       "outline-book",
+      "quick-scan",
       "research-pass",
       "run-quality-gate",
       "status-dashboard",
-      "studio"
+      "studio",
+      "tour"
     ],
     "hooks": [
       "SessionStart",

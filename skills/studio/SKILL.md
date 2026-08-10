@@ -2,13 +2,13 @@
 name: studio
 user-invocable: true
 argument-hint: ""
-description: "Guided front door dispatcher per D-17 (guided front door): presents five numbered paths (start a new book, continue writing, research and verify, review quality and status, troubleshoot or get help) and routes to the matching Phase 1 skill. Use when the author starts a session without a clear intent, types /studio, or is directed here by the SessionStart orientation message."
+description: "Guided front door dispatcher per D-17 (guided front door): presents six numbered paths (start a new book, continue writing, research and verify, review quality and status, troubleshoot or get help, quick preview) and routes to the matching skill. The sixth path, quick preview, needs no project and routes to quick-scan or tour. Use when the author starts a session without a clear intent, types /studio, or is directed here by the SessionStart orientation message."
 when_to_use: "Use when the author wants to know what to do next, types /studio, starts a chat session without naming a specific skill, or is directed here by the SessionStart message. Do not invoke when the author already names a specific skill or action (use that skill directly instead); do not invoke for surface-level questions that any skill can answer without routing."
 ---
 
-This skill is the guided front door and dispatcher for the Nonfiction Studio plugin per D-17 (guided front door). It reads project state, presents five numbered paths, confirms the author's choice, and routes to the matching skill. The skill writes nothing directly; all output is produced by the target skill. No chain edges exist for this skill in `agents/_chain-permitted.yaml`; the dispatcher routes to skills only.
+This skill is the guided front door and dispatcher for the Nonfiction Studio plugin per D-17 (guided front door). It reads project state, presents six numbered paths, confirms the author's choice, and routes to the matching skill. The skill writes nothing directly; all output is produced by the target skill. No chain edges exist for this skill in `agents/_chain-permitted.yaml`; the dispatcher routes to skills only.
 
-**Skills routed to (by path).** Path 1: `init-project`, then `intake-interview`. Path 2: `outline-book` (no chapter-list) or `draft-chapter` (chapter in progress or next unstarted). Path 3: `research-pass` or `fact-check-pass`. Path 4: `status-dashboard`, then `run-quality-gate`. Path 5: `doctor` (structural problems) or direct answer from inline-loaded bible context (general questions). No skill or agent is invoked for Path 5 general questions.
+**Skills routed to (by path).** Path 1: `init-project`, then `intake-interview`. Path 2: `outline-book` (no chapter-list) or `draft-chapter` (chapter in progress or next unstarted). Path 3: `research-pass` or `fact-check-pass`. Path 4: `status-dashboard`, then `run-quality-gate`. Path 5: `doctor` (structural problems) or direct answer from inline-loaded bible context (general questions). Path 6: `quick-scan` or `tour`, neither of which reads or requires a project. No skill or agent is invoked for Path 5 general questions.
 
 Skill inputs read:
 - `.studio/progress.json` (project state; required for project-exists probe and chapter inspection)
@@ -26,9 +26,9 @@ Use the Bash tool to check whether a project exists in this directory:
 test -f .studio/progress.json && echo HAS_PROGRESS || echo NO_PROGRESS
 ```
 
-**NO_PROGRESS:** A project does not exist here. Present Path 1 as the only option and skip to the confirm-before-handoff in Step 4, Path 1:
+**NO_PROGRESS:** A project does not exist here. Paths 2 through 5 all assume an existing project and do not apply yet; only Path 1 (start a new book) and Path 6 (quick preview) work without one. Present both, leading with the lower-commitment option since a first-time arrival is most likely to be standing at exactly this prompt, then skip straight to Step 4 for whichever the author picks (skip Step 3's full six-path greeting; it does not apply here):
 
-> It looks like you have no active project in this directory. Would you like to start a new book? If so, the next step is `init-project` (Path 1).
+> It looks like you have no active project in this directory. If you'd like a fast, no-commitment preview first, paste some writing for `quick-scan` (a voice and claims read) or take a guided `tour` of the sample book - neither needs a project. If you're ready to start a new book, the next step is `init-project` (Path 1). Which would you like?
 
 **HAS_PROGRESS:** Continue to Step 2.
 
@@ -48,9 +48,9 @@ Continue to Step 3.
 
 ---
 
-## Step 3 - Greet and present five paths
+## Step 3 - Greet and present six paths
 
-Greet the author by book title and present all five paths as numbered choices:
+Greet the author by book title and present all six paths as numbered choices:
 
 > Welcome back to **[book title]**. What do you want to work on?
 >
@@ -59,8 +59,9 @@ Greet the author by book title and present all five paths as numbered choices:
 > 3. **Research and verify** - gather new sources or check existing claims in a chapter
 > 4. **Review quality and status** - see the project dashboard and run the quality gate
 > 5. **Troubleshoot or get help** - diagnose a project problem or ask a general question
+> 6. **Quick preview** - paste writing for a fast voice-and-claims read, or take a guided tour of the sample book; neither needs a project
 
-Wait for the author to choose a number or describe their intent. Map the described intent to one of the five paths if unambiguous. Continue to Step 4 based on the choice.
+Wait for the author to choose a number or describe their intent. Map the described intent to one of the six paths if unambiguous. Continue to Step 4 based on the choice.
 
 ---
 
@@ -137,6 +138,16 @@ Ask the author to clarify:
 On confirmation, proceed with `doctor`. Note: `doctor` is a Phase 1 skill that arrives with TSK-054 (doctor skill). Its invocation form is `/nonfiction-studio:doctor`.
 
 **General question:** Use the Read tool to load the relevant bible files inline (`context/brief.md`, `context/style-profile.md`, `structure/thesis.md`, `structure/outline.md` as applicable). Answer directly from that context. Do not invoke any skill or agent.
+
+### Path 6 - Quick preview
+
+Ask the author to clarify:
+
+> Would you like to paste some writing for a quick voice-and-claims read (`quick-scan`), or see a guided tour of the quality gate using the bundled sample book (`tour`)?
+
+**Confirm-before-handoff:** State the skill: "Ready to proceed with `[quick-scan|tour]`. Confirm?"
+
+On confirmation, proceed with the named skill. Neither skill reads or requires `.studio/progress.json`, `.studio/meta.json`, or any other project file; both work identically whether or not a project exists in this directory, which is why this path is also offered directly from Step 1's `NO_PROGRESS` branch before any project exists.
 
 ---
 
