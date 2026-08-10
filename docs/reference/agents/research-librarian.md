@@ -148,6 +148,11 @@ key, the string `"true"`, `false`, or `null` all leave the gate closed. Older
 config files without this block remain valid per S-08 (schemas and file formats)
 Rule 2 (unknown fields preserved).
 
+The PreToolUse hook enforces this rule directly: it denies `WebSearch` and
+`WebFetch` calls from `research-librarian` and every other web-gated agent
+whenever `research.web_enabled` is not exactly `true`, per ADR-0007 (agent
+identity resolution).
+
 When the gate is closed and the author requests web research, the agent declines
 and states that web research is disabled for this project, citing the config
 change needed to enable it.
