@@ -125,6 +125,11 @@ test('(unit) formatFlagLine: no findings says nothing recognized, and does not c
   // scanner in this hook checks for that. See test (1) below for the exact fetch that
   // surfaced this.
   assert.doesNotMatch(line, /no known injection|injection signatures|injection scan/i, 'must not claim an injection check occurred or came back clean');
+  // Positive pin (item 7, fix wave): the blocklist above catches a verbatim revert but not a
+  // reworded reintroduction ("Injection check", "No injection detected."). Renaming the label
+  // to "Injection check" passes every assertion above unchanged; only this positive assertion
+  // on the disclaimer substring itself catches that regression.
+  assert.match(line, /not an injection check/i, 'the label must positively disclaim being an injection check, not merely avoid the old blocklisted phrases');
 });
 
 test('(unit) formatFlagLine: findings name the distinct pattern type(s); the count matches the deduped list, not the raw finding count', () => {
@@ -338,6 +343,9 @@ test('(1) planted injection page (exact OPP-P04 adversarial text): wrapped and f
 
   assert.match(wrappedResult, /nothing recognized/i, 'no scanner in this hook recognizes this phrasing; the flag says so honestly');
   assert.doesNotMatch(wrappedResult, /no known injection|injection signatures|injection scan/i, 'the flag must not claim an injection check occurred on a body that IS an instruction-override attempt: that is a false assurance, not a neutral non-finding (the round-5 defect this test now guards against)');
+  // Positive pin (item 7, fix wave): same reasoning as the unit test above, applied end to end
+  // against the exact adversarial fetch body that surfaced the round-5 defect in the first place.
+  assert.match(wrappedResult, /not an injection check/i, 'the wrapped flag must positively disclaim being an injection check on this exact adversarial body, not merely avoid the old blocklisted phrases');
   assert.doesNotMatch(out.hookSpecificOutput.additionalContext, /injection\.prompt-override/, 'additionalContext never names a prompt-override signature: the detector that produced it was deleted');
 });
 

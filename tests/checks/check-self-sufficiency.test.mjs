@@ -51,6 +51,7 @@ after(() => {
 const WATCHED_LIVE_PATHS = [
   'scripts/_f6-planted-anthropic-key.mjs', // must never come into existence live
   'scripts/_f6-planted-openai-key.mjs',
+  'scripts/_f6-planted-network-call.mjs',
   'examples/_f6-planted-openai-key.md',
   'examples/_f6-planted-network-mention.md',
 ];
@@ -97,6 +98,26 @@ test('pre-existing scope: an ANTHROPIC_API_KEY reference with no exceptions-file
     assert.match(result.combined, /scripts\/_f6-planted-anthropic-key\.mjs/, 'message must name the planted file');
     assert.match(result.combined, new RegExp(ANTHROPIC_KEY_NAME), 'message must name the planted pattern');
     assert.match(result.combined, /no exceptions-file entry/, 'message must say why it is forbidden');
+  } finally {
+    cleanup();
+  }
+});
+
+test('pre-existing scope: a raw network call (the fetch pattern) with no exceptions-file entry is caught', () => {
+  // Item 7 (fix wave): the only pre-existing NETWORK_PATTERNS test proves the examples/
+  // exemption still applies (a network call under examples/ stays exempt); nothing proved a
+  // network call OUTSIDE examples/ is actually caught, so emptying NETWORK_PATTERNS entirely
+  // passed the whole suite. This test closes that gap.
+  const { root, cleanup } = cloneRepoToTemp('selfsuff-network-preexisting');
+  try {
+    const target = join(root, 'scripts', '_f6-planted-network-call.mjs');
+    writeFileSync(target, 'async function loadRemote() { return await ' + FETCH_CALL + "'https://example.com/data'); }\n");
+
+    const result = runClonedChecker(root, SCRIPT);
+
+    assert.equal(result.status, 1, 'must exit 1; got: ' + result.combined);
+    assert.match(result.combined, /scripts\/_f6-planted-network-call\.mjs/, 'message must name the planted file');
+    assert.match(result.combined, /raw network call/, 'message must name the violation type');
   } finally {
     cleanup();
   }

@@ -16,8 +16,8 @@
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 
 import { cloneRepoToTemp, runClonedChecker, cleanupGoldenClone, snapshotPaths, diffPathSnapshots } from './clone-helper.mjs';
 
@@ -48,6 +48,7 @@ const WATCHED_LIVE_PATHS = [
   'README.md',
   'docs/formats/decisions.md',
   'examples/_f6-planted-violation.md', // must never come into existence live
+  'examples/_f7-planted/hooks.f7-planted.json',
 ];
 
 const beforeWatchedSnapshot = snapshotPaths(WATCHED_LIVE_PATHS);
@@ -162,6 +163,35 @@ test('widened scope: a literal ${CLAUDE_PLUGIN_ROOT} string planted under exampl
 // clone must still exit 0 even though examples/ is now in scope and contains
 // them.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Item 7 (fix wave): the hooks.json-shaped filename exemption (isHooksJsonShaped)
+// is scoped to finding (b) only per the header comment at lines 136-138, but
+// nothing automated pinned that the OTHER finding type is not accidentally
+// exempted too. Plants both violations in the SAME hooks.json-shaped file so one
+// test proves finding (a) fires there while finding (b) does not.
+// ---------------------------------------------------------------------------
+
+test('finding (a) is not exempted inside a hooks.json-shaped filename: a relative bin invocation still fires there even though finding (b) is exempt in the same file', () => {
+  const { root, cleanup } = cloneRepoToTemp('plugin-root-hooksjson-relbin');
+  try {
+    const target = join(root, 'examples', '_f7-planted', 'hooks.f7-planted.json');
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(
+      target,
+      '{"command": "node bin/ns-claims --project=.", "root": "' + '${CLAUDE_PLUGIN_ROOT}' + '/bin/ns-gate"}\n'
+    );
+
+    const result = runClonedChecker(root, SCRIPT);
+
+    assert.equal(result.status, 1, 'must exit 1; got: ' + result.combined);
+    assert.match(result.combined, /examples\/_f7-planted\/hooks\.f7-planted\.json/, 'message must name the planted hooks.json-shaped file');
+    assert.match(result.combined, /relative bin invocation/, 'finding (a) has no filename-shape exemption; it must still fire here');
+    assert.doesNotMatch(result.combined, /literal plugin-root environment-variable string/, 'finding (b) IS exempt inside a hooks.json-shaped file; only finding (a) should be reported here');
+  } finally {
+    cleanup();
+  }
+});
 
 test('clean clone: an unmodified temp clone (widened scope included) still exits 0', () => {
   const { root, cleanup } = cloneRepoToTemp('plugin-root-clean');

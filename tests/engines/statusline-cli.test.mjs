@@ -26,6 +26,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import os from 'node:os';
+import { buildMainStatusLine } from '../../hooks/lib/statusline-engine.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -60,7 +61,7 @@ test('case 1: full render contains active chapter, words vs target, open claims,
   const tmp = makeTempClone(GOLDEN);
   try {
     // Add a book-wide word-count target and a per-chapter promise: neither field is
-    // populated by any shipped writer yet (see ADR-0008 and the task report), but the
+    // populated by any shipped writer yet (see ADR-0008, status HUD and CANON 3.5), but the
     // engine is forward-compatible with both when present, per additionalProperties:
     // true on both schemas. This proves that path with a real fixture.
     const configPath = join(tmp, '.studio', 'config.json');
@@ -275,6 +276,48 @@ test('case 8: renders well under a generous ceiling with no subprocess spawned',
     // It is sized to catch a pathological regression (an accidental subprocess spawn
     // chain, a full-tree walk, a network call) while never flaking on ordinary variance.
     assert.ok(median < 2000, 'median wall-clock time must stay under 2000ms; got ' + median.toFixed(1) + 'ms');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('case 8b: in-process buildMainStatusLine call (no subprocess) measures tight against a low ceiling', () => {
+  // Item 7 (fix wave): case 8 above measures a full `node <script>` process spawn, so its
+  // 2000ms ceiling has to tolerate real OS process-start variance and is loose against the
+  // 42.7-67.5ms wall-clock range that spawn actually measures at. This test calls the engine
+  // function directly in this same process instead, which has no process-start variance to
+  // tolerate, so its ceiling can and should be tight. Kept alongside case 8's loose wall-clock
+  // assertion, not instead of it: case 8 still proves the real CLI path (subprocess, stdin
+  // pipe, argv) stays fast; this test proves the engine computation itself stays fast,
+  // independent of process-start noise.
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    // Warm-up call (first-call module/JIT variance is not what this measures).
+    buildMainStatusLine({ cwd: tmp });
+
+    const samples = [];
+    for (let i = 0; i < 5; i++) {
+      const start = process.hrtime.bigint();
+      const line = buildMainStatusLine({ cwd: tmp });
+      const elapsedMs = Number(process.hrtime.bigint() - start) / 1e6;
+      assert.ok(typeof line === 'string' && line.length > 0, 'engine must return a non-empty line');
+      samples.push(elapsedMs);
+    }
+    samples.sort((a, b) => a - b);
+    const median = samples[Math.floor(samples.length / 2)];
+
+    // eslint-disable-next-line no-console
+    console.log('[statusline-cli.test.mjs] in-process buildMainStatusLine samples (ms, no subprocess ' +
+      'spawn, no process-start variance): ' + samples.map(s => s.toFixed(3)).join(', ') +
+      '; median=' + median.toFixed(3) + 'ms');
+
+    // Tight ceiling, deliberately: measured median on a development machine is well under 1ms
+    // (sub-millisecond string assembly over three small already-parsed JSON reads). 50ms is
+    // generous against that measurement (roughly two orders of magnitude of headroom for a
+    // loaded CI runner) while still catching a real regression case 8's 2000ms ceiling would
+    // not notice: an accidental full-tree walk, a synchronous network call, or an N+1 file-read
+    // loop introduced into the engine.
+    assert.ok(median < 50, 'median in-process engine time must stay under 50ms; got ' + median.toFixed(3) + 'ms');
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
