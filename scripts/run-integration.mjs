@@ -639,7 +639,7 @@ const { dryRun, model } = parseArgs(process.argv.slice(2));
 // unattended CI runner (process.env.CI truthy) means a named green skip; no credential and not
 // CI means "developer machine," where the probe below decides between live (on an
 // already-authenticated local session) and a dry-run fallback. See that module's header for
-// the full precedence and why CI-truthiness alone -- never this probe's result -- is what
+// the full precedence and why CI-truthiness alone, never this probe's result, is what
 // triggers the skip.
 //
 // Corrected 2026-08-07: this gated solely on ANTHROPIC_API_KEY and so forced dry-run on every
@@ -651,7 +651,7 @@ const { dryRun, model } = parseArgs(process.argv.slice(2));
 // authenticated. Tier B's own workflow installs that binary before the live steps run, so on a
 // keyless GitHub runner this probe used to report "usable," the old gate below proceeded into
 // live mode, and the run failed on ordinary model-call errors instead of skipping cleanly. The
-// probe is now consulted ONLY on a non-CI developer machine with neither credential set --
+// probe is now consulted ONLY on a non-CI developer machine with neither credential set:
 // never when CI is truthy, so a binary that merely exists can no longer masquerade as
 // "authenticated."
 function claudeCliUsable() {
@@ -660,7 +660,7 @@ function claudeCliUsable() {
 }
 
 if (dryRun) {
-  // An explicit developer request always wins, regardless of credential or CI state -- the
+  // An explicit developer request always wins, regardless of credential or CI state - the
   // same precedence the pre-existing --dry-run flag always had.
   runDryMode(model);
 } else {
@@ -680,7 +680,7 @@ if (dryRun) {
   log('[run-integration] credential decision: ' + decision.mode + ' (' + decision.reason + ')');
 
   if (decision.mode === 'skip') {
-    exitWithCode(0, 'SKIP -- ' + decision.reason);
+    exitWithCode(0, 'SKIP - ' + decision.reason);
   } else if (decision.mode === 'dry-run') {
     runDryMode(model);
   } else {

@@ -2,13 +2,13 @@ name: Tier B
 
 # Runs weekly on a schedule, and on demand from the Actions tab (workflow_dispatch). Advisory
 # either way: this workflow has no pull_request trigger at all, so a Tier B failure can never
-# block a merge -- but it does hard-block a release, since the tag-triggered release workflow
+# block a merge, but it does hard-block a release, since the tag-triggered release workflow
 # (.github/workflows/release.yml) is a separate, later step in the release ceremony that a
 # maintainer runs only once Tier B is green. See docs/adr/ADR-0010-tier-b-trigger-and-credential.md
 # for the trigger and credential decision this workflow implements.
 #
 # Credential: CLAUDE_CODE_OAUTH_TOKEN, an OAuth token minted with `claude setup-token` and set
-# as a repo secret with `gh secret set` -- subscription authentication, not an API key, per the
+# as a repo secret with `gh secret set` - subscription authentication, not an API key, per the
 # self-sufficiency invariant. The secret may not be set yet; the two live steps below handle
 # that themselves. When neither CLAUDE_CODE_OAUTH_TOKEN nor the legacy ANTHROPIC_API_KEY
 # fallback is present on this unattended runner, scripts/lib/credential-mode.mjs (shared by
@@ -28,7 +28,7 @@ name: Tier B
 # controlled CI=true environment; see tests/checks/run-integration.test.mjs and
 # tests/checks/run-evals.test.mjs. What can only prove on a real GitHub runner: that this
 # workflow's own `secrets.CLAUDE_CODE_OAUTH_TOKEN` interpolation resolves the way the local
-# tests assume, and -- once the secret is set -- that a live run against the real API succeeds
+# tests assume, and, once the secret is set, that a live run against the real API succeeds
 # end to end. Both are first proven on this workflow's first scheduled or dispatched execution.
 
 on:
@@ -85,10 +85,10 @@ jobs:
       # dispatch-accuracy threshold is met, OR on the named green skip described in this file's
       # header; 1 if an evals/*.eval.json file is malformed; 2 if dispatch accuracy falls below
       # the documented threshold (roadmap row 1.12: a genuinely broken dispatch table must turn
-      # a live run red -- scripts/lib/dispatch-threshold.mjs is where that threshold is
+      # a live run red; scripts/lib/dispatch-threshold.mjs is where that threshold is
       # documented and chosen); 3 only on a genuine BUDGET_EXCEEDED (cap sized for the full
       # eval batch; see the script). This tier is advisory to merges only because the trigger
-      # above has no pull_request entry, not because any step here suppresses a nonzero exit --
+      # above has no pull_request entry, not because any step here suppresses a nonzero exit:
       # there is no continue-on-error in this file, and a scheduled or dispatched run below the
       # dispatch-accuracy threshold now fails the job for real.
       - name: Eval dispatch accuracy

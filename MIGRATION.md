@@ -10,7 +10,7 @@ Every book project carries a `.studio/meta.json` file with a `schema_version` fi
 
 ## What `ns-doctor --migrate` does today
 
-**Diagnosis only.** If a book's `schema_version` equals the installed plugin's `SUPPORTED_MAJOR`, `--migrate` reports "nothing to migrate" and exits 0 -- a current schema is a success state, not an error indistinguishable from a broken bible. If a book's `schema_version` is anything else, `--migrate` refuses and exits 2, naming both the book's version and the version the plugin supports.
+**Diagnosis only.** If a book's `schema_version` equals the installed plugin's `SUPPORTED_MAJOR`, `--migrate` reports "nothing to migrate" and exits 0: a current schema is a success state, not an error indistinguishable from a broken bible. If a book's `schema_version` is anything else, `--migrate` refuses and exits 2, naming both the book's version and the version the plugin supports.
 
 **No automated transformation exists yet.** `--migrate` does not currently rewrite `.studio/meta.json`, does not touch chapter content, evidence-ledger entries, or voice-profile data, and does not write a migration-event log. There is nothing to transform yet, because the plugin has shipped exactly one schema major (`2`) since its first release, so this path has never had a real old-format bible to run against. The command exists today as a readiness check: it tells an author clearly whether their book needs attention, without silently doing (or silently failing to do) anything to their files.
 
@@ -35,14 +35,14 @@ No migrations have shipped yet. When `schema_version` first changes, this sectio
 ### schema_version "2" -> "3" (shipped in vX.Y.Z)
 
 - What changed: <field rename / type change / removal, named exactly>
-- What ns-doctor --migrate does automatically: <the real transformation, or "nothing yet -- manual steps only">
+- What ns-doctor --migrate does automatically: <the real transformation, or "nothing yet, manual steps only">
 - What the author must do manually: <steps, or "nothing">
 - Data that cannot be migrated automatically: <named explicitly, or "none">
 ```
 
 ## What counts as a breaking change
 
-For a prompt-and-Markdown plugin like this one, there is no REST endpoint to version -- the compatibility surface is the bible schema, the component slugs, and the quality-gate semantics. A change needs a MAJOR version bump if it does any of the following:
+For a prompt-and-Markdown plugin like this one, there is no REST endpoint to version: the compatibility surface is the bible schema, the component slugs, and the quality-gate semantics. A change needs a MAJOR version bump if it does any of the following:
 
 - Renames, retypes, or removes a field in `.studio/meta.json`, `.studio/config.json`, `progress.json`, or the evidence-ledger format.
 - Renames or removes any shipped agent, skill, or hook slug.
@@ -50,7 +50,7 @@ For a prompt-and-Markdown plugin like this one, there is no REST endpoint to ver
 - Changes a `bin/` CLI's exit code, removes a flag, or changes what an existing flag means.
 - Removes or renames a previously documented `.studio/config.json` key.
 
-A new skill, agent, hook, or template, a new optional config key, a new warn-only gate check, or a new `bin/` flag that does not remove an existing one, is feature-additive (MINOR). A correctness fix that does not change a contract -- a check that was wrongly accepting bad output starting to reject it correctly, a prose update with no slug or schema affected -- is a PATCH.
+A new skill, agent, hook, or template, a new optional config key, a new warn-only gate check, or a new `bin/` flag that does not remove an existing one, is feature-additive (MINOR). A correctness fix that does not change a contract (a check that was wrongly accepting bad output starting to reject it correctly, a prose update with no slug or schema affected) is a PATCH.
 
 ## Mid-book update promise
 

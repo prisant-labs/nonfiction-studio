@@ -25,18 +25,21 @@
 //   2  - dispatch accuracy below scripts/lib/dispatch-threshold.mjs's threshold: a genuinely
 //        broken dispatch table (roadmap row 1.12). RETIRED meaning, as of this task: this code
 //        used to mean "operational error: no model access (no API key and no usable claude
-//        CLI)" -- that situation no longer reaches an error at all, since it now resolves to
+//        CLI)"; that situation no longer reaches an error at all, since it now resolves to
 //        either the named skip above (unattended CI) or an automatic dry-run fallback
 //        (developer machine); see scripts/lib/credential-mode.mjs.
 //   3  - BUDGET_EXCEEDED: cumulative spend exceeded the $1.50 cap
 //
-// Budget note (recalibrated 2026-08-08): 28 eval cases across 15 files at a
-// measured $0.037 per haiku call cost roughly $1.04 the last time this was
-// measured live, comfortably inside the $1.50 cap. A live batch is expected
-// to grade every case and exit 0; the old $0.10 cap covered barely two calls,
-// so it tripped BUDGET_EXCEEDED partway through every single run by design,
-// not in response to any real overrun. Hitting BUDGET_EXCEEDED (exit 3) now
-// means a genuine regression in spend, not the previously guaranteed outcome.
+// Budget note (recalibrated 2026-08-08, case count corrected 2026-08-09): 34 eval cases across
+// 16 files (counted directly from each file's cases[] array; the file originally said 28
+// across 15, which had gone stale as evals/ grew). The $0.037-per-haiku-call and ~$1.04-total
+// figures below are carried forward from the 2026-08-08 measurement and are NOT re-measured
+// against the corrected 34-case count; treat them as an estimate from an earlier case count,
+// not a re-verified one. Comfortably inside the $1.50 cap either way. A live batch is expected
+// to grade every case and exit 0; the old $0.10 cap covered barely two calls, so it tripped
+// BUDGET_EXCEEDED partway through every single run by design, not in response to any real
+// overrun. Hitting BUDGET_EXCEEDED (exit 3) now means a genuine regression in spend, not the
+// previously guaranteed outcome.
 
 import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
@@ -185,13 +188,13 @@ const { dryRun } = parseArgs(process.argv.slice(2));
 // claude CLI authenticates from the active account when one is logged in, so an authenticated
 // CLI session is sufficient on a developer machine, with no credential env var required at
 // all. scripts/lib/credential-mode.mjs is the shared, three-state decision that both this
-// script and scripts/run-integration.mjs now call -- see that module's header for the full
-// precedence and why CI-truthiness alone -- never this probe's result -- is what triggers the
+// script and scripts/run-integration.mjs now call; see that module's header for the full
+// precedence and why CI-truthiness alone, never this probe's result, is what triggers the
 // skip. Corrected 2026-08-07 alongside the same gate in run-integration.mjs.
 //
 // Corrected again in this task (F-CI-02, Tier B trigger contradicts D-20): this probe proves
 // only that the claude binary EXISTS, never that anyone is authenticated, and this script's
-// prior gate treated "no model access" as a hard exit(2) with no CI-awareness at all --
+// prior gate treated "no model access" as a hard exit(2) with no CI-awareness at all,
 // disagreeing with run-integration.mjs's own (also broken) dry-run fallback for the identical
 // situation. Both scripts now call the same decision function and can never disagree again.
 // The probe below is consulted ONLY on a non-CI developer machine with neither credential set.
@@ -200,7 +203,7 @@ function claudeCliUsable() {
   return !probe.error && probe.status === 0;
 }
 
-// An explicit --dry-run always wins, regardless of credential or CI state -- the same
+// An explicit --dry-run always wins, regardless of credential or CI state - the same
 // precedence the pre-existing flag always had; the credential decision is not even computed.
 let decisionMode;
 if (dryRun) {
@@ -221,7 +224,7 @@ if (dryRun) {
   );
   log('[run-evals] credential decision: ' + decision.mode + ' (' + decision.reason + ')');
   if (decision.mode === 'skip') {
-    log('[run-evals] SKIP -- ' + decision.reason);
+    log('[run-evals] SKIP - ' + decision.reason);
     process.exit(0);
   }
   decisionMode = decision.mode;

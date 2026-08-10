@@ -82,7 +82,7 @@ test('no tag given and no GITHUB_REF_NAME set -> operational error, exit 2', () 
   const { root, cleanup } = cloneRepoToTemp('release-tag-no-tag');
   try {
     // GITHUB_REF_NAME is a real GitHub Actions default env var, ambiently set on every Actions
-    // run -- including the run of THIS test suite under Tier A CI. Explicitly removed so the
+    // run, including the run of THIS test suite under Tier A CI. Explicitly removed so the
     // outcome is deterministic regardless of where the suite executes, not just on a machine
     // that happens not to have it set.
     const env = { ...process.env };

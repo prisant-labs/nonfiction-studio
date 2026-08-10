@@ -1,14 +1,14 @@
 // tests/checks/run-integration.test.mjs
 // what-it-is:   end-to-end tests of the REAL scripts/run-integration.mjs, driven through
-//               spawnSync with a controlled environment -- not just the extracted decision
+//               spawnSync with a controlled environment, not just the extracted decision
 //               function (see tests/checks/credential-mode.test.mjs for that), so the
 //               script's actual wiring is what gets proven, not only the function it calls.
-// what-it-does: covers the credential-decision requirements from this wave's task-7 brief
-//               that are safe and deterministic to prove without a real model call: the named
+// what-it-does: covers the credential-decision requirements (roadmap row 1.12) that are safe
+//               and deterministic to prove without a real model call: the named
 //               green skip in an unattended/no-credential environment, and that a credential
 //               being present still lets a real failure exit nonzero. PATH has the real
 //               claude CLI's directory surgically removed (see spawn-helper.mjs) in every
-//               scenario that could otherwise reach live mode -- this machine has a genuine,
+//               scenario that could otherwise reach live mode: this machine has a genuine,
 //               authenticated `claude` CLI on its real PATH (confirmed directly: `command -v
 //               claude` resolves), so leaving PATH untouched would risk an actual paid model
 //               call the moment a test exercises a code path this wave is deliberately trying
@@ -28,7 +28,7 @@
 // CORRECT implementation would never consult it. Run against the pre-fix script, that
 // generated two real haiku calls (~$0.07 total, visible in that run's own cost output) instead
 // of a skip, because the pre-fix script's forced-dry-run gate found this machine's real,
-// authenticated claude CLI on PATH and proceeded into live mode -- the exact defect this task
+// authenticated claude CLI on PATH and proceeded into live mode - the exact defect this task
 // fixes, reproduced by accident rather than by design. Every scenario below that could
 // possibly reach live mode now ALWAYS uses pathWithoutClaudeCli(), independent of which
 // script version is under test, specifically so an implementation bug fails loudly with a

@@ -1,5 +1,5 @@
 // what-it-is:   the shared Tier B credential decision
-// what-it-does: decides among three modes -- live, skip, dry-run -- from a caller-supplied
+// what-it-does: decides among three modes (live, skip, dry-run) from a caller-supplied
 //               set of already-read signals (never process.env itself, so a test can drive
 //               every branch with a plain object and zero environment mutation) and an
 //               injectable, optional CLI-usability probe. Precedence: a credential present
@@ -14,7 +14,7 @@
 //               authenticated. Tier B's own workflow installs that binary before the live
 //               steps, so on a keyless GitHub runner the old probe reported usable and both
 //               scripts proceeded into live mode, failing on ordinary model-call errors
-//               (run-integration.mjs) or hard-erroring with exit 2 (run-evals.mjs) -- two
+//               (run-integration.mjs) or hard-erroring with exit 2 (run-evals.mjs): two
 //               different outcomes for the identical "no credential" situation. This module
 //               is the single decision both scripts now call, so they can never disagree
 //               again, and CI-truthiness alone (never a probe result) is what triggers the
@@ -38,7 +38,7 @@ export const API_KEY_VAR = 'ANTHROPIC_API_KEY';
  * @param {string|undefined} signals.ci - the caller's own read of CI
  * @param {() => boolean} [probeCli] - returns true iff the local claude CLI is installed AND
  *   runnable (e.g. `claude --version` exits 0). Consulted ONLY on a non-CI developer machine
- *   with neither credential set -- never when a credential is present, and never when CI is
+ *   with neither credential set: never when a credential is present, and never when CI is
  *   truthy, so a binary that merely EXISTS can never again masquerade as "authenticated."
  * @returns {{mode: 'live'|'skip'|'dry-run', reason: string}}
  */
@@ -60,7 +60,7 @@ export function decideCredentialMode(signals, probeCli) {
 
   // Unattended environment, no credential: CI-truthiness alone is decisive. A GitHub runner
   // never has an interactive login, so absence of both variables here is conclusive without
-  // asking the local CLI anything -- and asking would be exactly the mistake being fixed:
+  // asking the local CLI anything, and asking would be exactly the mistake being fixed:
   // the CLI binary is INSTALLED by Tier B's own workflow before this decision runs, so a
   // probe would report "usable" even though nobody is authenticated.
   if (ci) {
@@ -68,7 +68,7 @@ export function decideCredentialMode(signals, probeCli) {
       mode: 'skip',
       reason:
         'neither ' + OAUTH_TOKEN_VAR + ' nor ' + API_KEY_VAR + ' is set, and CI is set (an unattended runner); ' +
-        'this is expected configuration, not a failure -- set the ' + OAUTH_TOKEN_VAR + ' repository secret ' +
+        'this is expected configuration, not a failure - set the ' + OAUTH_TOKEN_VAR + ' repository secret ' +
         'to enable live Tier B runs',
     };
   }

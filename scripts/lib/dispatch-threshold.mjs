@@ -5,12 +5,12 @@
 //               evals/*.eval.json file to exercise.
 // why:          roadmap row 1.12 requires that a deliberately broken dispatch table turns a
 //               live Tier B run red. Before this module existed, scripts/run-evals.mjs always
-//               exited 0 once every case had been graded, whatever the pass rate -- dispatch
+//               exited 0 once every case had been graded, whatever the pass rate: dispatch
 //               accuracy was advisory signal only, never a gate. 70% is the chosen threshold:
 //               grading uses a small model (haiku) against an intentionally loose match (does
 //               the response name the expected callee, not exact phrasing or output quality),
 //               so occasional misses from a HEALTHY dispatch table are expected noise, not a
-//               defect -- against the evals/ set's size when this was written (34 cases across
+//               defect. Against the evals/ set's size when this was written (34 cases across
 //               16 files, verified by counting the .eval.json cases[] arrays directly rather
 //               than trusting a comment elsewhere), a healthy table can absorb roughly a third
 //               of cases missing before this gate fails it, while a genuinely broken table

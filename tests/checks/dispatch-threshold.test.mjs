@@ -1,12 +1,12 @@
 // tests/checks/dispatch-threshold.test.mjs
 // what-it-is:   unit tests for scripts/lib/dispatch-threshold.mjs
-// what-it-does: drives meetsDispatchThreshold() with synthetic pass/total counts -- no eval
-//               file, no claude CLI, no model call. Requirement 7 of this wave's task-7
-//               brief testing section: "a dispatch pass rate below the threshold exits
-//               nonzero; at or above it exits 0."
+// what-it-does: drives meetsDispatchThreshold() with synthetic pass/total counts - no eval
+//               file, no claude CLI, no model call. Covers roadmap row 1.12's acceptance case:
+//               a dispatch pass rate below the threshold exits nonzero; at or above it
+//               exits 0.
 // why:          roadmap row 1.12 requires that a deliberately broken dispatch table turns a
 //               live Tier B run red. Before this module existed, scripts/run-evals.mjs
-//               always exited 0 once every case was graded, whatever the pass rate --
+//               always exited 0 once every case was graded, whatever the pass rate:
 //               dispatch accuracy was signal only, never a gate. This is the pure decision
 //               function the script's exit code is now conditioned on.
 // runner:       node --test tests/checks/dispatch-threshold.test.mjs (or node --test tests/checks/)

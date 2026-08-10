@@ -6,7 +6,7 @@
 //               removed first so a test's intent is never accidentally satisfied by whatever
 //               happens to be set on the machine actually running the suite) and runs a
 //               repo-relative script against it via the current node binary's own absolute
-//               path (process.execPath), never the bare word "node" -- so resolution never
+//               path (process.execPath), never the bare word "node", so resolution never
 //               depends on the very PATH a test may be deliberately altering. Also exposes
 //               pathWithoutClaudeCli(), a PATH value with ONLY the directory containing the
 //               real `claude` executable removed, for tests that need the target script's own
@@ -16,7 +16,7 @@
 //               pointed PATH at an empty directory, which also broke run-integration.mjs's OWN
 //               unrelated `spawnSync('node', ...)` calls into bin/ns-doctor and bin/ns-gate
 //               (discovered directly: a dry-run test failed with "ns-gate expected exit 0, got
-//               1" under a blanked PATH, but passed under the real one -- the inner spawn was
+//               1" under a blanked PATH, but passed under the real one: the inner spawn was
 //               silently failing to find `node` itself and its exit code was coerced to 1, not
 //               genuinely failing the gate). Removing only claude's directory keeps every
 //               other tool in the target script's dependency chain resolving normally.
@@ -37,7 +37,7 @@ export const REPO_ROOT = resolve(__dirname, '..', '..');
 /**
  * A copy of the real process.env with both credential variables removed, then the given
  * overrides applied. Deleting (not setting undefined) keeps the child's env free of the two
- * keys entirely unless a test re-adds one on purpose -- some platforms/Node versions treat an
+ * keys entirely unless a test re-adds one on purpose: some platforms/Node versions treat an
  * explicit `KEY: undefined` value inconsistently, so deletion is the only fully portable way
  * to guarantee absence.
  */

@@ -1,6 +1,6 @@
 // tests/checks/run-evals.test.mjs
 // what-it-is:   end-to-end tests of the REAL scripts/run-evals.mjs, driven through spawnSync
-//               with a controlled environment -- not just the extracted decision functions
+//               with a controlled environment, not just the extracted decision functions
 //               (see tests/checks/credential-mode.test.mjs and dispatch-threshold.test.mjs for
 //               those), so the script's actual wiring is what gets proven.
 // what-it-does: mirrors tests/checks/run-integration.test.mjs's coverage for the second Tier B
@@ -11,8 +11,8 @@
 //               machine, which has a real, authenticated claude CLI on its real PATH).
 // why:          F-CI-02 (Tier B trigger contradicts D-20). Before this task, run-evals.mjs's
 //               "no model access" gate was a hard process.exit(2) with no CI-awareness at
-//               all, disagreeing with run-integration.mjs's (broken) dry-run fallback -- "the
-//               two scripts disagree about what 'no credential' means," per the brief.
+//               all, disagreeing with run-integration.mjs's own (broken) dry-run fallback:
+//               the two scripts disagreed about what "no credential" means.
 // runner:       node --test tests/checks/run-evals.test.mjs (or node --test tests/checks/)
 
 import { test } from 'node:test';
@@ -42,7 +42,7 @@ test('unattended CI, no credential -> named green skip naming CLAUDE_CODE_OAUTH_
 // Requirement 6: a credential present, but claude is genuinely unreachable -> every case
 // fails to grade, the dispatch-accuracy gate (0%) fails it, and the run exits nonzero. Proves
 // the skip added for the CI/no-credential case can never fire once a credential is present,
-// i.e. it cannot mask a real failure -- and that a batch which graded nothing is never
+// i.e. it cannot mask a real failure, and that a batch which graded nothing is never
 // silently treated as healthy (dispatch-threshold.test.mjs's "zero cases" case, reached here
 // through the real script instead of the extracted function).
 // ---------------------------------------------------------------------------
@@ -51,13 +51,13 @@ test('credential present, claude unreachable -> every case fails, exits nonzero'
   const noClaude = pathWithoutClaudeCli();
   const env = buildEnv({ CLAUDE_CODE_OAUTH_TOKEN: 'test-fake-oauth-token', PATH: noClaude, Path: noClaude });
   // Several dozen cases across the real evals/ set, each a fast ENOENT (claude unreachable),
-  // not a real network call -- generous timeout headroom, not an expectation of needing it.
+  // not a real network call: generous timeout headroom, not an expectation of needing it.
   const result = runNodeScript(SCRIPT, [], env, { timeout: 120000 });
   assert.notEqual(result.status, 0, 'a credentialed run with an unreachable claude binary must fail, not exit 0; got: ' + result.combined);
   assert.doesNotMatch(result.combined, /SKIP/, 'a credentialed run must never take the skip path');
   // Not just "any nonzero exit": proves grading was genuinely ATTEMPTED (the credential was
   // recognized and the script did not hard-block before ever trying), and that the new
-  // dispatch-accuracy gate -- not some other, unrelated exit path -- is what failed it.
+  // dispatch-accuracy gate, not some other unrelated exit path, is what failed it.
   assert.match(result.combined, /dispatch-accuracy report/, 'must have actually attempted grading, not hard-blocked before trying');
   assert.match(result.combined, /passed:\s+0 \/ /, 'every case must have failed to grade (claude unreachable)');
   assert.doesNotMatch(result.combined, /no model access available/, 'must not take the old unconditional hard-error path');

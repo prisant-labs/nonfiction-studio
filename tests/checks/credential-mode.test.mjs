@@ -81,7 +81,7 @@ test('both credentials set -> live, OAuth token is the named reason', () => {
   assert.match(decision.reason, /CLAUDE_CODE_OAUTH_TOKEN is set/);
 });
 
-// probeCli must never be consulted when a credential is already present -- no wasted
+// probeCli must never be consulted when a credential is already present: no wasted
 // process spawn, and the module-header requirement "never a live model call" is trivially
 // satisfied when the probe function is not even invoked.
 test('probeCli is not consulted when any credential is present', () => {
@@ -93,7 +93,7 @@ test('probeCli is not consulted when any credential is present', () => {
 });
 
 // A missing probeCli (undefined) on a developer machine degrades to dry-run rather than
-// throwing -- callers are never forced to supply a probe just to get a safe default.
+// throwing: callers are never forced to supply a probe just to get a safe default.
 test('missing probeCli degrades to dry-run rather than throwing', () => {
   assert.doesNotThrow(() => decideCredentialMode({ oauthToken: undefined, apiKey: undefined, ci: undefined }));
   const decision = decideCredentialMode({ oauthToken: undefined, apiKey: undefined, ci: undefined });

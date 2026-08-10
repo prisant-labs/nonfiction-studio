@@ -37,10 +37,10 @@ The surface-support table format mirrors the plugin's actual three-surface suppo
 
 This plugin has no release automation beyond the tag-triggered workflow, so cutting a version is a manual, documented sequence rather than a single command. It has never been executed for a real release; the steps below are the intended sequence, not a proven-live procedure.
 
-1. Confirm Tier A is green on `main` and confirm Tier B's most recent scheduled or dispatched run was a genuine live pass, not a named skip -- `git log` or the Actions tab shows whether `CLAUDE_CODE_OAUTH_TOKEN` was set for that run. A skip is a valid green state day to day, but it proves nothing about the release candidate; do not cut a release on skip evidence alone.
+1. Confirm Tier A is green on `main` and confirm Tier B's most recent scheduled or dispatched run was a genuine live pass, not a named skip: `git log` or the Actions tab shows whether `CLAUDE_CODE_OAUTH_TOKEN` was set for that run. A skip is a valid green state day to day, but it proves nothing about the release candidate; do not cut a release on skip evidence alone.
 2. Decide the new version number using the breaking / feature-additive / patch categories in `MIGRATION.md`'s compatibility section, applied to what actually changed since the last release.
 3. Bump the version together, in one commit, in all three version-bearing manifests: `library.json` (the source of truth), `package.json`, and `.claude-plugin/plugin.json`. `node scripts/checks/manifest-drift.mjs`-backed conformance (run via `node scripts/check.mjs .`) fails loudly if any of the three disagree.
-4. If this release changes `.studio/meta.json`'s `schema_version`, add a dated entry to `MIGRATION.md`'s migration log before tagging -- F-DX-13 (no shipped versioning policy) exists precisely so this step is never skipped.
+4. If this release changes `.studio/meta.json`'s `schema_version`, add a dated entry to `MIGRATION.md`'s migration log before tagging: F-DX-13 (no shipped versioning policy) exists precisely so this step is never skipped.
 5. Move the `CHANGELOG.md` `Unreleased` section's content into a new dated `## [x.y.z] - YYYY-MM-DD` section (moved, not duplicated), leaving `Unreleased` empty for whatever comes next.
 6. Write this release's real entry in `RELEASE-NOTES.md`, in the shape shown above, replacing this stub content the first time this step runs.
 7. Commit the version bump and both doc updates on `main`.

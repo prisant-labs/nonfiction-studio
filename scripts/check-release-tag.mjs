@@ -1,8 +1,8 @@
 // scripts/check-release-tag.mjs
 // what-it-is:   release-tag version-agreement checker
 // what-it-does: compares a git tag name against the version fields in the three
-//               version-bearing manifests -- library.json (the version source of truth per
-//               the U9 version-match check), package.json, and .claude-plugin/plugin.json --
+//               version-bearing manifests (library.json, the version source of truth per
+//               the U9 version-match check; package.json; and .claude-plugin/plugin.json),
 //               and exits nonzero, naming every manifest that disagrees, unless the tag and
 //               all three agree exactly.
 // why:          the release tag workflow (.github/workflows/release.yml) needs this as its
