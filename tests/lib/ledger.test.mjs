@@ -270,6 +270,45 @@ test('parseSources handles the committed sample book sources.md', () => {
   assert.equal(entries[0].year, 2015);
 });
 
+// ---- verbatim field (Task 4: quote fidelity and research packets, warn mode) ---
+// D-07 (claim ledger with stable IDs) amendment: verbatim is an OPTIONAL, named,
+// validated EV field holding the exact source text for quote-fidelity checking.
+// An EV entry without it must parse and round-trip exactly as before (case 2).
+
+const EV_FIXTURE_VERBATIM = [
+  '### EV-0001 (verbatim field)',
+  '- claim: The source is quoted directly in the chapter.',
+  '- source: SRC-0001',
+  '- locator: p. 8',
+  '- verbatim: The exact words as they appear in the source.',
+  '- confidence: high',
+  '- status: verified',
+  '- added-by: research-librarian',
+  '- date: 2026-07-18',
+].join('\n');
+
+test('parseEvidenceLog parses the optional verbatim field as a named, known field (case 1)', () => {
+  const entries = parseEvidenceLog(EV_FIXTURE_VERBATIM);
+  assert.equal(entries[0].verbatim, 'The exact words as they appear in the source.');
+  assert.ok(!Object.prototype.hasOwnProperty.call(entries[0].extra, 'verbatim'),
+    'verbatim is a named field, not routed through the extra map');
+});
+
+test('serializeEvidenceLog round-trips an entry with verbatim byte-faithfully, preserving field order (case 1)', () => {
+  const entries = parseEvidenceLog(EV_FIXTURE_VERBATIM);
+  const serialized = serializeEvidenceLog(entries);
+  assert.equal(serialized, EV_FIXTURE_VERBATIM,
+    'serialized output is byte-for-byte identical, including the verbatim field position');
+});
+
+test('parseEvidenceLog: an EV entry WITHOUT verbatim still parses and behaves exactly as before (case 2)', () => {
+  // EV_FIXTURE_SINGLE (defined above) has no verbatim field.
+  const entries = parseEvidenceLog(EV_FIXTURE_SINGLE);
+  assert.equal(entries[0].verbatim, undefined, 'verbatim is undefined when absent, like any other optional field');
+  const serialized = serializeEvidenceLog(entries);
+  assert.equal(serialized, EV_FIXTURE_SINGLE, 'entries without verbatim round-trip unchanged (case 2)');
+});
+
 // ---- fieldOrder preservation ---------------------------------------------------
 
 test('_fieldOrder captures the original field sequence including unknown fields', () => {
