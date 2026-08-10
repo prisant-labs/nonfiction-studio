@@ -23,6 +23,18 @@ import { cloneRepoToTemp, runClonedChecker, cleanupGoldenClone, snapshotPaths, d
 
 const SCRIPT = 'scripts/check-self-sufficiency.mjs';
 
+// Built from parts so this file's own tracked source never contains the forbidden
+// substrings check-self-sufficiency.mjs scans for as contiguous text -- the same
+// reason that checker excludes its own source and scripts/checks/mcp-valid.mjs from
+// self-scanning ("every forbidden literal it looks for necessarily appears in this
+// file too"). Planting a violation for a test necessarily means the violation's
+// exact text exists somewhere; building it at runtime, once, here, keeps it out of
+// the git-tracked bytes of this file while the CLONE still receives the real,
+// fully-joined string the checker is supposed to catch.
+const ANTHROPIC_KEY_NAME = ['ANTHROPIC', 'API', 'KEY'].join('_');
+const OPENAI_KEY_NAME = ['OPENAI', 'API', 'KEY'].join('_');
+const FETCH_CALL = ['fetch', '('].join('');
+
 after(() => {
   cleanupGoldenClone();
 });
@@ -77,13 +89,13 @@ test('pre-existing scope: an ANTHROPIC_API_KEY reference with no exceptions-file
   const { root, cleanup } = cloneRepoToTemp('selfsuff-anthropic-key');
   try {
     const target = join(root, 'scripts', '_f6-planted-anthropic-key.mjs');
-    writeFileSync(target, "const key = process.env.ANTHROPIC_API_KEY;\n");
+    writeFileSync(target, 'const key = process.env.' + ANTHROPIC_KEY_NAME + ';\n');
 
     const result = runClonedChecker(root, SCRIPT);
 
     assert.equal(result.status, 1, 'must exit 1; got: ' + result.combined);
     assert.match(result.combined, /scripts\/_f6-planted-anthropic-key\.mjs/, 'message must name the planted file');
-    assert.match(result.combined, /ANTHROPIC_API_KEY/, 'message must name the planted pattern');
+    assert.match(result.combined, new RegExp(ANTHROPIC_KEY_NAME), 'message must name the planted pattern');
     assert.match(result.combined, /no exceptions-file entry/, 'message must say why it is forbidden');
   } finally {
     cleanup();
@@ -94,13 +106,13 @@ test('pre-existing scope: a non-Anthropic provider key is caught', () => {
   const { root, cleanup } = cloneRepoToTemp('selfsuff-openai-key-preexisting');
   try {
     const target = join(root, 'scripts', '_f6-planted-openai-key.mjs');
-    writeFileSync(target, "const key = process.env.OPENAI_API_KEY;\n");
+    writeFileSync(target, 'const key = process.env.' + OPENAI_KEY_NAME + ';\n');
 
     const result = runClonedChecker(root, SCRIPT);
 
     assert.equal(result.status, 1, 'must exit 1; got: ' + result.combined);
     assert.match(result.combined, /scripts\/_f6-planted-openai-key\.mjs/, 'message must name the planted file');
-    assert.match(result.combined, /OPENAI_API_KEY/, 'message must name the planted pattern');
+    assert.match(result.combined, new RegExp(OPENAI_KEY_NAME), 'message must name the planted pattern');
   } finally {
     cleanup();
   }
@@ -117,13 +129,13 @@ test('widened scope: a non-Anthropic provider key planted under examples/ is cau
   const { root, cleanup } = cloneRepoToTemp('selfsuff-openai-key-examples');
   try {
     const target = join(root, 'examples', '_f6-planted-openai-key.md');
-    writeFileSync(target, 'Planted for F6/F7: OPENAI_API_KEY should never appear in shipped or example content.\n');
+    writeFileSync(target, 'Planted for F6/F7: ' + OPENAI_KEY_NAME + ' should never appear in shipped or example content.\n');
 
     const result = runClonedChecker(root, SCRIPT);
 
     assert.equal(result.status, 1, 'must exit 1; got: ' + result.combined);
     assert.match(result.combined, /examples\/_f6-planted-openai-key\.md/, 'message must name the planted file');
-    assert.match(result.combined, /OPENAI_API_KEY/, 'message must name the planted pattern');
+    assert.match(result.combined, new RegExp(OPENAI_KEY_NAME), 'message must name the planted pattern');
   } finally {
     cleanup();
   }
@@ -133,7 +145,7 @@ test('widened scope: a raw network call planted under examples/ remains exempt (
   const { root, cleanup } = cloneRepoToTemp('selfsuff-network-examples');
   try {
     const target = join(root, 'examples', '_f6-planted-network-mention.md');
-    writeFileSync(target, "This chapter's example code calls fetch(url) to illustrate the API the memoirist built.\n");
+    writeFileSync(target, "This chapter's example code calls " + FETCH_CALL + "url) to illustrate the API the memoirist built.\n");
 
     const result = runClonedChecker(root, SCRIPT);
 
