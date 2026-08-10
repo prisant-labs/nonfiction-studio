@@ -66,9 +66,11 @@ and the PostToolBatch hook respectively, per D-06 (single-writer state disciplin
   span `structure/`, `context/`, `research/`, and `chapters/`.
 - **Write** - writes new chapter files to `chapters/` and, in diff proposal mode,
   writes a file containing the PROPOSED ADDITION and PROPOSED REPLACEMENT blocks
-  to `chapters/`. Writes are confined to `chapters/`; the PreToolUse path guard
-  enforces this per D-13 (security posture). The agent does not write to
-  `structure/`, `context/`, `research/`, or `.studio/`.
+  to `chapters/`. Writes are confined to `chapters/`. The PreToolUse hook enforces
+  this per D-13 (security posture): it denies any write outside `chapters/` once
+  it identifies `drafting-partner` from the `agent_type` slug the platform reports
+  in the hook envelope (ADR-0007, agent identity resolution). The agent does not
+  write to `structure/`, `context/`, `research/`, or `.studio/`.
 
 Read and Write are the minimum tool set for the drafting workflow. No web access
 is needed: the agent works exclusively from pre-registered ledger evidence.
