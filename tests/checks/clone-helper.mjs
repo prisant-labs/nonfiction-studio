@@ -104,13 +104,17 @@ export function cleanupGoldenClone() {
  * Runs a checker script that lives INSIDE a temp clone (so the script's own
  * REPO_ROOT, resolved from import.meta.url, is the clone, not the real repo).
  * relScriptPath is repo-relative, e.g. "scripts/checks/check-plugin-root.mjs".
+ * env defaults to the real process.env (unchanged default for every pre-existing caller);
+ * pass a caller-built env when a test needs deterministic control over an ambient variable
+ * such as GITHUB_REF_NAME, which real CI sets on every run and a local machine normally does
+ * not, so leaving it to chance would make a test's outcome depend on where it happens to run.
  */
-export function runClonedChecker(cloneRoot, relScriptPath, args = []) {
+export function runClonedChecker(cloneRoot, relScriptPath, args = [], env = process.env) {
   const scriptAbs = join(cloneRoot, ...relScriptPath.split('/'));
   const result = spawnSync('node', [scriptAbs, ...args], {
     encoding: 'utf8',
     cwd: cloneRoot,
-    env: process.env,
+    env,
   });
   return {
     status: result.status,
