@@ -343,10 +343,11 @@ test('computeStatusBoard: missing .studio/gate/ directory entirely is not an err
 
 // ---- GATE-SOURCE INVARIANT: computeStatusBoard never reads chapter.last_gate or ------
 // chapter.drift_score from the progress argument, only the newest report under .studio/gate/.
-// This is the F-HK-05-shaped trap: progress.json's last_gate and drift_score are DELIBERATELY
-// set to values that disagree with the real gate report on disk, for BOTH the verdict and the
-// numeric drift score (not verdict alone), so an implementation that reads either progress.json
-// field for either value would pass a naive test but fail this one.
+// This is the same shape of trap as F-HK-05 (last_gate never written): progress.json's
+// last_gate and drift_score are DELIBERATELY set to values that disagree with the real gate
+// report on disk, for BOTH the verdict and the numeric drift score (not verdict alone), so an
+// implementation that reads either progress.json field for either value would pass a naive
+// test but fail this one.
 
 test('GATE SOURCE: computeStatusBoard follows the newest .studio/gate/ report, never progress.json last_gate or drift_score', () => {
   const root = makeGateDir({

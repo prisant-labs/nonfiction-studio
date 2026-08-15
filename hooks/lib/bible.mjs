@@ -2,11 +2,11 @@
 // what-it-does: walks up from a start directory to find the book root, reads meta.json and config.json,
 //               and provides atomic progress.json read/write with unknown-field preservation
 // why:          all engine CLIs and hooks share the same root-finding and bible-access logic;
-//               one module eliminates drift across the six of the seven shipped CLIs and all
-//               six hook scripts that import it (twelve importers total)
-// used-by:      imported by six of the seven CLIs under bin/ (ns-claims, ns-doctor, ns-gate,
-//               ns-notes, ns-scrub, ns-stylometry; not ns-statusline) and by all six hook
-//               scripts under hooks/
+//               one module eliminates drift across the seven of the eight shipped CLIs and all
+//               six hook scripts that import it (thirteen importers total)
+// used-by:      imported by seven of the eight CLIs under bin/ (ns-claims, ns-doctor, ns-gate,
+//               ns-notes, ns-scrub, ns-status, ns-stylometry; not ns-statusline) and by all six
+//               hook scripts under hooks/
 
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';

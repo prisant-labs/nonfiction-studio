@@ -15,11 +15,12 @@
 // report file per chapter slug under .studio/gate/, never from progress.json's per-chapter
 // `last_gate` field, and never from progress.json's per-chapter `drift_score` field either. Both
 // fields are read by no function in this module. `last_gate` stays null in every v1 writer by
-// design (finding F-HK-05, resolved by re-specification, not implementation); a hand-authored
-// fixture may populate it for one chapter as sample content, which is exactly the trap a naive
-// implementation would pass by accident. `drift_score` is a separate, hook-maintained convenience
-// field that this board never treats as authoritative either, for the same reason. See
-// computeStatusBoard below, whose only per-chapter fs read is a .studio/gate/ report file.
+// design (finding F-HK-05 (last_gate never written), resolved by re-specification, not
+// implementation); a hand-authored fixture may populate it for one chapter as sample content,
+// which is exactly the trap a naive implementation would pass by accident. `drift_score` is a
+// separate, hook-maintained convenience field that this board never treats as authoritative
+// either, for the same reason. See computeStatusBoard below, whose only per-chapter fs read is
+// a .studio/gate/ report file.
 //
 // DETERMINISM INVARIANT: no function in this module stamps a generation timestamp, reads the
 // system clock, or formats a number with a locale-aware method (no toLocaleString, no
