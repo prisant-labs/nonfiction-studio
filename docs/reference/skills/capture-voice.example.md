@@ -106,11 +106,11 @@ The engine prints the eight-marker vector to stdout. The agent reads the output:
   "markers": {
     "function_word_rate": 0.4717,
     "contraction_rate": 0.0299,
-    "first_person_rate": 0.2268,
-    "second_person_rate": 3.4014,
-    "type_token_ratio": 0.4558,
-    "avg_word_length": 5.2041,
-    "avg_sentence_length": 13.1642,
+    "first_person_rate": 0.2262,
+    "second_person_rate": 3.3937,
+    "type_token_ratio": 0.7516,
+    "avg_word_length": 5.1923,
+    "avg_sentence_length": 13.1940,
     "punctuation_rate": 13.0090
   }
 }

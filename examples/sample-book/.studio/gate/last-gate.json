@@ -21,7 +21,7 @@
     {
       "check": "stylometry",
       "verdict": "pass",
-      "detail": "drift score 29.80 within threshold 35",
+      "detail": "drift score 10.86 within threshold 35",
       "evidence": [],
       "next": null
     },

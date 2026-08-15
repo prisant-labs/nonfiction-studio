@@ -1,7 +1,12 @@
 // what-it-is:   deterministic eight-marker voice-drift engine
 // what-it-does: measures the eight-marker stylometry vector for one chapter or an aggregate
-//               book, then computes a drift score against a stored baseline using the sum-of-
-//               per-marker-deviationPct formula documented in TSK-022 report
+//               book, then computes a drift score against a stored baseline. The score is an
+//               unweighted sum of per-marker deviations, each capped so no single marker can
+//               contribute more than one third of the configured drift budget (roadmap row 1.7,
+//               voice registers). type_token_ratio is a moving average over a fixed
+//               TTR_WINDOW_SIZE-token window, which makes it length-invariant; scoring against a
+//               baseline captured under a different marker_set_version fails rather than
+//               silently misreading the numbers.
 // why:          the engine logic lives in a lib module so both bin/ns-stylometry (CLI) and the
 //               Stop gate hook share the same computation path per S-07 section 4
 // used-by:      bin/ns-stylometry, hooks/stop-gate.mjs
@@ -83,6 +88,30 @@ const PUNCT_RE = /[.,;:!?()"]/g;
 // Sentence-end detection: one or more .!? followed by whitespace or end of string.
 // Applied after text normalization (all whitespace collapsed to single space).
 const SENTENCE_END_RE = /[.!?]+(?:\s|$)/g;
+
+// Moving-average type-token ratio window size, in tokens (Correction A, roadmap row 1.7,
+// voice registers). A single named constant, not a literal scattered through the code.
+// Fixed for this task; not read from .studio/config.json (deferred scope). Text shorter
+// than or equal to one window falls back to the plain ratio over the whole text -- see
+// movingAverageTypeTokenRatio.
+const TTR_WINDOW_SIZE = 100;
+
+// Per-marker contribution bound, expressed as a divisor of the configured drift budget
+// rather than an absolute number (Correction B, roadmap row 1.7, voice registers): no
+// single marker's CONTRIBUTION to the score may exceed one third of
+// thresholds.drift_score_max, so at least three markers must deviate substantially before
+// their combined contribution can breach the gate. The bound scales with whatever budget a
+// project configures; deviationPct itself is never capped, only what it adds to score.
+const MARKER_CONTRIBUTION_DIVISOR = 3;
+
+// Current stylometry marker-set version. Bumped whenever a marker's computation changes
+// meaning under the same key name: type_token_ratio moved from a flat ratio to a
+// TTR_WINDOW_SIZE-token moving average in this bump, version 1 to version 2. A baseline
+// captured under an earlier version would be silently misread as enormous drift if scored
+// without the guard in computeDrift; a stylometry.baseline object predating this field
+// entirely is treated as version 1. Exported so tests and callers can reference it by
+// name instead of hardcoding the number.
+export const CURRENT_MARKER_SET_VERSION = 2;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -184,12 +213,71 @@ function extractCounts(rawText) {
 }
 
 /**
+ * Computes the moving-average type-token ratio: the mean of the plain unique/total
+ * ratio over every sliding window of TTR_WINDOW_SIZE tokens (Correction A, roadmap
+ * row 1.7, voice registers). Length-invariant by construction, because the window
+ * never changes size no matter how much text is measured -- unlike a flat ratio,
+ * whose denominator grows with the text while vocabulary growth slows, so it keeps
+ * falling on longer samples for reasons that have nothing to do with a change in
+ * voice. Residual note: this reduces the length artifact structurally, it does not
+ * abolish it; a very short window-count still carries some sample-size noise.
+ *
+ * Text shorter than or equal to one window falls back to the plain ratio over the
+ * whole text -- a single window spanning everything reduces to the same arithmetic.
+ *
+ * Implementation: an incremental sliding window (a frequency map updated one token
+ * at a time) rather than rescanning each window from scratch, so a book-length
+ * corpus costs O(totalWords), not O(totalWords * TTR_WINDOW_SIZE).
+ *
+ * @param {string[]} lowerWords - lower-cased word tokens in original order
+ * @returns {number} moving-average type-token ratio; 0 for an empty token list
+ */
+function movingAverageTypeTokenRatio(lowerWords) {
+  const n = lowerWords.length;
+  if (n === 0) return 0;
+  if (n <= TTR_WINDOW_SIZE) {
+    return new Set(lowerWords).size / n;
+  }
+
+  const freq = new Map();
+  let uniqueCount = 0;
+  for (let i = 0; i < TTR_WINDOW_SIZE; i++) {
+    const w = lowerWords[i];
+    const c = (freq.get(w) || 0) + 1;
+    freq.set(w, c);
+    if (c === 1) uniqueCount++;
+  }
+
+  const windowCount = n - TTR_WINDOW_SIZE + 1;
+  let sumRatios = uniqueCount / TTR_WINDOW_SIZE;
+
+  for (let start = 1; start < windowCount; start++) {
+    const outgoing = lowerWords[start - 1];
+    const outgoingCount = freq.get(outgoing) - 1;
+    freq.set(outgoing, outgoingCount);
+    if (outgoingCount === 0) uniqueCount--;
+
+    const incoming = lowerWords[start + TTR_WINDOW_SIZE - 1];
+    const incomingCount = (freq.get(incoming) || 0) + 1;
+    freq.set(incoming, incomingCount);
+    if (incomingCount === 1) uniqueCount++;
+
+    sumRatios += uniqueCount / TTR_WINDOW_SIZE;
+  }
+
+  return sumRatios / windowCount;
+}
+
+/**
  * Derives the eight-marker vector from aggregated raw counts.
  * All ratios are computed from the aggregated numerators and denominators
  * rather than averaged from per-chapter values.
  *
  * Returned object key names match the baseline.markers keys in config.json
- * exactly, as required by the reconciliation protocol.
+ * exactly, as required by the reconciliation protocol. type_token_ratio is
+ * the moving-average ratio (movingAverageTypeTokenRatio); the key name is
+ * unchanged from the flat-ratio predecessor it replaces -- a windowed moving
+ * average is still a type-token ratio.
  *
  * @param {object} counts - aggregated raw count object (same shape as extractCounts output
  *   except lowerWords may be a merged array from multiple chapters)
@@ -199,14 +287,12 @@ function ratiosFromCounts(counts) {
   const { totalWords, functionWordCount, contractionCount, firstPersonCount,
           secondPersonCount, totalCharLength, punctCount, sentenceCount, lowerWords } = counts;
 
-  const uniqueWordCount = new Set(lowerWords).size;
-
   return {
     function_word_rate:   totalWords  > 0 ? functionWordCount / totalWords        : 0,
     contraction_rate:     sentenceCount > 0 ? contractionCount / sentenceCount     : 0,
     first_person_rate:    totalWords  > 0 ? firstPersonCount  / totalWords * 100  : 0,
     second_person_rate:   totalWords  > 0 ? secondPersonCount / totalWords * 100  : 0,
-    type_token_ratio:     totalWords  > 0 ? uniqueWordCount   / totalWords        : 0,
+    type_token_ratio:     movingAverageTypeTokenRatio(lowerWords),
     avg_word_length:      totalWords  > 0 ? totalCharLength   / totalWords        : 0,
     avg_sentence_length:  sentenceCount > 0 ? totalWords      / sentenceCount     : 0,
     punctuation_rate:     totalWords  > 0 ? punctCount        / totalWords * 100  : 0,
@@ -237,11 +323,16 @@ export function measureChapter(text) {
  * Measures the aggregate eight-marker vector for a whole book by combining
  * raw counts from every chapter before deriving ratios.
  *
- * type_token_ratio uses the union of unique words across all chapters, not
- * the mean of per-chapter TTRs, matching the documented TSK-019 method.
+ * type_token_ratio is the moving-average ratio (movingAverageTypeTokenRatio)
+ * over the concatenated token stream of all chapters, in the order given.
+ * Unlike the other seven markers, which are aggregate sums or ratios and so
+ * are order-independent, type_token_ratio's value can shift slightly with
+ * chapter order, because a window can span a chapter boundary. Both real
+ * callers (bin/ns-stylometry, hooks/lib/gate-engine.mjs) sort chapter files
+ * by name before calling measureBook, so this is deterministic in practice.
  *
- * @param {string[]} chapters - array of raw chapter text strings; order does
- *   not affect any marker value
+ * @param {string[]} chapters - array of raw chapter text strings, in the
+ *   order they are concatenated for type_token_ratio's sliding window
  * @returns {object} eight-marker aggregate vector
  */
 export function measureBook(chapters) {
@@ -291,24 +382,58 @@ export function countWords(rawText) {
 }
 
 /**
+ * Typed error for a stylometry baseline captured under a stale marker_set_version.
+ * Callers catch StaleBaselineError (or check err.name) and treat it like any other
+ * operational error (hooks/lib/gate-engine.mjs's existing per-check try/catch already
+ * turns this into a skip verdict and exit code 2 with no changes needed there). The
+ * remedy is always the same: re-run capture-voice to recapture the baseline with the
+ * corrected engine.
+ */
+export class StaleBaselineError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'StaleBaselineError';
+    this.code = 'STALE_BASELINE';
+    this.exitCode = 2;
+  }
+}
+
+/**
  * Computes the drift score and per-marker analysis by comparing a measured
  * vector against the stored baseline.
  *
- * Drift formula (TSK-022 report, which overrides the brief sketch):
- *   deviationPct = |measured - baseline| / baseline * 100
- *   score = SUM of deviationPct across all markers in the baseline
+ * Drift formula (TSK-022 report as amended by roadmap row 1.7's two corrections):
+ *   deviationPct  = |measured - baseline| / baseline * 100            (honest, uncapped)
+ *   contribution  = min(deviationPct, thresholds.drift_score_max / MARKER_CONTRIBUTION_DIVISOR)
+ *   score         = SUM of contribution across all markers in the baseline
+ * The score is an unweighted sum: every marker's (bounded) contribution counts equally;
+ * "weighted" would mean some markers count for more than others, which is not this formula.
+ * deviationPct is always reported honest and uncapped, so a later explain step can name the
+ * real deviation and say it was capped; only the running score total is bounded, never the
+ * reported per-marker deviation itself.
  *
  * Zero-baseline rule per brief:
  *   when baseline === 0: deviationPct = 0 if measured === 0, else 100
  *
- * A marker is flagged when its deviationPct exceeds the per-marker tolerance
- * band (thresholds.stylometry_marker_tolerance, default 2.0).
+ * A marker is flagged when its deviationPct (the honest value, not the capped
+ * contribution) exceeds the per-marker tolerance band (thresholds.stylometry_marker_tolerance,
+ * default 2.0).
+ *
+ * Stale-baseline guard: baseline.marker_set_version must equal CURRENT_MARKER_SET_VERSION.
+ * A baseline object missing the field entirely is treated as version 1. A mismatch throws
+ * StaleBaselineError rather than scoring a baseline whose type_token_ratio values mean
+ * something different under the current engine (Correction A changed what a stored
+ * type_token_ratio number means, from a flat ratio to a windowed moving average).
  *
  * @param {object} measured   - marker vector from measureBook or measureChapter
- * @param {object} baseline   - stored markers object from config.json
- *   stylometry.baseline.markers
+ * @param {object} baseline   - the stored stylometry.baseline object from config.json,
+ *   shaped { markers: {...8 markers}, marker_set_version?: number, ...other fields }.
+ *   This is NOT just the markers sub-object: marker_set_version lives alongside markers,
+ *   not inside it, and computeDrift needs both to score safely.
  * @param {object} thresholds - thresholds block from config.json
  * @returns {{ score: number, perMarker: object[], exceeded: boolean }}
+ * @throws {StaleBaselineError} when baseline.marker_set_version does not match
+ *   CURRENT_MARKER_SET_VERSION
  */
 export function computeDrift(measured, baseline, thresholds) {
   const markerTolerance = (thresholds && thresholds.stylometry_marker_tolerance != null)
@@ -317,12 +442,30 @@ export function computeDrift(measured, baseline, thresholds) {
   const driftScoreMax = (thresholds && thresholds.drift_score_max != null)
     ? thresholds.drift_score_max
     : 35;
+  const maxMarkerContribution = driftScoreMax / MARKER_CONTRIBUTION_DIVISOR;
+
+  if (!baseline || !baseline.markers) {
+    throw new Error(
+      'computeDrift: baseline.markers is missing; expected the stylometry.baseline object ' +
+      '(with a markers sub-object), not just the markers object by itself'
+    );
+  }
+  const markers = baseline.markers;
+  const storedVersion = (baseline.marker_set_version != null) ? baseline.marker_set_version : 1;
+
+  if (storedVersion !== CURRENT_MARKER_SET_VERSION) {
+    throw new StaleBaselineError(
+      'stylometry baseline marker_set_version ' + storedVersion + ' does not match the ' +
+      'engine\'s current marker set version ' + CURRENT_MARKER_SET_VERSION + '; run ' +
+      'capture-voice to re-capture the baseline with the corrected engine'
+    );
+  }
 
   const perMarker = [];
   let score = 0;
 
-  for (const marker of Object.keys(baseline)) {
-    const baselineVal = baseline[marker];
+  for (const marker of Object.keys(markers)) {
+    const baselineVal = markers[marker];
     const measuredVal = (measured != null && marker in measured) ? measured[marker] : 0;
 
     let deviationPct;
@@ -332,14 +475,17 @@ export function computeDrift(measured, baseline, thresholds) {
       deviationPct = Math.abs(measuredVal - baselineVal) / baselineVal * 100;
     }
 
+    const capped = deviationPct > maxMarkerContribution;
+    const contribution = capped ? maxMarkerContribution : deviationPct;
     const flagged = deviationPct > markerTolerance;
-    score += deviationPct;
+    score += contribution;
 
     perMarker.push({
       marker,
       baseline: baselineVal,
       measured: measuredVal,
       deviationPct,
+      capped,
       flagged,
     });
   }

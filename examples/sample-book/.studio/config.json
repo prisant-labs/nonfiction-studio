@@ -26,13 +26,14 @@
     "baseline": {
       "captured": "2026-08-10T09:00:00Z",
       "sample_count": 2,
-      "method": "word-tokenized prose from chapters/01 and chapters/02 combined; markers and headings stripped; captured from these same two chapters after they were rewritten for voice consistency, so this baseline is a fit against itself, not an independent sample, and book-level drift against it measures 0.02; a single chapter measured against this book-level baseline is a smaller, different population, which structurally inflates type_token_ratio (chapter 1 alone measures 0.5057, chapter 2 alone 0.4934, versus 0.4171 combined here) and drives most of any one chapter's drift score; the metric correction and prose de-padding needed to remove this artifact are scheduled as tranche 2 work against roadmap row 1.7 (voice registers)",
+      "marker_set_version": 2,
+      "method": "word-tokenized prose from chapters/01 and chapters/02 combined; markers and headings stripped; captured from these same two chapters after they were rewritten for voice consistency, so this baseline is a fit against itself, not an independent sample, and book-level drift against it measures near zero. Re-captured under the corrected engine (roadmap row 1.7, voice registers): type_token_ratio is now a moving average over 100-token windows, which is length-invariant by construction, so a single chapter measured against this book-level baseline no longer inflates type_token_ratio the way the flat-ratio predecessor did (chapter 1 alone now measures 0.7498, chapter 2 alone 0.7490, versus 0.7329 combined here -- a small residual gap, not the roughly 0.09 gap the flat ratio produced).",
       "markers": {
         "function_word_rate": 0.4882,
         "contraction_rate": 0.1250,
         "first_person_rate": 0.7583,
         "second_person_rate": 2.8436,
-        "type_token_ratio": 0.4171,
+        "type_token_ratio": 0.7329,
         "avg_word_length": 5.0095,
         "avg_sentence_length": 13.1875,
         "punctuation_rate": 13.2701

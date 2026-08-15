@@ -421,7 +421,12 @@ export function runGate(root, opts = {}) {
           throw new Error('no baseline vector in config.json (stylometry.baseline.markers missing or null)');
         }
 
-        const baseline = fullConfig.stylometry.baseline.markers;
+        // Correction: pass the whole stylometry.baseline object (markers plus
+        // marker_set_version), not just .markers -- computeDrift needs both to
+        // apply the stale-baseline guard (roadmap row 1.7, voice registers). A
+        // thrown StaleBaselineError is caught by this block's existing try/catch
+        // below, exactly like any other engine error: skip verdict, exit code 2.
+        const baseline = fullConfig.stylometry.baseline;
         const chapterTexts = chapters.map(c => c.text);
         const chapterFiles = chapters.map(c => c.file);
 
