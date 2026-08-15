@@ -64,7 +64,9 @@ unchanged at 3 (`MARKER_CONTRIBUTION_DIVISOR` in `hooks/lib/stylometry-engine.mj
 default" is 35, the value shipped before this recalibration. "New default" is 25
 (`DEFAULT_DRIFT_SCORE_MAX` in `hooks/lib/stylometry-engine.mjs`), chosen from a budget sweep
 of 20 through 35 as the value that gives row 5 below a comfortable, non-hairline margin
-(7.6% of budget) while leaving rows 1-4 and 6 safely passing; a smaller per-marker divisor
+(7.6% of budget) while leaving rows 1-4 safely passing and row 6 measuring pass despite a
+ground truth of block (a disclosed divergence, not a design goal; see "Row 6" below); a
+smaller per-marker divisor
 and a raw-occurrence-count damped bound were also evaluated and rejected (see the
 `DEFAULT_DRIFT_SCORE_MAX` doc comment in `hooks/lib/stylometry-engine.mjs` for why).
 

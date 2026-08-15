@@ -554,7 +554,7 @@ if (chapterWrites.size > 0 || progressTouched) {
       try {
         writeProgressAtomic(bookRoot, progress);
       } catch (err) {
-        // Rename failure: log, progress retains last-valid state per S-07 failure row.
+        // Rename failure: log, progress retains last-valid state per S-07 (hooks and scripts) failure row.
         logError('writeProgressAtomic failed; progress retains last-valid state', err);
       }
     }
@@ -646,9 +646,13 @@ for (const { toolName, toolInput } of dispatches) {
 // Output: emit additionalContext when at least one chapter write was processed
 // and/or the eligibility sweep demoted something (so a demotion is never
 // silent even when it happened via a bare progress.json edit with no chapter
-// write at all - AC4, "the next check-in after a demotion says so"); empty
-// stdout otherwise (dispatch-only batches, and progress.json touches that
-// changed nothing, are intentionally silent here, unchanged from before).
+// write at all - AC4 (gate run reports a demotion), "the next gate run after
+// a demotion says so"). This hook's additionalContext reports the demotion at
+// the next check-in, not at the next gate run, so AC4 remains unmet as
+// written; closing it needs a durable demotion marker plus a warn-level gate
+// check, tracked as a separate task. Empty stdout otherwise (dispatch-only
+// batches, and progress.json touches that changed nothing, are intentionally
+// silent here, unchanged from before).
 // ---------------------------------------------------------------------------
 const contextLines = [];
 if (chapterWrites.size > 0 && summaryParts.length > 0) {

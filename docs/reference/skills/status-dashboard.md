@@ -8,7 +8,7 @@ tags: ["skill", "status", "dashboard", "progress", "overview", "gate"]
 
 # status-dashboard
 
-The `status-dashboard` skill renders a read-only per-chapter project overview by fronting `bin/ns-status` in a single Bash call. It is a Phase 1 skill specified in S-06 3.9 (skills and invocation surface) and governed by D-06 (single-writer state discipline) and S-08 sections 3 and 11.
+The `status-dashboard` skill renders a read-only per-chapter project overview by fronting `bin/ns-status` in a single Bash call. It is a Phase 1 skill specified in S-06 3.9 (skills and invocation surface) and governed by D-06 (single-writer state discipline) and S-08 (schemas and file formats) sections 3 and 11.
 
 ## Purpose
 

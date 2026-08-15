@@ -330,6 +330,19 @@ test('golden sample book CLI: --all --json exits 0', () => {
 // near-zero-baseline instability in deviationPct that is written up for
 // roadmap row 1.7 (voice registers) and the D-08 (hybrid voice scoring)
 // amendment.
+//
+// This guarantee currently holds only because both golden chapters still
+// carry the padded closing paragraph the stylometry baseline was fit against
+// (examples/sample-book/.studio/config.json's stylometry.baseline.method
+// discloses the padding and that de-padding stays deferred behind baseline
+// architecture). A de-padding attempt made earlier in this wave measured the
+// two chapters, once de-padded, at 40.72 and 37.78 against the then-shipped
+// budget of 35 -- both already over. Independently re-verified against HEAD
+// at the current budget of 25: 38.86 and 38.56 against the baseline left
+// unchanged, and still 34.80 and 33.08 against a baseline re-captured from
+// the de-padded chapters themselves. Whoever unblocks de-padding should
+// expect this test, and the CLI test below it, to need rework, not treat a
+// new failure here as a regression.
 
 test('golden sample book: EVERY chapter passes its own stylometry check individually, not just the combined book', () => {
   const root = join(EXAMPLES, 'sample-book');
