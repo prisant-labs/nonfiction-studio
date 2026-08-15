@@ -24,10 +24,10 @@ CLI's own JSON output instead. This passes [ADR-0009](../../adr/ADR-0009-apparat
 property that a failing test can be written against before the feature exists, the same criterion
 `ns-notes` passed.
 
-`ns-status` is read-only by design. It never writes to `.studio/` or anywhere else. State changes
-- the promotion ceremony onto the existing `final` chapter status, for example (see
+`ns-status` is read-only by design. It never writes to `.studio/` or anywhere else. State
+changes (the promotion ceremony onto the existing `final` chapter status, for example - see
 ["The promotion ceremony and automatic demotion"](#the-promotion-ceremony-and-automatic-demotion)
-below) - belong to a hook, because D-06 (single-writer state discipline) reserves `.studio/`
+below) belong to a hook, because D-06 (single-writer state discipline) reserves `.studio/`
 machine-state writes for hooks, not for a CLI a narrating skill can invoke mid-conversation.
 
 ## What it reads
