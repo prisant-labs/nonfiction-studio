@@ -28,6 +28,17 @@
 // filesystem path. This follows hooks/lib/statusline-engine.mjs's own stated convention, for
 // exactly the same reason: this repo's CI runs both an Ubuntu and a Windows leg, and two runs
 // against the same unchanged project must produce byte-identical output on either.
+//
+// PROMOTION ATTESTATION (the promotion ceremony and automatic demotion): the exports below this
+// point (DEMOTION_FALLBACK_STATUS, parseDecisionsLog, validateDecisionEntry, linksNameChapter,
+// isEligibleForFinal) are the ONE implementation of "is this chapter eligible for the terminal
+// `final` status." hooks/post-tool-batch.mjs - the sole writer of progress.json per D-06
+// (single-writer state discipline) - imports and calls isEligibleForFinal rather than
+// re-deriving eligibility, so the hook (which enforces it) and this module (which reports the
+// board) cannot drift on what "eligible" means. This mirrors why foldForCompare has exactly one
+// implementation (hooks/lib/agent-identity.mjs) instead of the three this project once carried.
+// All five are pure: they touch no filesystem. The hook itself reads and parses
+// context/decisions.md and passes the result in.
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -373,4 +384,159 @@ export function renderBoardMarkdown(board) {
   }
 
   return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// PROMOTION ATTESTATION
+//
+// docs/formats/decisions.md is the normative grammar for context/decisions.md:
+// append-only, heading `### YYYY-MM-DD - <label>`, body fields `actor` (either
+// the literal string "author" or a roster slug), `decision`, `rationale`, and
+// optional `links`. The functions below are the ONE parser and the ONE
+// eligibility predicate for that grammar (see the module header above for why
+// they live here). All four are pure - no filesystem access - so they are
+// unit tested directly against synthetic and doc-verbatim text, independent
+// of any hook.
+// ---------------------------------------------------------------------------
+
+// The status a chapter falls back to when it is found `final` but ineligible
+// (hooks/post-tool-batch.mjs is the only writer that ever assigns this). NOT
+// `gated`: `gated` asserts a gate run passed against the CURRENT content,
+// which is never true for a chapter whose eligibility just failed - either it
+// was just edited and has not been re-gated, or its `final` status was never
+// legitimate to begin with. `revised` is accurate in both cases: this
+// project's own chapter-lifecycle prose reads `revised` as "after a revise
+// pass," exactly the state a demoted chapter is in, and it asserts nothing
+// about a gate outcome the hook cannot vouch for.
+export const DEMOTION_FALLBACK_STATUS = 'revised';
+
+const DECISION_HEADING_RE = /^###\s+(\d{4}-\d{2}-\d{2})\s+-\s+(.+?)\s*$/;
+const DECISION_FIELD_RE = /^-\s*([a-zA-Z]+):\s?(.*)$/;
+const DECISION_FIELD_NAMES = new Set(['actor', 'decision', 'rationale', 'links']);
+const REQUIRED_DECISION_FIELDS = ['actor', 'decision', 'rationale'];
+
+/**
+ * Parses context/decisions.md text into an array of entries in file order:
+ * { date, label, actor, decision, rationale, links }. A field absent from an
+ * entry's bullet list comes back as null (validateDecisionEntry below is what
+ * turns that into a finding); links is the one field the grammar itself
+ * allows to be genuinely absent or blank. Content before the first heading
+ * (the HTML comment, the "# Decision Log" title) is ignored. Never throws on
+ * malformed content - at worst, an unparseable file yields zero entries,
+ * which isEligibleForFinal correctly reads as "no attestation exists" rather
+ * than crashing its caller.
+ *
+ * @param {string} text - raw context/decisions.md content
+ * @returns {Array<{date: string, label: string, actor: string|null,
+ *                   decision: string|null, rationale: string|null, links: string|null}>}
+ */
+export function parseDecisionsLog(text) {
+  const entries = [];
+  if (typeof text !== 'string') return entries;
+
+  let current = null;
+  for (const rawLine of text.split('\n')) {
+    const headingMatch = DECISION_HEADING_RE.exec(rawLine);
+    if (headingMatch) {
+      if (current) entries.push(current);
+      current = {
+        date: headingMatch[1],
+        label: headingMatch[2],
+        actor: null,
+        decision: null,
+        rationale: null,
+        links: null,
+      };
+      continue;
+    }
+    if (!current) continue; // preamble before the first heading
+    const fieldMatch = DECISION_FIELD_RE.exec(rawLine);
+    if (!fieldMatch) continue;
+    const key = fieldMatch[1].toLowerCase();
+    if (!DECISION_FIELD_NAMES.has(key)) continue;
+    current[key] = fieldMatch[2].trim();
+  }
+  if (current) entries.push(current);
+  return entries;
+}
+
+/**
+ * Validates one parsed entry against docs/formats/decisions.md's required-
+ * field rule: `actor`, `decision`, and `rationale` are required and must be
+ * non-empty strings; `links` is optional and may be blank or absent. This is
+ * the field-presence validator for the decision-log grammar.
+ *
+ * @param {{actor: *, decision: *, rationale: *}} entry
+ * @returns {{valid: boolean, missing: string[]}}
+ */
+export function validateDecisionEntry(entry) {
+  const missing = [];
+  for (const field of REQUIRED_DECISION_FIELDS) {
+    const val = entry ? entry[field] : undefined;
+    if (typeof val !== 'string' || val === '') missing.push(field);
+  }
+  return { valid: missing.length === 0, missing };
+}
+
+// A chapter slug, matching the schema's own pattern exactly
+// (templates/book-scaffold/.studio/progress.schema.json: ^[0-9]{2}-[a-z0-9-]+$).
+const CHAPTER_SLUG_RE = /^[0-9]{2}-[a-z0-9-]+$/;
+
+/**
+ * Whether a decision entry's free-text `links` field names the given chapter
+ * slug. Matches the slug as a whole token, bounded on both sides by either a
+ * string edge or a character outside the slug alphabet (digits, lowercase
+ * letters, hyphen) - so "03-the-signal" matches inside
+ * "chapters/03-the-signal.md" and
+ * ".studio/gate/03-the-signal.20260717T154022Z.json" (both real shapes used
+ * in docs/formats/decisions.md's own worked examples) but never inside the
+ * longer, different slug "03-the-signal-appendix". A slug not shaped like the
+ * schema pattern never matches anything: this function gates a `final`
+ * status, not a place to guess at a caller's typo.
+ *
+ * @param {string|null} links
+ * @param {string} slug
+ * @returns {boolean}
+ */
+export function linksNameChapter(links, slug) {
+  if (typeof links !== 'string' || links === '') return false;
+  if (typeof slug !== 'string' || !CHAPTER_SLUG_RE.test(slug)) return false;
+  const escaped = slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const boundary = '[^0-9a-z-]';
+  const pattern = '(^|' + boundary + ')' + escaped + '($|' + boundary + ')';
+  return new RegExp(pattern).test(links);
+}
+
+/**
+ * THE SHARED ELIGIBILITY PREDICATE for the `final` status. A chapter is
+ * eligible only when `entries` (parseDecisionsLog's output) contains at least
+ * one entry that is BOTH:
+ *   1. structurally valid (validateDecisionEntry), and
+ *   2. attested by a human: `actor` is EXACTLY the literal string "author",
+ *      never a roster slug. docs/formats/decisions.md allows `actor` to be
+ *      "author" OR a roster slug (e.g. "fact-checker") for entries in
+ *      general, but reaching `final` specifically requires a dated HUMAN
+ *      attestation: a roster slug records an agent's editorial judgment, not
+ *      the author's human final-pass sign-off `final` represents.
+ * and whose `links` field names this exact slug (linksNameChapter).
+ *
+ * Pure: takes already-parsed entries, touches no filesystem.
+ * hooks/post-tool-batch.mjs is the only caller that ever acts on this result;
+ * nothing in this module assigns a chapter's status. One-directional by
+ * construction: this function only ever answers "may this chapter BE final,"
+ * never "should this chapter BECOME final" - promotion is always a human
+ * editing progress.json directly, never a hook or CLI write.
+ *
+ * @param {string} slug
+ * @param {ReturnType<typeof parseDecisionsLog>} entries
+ * @returns {boolean}
+ */
+export function isEligibleForFinal(slug, entries) {
+  if (!Array.isArray(entries)) return false;
+  for (const entry of entries) {
+    if (!entry || entry.actor !== 'author') continue;
+    if (!validateDecisionEntry(entry).valid) continue;
+    if (linksNameChapter(entry.links, slug)) return true;
+  }
+  return false;
 }

@@ -25,9 +25,10 @@ property that a failing test can be written against before the feature exists, t
 `ns-notes` passed.
 
 `ns-status` is read-only by design. It never writes to `.studio/` or anywhere else. State changes
-(a future promotion ceremony onto the existing `final` chapter status, for example) belong to a
-hook, because D-06 (single-writer state discipline) reserves `.studio/` machine-state writes for
-hooks, not for a CLI a narrating skill can invoke mid-conversation.
+- the promotion ceremony onto the existing `final` chapter status, for example (see
+["The promotion ceremony and automatic demotion"](#the-promotion-ceremony-and-automatic-demotion)
+below) - belong to a hook, because D-06 (single-writer state discipline) reserves `.studio/`
+machine-state writes for hooks, not for a CLI a narrating skill can invoke mid-conversation.
 
 ## What it reads
 
@@ -151,6 +152,41 @@ every path emitted is book-root-relative. This follows `ns-statusline`'s own est
 convention, for the same reason: this repository's CI runs both an Ubuntu and a Windows leg, and
 the two must agree byte for byte.
 
+## The promotion ceremony and automatic demotion
+
+`ns-status` reports the `final` status; it never sets it. Reaching `final` - the terminal state
+on the schema's `status` enum (`empty`, `outlined`, `drafting`, `drafted`, `revised`, `gated`,
+`final`) - requires a dated human attestation entry in `context/decisions.md`
+([format reference](../../formats/decisions.md)): `actor: author` exactly (not a roster slug),
+all required fields present, and a `links` entry naming the chapter's slug. Some planning prose
+for this project calls this same terminal state "locked"; there is no separate `locked` value on
+the enum - it is `final` under a different name, reused rather than adding an eighth schema value
+for a rename that would force a version bump and a migration.
+
+Promotion is a human editing `.studio/progress.json` directly, in a batch that does not also
+write the chapter's own file (see below for why). Demotion is automatic and machine-enforced:
+`hooks/post-tool-batch.mjs`, `.studio/progress.json`'s sole writer per D-06 (single-writer state
+discipline), falls a chapter back to `revised` whenever either holds:
+
+- the chapter reads `final` but no valid attestation names its slug - an unattested promotion
+  attempt never takes effect; it is reverted in the same batch it happened in, even when no
+  chapter file was written at all, or
+- the chapter's own file is written (`Write` or `Edit`) while it is `final` - regardless of
+  whether the new content differs from the old, and regardless of whether a matching attestation
+  still exists. Any further edit invalidates the prior sign-off: the attestation grammar carries
+  no content fingerprint that could tell a genuine revert apart from a coincidence, so the hook
+  does not try to guess.
+
+Because the hook demotes on any edit to the chapter's own file, a batch that both edits the
+chapter and sets it `final` in `.studio/progress.json` is demoted by the edit half before the
+promotion can stand - the attestation must land in its own batch.
+
+The eligibility check - `isEligibleForFinal` in `hooks/lib/status-engine.mjs` - is the one
+implementation shared between the hook and this module, so the two cannot disagree about what
+"eligible" means. `ns-status` itself never calls it: this CLI stays read-only (see Purpose above)
+and trusts `progress.json`'s `status` field verbatim, which the hook has already made
+trustworthy by construction before this CLI ever reads it.
+
 ## Vocabulary note
 
 This CLI reports project progress and how many chapters remain to reach `final`. It never uses the
@@ -177,4 +213,5 @@ on a non-zero exit.
 - [ns-gate CLI reference](./ns-gate.md) - writes the per-chapter and whole-book reports this CLI reads
 - [ns-statusline CLI reference](./ns-statusline.md) - the always-succeeding status-bar sibling this CLI's exit taxonomy deliberately diverges from, and why
 - [gate report format](../../formats/gate-report.md) - the normative shape of the files under `.studio/gate/`
+- [decision log format](../../formats/decisions.md) - the normative grammar for `context/decisions.md`, including the promotion attestation shape the ceremony above requires
 - [ADR-0009: apparatus CLI](../../adr/ADR-0009-apparatus-cli.md) - the standing growth-policy test this CLI passes

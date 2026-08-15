@@ -28,6 +28,11 @@ import {
   isHighlighted,
   computeStatusBoard,
   renderBoardMarkdown,
+  DEMOTION_FALLBACK_STATUS,
+  parseDecisionsLog,
+  validateDecisionEntry,
+  linksNameChapter,
+  isEligibleForFinal,
 } from '../../hooks/lib/status-engine.mjs';
 
 // ---------------------------------------------------------------------------
@@ -516,4 +521,175 @@ test('renderBoardMarkdown: never contains an absolute filesystem path', () => {
 test('renderBoardMarkdown: is a pure function of its input (two calls, same board, identical string)', () => {
   const board = sampleBoard();
   assert.equal(renderBoardMarkdown(board), renderBoardMarkdown(board));
+});
+
+// ---------------------------------------------------------------------------
+// Promotion attestation (Task 5: the promotion ceremony and automatic
+// demotion). parseDecisionsLog, validateDecisionEntry, linksNameChapter, and
+// isEligibleForFinal are pure functions over already-read text, so they are
+// unit tested here directly, the same way every other pure helper in this
+// file is. hooks/post-tool-batch.mjs's use of these functions against a
+// REAL subprocess run is covered separately in
+// tests/hooks/post-tool-batch-promotion.test.mjs - this file never spawns a
+// process.
+// ---------------------------------------------------------------------------
+
+// The two worked examples from docs/formats/decisions.md, reproduced
+// VERBATIM (not paraphrased) so this suite proves the parser and validator
+// against the same text a human reading that doc would write by hand.
+const DECISIONS_DOC_HUMAN_ATTESTATION = [
+  '### 2026-07-17 - human final pass attestation, chapter 03',
+  '- actor: author',
+  '- decision: Chapter 03 approved for gate after a full manual read.',
+  '- rationale: Stylometry warned on drift but the technical section reads correctly for the audience.',
+  '- links: .studio/gate/03-the-signal.20260717T154022Z.json, EV-0031 (survey figure)',
+].join('\n');
+
+const DECISIONS_DOC_EDITORIAL_OUTCOME = [
+  '### 2026-07-17 - outline approved, chapter 04',
+  '- actor: developmental-editor',
+  '- decision: Outline accepted with minor structural adjustments.',
+  '- rationale: Chapter flow matches the thesis arc established in chapter 01.',
+  '- links: structure/04-the-archive.md',
+].join('\n');
+
+// ---- parseDecisionsLog ------------------------------------------------------
+
+test('parseDecisionsLog: parses the format doc\'s human-attestation worked example verbatim', () => {
+  const entries = parseDecisionsLog(DECISIONS_DOC_HUMAN_ATTESTATION);
+  assert.equal(entries.length, 1);
+  assert.deepEqual(entries[0], {
+    date: '2026-07-17',
+    label: 'human final pass attestation, chapter 03',
+    actor: 'author',
+    decision: 'Chapter 03 approved for gate after a full manual read.',
+    rationale: 'Stylometry warned on drift but the technical section reads correctly for the audience.',
+    links: '.studio/gate/03-the-signal.20260717T154022Z.json, EV-0031 (survey figure)',
+  });
+});
+
+test('parseDecisionsLog: parses the format doc\'s editorial-outcome worked example verbatim', () => {
+  const entries = parseDecisionsLog(DECISIONS_DOC_EDITORIAL_OUTCOME);
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].actor, 'developmental-editor');
+  assert.equal(entries[0].links, 'structure/04-the-archive.md');
+});
+
+test('parseDecisionsLog: parses multiple entries in file order, ignoring preamble before the first heading', () => {
+  const text = [
+    '<!-- context/decisions.md',
+    '     Append-only editorial and attestation log.',
+    '-->',
+    '',
+    '# Decision Log',
+    '',
+    DECISIONS_DOC_HUMAN_ATTESTATION,
+    '',
+    DECISIONS_DOC_EDITORIAL_OUTCOME,
+    '',
+  ].join('\n');
+  const entries = parseDecisionsLog(text);
+  assert.equal(entries.length, 2, 'preamble produced no phantom entry');
+  assert.equal(entries[0].label, 'human final pass attestation, chapter 03');
+  assert.equal(entries[1].label, 'outline approved, chapter 04');
+});
+
+test('parseDecisionsLog: a field absent from an entry\'s bullet list comes back null, not undefined or thrown', () => {
+  const text = '### 2026-08-15 - incomplete entry\n- actor: author\n- decision: Something decided.\n';
+  const entries = parseDecisionsLog(text);
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].rationale, null, 'missing rationale field is null');
+  assert.equal(entries[0].links, null, 'missing optional links field is null');
+});
+
+test('parseDecisionsLog: an empty or non-string input yields zero entries, never throws', () => {
+  assert.deepEqual(parseDecisionsLog(''), []);
+  assert.deepEqual(parseDecisionsLog(null), []);
+  assert.deepEqual(parseDecisionsLog(undefined), []);
+});
+
+// ---- validateDecisionEntry --------------------------------------------------
+
+test('validateDecisionEntry: the format doc\'s human-attestation example is valid with nothing missing', () => {
+  const entries = parseDecisionsLog(DECISIONS_DOC_HUMAN_ATTESTATION);
+  assert.deepEqual(validateDecisionEntry(entries[0]), { valid: true, missing: [] });
+});
+
+test('validateDecisionEntry: an entry missing rationale is invalid and names the missing field', () => {
+  const entries = parseDecisionsLog('### 2026-08-15 - incomplete entry\n- actor: author\n- decision: Something decided.\n');
+  const result = validateDecisionEntry(entries[0]);
+  assert.equal(result.valid, false);
+  assert.deepEqual(result.missing, ['rationale']);
+});
+
+test('validateDecisionEntry: links is optional; a blank links field does not affect validity', () => {
+  const entries = parseDecisionsLog(
+    '### 2026-08-15 - no links entry\n- actor: author\n- decision: Something decided.\n- rationale: Because.\n- links:\n'
+  );
+  assert.deepEqual(validateDecisionEntry(entries[0]), { valid: true, missing: [] });
+});
+
+// ---- linksNameChapter --------------------------------------------------------
+
+test('linksNameChapter: matches a slug inside a chapters/ path token', () => {
+  assert.equal(linksNameChapter('chapters/03-the-signal.md', '03-the-signal'), true);
+});
+
+test('linksNameChapter: matches a slug inside a gate-report-shaped token (the format doc\'s own example)', () => {
+  assert.equal(
+    linksNameChapter('.studio/gate/03-the-signal.20260717T154022Z.json, EV-0031 (survey figure)', '03-the-signal'),
+    true
+  );
+});
+
+test('linksNameChapter: does not false-positive on a longer, different slug sharing a prefix', () => {
+  assert.equal(linksNameChapter('chapters/03-the-signal-appendix.md', '03-the-signal'), false);
+});
+
+test('linksNameChapter: returns false for blank, null, or non-string links', () => {
+  assert.equal(linksNameChapter('', '03-the-signal'), false);
+  assert.equal(linksNameChapter(null, '03-the-signal'), false);
+  assert.equal(linksNameChapter(undefined, '03-the-signal'), false);
+});
+
+test('linksNameChapter: returns false when slug itself is not schema-shaped (defensive, never guesses)', () => {
+  assert.equal(linksNameChapter('chapters/not-a-slug.md', 'not-a-slug'), false);
+});
+
+// ---- isEligibleForFinal (THE SHARED ELIGIBILITY PREDICATE) -----------------
+
+test('isEligibleForFinal: the format doc\'s human-attestation example makes its chapter eligible', () => {
+  const entries = parseDecisionsLog(DECISIONS_DOC_HUMAN_ATTESTATION);
+  assert.equal(isEligibleForFinal('03-the-signal', entries), true);
+});
+
+test('isEligibleForFinal: a chapter with no matching entry at all is not eligible', () => {
+  const entries = parseDecisionsLog(DECISIONS_DOC_HUMAN_ATTESTATION);
+  assert.equal(isEligibleForFinal('02-finding-your-network', entries), false);
+});
+
+test('isEligibleForFinal: a roster-slug actor (not literal "author") never confers eligibility', () => {
+  // The editorial-outcome example names chapter 04 in its links but is attested
+  // by a roster slug (developmental-editor), not the human author - it records
+  // an agent's editorial judgment, not the human final-pass sign-off.
+  const entries = parseDecisionsLog(DECISIONS_DOC_EDITORIAL_OUTCOME);
+  assert.equal(isEligibleForFinal('04-the-archive', entries), false);
+});
+
+test('isEligibleForFinal: a structurally invalid entry (missing rationale) does not confer eligibility even with actor: author and a matching link', () => {
+  const entries = parseDecisionsLog(
+    '### 2026-08-15 - incomplete attestation\n- actor: author\n- decision: Approved.\n- links: chapters/01-listening-before-speaking.md\n'
+  );
+  assert.equal(isEligibleForFinal('01-listening-before-speaking', entries), false);
+});
+
+test('isEligibleForFinal: a non-array entries argument is not eligible (defensive)', () => {
+  assert.equal(isEligibleForFinal('01-listening-before-speaking', null), false);
+  assert.equal(isEligibleForFinal('01-listening-before-speaking', undefined), false);
+});
+
+// ---- DEMOTION_FALLBACK_STATUS -----------------------------------------------
+
+test('DEMOTION_FALLBACK_STATUS is "revised", a schema-valid status distinct from "final" and "gated"', () => {
+  assert.equal(DEMOTION_FALLBACK_STATUS, 'revised');
 });
