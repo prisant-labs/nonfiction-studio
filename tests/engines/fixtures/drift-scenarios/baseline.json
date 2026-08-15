@@ -1,0 +1,13 @@
+{
+  "markers": {
+    "function_word_rate": 0.4882,
+    "contraction_rate": 0.125,
+    "first_person_rate": 0.7583,
+    "second_person_rate": 2.8436,
+    "type_token_ratio": 0.7329,
+    "avg_word_length": 5.0095,
+    "avg_sentence_length": 13.1875,
+    "punctuation_rate": 13.2701
+  },
+  "marker_set_version": 2
+}

@@ -25,7 +25,7 @@ import {
 } from 'node:fs';
 import { join, relative } from 'node:path';
 import { computeCoverage, scanChapter, scanQuoteAnchors, computeQuoteFindings } from './claims-engine.mjs';
-import { measureBook, computeDrift } from './stylometry-engine.mjs';
+import { measureBook, computeDrift, DEFAULT_DRIFT_SCORE_MAX } from './stylometry-engine.mjs';
 import { scrub } from './scrub-engine.mjs';
 import { parseEvidenceLog } from './ledger.mjs';
 // [TSK-029b (state-coherence gate check) 2026-07-18 per OQ-13 (gate coherence check) decision:
@@ -433,7 +433,7 @@ export function runGate(root, opts = {}) {
         const measured = measureBook(chapterTexts);
         const { score, exceeded } = computeDrift(measured, baseline, thresholds);
         const driftMax = (thresholds && thresholds.drift_score_max != null)
-          ? thresholds.drift_score_max : 35;
+          ? thresholds.drift_score_max : DEFAULT_DRIFT_SCORE_MAX;
 
         const verdict = deriveVerdict(styloConfig, exceeded);
 

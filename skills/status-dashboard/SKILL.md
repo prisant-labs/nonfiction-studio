@@ -18,7 +18,7 @@ This skill is the read-only project status dashboard. It reads `.studio/progress
 
 Skill inputs read:
 - `.studio/progress.json` (chapter status, word count, open_claim_count; totals block; required)
-- `.studio/config.json` (thresholds.drift_score_max for highlight threshold; default 35 when absent)
+- `.studio/config.json` (thresholds.drift_score_max for highlight threshold; default 25 when absent)
 - `.studio/gate/` directory listing (filenames via Bash; then Read of newest dot-form report per slug for drift and verdict; newest all-report for totals annotation)
 
 No skill chain edges exist for this skill.
@@ -73,7 +73,7 @@ For the whole-book annotation: among all `all.<ts>.json` files, identify the new
 
 ## Step 3 - Config read for drift threshold
 
-Use the Read tool on `.studio/config.json`. Read the value at `thresholds.drift_score_max`. If the file is absent, unreadable, or the field is not present, use the default value `35` and record that the default was applied for the footer note in Step 5.
+Use the Read tool on `.studio/config.json`. Read the value at `thresholds.drift_score_max`. If the file is absent, unreadable, or the field is not present, use the default value `25` and record that the default was applied for the footer note in Step 5.
 
 ---
 
@@ -115,7 +115,7 @@ A row satisfying either condition receives the `!` prefix in the `#` cell (appli
 
 Add a footer note:
 
-> Drift threshold: `thresholds.drift_score_max` = `<value>` (from `.studio/config.json`[; default 35 applied - field was absent] ).
+> Drift threshold: `thresholds.drift_score_max` = `<value>` (from `.studio/config.json`[; default 25 applied - field was absent] ).
 
 Omit the bracketed clause when the field was actually present.
 
@@ -142,4 +142,4 @@ If all chapters have gate reports, zero open claims, and no highlighted rows, st
 
 **Missing or empty gate directory.** Step 2 produces no matching filenames. All Drift and Gate cells render as "-"; Step 6 suggests running the quality gate for every chapter.
 
-**Missing or unreadable `.studio/config.json`.** Step 3 defaults to 35 and notes the default in the Step 5 footer. Not a halt condition; the dashboard renders normally.
+**Missing or unreadable `.studio/config.json`.** Step 3 defaults to 25 and notes the default in the Step 5 footer. Not a halt condition; the dashboard renders normally.

@@ -12,7 +12,7 @@
     }
   },
   "thresholds": {
-    "drift_score_max": 35,
+    "drift_score_max": 25,
     "claim_coverage_min": 1.0,
     "stylometry_marker_tolerance": 2.0
   },

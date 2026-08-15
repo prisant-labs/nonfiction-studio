@@ -203,7 +203,7 @@ test('golden book (--json): chapter and totals figures match the committed fixtu
     assert.equal(json.totals.chaptersRemaining, 6);
 
     assert.equal(json.wholeBookGate, null, 'no all.<ts>.json report is committed in the fixture');
-    assert.equal(json.thresholds.driftScoreMax, 35);
+    assert.equal(json.thresholds.driftScoreMax, 25);
     assert.equal(json.thresholds.driftScoreMaxIsDefault, false);
   } finally {
     rmSync(tmp, { recursive: true, force: true });

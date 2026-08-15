@@ -75,7 +75,7 @@ or use the same `node` plus full-path form.
 
 | Exit code | Meaning |
 |---|---|
-| 0 | Pass - drift score is below the `thresholds.drift_score_max` value in config.json (default 35) |
+| 0 | Pass - drift score is below the `thresholds.drift_score_max` value in config.json (default 25) |
 | 1 | Drift score at or above threshold; per-marker flags identify which markers drove the score |
 | 2 | Missing baseline, stale baseline (`marker_set_version` does not match the engine's current version -- run `capture-voice` to recapture it), missing chapters directory, invalid `--measure` argument, or operational error |
 
@@ -84,7 +84,7 @@ or use the same `node` plus full-path form.
 Human-readable pass:
 
 ```
-[stylometry] pass: drift score 2.34 < threshold 35
+[stylometry] pass: drift score 2.34 < threshold 25
 ```
 
 Human-readable failure:
@@ -159,7 +159,11 @@ gap (0.5057 versus 0.4171) the flat ratio produced. Chapter 1's per-chapter drif
 from 29.80 (of a 35 budget, `type_token_ratio` alone contributing 21.24 of those points) to
 10.86, with `type_token_ratio` now contributing 2.30 points. The residual gap is not zero --
 a very short chapter still carries some sample-size noise, and text shorter than one window
-falls back to the plain ratio entirely -- but it no longer dominates the score.
+falls back to the plain ratio entirely -- but it no longer dominates the score. That 35-budget
+figure is historical: the default budget was itself recalibrated to 25 afterward, for the
+reasons in Calibration, below. Chapter 1's score of 10.86 did not change (`drift_score_max`
+does not affect the score, only the pass/block line), so it now reads as 43.4% of a smaller
+budget rather than 31% of the original one.
 
 The per-marker contribution cap (see Purpose, above) addresses the other half of the same
 roadmap row: a marker whose baseline rests on very few raw occurrences, such as
@@ -171,6 +175,46 @@ unstable marker can no longer manufacture a false positive on its own -- while a
 that has genuinely drifted, which moves several markers at once, still clears the threshold
 comfortably (the planted `voice-drift` fixture still exceeds its threshold at book level and
 for every chapter individually after both corrections).
+
+## Calibration
+
+`thresholds.drift_score_max` defaults to 25 (`DEFAULT_DRIFT_SCORE_MAX` in
+`hooks/lib/stylometry-engine.mjs`, the single source of truth every other module and CLI
+that needs the default imports rather than re-declaring). It was 35 until this recalibration.
+
+**Why it changed.** The `type_token_ratio` length-invariance correction described above
+shrank the drift score's overall scale by roughly an order of magnitude without a matching
+change to the budget. Measured against a committed, labeled scenario suite (`tests/engines/
+fixtures/drift-scenarios/`, exercised by `tests/engines/stylometry-calibration.test.mjs`), a
+chapter with every contraction and every first-person pronoun stripped out -- the canonical
+signature of a ghostwriting pass, mechanically removing the author's voice rather than a
+human revising it -- passed at the 35 default. That scenario blocks at the 25 default.
+
+**What was measured, not just argued.** Three levers were evaluated against the suite:
+lowering the default budget (selected); lowering the per-marker contribution divisor
+(rejected: the ghostwriting scenario's score and the natural-variation-between-chapters
+score move together as the divisor changes, so no divisor value separates them, and a
+smaller divisor also erodes the "at least three markers must move together" guarantee the
+cap exists to provide); and damping the per-marker cap by the raw occurrence count each
+marker rests on (rejected: the ghostwriting signature lives on the two sparsest markers in
+the vector, so damping by occurrence count makes that specific signature score LOWER, moving
+it further from blocking, not closer -- the opposite of what the regression needed). The
+full scenario table, the swept budget values considered, and the reasoning for each rejected
+lever are recorded in the task history for this change.
+
+**What this calibration cannot do.** Two honestly written chapters from the same author,
+scored against a baseline self-fit from just those two chapters, differ from each other on
+the same three markers the ghostwriting signature moves (contraction, first-person, and
+second-person rate), because a two-chapter self-fit baseline is each chapter's own
+population as much as it is a population either chapter was independently measured against.
+No budget or divisor value found by this task passes that honest variation while still
+blocking the ghostwriting signature above -- the two cases land on the same side of every
+threshold tested, for the same structural reason (both are dominated by two or three markers
+pinned at the per-marker bound plus the population floor). This is a property of scoring a
+short chapter against a same-book self-fit baseline, not a defect in the 25 default
+specifically; a baseline captured from independent author writing samples, at enough volume
+to stop being dominated by a handful of pronoun and contraction counts, is the fix, and is
+out of scope for this change.
 
 ## Relationship to other CLIs
 

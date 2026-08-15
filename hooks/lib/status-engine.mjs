@@ -42,10 +42,14 @@
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { DEFAULT_DRIFT_SCORE_MAX } from './stylometry-engine.mjs';
 
-// Matches skills/status-dashboard/SKILL.md's documented default (35, applied when
-// .studio/config.json or its thresholds.drift_score_max field is absent).
-export const DEFAULT_DRIFT_THRESHOLD = 35;
+// Matches skills/status-dashboard/SKILL.md's documented default, applied when
+// .studio/config.json or its thresholds.drift_score_max field is absent. Re-exported under
+// this module's own name (rather than importing DEFAULT_DRIFT_SCORE_MAX directly at call
+// sites) so this module keeps its own stable public name while hooks/lib/stylometry-engine.mjs
+// stays the single source of truth for the number itself.
+export const DEFAULT_DRIFT_THRESHOLD = DEFAULT_DRIFT_SCORE_MAX;
 
 /**
  * Parses a .studio/gate/ filename against the two significant patterns documented in

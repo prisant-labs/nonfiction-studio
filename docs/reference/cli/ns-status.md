@@ -90,7 +90,7 @@ A Markdown table with columns `#`, `Title`, `Status`, `Words`, `Drift`, `Open Cl
 row per `progress.json` chapter entry in array order, followed by a **Totals** row. A highlighted
 row (drift score above `thresholds.drift_score_max`, or a `block` gate verdict) carries a leading
 `!` in its `#` cell. A chapter with no gate report on record shows `-` in both the Drift and Gate
-cells. Below the table: the effective drift threshold and whether it is the built-in default (35)
+cells. Below the table: the effective drift threshold and whether it is the built-in default (25)
 or a configured value, and, when `progress.json`'s totals carry a `chapters_total`, a
 chapters-remaining-to-final count.
 
@@ -103,7 +103,7 @@ Example, against the committed sample book:
 | 02 | Finding Your Network | drafted | 527 | - | 0 | - |
 | **Totals** | | | **1055** | | **0** | **0 of 6 final** |
 
-Drift threshold: thresholds.drift_score_max = 35 (from .studio/config.json).
+Drift threshold: thresholds.drift_score_max = 25 (from .studio/config.json).
 6 chapter(s) remaining to final.
 ```
 
@@ -133,7 +133,7 @@ Drift threshold: thresholds.drift_score_max = 35 (from .studio/config.json).
     "chaptersRemaining": 6
   },
   "wholeBookGate": null,
-  "thresholds": { "driftScoreMax": 35, "driftScoreMaxIsDefault": false }
+  "thresholds": { "driftScoreMax": 25, "driftScoreMaxIsDefault": false }
 }
 ```
 

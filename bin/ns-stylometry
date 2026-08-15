@@ -13,6 +13,7 @@ import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
 import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
 import {
   measureChapter, measureBook, computeDrift, countWords, CURRENT_MARKER_SET_VERSION,
+  DEFAULT_DRIFT_SCORE_MAX,
 } from '../hooks/lib/stylometry-engine.mjs';
 
 // ---- arg parsing ---------------------------------------------------------------
@@ -194,7 +195,7 @@ for (const absPath of chapterPaths) {
 
 // Zero-chapter edge case: no chapters means no drift.
 if (chapterTexts.length === 0) {
-  const driftScoreMax = (thresholds && thresholds.drift_score_max != null) ? thresholds.drift_score_max : 35;
+  const driftScoreMax = (thresholds && thresholds.drift_score_max != null) ? thresholds.drift_score_max : DEFAULT_DRIFT_SCORE_MAX;
   const outJson = {
     check: 'stylometry',
     verdict: 'pass',
@@ -228,7 +229,7 @@ try {
   process.exit(2);
 }
 
-const driftScoreMax = (thresholds && thresholds.drift_score_max != null) ? thresholds.drift_score_max : 35;
+const driftScoreMax = (thresholds && thresholds.drift_score_max != null) ? thresholds.drift_score_max : DEFAULT_DRIFT_SCORE_MAX;
 const flaggedMarkers = perMarker.filter(m => m.flagged);
 
 // Exit code is determined solely by score vs threshold; gate mode is not read.

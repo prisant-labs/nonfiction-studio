@@ -104,6 +104,34 @@ const TTR_WINDOW_SIZE = 100;
 // project configures; deviationPct itself is never capped, only what it adds to score.
 const MARKER_CONTRIBUTION_DIVISOR = 3;
 
+// Default drift budget applied when thresholds.drift_score_max is absent from config.json
+// (computeDrift's own fallback, below). Recalibrated from 35 to 25 against a committed,
+// labeled scenario suite (tests/engines/fixtures/drift-scenarios/, exercised by
+// tests/engines/stylometry-calibration.test.mjs) after Correction A (the type_token_ratio
+// length-invariance fix) shrank the drift score's scale by roughly an order of magnitude
+// without a matching budget change, which let a chapter stripped of every contraction and
+// every first-person pronoun -- the canonical ghostwriting signature -- pass at 35 (score
+// 33.58) while still blocking at 25 (score 26.91).
+//
+// Two other levers were measured against the same suite and rejected. A smaller
+// MARKER_CONTRIBUTION_DIVISOR (currently 3, unchanged) was rejected because the
+// ghostwriting signature's score and a natural between-chapter voice-variation score move
+// together as the divisor changes -- both are dominated by two markers pinned at the
+// per-marker bound plus a population-mismatch residual, and the residual gap between them
+// does not narrow at any divisor value, so no divisor separates the two cases; a smaller
+// divisor also weakens the "at least three markers must move together" guarantee the bound
+// exists to provide. Damping the per-marker bound by each marker's raw occurrence count was
+// rejected because the ghostwriting signature lives on the two SPARSEST markers in the
+// vector (contraction_rate and first_person_rate); any damping that shrinks toward zero as
+// occurrence count shrinks lowers exactly those two markers' contribution, moving the
+// signature further from blocking rather than closer -- the wrong direction for the one
+// case this recalibration had to fix.
+//
+// This constant is the single source of truth for the shipped default:
+// hooks/lib/status-engine.mjs, hooks/lib/gate-engine.mjs, and bin/ns-stylometry all import
+// it rather than each carrying their own literal.
+export const DEFAULT_DRIFT_SCORE_MAX = 25;
+
 // Current stylometry marker-set version. Bumped whenever a marker's computation changes
 // meaning under the same key name: type_token_ratio moved from a flat ratio to a
 // TTR_WINDOW_SIZE-token moving average in this bump, version 1 to version 2. A baseline
@@ -441,7 +469,7 @@ export function computeDrift(measured, baseline, thresholds) {
     : 2.0;
   const driftScoreMax = (thresholds && thresholds.drift_score_max != null)
     ? thresholds.drift_score_max
-    : 35;
+    : DEFAULT_DRIFT_SCORE_MAX;
   const maxMarkerContribution = driftScoreMax / MARKER_CONTRIBUTION_DIVISOR;
 
   if (!baseline || !baseline.markers) {
