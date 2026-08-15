@@ -83,7 +83,7 @@ Drift score formula (TSK-022 documented, as amended by roadmap row 1.7's per-mar
 
 Fixture drift score: 28.49 (book level), 26.66 (chapter 1 alone), 33.60 (chapter 2 alone).
 
-Golden book drift score: 0.01 (book level; all markers close to the self-referential baseline, well below threshold). See `docs/reference/cli/ns-stylometry.md` for the golden book's own per-chapter reading, which also improved under this correction (chapter 1 fell from 29.80 to 10.86 of a 35 budget).
+Golden book drift score: 0.01 (book level; all markers close to the self-referential baseline, well below threshold). See `docs/reference/cli/ns-stylometry.md` for the golden book's own per-chapter reading, which also improved under this correction (chapter 1 fell from 29.80 to 10.86 of a 25 budget).
 
 Pinned threshold (`thresholds.drift_score_max` in `.studio/config.json`): **20**
 

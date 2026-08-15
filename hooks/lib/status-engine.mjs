@@ -161,9 +161,9 @@ export function extractGateVerdict(report) {
 }
 
 // Matches the live hooks/lib/gate-engine.mjs detail-string shape ("drift score 10.86 within
-// threshold 35" / "... exceeds threshold 35; stylometry.drift-threshold") and the
+// threshold 25" / "... exceeds threshold 25; stylometry.drift-threshold") and the
 // underscore-joined shape docs/formats/gate-report.md's own worked example uses
-// ("drift_score 38 exceeds threshold 35"), so a wording gap between the engine and its
+// ("drift_score 38 exceeds threshold 25"), so a wording gap between the engine and its
 // documentation does not silently stop this function from parsing a real report either way.
 const DRIFT_SCORE_PATTERN = /drift[ _]score\s+(-?\d+(?:\.\d+)?)/i;
 

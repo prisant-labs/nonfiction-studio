@@ -79,7 +79,7 @@ Each entry in the `checks` array carries:
     {
       "check": "stylometry",
       "verdict": "warn",
-      "detail": "drift_score 38 exceeds threshold 35",
+      "detail": "drift_score 38 exceeds threshold 25",
       "evidence": [".studio/progress.json#/chapters/2/drift_score"],
       "next": "Review long-sentence rate and contraction rate against the baseline."
     }
