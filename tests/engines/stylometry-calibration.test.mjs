@@ -96,6 +96,26 @@ test('examples/sample-book/.studio/config.json ships drift_score_max equal to DE
     'side; this pins it from the constant side, so a mismatch between the two is caught)');
 });
 
+// The four non-voice-drift fixture configs (ai-injection, continuity-error, unsourced-claim,
+// config-coercion) were also brought to DEFAULT_DRIFT_SCORE_MAX for consistency across the
+// example fleet. None of them is exercised by a live stylometry score in a way that would
+// catch a silent revert to 35 (config-coercion's baseline is null, so stylometry never scores
+// against it at all; the other three score near zero regardless of threshold), so each gets
+// its own pin here rather than relying on fixture-matrix behavior to notice.
+const OTHER_FIXTURE_CONFIGS = [
+  'ai-injection', 'continuity-error', 'unsourced-claim', 'config-coercion',
+];
+for (const fixture of OTHER_FIXTURE_CONFIGS) {
+  test('examples/fixtures/' + fixture + '/.studio/config.json ships drift_score_max equal to DEFAULT_DRIFT_SCORE_MAX', () => {
+    const configPath = fixture === 'config-coercion'
+      ? join(__dirname, '..', '..', 'examples', 'fixtures', fixture, 'config.json')
+      : join(__dirname, '..', '..', 'examples', 'fixtures', fixture, '.studio', 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    assert.strictEqual(config.thresholds.drift_score_max, DEFAULT_DRIFT_SCORE_MAX,
+      fixture + '\'s config must match the engine default exactly, not silently diverge');
+  });
+}
+
 test('status-engine.mjs re-exports the SAME value as DEFAULT_DRIFT_SCORE_MAX, not an independent copy', async () => {
   const { DEFAULT_DRIFT_THRESHOLD } = await import('../../hooks/lib/status-engine.mjs');
   assert.strictEqual(DEFAULT_DRIFT_THRESHOLD, DEFAULT_DRIFT_SCORE_MAX,
@@ -132,11 +152,8 @@ const SCENARIOS = [
     label: 'contractions + first person removed -- the ghostwriting signature (THE regression this task closes)',
     expected: 'block',
   },
-  {
-    file: '01-first-and-second-person-removed.md',
-    label: 'first + second person removed -- same marker count as the row above, quiet residual (see SCENARIOS.md)',
-    expected: 'pass',
-  },
+  // Row 6 (first + second person removed) is NOT in this table -- see the dedicated
+  // divergence test below, matching how rows 9-10 (honest variance) are handled.
   { file: '01-contractions-first-second-removed.md', label: 'contractions + first + second person all removed', expected: 'block' },
   { file: 'different-voice.md', label: 'genuinely different authorial voice (voice-drift fixture ch2, copied static)', expected: 'block' },
 ];
@@ -149,6 +166,29 @@ for (const s of SCENARIOS) {
       s.label + ': expected ' + s.expected + ', got ' + verdict + ' (score ' + score.toFixed(2) + ')');
   });
 }
+
+// ---------------------------------------------------------------------------
+// Row 6: ground truth BLOCK, measured verdict PASS. An earlier version of this suite
+// labeled row 6 "pass" using the single-axis reasoning that justifies rows 2-4, which does
+// not actually reach row 6 (it moves two axes, same count as row 5). That label was set to
+// match the measurement, not derived independently -- exactly the shape this task exists to
+// eliminate. Row 5's own reasoning (two markers moving together is the ghostwriting
+// signature this recalibration targets) applies here too, so ground truth is BLOCK. The
+// measured verdict stays PASS at the shipped default: row 6's residual in the six markers
+// the transformation does not touch (about 3.4 points) is far smaller than row 5's (about
+// 10.2), so it never reaches budget at divisor 3. See SCENARIOS.md's "Row 6" section for
+// the full reasoning, including why row 6 is this calibration's binding constraint.
+// ---------------------------------------------------------------------------
+
+test('row 6 (first + second person removed): ground truth BLOCK, measured verdict PASS -- label set from the same two-axis reasoning as row 5, not from measurement', () => {
+  const { score, exceeded } = scoreScenario('01-first-and-second-person-removed.md');
+  assert.strictEqual(exceeded, false,
+    'measured verdict is pass under the shipped default (score ' + score.toFixed(2) + '). Ground truth is block: ' +
+    'this is a two-axis pronoun-removal signature, the same count as row 5, which this suite treats as ' +
+    'suspicious enough to warrant blocking. It passes here because its residual in the other six markers ' +
+    '(about 3.4 points) is much smaller than row 5\'s (about 10.2) -- see SCENARIOS.md for why, and for why ' +
+    'this is the binding constraint on this calibration at divisor 3.');
+});
 
 // ---------------------------------------------------------------------------
 // Honest-variance: ground truth PASS, measured verdict BLOCK. See SCENARIOS.md's
@@ -169,8 +209,11 @@ test('honest-variance ch1 (de-padded, self-fit baseline): ground truth PASS, mea
   const { score, exceeded } = computeDrift(measureChapter(ch1Depadded), selfFitBaseline, null);
   assert.strictEqual(exceeded, true,
     'measured verdict is block under the shipped default (score ' + score.toFixed(2) + '). Ground truth is pass: ' +
-    'two honestly written chapters differing naturally should not block. No swept budget or divisor closes this ' +
-    'gap for this corpus -- see the "Honest-variance scenario" section of SCENARIOS.md for the proof.');
+    'two honestly written chapters differing naturally should not block. At divisor 3 (the shipped divisor), ' +
+    'no budget in the range this calibration could responsibly ship closes this gap; separation DOES exist ' +
+    'in the joint budget-and-divisor space but was not adopted -- see the "Honest-variance scenario" section ' +
+    'of SCENARIOS.md and the Calibration section of docs/reference/cli/ns-stylometry.md for the full proof ' +
+    'and the reasons.');
 });
 
 test('honest-variance ch2 (de-padded, self-fit baseline): same finding as ch1', () => {

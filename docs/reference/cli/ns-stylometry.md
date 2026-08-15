@@ -191,30 +191,81 @@ signature of a ghostwriting pass, mechanically removing the author's voice rathe
 human revising it -- passed at the 35 default. That scenario blocks at the 25 default.
 
 **What was measured, not just argued.** Three levers were evaluated against the suite:
-lowering the default budget (selected); lowering the per-marker contribution divisor
-(rejected: the ghostwriting scenario's score and the natural-variation-between-chapters
-score move together as the divisor changes, so no divisor value separates them, and a
-smaller divisor also erodes the "at least three markers must move together" guarantee the
-cap exists to provide); and damping the per-marker cap by the raw occurrence count each
-marker rests on (rejected: the ghostwriting signature lives on the two sparsest markers in
-the vector, so damping by occurrence count makes that specific signature score LOWER, moving
-it further from blocking, not closer -- the opposite of what the regression needed). The
-full scenario table, the swept budget values considered, and the reasoning for each rejected
-lever are recorded in the task history for this change.
+lowering the default budget (selected); lowering the per-marker contribution divisor; and
+damping the per-marker cap by the raw occurrence count each marker rests on. Damping by raw
+occurrence count was rejected outright: the ghostwriting signature lives on the two sparsest
+markers in the vector, so damping by occurrence count makes that specific signature score
+LOWER, moving it further from blocking, not closer -- the opposite of what the regression
+needed, at every damping strength tried.
 
-**What this calibration cannot do.** Two honestly written chapters from the same author,
-scored against a baseline self-fit from just those two chapters, differ from each other on
-the same three markers the ghostwriting signature moves (contraction, first-person, and
-second-person rate), because a two-chapter self-fit baseline is each chapter's own
-population as much as it is a population either chapter was independently measured against.
-No budget or divisor value found by this task passes that honest variation while still
-blocking the ghostwriting signature above -- the two cases land on the same side of every
-threshold tested, for the same structural reason (both are dominated by two or three markers
-pinned at the per-marker bound plus the population floor). This is a property of scoring a
-short chapter against a same-book self-fit baseline, not a defect in the 25 default
-specifically; a baseline captured from independent author writing samples, at enough volume
-to stop being dominated by a handful of pronoun and contraction counts, is the fix, and is
-out of scope for this change.
+Lowering the divisor is a more qualified rejection, corrected after an initial version of
+this document overstated it. AT A FIXED BUDGET, the ghostwriting signature and natural
+between-chapter voice variation move together as the divisor changes -- both are dominated by
+two markers pinned at the per-marker bound plus a residual, and neither budget 35 nor budget
+25 has a divisor that separates them. That is not the same claim as "no divisor separates
+them," and the stronger claim is false: separation exists in the JOINT budget-and-divisor
+space. Natural voice variation's score has a hard ceiling (the largest measured chapter tops
+out at 47.09 once the per-marker cap exceeds that chapter's own largest single deviation,
+16.49%), while the ghostwriting signature's two fully-saturated markers keep climbing
+linearly with the cap and have no such ceiling below 210. Once the budget exceeds the honest-
+variation ceiling, the two curves cross. A working point was verified end to end against the
+real engine: budget 50, divisor 2.5 blocks the ghostwriting signature (score 50.24) while
+passing both de-padded golden chapters (47.09 and 44.54) and matching every other scenario's
+ground truth, with two markers alone (40) still comfortably short of the 50-point budget --
+the "at least three markers" guarantee holds outright there, not just in spirit.
+
+That point was not adopted as the shipped default. The feasible region shrinks fast as the
+divisor rises toward the current value of 3 (a few points wide near divisor 2.5 in this
+task's own search, and empty by divisor 2.6), the low end of the feasible divisor range sits
+close enough to 2 that two markers alone approach sufficiency to block by themselves --
+eroding, not preserving, the guarantee the bound exists to provide -- and any divisor change
+ripples into every document and fixture that quotes "one third" or a divisor-derived number,
+including `examples/fixtures/voice-drift/PLANTED.md`'s per-marker contribution table. Nothing
+about the shipped default requires this region to stay unexplored forever; it is simply a
+larger change than this task made, evaluated and left for a future task with the numbers
+above to start from, not because the numbers do not exist.
+
+**What actually makes the ghostwriting signature block at the shipped default.** Decomposed
+against chapter 1's own true baseline (removing the same-book population-mismatch floor
+entirely), the ghostwriting signature's genuine knock-on in the six markers the
+transformation does not directly touch is about 6.05 points -- short of the roughly 8.33
+points that budget 25's cap of 8.33 per marker would need from residual alone to block. The
+remaining roughly 4.2 points of the 10.25-point residual actually measured (against the real,
+same-book self-fit baseline) come from the same population-mismatch floor every chapter
+carries when scored against that kind of baseline (10.86 points, for a chapter that was not
+transformed at all). At the shipped default, the calibration catches the ghostwriting
+signature partly because of that floor, not from the transformation's own signal alone. A
+baseline with less population mismatch -- more author samples, not just the two chapters
+being graded -- would shrink the floor and, with it, part of what currently makes 25 work.
+
+**What this calibration cannot do at the shipped default (divisor 3, budget 25).** Two
+honestly written chapters from the same author, scored against a baseline self-fit from just
+those two chapters, differ from each other on the same three markers the ghostwriting
+signature moves (contraction, first-person, and second-person rate), because a two-chapter
+self-fit baseline is each chapter's own population as much as it is a population either
+chapter was independently measured against. At divisor 3 specifically, no budget in the
+range this calibration could responsibly ship passes that honest variation while still
+blocking the ghostwriting signature (see the joint-space paragraph above for where that stops
+being true). This is a property of scoring a short chapter against a same-book self-fit
+baseline at this divisor, not an unconditional impossibility.
+
+A baseline captured from independent author writing samples, at enough volume to stop being
+dominated by a handful of pronoun and contraction counts, would also shrink the honest-
+variation problem -- but per the paragraph above, that same volume shrinks the population-
+mismatch floor this calibration partly relies on to catch the ghostwriting signature. Moving
+to an independent-sample baseline is not a strict improvement over the two-chapter self-fit
+baseline this document otherwise describes; it trades one open problem for tightening the
+margin on another, already-fixed one. Building that baseline, and re-deriving the budget
+against it, is out of scope for this change.
+
+**The scenario suite alone does not select 25.** At divisor 3, the eight non-honest-variation
+scenarios in the suite are consistent with any budget from about 16.12 to 30.73 -- a band
+roughly 14.6 points wide. 25 was chosen inside that band for the margins described above, not
+derived uniquely from the scenarios. The suite's own floor-fraction test (asserting 10.86 is
+43.4% of budget) narrows the pin further, but that test is a statistic computed FROM the
+chosen value, not an independent ground-truth constraint the way the scenario verdicts are;
+it pins drift away from 25, it does not justify 25 over some other point in the 14.6-point
+band.
 
 ## Relationship to other CLIs
 

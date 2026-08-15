@@ -75,7 +75,7 @@ and a raw-occurrence-count damped bound were also evaluated and rejected (see th
 | 3 | `01-first-person-removed.md` | first person only | pass | 21.87 pass | 18.53 pass |
 | 4 | `01-second-person-removed.md` | second person only | pass | 15.98 pass | 12.65 pass |
 | 5 | `01-contractions-and-first-person-removed.md` | contractions + first person | **block** | 33.58 pass | 26.91 **block** |
-| 6 | `01-first-and-second-person-removed.md` | first + second person | pass | 26.78 pass | 20.11 pass |
+| 6 | `01-first-and-second-person-removed.md` | first + second person | block (see note) | 26.78 pass | 20.11 **pass** |
 | 7 | `01-contractions-first-second-removed.md` | all three | block | 38.27 block | 28.27 block |
 | 8 | `different-voice.md` | genuinely different voice (voice-drift ch2) | block | 62.97 block | 51.35 block |
 | 9 | `01-honest-variance-depadded.md` | de-padded ch1, self-fit baseline | pass (see note) | 41.46 block | 34.80 block |
@@ -86,29 +86,87 @@ contraction and every first-person pronoun stripped -- the canonical ghostwritin
 literally half of this project's own planted `voice-drift` defect -- passed. At the new
 default it blocks.
 
-Row 6 shows the same nominal shape (two pronoun/contraction markers fully deviated) landing on
-the opposite side of the line. The difference is the OTHER six markers' residual movement:
-expanding contractions (row 5) adds words and shifts several other ratios by a few points
-each; substituting pronouns alone (row 6) barely moves anything else. Summed across the six
-unaffected markers, row 5 carries about 10.2 points of residual, row 6 about 3.4. The
-calibration in this suite catches a two-marker signature when it comes with that much
-knock-on movement; it does not catch a surgically quiet two-marker strip under the
-`divisor = 3` architecture. This is a measured limit of the current design, not an oversight.
+### What actually makes row 5 block, decomposed
+
+Row 5's score at the shipped default (26.91) is not mostly the transformation's own signal.
+Rescored against chapter 1's own true baseline instead of the two-chapter self-fit baseline
+(removing the population-mismatch floor every chapter carries when scored against a baseline
+it is only half of), row 5's genuine knock-on in the six markers the transformation does not
+touch directly is about 6.05 points -- short of the roughly 8.33 points that budget 25's
+per-marker cap would need from residual alone to push the two fully-saturated markers over
+budget. The other roughly 4.2 points of the 10.25-point residual actually measured (against
+the real, shipped, same-book self-fit baseline) are the same population-mismatch floor an
+UNCHANGED chapter 1 carries on its own (10.86 points, row 1 above). At the shipped default,
+this calibration blocks row 5 partly by leaning on that floor, not from the transformation's
+signal alone.
+
+### Row 6: ground truth set from measurement, not independent judgment
+
+An earlier version of this file labeled row 6 "pass," on the reasoning used for rows 2-4:
+that the per-marker bound exists so a single stylistic axis cannot alone decide the verdict.
+Row 6 moves two axes (first- and second-person pronouns both removed), the same count as row
+5, so that reasoning does not actually reach it -- the label was set to match what the engine
+does, not derived independently the way rows 2-5, 7, and 8 are. Row 5's own reasoning (two
+markers moving together is the signature this recalibration targets) applies to row 6 just as
+much, so ground truth here is relabeled **block**, and the divergence from the shipped
+default's measured verdict (**pass**, at both the old and new default) is disclosed the same
+way rows 9-10 disclose theirs, rather than silently matching the label to the measurement.
+
+The mechanism is the same knock-on-versus-floor split as row 5, at different magnitudes.
+Summed across the six markers the transformation does not directly touch, row 5 carries about
+10.2 points of residual against the shipped self-fit baseline (about 6.05 genuine, about 4.2
+floor, per the decomposition above); row 6 carries about 3.4. Both are two-marker signatures;
+the difference is entirely in how much the surrounding six markers also move, and expanding
+contractions (row 5) disturbs them more than substituting pronouns alone (row 6) does. This
+is a real, measured difference in this corpus, not a reason row 6 deserved a different ground
+truth -- it is the reason row 6 is the calibration's binding constraint: at divisor 3, no
+budget both keeps row 1 passing and makes row 6 block (row 6 needs budget under about 10.3
+for its own two-marker-plus-residual sum to reach it, and row 1's own floor is 10.86, already
+above that). Catching row 6 at divisor 3 is not available at any budget; it would need either
+a different divisor or the joint budget-and-divisor region described in
+`docs/reference/cli/ns-stylometry.md`'s Calibration section.
 
 ### Honest-variance scenario (rows 9-10): ground truth vs. measured verdict
 
-These two rows are the case this recalibration was commissioned to fix and could not fix.
-Ground truth is **pass**: two honestly written chapters from the same author, scored against
-a baseline self-fit from just the two of them, is natural variation, not drift. The measured
-verdict is **block**, at both the old and the new default. This is not a bug in this
-calibration; it is a structural property of the flat per-marker cap that no choice of budget
-or divisor can route around for this corpus. Proof by construction: while exactly two
-markers are pinned at the per-marker bound for both cases, each case's score is
-`2 x (budget/divisor) + residual`, where `residual` is that case's own sum over the other six
-markers, a constant with respect to budget and divisor. Row 5's residual is about 10.2; rows
-9-10's residual is about 18.1 and 16.7 respectively. Honest variance is offset ABOVE the
-ghostwriting signature by that gap at every budget/divisor combination that also closes row
-5. The test for these two rows asserts the MEASURED verdict (block), not the ground
-truth, and says so in the test's own comments -- a suite that silently asserted `pass` here
-would be hiding the finding, and a suite that left the row out would be hiding it more
-effectively.
+These two rows are the case this recalibration was commissioned to fix. Ground truth is
+**pass**: two honestly written chapters from the same author, scored against a baseline
+self-fit from just the two of them, is natural variation, not drift. The measured verdict at
+the shipped default (divisor 3, budget 25) is **block**, at both the old and the new default
+budget. Proof for the shipped divisor specifically: while exactly two markers stay pinned at
+the per-marker bound for both row 5 and rows 9-10 -- true at both budget 35 and budget 25,
+divisor 3 -- each case's score is `2 x (budget/divisor) + residual`, with `residual` constant
+across budget and divisor IN THAT REGIME. Row 5's residual is about 10.2; rows 9 and 10's are
+about 18.1 and 16.7. Honest variance is offset above the ghostwriting signature by that gap
+throughout the regime, so at divisor 3, no budget in the range this calibration could
+responsibly ship passes rows 9-10 while blocking row 5.
+
+That regime does not hold everywhere, and the constant-residual argument does not generalize
+past it the way an earlier version of this file claimed. Rows 9-10's largest single deviation
+(16.49% for row 9) means their score has a hard ceiling: once the per-marker cap exceeds that
+value, every marker is uncapped and the score stops changing (47.09 for row 9, 44.54 for row
+10) no matter how much further the cap grows. Row 5's two manipulated markers sit at exactly
+100% deviation and have no such ceiling below a cap of 100. Past a cap of about 18.42, row
+5's climbing score exceeds rows 9-10's flat ceiling, and the two cases separate. Budget 50,
+divisor 2.5 (cap 20) is a verified working point: row 5 scores 50.24 and blocks, rows 9-10
+score 47.09 and 44.54 and pass, and every other row in the table above still matches its
+ground truth. This was not adopted as the shipped default; see `docs/reference/cli/
+ns-stylometry.md`'s Calibration section for the real reasons (the feasible region is narrow,
+it degrades the three-marker guarantee at its own low end, and it ripples into every
+divisor-derived number this project ships) and for what changing the shipped default there
+would actually require.
+
+The test for rows 6, 9, and 10 asserts the MEASURED verdict, not the ground truth, and says
+so in the test's own comments -- a suite that silently matched ground truth to whatever the
+engine currently does would be hiding these findings, and a suite that left the rows out
+would be hiding them more effectively.
+
+### The suite does not, by itself, select 25
+
+At divisor 3, the eight scenarios above other than rows 9-10 are jointly consistent with any
+budget from about 16.12 to 30.73 -- a band roughly 14.6 points wide, not a single point. 25
+sits inside that band; it is not derived uniquely from the labeled scenarios the way each
+scenario's own verdict is. The floor-fraction test in `tests/engines/stylometry-
+calibration.test.mjs` (asserting row 1's score is 43.4% of budget) narrows the pin further,
+but that test is a statistic computed from the chosen value of 25, not an independent
+ground-truth constraint like the scenario verdicts above -- it detects drift away from 25
+once 25 is chosen, it does not justify 25 over another point in the 14.6-point band.

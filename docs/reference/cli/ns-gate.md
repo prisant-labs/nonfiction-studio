@@ -111,7 +111,7 @@ Human-readable summary:
 [ns-gate] verdict: pass (report: .studio/gate/01-listening-before-speaking.20260719T120000Z.json)
   [claim_coverage] pass: coverage 100.0% (10/10 markers resolved)
   [prompt_scrub] pass: no injection patterns found
-  [stylometry] pass: drift score 2.34 is within threshold 35
+  [stylometry] pass: drift score 2.34 is within threshold 25
 ```
 
 JSON output (with `--json`) follows the S-08 section 11 gate-report shape with `verdict`,

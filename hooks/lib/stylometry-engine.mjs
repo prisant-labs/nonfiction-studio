@@ -113,19 +113,40 @@ const MARKER_CONTRIBUTION_DIVISOR = 3;
 // every first-person pronoun -- the canonical ghostwriting signature -- pass at 35 (score
 // 33.58) while still blocking at 25 (score 26.91).
 //
-// Two other levers were measured against the same suite and rejected. A smaller
-// MARKER_CONTRIBUTION_DIVISOR (currently 3, unchanged) was rejected because the
-// ghostwriting signature's score and a natural between-chapter voice-variation score move
-// together as the divisor changes -- both are dominated by two markers pinned at the
-// per-marker bound plus a population-mismatch residual, and the residual gap between them
-// does not narrow at any divisor value, so no divisor separates the two cases; a smaller
-// divisor also weakens the "at least three markers must move together" guarantee the bound
-// exists to provide. Damping the per-marker bound by each marker's raw occurrence count was
-// rejected because the ghostwriting signature lives on the two SPARSEST markers in the
-// vector (contraction_rate and first_person_rate); any damping that shrinks toward zero as
-// occurrence count shrinks lowers exactly those two markers' contribution, moving the
-// signature further from blocking rather than closer -- the wrong direction for the one
-// case this recalibration had to fix.
+// Two other levers were measured against the same suite. A smaller MARKER_CONTRIBUTION_
+// DIVISOR (currently 3, unchanged) does not separate the ghostwriting signature from natural
+// between-chapter voice variation AT THIS BUDGET (35, nor at 25): both are dominated by two
+// markers pinned at the per-marker bound plus a residual, and at a fixed budget the residual
+// gap between them does not narrow as the divisor changes alone. That is NOT the same as "no
+// divisor separates them" -- it does not, at a fixed budget. Separation DOES exist in the
+// joint (budget, divisor) space: honest variation's score has a hard ceiling (47.09 for one
+// golden chapter measured against the de-padded two-chapter self-fit baseline, reached once
+// the per-marker cap exceeds its largest single deviation), while the ghostwriting
+// signature's two saturated markers keep climbing linearly with the cap, so at a budget above
+// that ceiling the two curves cross. This task verified a working point (budget 50, divisor
+// 2.5) that blocks the ghostwriting signature while passing both de-padded chapters, with
+// two markers alone (40) still comfortably short of budget. It was not pursued for the
+// shipped default for three reasons: the feasible band shrinks fast as the divisor approaches
+// 3 (a few points wide near divisor 2.5, empty by divisor 2.6 in this task's own search), the
+// low end of the feasible divisor range (near 2) makes two markers alone nearly sufficient to
+// block on their own, which is the guarantee this bound exists to prevent, and any divisor
+// change ripples into every document and fixture that quotes "one third" or a divisor-derived
+// number, including examples/fixtures/voice-drift/PLANTED.md's per-marker contribution table.
+// Damping the per-marker bound by each marker's raw occurrence count was rejected because the
+// ghostwriting signature lives on the two SPARSEST markers in the vector (contraction_rate
+// and first_person_rate); any damping that shrinks toward zero as occurrence count shrinks
+// lowers exactly those two markers' contribution, moving the signature further from blocking
+// rather than closer -- the wrong direction for the one case this recalibration had to fix.
+//
+// A second, independently measured finding narrows what "25" is actually doing: at this
+// budget, the ghostwriting signature's genuine knock-on in the six markers the transformation
+// does not directly touch is about 6.05 points (measured against chapter 1's own true
+// baseline, removing the population-mismatch floor entirely) -- short of the roughly 8.33
+// points needed to block on its own. The other roughly 4.2 points that make it block come
+// from the same population-mismatch floor every chapter carries when scored against a
+// same-book self-fit baseline (10.86 points for an unchanged chapter). The calibration works
+// on this suite partly by leaning on that floor, not solely on the transformation's own
+// signal.
 //
 // This constant is the single source of truth for the shipped default:
 // hooks/lib/status-engine.mjs, hooks/lib/gate-engine.mjs, and bin/ns-stylometry all import
