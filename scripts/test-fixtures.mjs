@@ -32,6 +32,7 @@ const NS_SCRUB = join(BIN, 'ns-scrub');
 const NS_DOCTOR = join(BIN, 'ns-doctor');
 const NS_GATE = join(BIN, 'ns-gate');
 const NS_NOTES = join(BIN, 'ns-notes');
+const NS_STATUS = join(BIN, 'ns-status');
 
 // ---------------------------------------------------------------------------
 // Fixture source directories (committed; never modified)
@@ -71,6 +72,13 @@ const MATRIX = [
       // the run leaves no residue; tests/engines/notes-cli.test.mjs is the more detailed,
       // dedicated proof of exit-code mapping and byte-identical regeneration.
       { engine: NS_NOTES, args: [], expected: 1 },
+      // ns-status is read-only and has no findings-based exit code (only 0 on success or 2 on
+      // an operational error); the golden book is a well-formed project, so it always exits 0.
+      // This proves the CLI runs end to end against the real committed progress.json,
+      // config.json, and .studio/gate/ report via the shared temp-clone harness; the dedicated,
+      // more detailed proof of the read-only and determinism guarantees is
+      // tests/engines/status-cli.test.mjs.
+      { engine: NS_STATUS, args: [], expected: 0 },
     ],
   },
   {

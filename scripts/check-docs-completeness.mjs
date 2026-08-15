@@ -28,9 +28,12 @@ const DOCS_CLI = join(REPO_ROOT, 'docs', 'reference', 'cli');
 // The shipped CLI binaries per D-05 (five shipped CLIs via bin/; ns-statusline is the sixth,
 // added by OPP-P03, studio HUD, see docs/adr/ADR-0008-status-hud.md; ns-notes is the seventh,
 // added by OPP-D05, apparatus generator, see docs/adr/ADR-0009-apparatus-cli.md for the growth
-// decision and the standing growth-policy test for any future CLI).
+// decision and the standing growth-policy test for any future CLI; ns-status is the eighth, the
+// deterministic project chapter board, which passes that same ADR-0009 growth-policy criterion
+// 1 - correctness here is a byte-for-byte property a failing test can be written against
+// before the feature exists).
 // Excludes spike/probe scripts and .cmd Windows shims.
-const SHIPPED_CLIS = ['ns-claims', 'ns-doctor', 'ns-gate', 'ns-notes', 'ns-scrub', 'ns-statusline', 'ns-stylometry'];
+const SHIPPED_CLIS = ['ns-claims', 'ns-doctor', 'ns-gate', 'ns-notes', 'ns-scrub', 'ns-status', 'ns-statusline', 'ns-stylometry'];
 
 // ---------------------------------------------------------------------------
 // Helpers

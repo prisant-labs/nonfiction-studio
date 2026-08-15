@@ -46,6 +46,7 @@
       "ns-gate",
       "ns-notes",
       "ns-scrub",
+      "ns-status",
       "ns-statusline",
       "ns-stylometry"
     ]
