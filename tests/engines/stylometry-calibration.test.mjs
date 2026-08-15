@@ -58,6 +58,52 @@ test('DEFAULT_DRIFT_SCORE_MAX is exactly 25', () => {
     'reasoning this was chosen from');
 });
 
+// ---------------------------------------------------------------------------
+// The engine constant alone is not the whole calibration: three data files and one
+// re-exported constant each carry their own copy of the chosen value, and a strict-equality
+// pin on DEFAULT_DRIFT_SCORE_MAX above proves nothing about any of them. Every one of these
+// could silently drift back to 35 (a bad merge, a reverted line, a stale re-export) without
+// failing a single other test in this suite, because the suite above always reads
+// DEFAULT_DRIFT_SCORE_MAX itself, never one of these copies. This is exactly the
+// "passes silently" shape the acceptance criteria warn about, so each copy gets its own
+// strict-equality assertion against the single source of truth. Reading these four files is
+// a narrow, deliberate exception to "no live reads from examples/" elsewhere in this suite:
+// unlike the frozen chapter/baseline fixtures, these are THIS task's own deployed artifacts,
+// not content a later de-padding task is expected to change.
+// ---------------------------------------------------------------------------
+
+test('templates/config-defaults.json ships drift_score_max equal to DEFAULT_DRIFT_SCORE_MAX', () => {
+  const config = JSON.parse(readFileSync(join(__dirname, '..', '..', 'templates', 'config-defaults.json'), 'utf8'));
+  assert.strictEqual(config.thresholds.drift_score_max, DEFAULT_DRIFT_SCORE_MAX,
+    'the shipped default config must match the engine default exactly, not silently diverge');
+});
+
+test('templates/book-scaffold/.studio/config.json ships drift_score_max equal to DEFAULT_DRIFT_SCORE_MAX', () => {
+  const config = JSON.parse(readFileSync(
+    join(__dirname, '..', '..', 'templates', 'book-scaffold', '.studio', 'config.json'), 'utf8'
+  ));
+  assert.strictEqual(config.thresholds.drift_score_max, DEFAULT_DRIFT_SCORE_MAX,
+    'the book-scaffold template config must match the engine default exactly, not silently diverge');
+});
+
+test('examples/sample-book/.studio/config.json ships drift_score_max equal to DEFAULT_DRIFT_SCORE_MAX', () => {
+  const config = JSON.parse(readFileSync(
+    join(__dirname, '..', '..', 'examples', 'sample-book', '.studio', 'config.json'), 'utf8'
+  ));
+  assert.strictEqual(config.thresholds.drift_score_max, DEFAULT_DRIFT_SCORE_MAX,
+    'the golden example config must match the engine default exactly, not silently diverge ' +
+    '(the literal 25 in tests/engines/status-cli.test.mjs pins the same value from the CLI ' +
+    'side; this pins it from the constant side, so a mismatch between the two is caught)');
+});
+
+test('status-engine.mjs re-exports the SAME value as DEFAULT_DRIFT_SCORE_MAX, not an independent copy', async () => {
+  const { DEFAULT_DRIFT_THRESHOLD } = await import('../../hooks/lib/status-engine.mjs');
+  assert.strictEqual(DEFAULT_DRIFT_THRESHOLD, DEFAULT_DRIFT_SCORE_MAX,
+    'status-engine.mjs must derive its default from the engine constant, not carry its own ' +
+    'literal that could drift out of sync (this is exactly what a merge-conflict resolution ' +
+    'on a concurrently-edited file could silently reintroduce)');
+});
+
 test('before/after: the ghostwriting scenario passed at the old default (35) and blocks at the new default', () => {
   const measured = measureChapter(
     readFileSync(join(CHAPTERS, '01-contractions-and-first-person-removed.md'), 'utf8')
