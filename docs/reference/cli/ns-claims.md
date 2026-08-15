@@ -153,7 +153,7 @@ ns-claims --packets
 
 ## Relationship to other CLIs
 
-`ns-claims` is one of the five shipped CLIs per D-05 (five shipped CLIs via bin/). In
+`ns-claims` is one of the seven shipped CLIs per D-05 (five shipped CLIs via bin/). In
 the Stop gate sequence, `bin/ns-gate` calls the claims engine internally so the same
 coverage computation runs in both interactive sessions and CI; the gate's `quote_fidelity`
 check (D-03 (layered Stop gate)) shares the same quote-scanning functions `--quotes` uses.
