@@ -11,7 +11,9 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
 import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
-import { measureChapter, measureBook, computeDrift, countWords } from '../hooks/lib/stylometry-engine.mjs';
+import {
+  measureChapter, measureBook, computeDrift, countWords, CURRENT_MARKER_SET_VERSION,
+} from '../hooks/lib/stylometry-engine.mjs';
 
 // ---- arg parsing ---------------------------------------------------------------
 
@@ -33,6 +35,12 @@ try {
 // usage: ns-stylometry --measure=<path>[,<path>...]
 // single file: measureChapter; multiple files: measureBook (aggregated counts before ratios).
 // JSON implied; exit 0 on success, exit 2 on missing or unreadable file.
+// Output carries marker_set_version alongside markers so the capture path (voice-capture
+// agent) writes both into stylometry.baseline by construction, rather than depending on
+// prose in several separate files staying in sync with a constant in this engine. Without
+// this, a freshly captured baseline would carry no marker_set_version at all, which
+// computeDrift's stale-baseline guard treats as version 1 and rejects -- the exact defect
+// this field closes.
 
 if (opts.measure !== null) {
   if (opts.measure.length === 0) {
@@ -59,7 +67,9 @@ if (opts.measure !== null) {
   }
 
   const markers = texts.length === 1 ? measureChapter(texts[0]) : measureBook(texts);
-  const out = { markers, files: resolvedPaths, totalWords };
+  const out = {
+    markers, marker_set_version: CURRENT_MARKER_SET_VERSION, files: resolvedPaths, totalWords,
+  };
   process.stdout.write(JSON.stringify(out, null, 2) + '\n');
   process.exit(0);
 }

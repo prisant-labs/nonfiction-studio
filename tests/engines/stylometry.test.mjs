@@ -381,10 +381,11 @@ test('golden sample book CLI: ns-stylometry --chapter=<slug> --json exits 0 for 
 // Reconciliation outcome (TSK-026): function_word_rate is NOT flagged after
 // reconciliation because the passive rewrite removes first/second-person pronouns
 // (function words) while adding auxiliary verbs (also function words); the net
-// rate change is 0.78%, within the 2% per-marker tolerance band. This is
+// rate change is 0.79%, within the 2% per-marker tolerance band. This is
 // documented in voice-drift/PLANTED.md. first_person_rate flags at 100%
-// deviation (0 vs 0.2268 baseline). The fixture exits 1 because total score
-// (~207) decisively exceeds threshold (20).
+// deviation (0 vs 0.2262 baseline). The fixture exits 1 because total score
+// (~28, book level, under the roadmap row 1.7 per-marker contribution cap)
+// decisively exceeds threshold (20).
 
 test('voice-drift fixture: measureBook + computeDrift exceeds threshold (exit 1)', () => {
   const root = join(EXAMPLES, 'fixtures', 'voice-drift');
@@ -701,6 +702,20 @@ test('property: no single marker can push the score to the threshold alone, at m
     assert.ok(
       score <= driftScoreMax / 3 + 1e-9,
       'one marker alone must not push the score past one third of budget ' + driftScoreMax + '; got ' + score
+    );
+    // Pins the divisor from below as well as above: a hardcoded cap (for example a
+    // literal 10, forbidden by the brief) would satisfy the upper-bound assertion
+    // above at both budgets in this loop, since 10 <= driftScoreMax / 3 for both 30
+    // and 90, without ever proving the cap scales with the configured budget. With
+    // only one marker deviating and three stable markers contributing 0, score
+    // equals the cap exactly, so asserting equality (not just <=) at more than one
+    // budget value is what actually proves the bound is driftScoreMax / 3 and not
+    // some fixed number that happens to be small enough to pass at these budgets.
+    assert.ok(
+      Math.abs(score - driftScoreMax / 3) < 1e-9,
+      'a single fully capped marker\'s contribution must equal exactly one third of budget ' +
+      driftScoreMax + ', proving the bound scales with the configured budget rather than being ' +
+      'a hardcoded number; got ' + score
     );
     assert.strictEqual(exceeded, false,
       'one marker alone must not exceed the threshold at budget ' + driftScoreMax + '; score=' + score);

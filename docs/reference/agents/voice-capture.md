@@ -19,8 +19,10 @@ vector; the agent writes it into config.
 The `voice-capture` agent converts author writing samples, or a confirmed bootstrap
 passage when no samples exist, into two outputs: `context/style-profile.md` (the
 human-readable voice contract every other agent reads for craft guidance) and the
-`stylometry.baseline.markers` object in `.studio/config.json` (the numeric anchor
-the gate uses to score drift). Neither output is committed until the author
+`stylometry.baseline.markers` object plus `stylometry.baseline.marker_set_version`
+number in `.studio/config.json` (the numeric anchor the gate uses to score drift,
+and the version stamp that lets the drift scorer refuse a baseline captured under
+a different marker computation). Neither output is committed until the author
 confirms the draft profile. The agent does not evaluate whether the captured voice
 is good; it observes, describes, and records.
 
@@ -83,7 +85,7 @@ confirms the draft profile.
 | Path | Written when | Contents |
 |---|---|---|
 | `context/style-profile.md` | After author confirmation | Full operational voice profile per the S-08 section 9 schema, covering all eleven fields: tone, diction, rhythm, POV, tense, do list, do-not list, banned tics, exemplar passages, narrator voice note, and the bootstrapped flag |
-| `.studio/config.json` | After the engine run (before profile confirmation) | The `stylometry.baseline.markers` object: eight-marker vector printed by `bin/ns-stylometry --measure`, written via read-modify-write; no other config fields are touched |
+| `.studio/config.json` | After the engine run (before profile confirmation) | The `stylometry.baseline.markers` object AND `stylometry.baseline.marker_set_version` number, both printed by `bin/ns-stylometry --measure`, written via read-modify-write; no other config fields are touched |
 
 The numeric baseline in `.studio/config.json` is written when the engine runs
 (Path A step 4 or Path B step 6). The profile in `context/style-profile.md` is

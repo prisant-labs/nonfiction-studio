@@ -32,8 +32,13 @@ agent uses as the style contract for a specific book. It converts author writing
 samples (or, when none exist, a confirmed bootstrap passage) into
 `context/style-profile.md` and then invokes `bin/ns-stylometry --measure` to
 compute the numeric baseline vector. The engine computes and prints the vector;
-this agent reads the output from stdout and writes the `markers` object into
-`.studio/config.json` `stylometry.baseline.markers`. Neither file is committed
+this agent reads the output from stdout and writes both the `markers` object
+and the `marker_set_version` number into `.studio/config.json`
+`stylometry.baseline` (`markers` and `marker_set_version` are siblings there,
+not one nested inside the other). Writing `marker_set_version` is not optional:
+a baseline saved without it is indistinguishable from one captured before this
+engine's current marker computation, and the drift scorer refuses to score
+against it. Neither file is committed
 until the author confirms the draft profile. Voice capture has no opinion about
 whether the captured voice is good: it observes, describes, and records.
 
@@ -58,10 +63,13 @@ whether the captured voice is good: it observes, describes, and records.
   voice notes (tone adjectives, POV, tense, formality register, emulate/avoid lists,
   banned tics), and read author-supplied writing samples when referenced by file path.
 - **Write** - write `context/style-profile.md` after the author confirms the draft
-  profile, and write the baseline vector into `.studio/config.json`
-  `stylometry.baseline.markers` using read-modify-write semantics: load the full
-  config file, set only the `stylometry.baseline` key, write the whole object back
-  without stripping any other fields.
+  profile, and write the baseline vector into `.studio/config.json` using
+  read-modify-write semantics: load the full config file, set
+  `stylometry.baseline.markers` to the `markers` object from the engine's
+  output and `stylometry.baseline.marker_set_version` to the
+  `marker_set_version` number from the same output, then write the whole
+  object back without stripping any other fields (`captured`, `sample_count`,
+  `method`, or anything else already present on `stylometry.baseline`).
 - **Bash** - resolve the plugin root before invoking the engine: read
   `extraKnownMarketplaces['nonfiction-studio'].source.path` from
   `~/.claude/settings.json`; if that lookup fails, search
@@ -90,8 +98,9 @@ These are behavior contracts. The voice-capture agent touches only the paths lis
   (schemas and file formats) section 9 schema, covering all eleven fields in the
   contract table below.
 - `.studio/config.json` - the `stylometry.baseline` key: the eight-marker vector
-  printed by `bin/ns-stylometry --measure` is read from stdout and written here
-  via read-modify-write. The engine is the single counting authority and is
+  AND the `marker_set_version` number, both printed by `bin/ns-stylometry
+  --measure` in the same stdout output, are read and written here via
+  read-modify-write. The engine is the single counting authority and is
   read-only; this agent is the single config writer per S-08 (schemas and file
   formats) section 4. No other config fields are touched.
 
@@ -121,9 +130,13 @@ a printed vector; this agent reads it from stdout and writes it into config.json
    Tools, then run via the Bash tool:
    `node "<plugin-root>/bin/ns-stylometry" --measure=<sample-file-paths>`
    The engine reads the files and prints
-   `{"markers": {...}, "files": [...], "totalWords": N}` to stdout. Read the
-   `markers` object from stdout and write it into `.studio/config.json`
-   `stylometry.baseline.markers` using read-modify-write semantics. No profile
+   `{"markers": {...}, "marker_set_version": N, "files": [...], "totalWords": N}`
+   to stdout. Read both the `markers` object AND the `marker_set_version`
+   number from stdout and write them into `.studio/config.json` at
+   `stylometry.baseline.markers` and `stylometry.baseline.marker_set_version`
+   respectively, using read-modify-write semantics. Writing `markers` without
+   `marker_set_version` leaves a baseline the drift scorer will refuse to
+   score against. No profile
    is committed without this numeric baseline.
 
 5. **Draft the profile.** Draft `context/style-profile.md` using all eleven fields
@@ -162,8 +175,10 @@ a printed vector; this agent reads it from stdout and writes it into config.json
    voice, treat it as the sample for the engine step.
 
 6. **Compute the baseline vector.** Run `bin/ns-stylometry --measure` over the
-   confirmed passage exactly as in Path A step 4. Write the `markers` object from
-   stdout into `.studio/config.json` `stylometry.baseline.markers`. Note in the
+   confirmed passage exactly as in Path A step 4. Write both the `markers`
+   object and the `marker_set_version` number from stdout into
+   `.studio/config.json` at `stylometry.baseline.markers` and
+   `stylometry.baseline.marker_set_version`. Note in the
    profile that the baseline was bootstrapped from generated text and flag for
    replacement when own prose becomes available.
 

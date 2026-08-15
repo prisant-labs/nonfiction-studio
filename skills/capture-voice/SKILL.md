@@ -54,9 +54,9 @@ Spawn the `voice-capture` agent via the `capture-voice -> voice-capture` chain e
 - The word-count band from Step 2, or the Path B signal
 
 The agent handles all computation and all file writes:
-- `bin/ns-stylometry --measure` computes and prints the baseline vector; the agent reads it from stdout
+- `bin/ns-stylometry --measure` computes and prints the baseline vector, alongside a `marker_set_version` number; the agent reads both from stdout
 - The agent writes `context/style-profile.md` with the full eleven-field profile
-- The agent writes the `stylometry.baseline.markers` block into `.studio/config.json` via read-modify-write semantics
+- The agent writes both `stylometry.baseline.markers` and `stylometry.baseline.marker_set_version` into `.studio/config.json` via read-modify-write semantics. A baseline saved without `marker_set_version` is one the drift scorer will refuse to score against.
 
 This skill writes neither file. Do not instruct the agent to write `.studio/progress.json` or any other `.studio/` path beyond `config.json`.
 
@@ -66,7 +66,7 @@ After the agent completes, use the Read tool twice:
 
 1. Read `context/style-profile.md`. If the file is absent or empty, report that the profile was not written. Note that no partial profile exists: the agent's no-profile-without-baseline guardrail ensures `context/style-profile.md` is not committed unless `bin/ns-stylometry --measure` ran and returned a vector. Ask the author to re-run from Step 2.
 
-2. Read `.studio/config.json`. Confirm the `stylometry.baseline.markers` key is present. If it is absent, report the missing baseline and ask the author to re-run.
+2. Read `.studio/config.json`. Confirm both `stylometry.baseline.markers` and `stylometry.baseline.marker_set_version` are present. If either is absent, report the missing or incomplete baseline and ask the author to re-run: a baseline with `markers` but no `marker_set_version` looks complete but will be rejected the first time anything scores against it.
 
 Continue to Step 5 only when both checks pass.
 

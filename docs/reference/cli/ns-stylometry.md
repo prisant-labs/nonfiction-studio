@@ -31,9 +31,13 @@ number, and each entry also reports whether the cap was binding for that marker.
 Markers that deviate beyond the per-marker tolerance are flagged individually in the
 output (flagging uses the honest deviation, not the capped contribution).
 
-The `voice-drift` fixture is designed so the first-person rate drops sharply (passive
-impersonal register replacing first-person address), causing the drift score to exceed
-the fixture's threshold of 20, per the 2026-07-18 reconciliation at TSK-026
+The `voice-drift` fixture is designed so the passive impersonal register that replaces
+first-person and second-person address moves several markers at once: first-person rate
+drops to zero, second-person rate and contraction rate shift sharply, and sentence
+rhythm changes measurably. No single one of these markers can exceed the drift score's
+threshold alone, per the per-marker contribution cap described above; it is their
+combined contribution, several markers deviating together, that pushes the fixture's
+drift score past its threshold of 20, per the 2026-07-18 reconciliation at TSK-026
 (ns-stylometry engine).
 
 ## Invocation
