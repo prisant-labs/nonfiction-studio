@@ -44,11 +44,13 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { DEFAULT_DRIFT_SCORE_MAX } from './stylometry-engine.mjs';
 
-// Matches skills/status-dashboard/SKILL.md's documented default, applied when
-// .studio/config.json or its thresholds.drift_score_max field is absent. Re-exported under
-// this module's own name (rather than importing DEFAULT_DRIFT_SCORE_MAX directly at call
-// sites) so this module keeps its own stable public name while hooks/lib/stylometry-engine.mjs
-// stays the single source of truth for the number itself.
+// This engine's own built-in default, applied when .studio/config.json or its
+// thresholds.drift_score_max field is absent. skills/status-dashboard/SKILL.md deliberately
+// documents no threshold number of its own; it narrates whichever value and isDefault flag this
+// module reports. Re-exported under this module's own name (rather than importing
+// DEFAULT_DRIFT_SCORE_MAX directly at call sites) so this module keeps its own stable public
+// name while hooks/lib/stylometry-engine.mjs stays the single source of truth for the number
+// itself.
 export const DEFAULT_DRIFT_THRESHOLD = DEFAULT_DRIFT_SCORE_MAX;
 
 /**
@@ -92,8 +94,9 @@ export function parseGateFilename(filename) {
  * comparison), so a single global sort is sufficient - the last filename encountered per slug,
  * in sorted order, is the newest. Lexicographic order over the compact YYYYMMDDTHHMMSSZ shape
  * equals chronological order by construction, the same equivalence
- * hooks/lib/gate-engine.mjs's own pruneGateReports and skills/status-dashboard/SKILL.md both
- * already rely on.
+ * hooks/lib/gate-engine.mjs's own pruneGateReports also relies on. skills/status-dashboard/
+ * SKILL.md no longer restates this rule itself; it narrates whatever this module already
+ * selected.
  *
  * @param {string[]} filenames - a .studio/gate/ directory listing, any order
  * @returns {{perSlug: Map<string,string>, wholeBook: string|null}}
@@ -165,9 +168,10 @@ const DRIFT_SCORE_PATTERN = /drift[ _]score\s+(-?\d+(?:\.\d+)?)/i;
 /**
  * Extracts the numeric drift score from a parsed gate report's `stylometry` check entry.
  * Returns null when: the report is null/malformed, no `checks[]` entry has `check ===
- * "stylometry"`, that entry's own verdict is "skip" (skills/status-dashboard/SKILL.md Step 2:
- * "If the stylometry entry is absent or its verdict is skip, the Drift cell is '-'"), or its
- * `detail` string carries no recognizable "drift score N" phrase. Never throws: an
+ * "stylometry"`, that entry's own verdict is "skip" (the same "Drift cell is -" rule
+ * bin/ns-status's JSON reports and skills/status-dashboard/SKILL.md narrates verbatim, rather
+ * than re-deriving), or its `detail` string carries no recognizable "drift score N" phrase.
+ * Never throws: an
  * unparseable detail string degrades to null (an honest "no drift score available" cell)
  * rather than failing the whole board over one chapter's report.
  *
@@ -187,8 +191,9 @@ export function extractDriftScore(report) {
 
 /**
  * Reads config.json's `thresholds.drift_score_max`. Returns the configured value when it is a
- * finite number; otherwise DEFAULT_DRIFT_THRESHOLD with isDefault: true, matching the default
- * skills/status-dashboard/SKILL.md documents. A present-but-malformed value (wrong type,
+ * finite number; otherwise DEFAULT_DRIFT_THRESHOLD with isDefault: true. skills/status-dashboard/
+ * SKILL.md documents no default of its own; it narrates whichever value and isDefault flag this
+ * function returns. A present-but-malformed value (wrong type,
  * non-finite) is treated the same as an absent one for this purpose. An unreadable
  * config.json itself never reaches this function: findBookRoot's loadBible already throws a
  * BibleError on a corrupt config.json, which the CLI surfaces as an exit-2 operational error
@@ -225,8 +230,9 @@ export function deriveChapterNumber(slug) {
 /**
  * The Title cell: the chapter's own `title` field when present and non-empty, else derived
  * from the slug by dropping the two-digit numeric prefix and replacing hyphens with spaces
- * (for example "listening before speaking" from "01-listening-before-speaking") - matching
- * skills/status-dashboard/SKILL.md Step 4's documented derivation exactly.
+ * (for example "listening before speaking" from "01-listening-before-speaking").
+ * skills/status-dashboard/SKILL.md documents no derivation of its own; it reads whatever this
+ * function already produced in bin/ns-status's JSON `title` field.
  *
  * @param {object} chapter - a progress.json chapters[] entry
  * @returns {string}
@@ -239,8 +245,9 @@ export function deriveChapterTitle(chapter) {
 
 /**
  * A chapter row is highlighted when its drift score exceeds the effective threshold, or its
- * gate verdict is "block" - the same two conditions skills/status-dashboard/SKILL.md Step 5
- * already applies. A chapter with no drift score (null) can never be highlighted on the drift
+ * gate verdict is "block" - the same two conditions this engine alone applies.
+ * skills/status-dashboard/SKILL.md reads the resulting `highlighted` field verbatim rather than
+ * re-deriving them. A chapter with no drift score (null) can never be highlighted on the drift
  * condition alone.
  *
  * @param {{drift: number|null, gate: string|null}} row
@@ -339,11 +346,12 @@ export function computeStatusBoard(root, progress, config) {
 
 /**
  * Renders a computeStatusBoard() result as a Markdown table (columns: #, Title, Status,
- * Words, Drift, Open Claims, Gate - matching skills/status-dashboard/SKILL.md Step 4's
- * established column set) plus a short footer: the drift threshold and its source, and the
+ * Words, Drift, Open Claims, Gate - the same column set skills/status-dashboard/SKILL.md's
+ * JSON-driven render also uses) plus a short footer: the drift threshold and its source, and the
  * chapters-remaining-to-final count when progress.json's totals carry a chapters_total. A
- * highlighted row (see isHighlighted) carries a leading "!" in its # cell, the same convention
- * skills/status-dashboard/SKILL.md already uses. Deterministic: no timestamp, no
+ * highlighted row (see isHighlighted) carries a leading "!" in its # cell; skills/status-dashboard/
+ * SKILL.md's own render applies that same leading "!" by reading the `highlighted` field
+ * directly, not by re-deriving it. Deterministic: no timestamp, no
  * locale-formatted number (plain string concatenation only - JavaScript's default
  * Number-to-string conversion is locale-independent, unlike toLocaleString/Intl.NumberFormat),
  * no absolute path (reportPath, when present, is always book-root-relative).
