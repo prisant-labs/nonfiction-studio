@@ -17,7 +17,7 @@ Skill inputs read:
 - `structure/chapter-list.md` (slug registry; probed at Step 2 to resolve a chapter argument to a canonical slug)
 - `chapters/<slug>.md` (target chapter; file-existence probed at Step 2)
 - `context/style-profile.md` (baseline pre-check at Step 3; absence triggers the degraded check subset)
-- `.studio/config.json` (baseline pre-check at Step 3; `stylometry.baseline.markers` absence also triggers the degraded check subset)
+- `.studio/config.json` (baseline pre-check at Step 3; `stylometry.baseline.markers` absence, or a `stylometry.baseline.marker_set_version` that is absent or does not match the engine's current version, also triggers the degraded check subset)
 
 No skill chain edges exist for this skill.
 
@@ -98,7 +98,11 @@ Continue to Step 4 to resolve the plugin root; the gate invocation in Step 5 use
 
 > Voice drift check skipped: `context/style-profile.md` is present but `stylometry.baseline.markers` is absent or null in `.studio/config.json`. Run `/nonfiction-studio:capture-voice` to populate the baseline and enable voice drift detection.
 
-If `stylometry.baseline.markers` is present and non-null, run the full gate. Set no check subset (all five checks will be included by ns-gate's default).
+If `stylometry.baseline.markers` is present and non-null, also check `stylometry.baseline.marker_set_version` in that same read. If it is absent, null, or not equal to `2` (the stylometry engine's current marker set version; `hooks/lib/stylometry-engine.mjs`'s `CURRENT_MARKER_SET_VERSION` constant is the source of truth, so re-check this number here if the engine has bumped it since this was written), the stored baseline predates the corrected engine and `ns-gate` will reject it. Route this the same as the case above: set the check subset to `claims,scrub,continuity-quick,coherence` and present:
+
+> Voice drift check skipped: the stored baseline in `.studio/config.json` was captured under an earlier version of the stylometry engine (`stylometry.baseline.marker_set_version` is missing or does not match the engine's current version). Run `/nonfiction-studio:capture-voice` to re-capture the baseline with the corrected engine and enable voice drift detection.
+
+Only when `stylometry.baseline.markers` is present and non-null AND `marker_set_version` matches the engine's current version, run the full gate. Set no check subset (all five checks will be included by ns-gate's default).
 
 ---
 
@@ -193,6 +197,6 @@ If stdout also contains output (partial JSON or other text), include it verbatim
 
 **No argument and no progress.json.** Step 2 halts and asks the author which chapter to gate. No gate invocation until the author replies with a chapter.
 
-**Voice baseline absent.** Step 3 sets the degraded check subset and warns about the skipped voice drift check. The gate still runs; baseline absence is not a halt condition. The four remaining checks run normally.
+**Voice baseline absent or stale.** Step 3 sets the degraded check subset and warns about the skipped voice drift check, whether the baseline is missing entirely or its `marker_set_version` is absent or does not match the engine's current version. The gate still runs; neither condition is a halt condition. The four remaining checks run normally.
 
 **Exit 2 from ns-gate.** Step 5 presents the error from stderr and halts. Never treated as a pass, warn, or block verdict. Re-run after diagnosing with `doctor`.

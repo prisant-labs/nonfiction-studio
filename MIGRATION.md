@@ -55,3 +55,15 @@ A new skill, agent, hook, or template, a new optional config key, a new warn-onl
 ## Mid-book update promise
 
 An author partway through a book must be able to take a MINOR or PATCH update with no migration step required at all. A MAJOR update may require running `ns-doctor --migrate`, but the migration must be runnable from the `doctor` skill without leaving the author's working session, any manual steps are surfaced before automated ones run, and no book content may be destroyed. `doctor` warns at session start whenever the installed plugin is ahead of a book's schema version, pointing at this file.
+
+## Voice-baseline note: marker_set_version (not a schema_version change)
+
+Independent of `.studio/meta.json`'s `schema_version` (unchanged by this release), the stylometry engine now requires `stylometry.baseline.marker_set_version` on every voice baseline. Every book's baseline captured before this release lacks the field entirely, and the drift scorer treats an absent field as version 1, which no longer matches the engine's current marker set version.
+
+What happens if you take this update without re-running `capture-voice`: the stylometry check inside `ns-gate` throws a stale-baseline error on every gate run. The gate turns that into a `skip` verdict for the stylometry check alone, with exit code 2 for that run; the top-level gate verdict is unaffected by the skip and can still read `pass`, so voice drift checking goes quiet without the run looking like a failure.
+
+The remedy is one command: re-run `/nonfiction-studio:capture-voice` to recapture the baseline. A freshly captured baseline always carries the current `marker_set_version` and clears the skip.
+
+Separately, and not book-affecting the same way: this release also lowers the default `thresholds.drift_score_max` from 35 to 25, but every scaffolded book carries an explicit value for that key, so only a book that omits it from `.studio/config.json` sees a different default.
+
+Neither change is a MAJOR version bump under "What counts as a breaking change" above (no field was renamed, retyped, or removed; `marker_set_version` is additive), so `ns-doctor --migrate`'s `schema_version` check does not see either one, and the migration log format above does not apply. Both are called out here, outside that format, because the mid-book update promise above is the one place an author would think to look.
