@@ -3,11 +3,11 @@
 // what-it-does: computes and renders the project's chapter board and completion numbers - per-
 //               chapter status, word count, open claims, drift score, and gate verdict, plus
 //               whole-book totals - as JSON or as a human-readable Markdown board; never writes
-// why:          the CLI is the public surface; all computation lives in status-engine.mjs so a
-//               later task can reduce the status-dashboard skill to narration over this CLI's own
-//               JSON output, instead of asking the model to list a directory, parse filenames, and
-//               read numbers out of prose by eye, with nothing asserting it parsed correctly the
-//               same way twice (ADR-0009 (apparatus CLI), growth-policy criterion 1)
+// why:          the CLI is the public surface; all computation lives in status-engine.mjs so the
+//               status-dashboard skill can narrate this CLI's own JSON output directly, instead of
+//               asking the model to list a directory, parse filenames, and read numbers out of
+//               prose by eye, with nothing asserting it parsed correctly the same way twice
+//               (ADR-0009 (apparatus CLI), growth-policy criterion 1)
 // usage:        ns-status [--project=<dir>] [--json]
 //
 // READ-ONLY BY DESIGN: this CLI never writes to .studio/ or anywhere else. State changes (a

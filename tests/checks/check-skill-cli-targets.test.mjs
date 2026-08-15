@@ -21,8 +21,8 @@
 //               during iteration - the same discipline check-workspace-refs.test.mjs uses.
 // why:          F-CI-07 (dispatcher and CLI-wrapper skills uncovered) - closed for
 //               status-dashboard's bin/ns-status reference specifically; these tests are the
-//               durable, permanent proof that the checker has real teeth (F6, checker negative
-//               tests: "a checker that cannot fail is not a checker"), not only a one-time
+//               durable, permanent proof that the checker has real teeth - F6 (checker negative
+//               tests): "a checker that cannot fail is not a checker" - not only a one-time
 //               manual run.
 // runner:       node --test "tests/checks/*.test.mjs"
 
@@ -186,4 +186,40 @@ test('real-repo scope: a deliberately corrupted bin/ns-status reference in statu
   } finally {
     cleanup();
   }
+});
+
+// ---------------------------------------------------------------------------
+// Git-tracked mode: every test above runs through clone-helper.mjs (either
+// cloneRepoToTemp or a from-scratch synthetic root), and clone-helper.mjs
+// deliberately strips .git from every fixture it builds - that is the
+// documented mechanism the whole file relies on to exercise this checker's
+// degraded filesystem-walk fallback consistently. That leaves this
+// checker's OTHER code path, git-tracked mode (getGitTrackedFiles), with no
+// coverage from any test above: it is the mode a real checkout always runs
+// in (a fresh `actions/checkout` leaves .git present), and CI's own direct
+// step (.github/workflows/tier-a.yml, "Skill CLI routing targets") is the
+// primary proof of it, matching how the three sibling standalone checkers
+// are covered. This test adds a second, permanent proof of the same code
+// path without touching clone-helper.mjs's single-purpose design: it runs
+// the real, current on-disk checker script directly against REPO_ROOT
+// itself (no clone, no copy - the exact real file at its exact real path),
+// which necessarily has real git metadata. runClonedChecker is reused
+// unmodified; REPO_ROOT is simply passed as the root instead of a clone's
+// root, which is a legitimate, already-supported call shape, not a
+// workaround. The checker only ever reads files and git output and writes
+// to stdout/stderr, so running it in place against the live repo makes no
+// filesystem change of any kind.
+// ---------------------------------------------------------------------------
+
+test('git-tracked mode: running the checker in place against this repo\'s real .git engages git-tracked mode, not the degraded fallback', () => {
+  const result = runClonedChecker(REPO_ROOT, SCRIPT);
+  assert.equal(result.status, 0, 'the real, current tree must have no unresolved routing targets; got: ' + result.combined);
+  assert.match(
+    result.combined, /mode: git-tracked/,
+    'must report git-tracked mode, not degraded mode, when run in place against a real checkout; got: ' + result.combined
+  );
+  assert.doesNotMatch(
+    result.combined, /NOTE: degraded mode/,
+    'must not fall back to the degraded filesystem-walk path when real git metadata is present; got: ' + result.combined
+  );
 });

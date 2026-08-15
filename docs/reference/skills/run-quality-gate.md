@@ -141,7 +141,7 @@ The top-level `verdict` is the most severe check verdict subject to the D-03 coe
 - `thesis_alignment.mode: block` is coerced to `warn` (judgment checks cannot block in v1)
 - When `gate.mode` is `warn` (the default), the top-level verdict is capped at `warn` even if per-check entries carry `block`; per-check entries keep their actual verdict so authors see what would block once they opt in
 
-Reports are retained and pruned to the last 10 per chapter slug by `bin/ns-gate`. `status-dashboard` reads the `last_gate` timestamp from the most recent report file name.
+Reports are retained and pruned to the last 10 per chapter slug by `bin/ns-gate`. `bin/ns-status` reads the timestamp in the most recent report file name per slug to derive the drift score and gate verdict in its JSON output; `status-dashboard` narrates that JSON rather than reading report files itself.
 
 ## Failure Behavior
 

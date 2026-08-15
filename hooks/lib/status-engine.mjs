@@ -2,13 +2,15 @@
 // what-it-does: computes a per-chapter board and whole-book totals from progress.json's chapters
 //               and totals, config.json's drift threshold, and the newest gate report per chapter
 //               slug under .studio/gate/; renders the result as JSON-ready data or a Markdown board
-// why:          the status-dashboard skill today asks the language model to list a directory, parse
-//               filenames, open reports, and read numbers out of prose by eye, with nothing
-//               asserting it parsed correctly the same way twice; this module is the deterministic
-//               computation a later task points that skill at, following the same CLI-over-engine-
-//               module pattern the other seven CLIs already use (ADR-0009 (apparatus CLI),
-//               growth-policy criterion 1: correctness here is a byte-for-byte, machine-checkable
-//               property a failing test can be written against before the feature exists)
+// why:          this module is the deterministic computation status-dashboard's skill body
+//               narrates rather than computes: the skill no longer asks the language model to
+//               list a directory, parse filenames, open reports, and read numbers out of prose
+//               by eye (nothing asserted correctness the same way twice under that approach); it
+//               invokes bin/ns-status and renders this module's JSON output directly, following
+//               the same CLI-over-engine-module pattern the other seven CLIs already use
+//               (ADR-0009 (apparatus CLI), growth-policy criterion 1: correctness here is a
+//               byte-for-byte, machine-checkable property a failing test can be written against
+//               before the feature exists)
 // used-by:      bin/ns-status
 //
 // GATE-SOURCE INVARIANT: gate verdict and drift score for a chapter come ONLY from the newest
