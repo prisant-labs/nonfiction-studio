@@ -2,144 +2,124 @@
 name: status-dashboard
 user-invocable: true
 argument-hint: ""
-description: "Renders a read-only per-chapter status dashboard from .studio/progress.json (status, word count, open claims per entry) and the newest dot-form gate reports in .studio/gate/ (drift score, gate verdict per slug); highlights rows where drift exceeds thresholds.drift_score_max or where the newest gate report carries a block verdict; writes nothing; routes to init-project when progress.json is absent and to doctor when progress.json is malformed. Use when the author asks 'where am I on the book,' wants to 'check my progress,' or needs a quick status check before starting a session."
+description: "Fronts the read-only bin/ns-status engine in a single Bash call: renders the per-chapter status board (status, word count, open claims, drift score, gate verdict) and whole-book totals directly from its JSON output, marking each row the CLI itself flags as highlighted (a drift score above the configured threshold, or a block gate verdict); writes nothing; routes to init-project when no book root or progress.json is found, and to doctor on any other engine error. Use when the author asks 'where am I on the book,' wants to 'check my progress,' or needs a quick status check before starting a session."
 when_to_use: "Use when the author types the /status verb alias, asks how their book is going, or wants a project overview before starting a session. Do not invoke to run the quality gate (use run-quality-gate), diagnose project structure problems (use doctor), start a new project (use init-project), or for unrelated queries."
 ---
 
-This skill is the read-only project status dashboard. It reads `.studio/progress.json` for per-chapter status, word count, and open claims; lists `.studio/gate/` for the newest dot-form gate report per chapter slug to supply drift score and gate verdict; reads `.studio/config.json` for the drift threshold; and renders the result as a Markdown table. Highlighted rows carry a block gate verdict or a drift score above the configured threshold. The skill writes nothing to any file or `.studio/` path.
+This skill is the read-only project status dashboard. It fronts `bin/ns-status` in a single Bash call, parses its JSON output, and renders the per-chapter board and whole-book totals directly from that output. The skill performs no arithmetic and parses no number out of prose: every status value, word count, open-claim count, drift score, gate verdict, threshold value, and highlight decision in the rendered table is read directly from a field `bin/ns-status` has already computed. The skill writes nothing to any file or `.studio/` path.
 
-**Status vocabulary.** Chapter status values are the committed schema enum verbatim: `empty`, `outlined`, `drafting`, `drafted`, `revised`, `gated`, `final`. These are the values defined in `templates/book-scaffold/.studio/progress.schema.json` and S-08 section 3. No mapping or display transformation is applied. `final` is a real chapter's terminal state, not merely the highest ordinal: reaching it requires a dated human attestation entry in `context/decisions.md`, and editing a chapter's file after it reaches `final` automatically falls it back to `revised` - both enforced by `hooks/post-tool-batch.mjs`, never by this skill. See the [ns-status CLI reference](../../docs/reference/cli/ns-status.md#the-promotion-ceremony-and-automatic-demotion) for the full ceremony; this skill only ever displays whatever `status` value `progress.json` already carries.
+**Status vocabulary.** Chapter status values are the committed schema enum verbatim: `empty`, `outlined`, `drafting`, `drafted`, `revised`, `gated`, `final`. These are the values defined in `templates/book-scaffold/.studio/progress.schema.json` and S-08 section 3. No mapping or display transformation is applied. `final` is a real chapter's terminal state, not merely the highest ordinal: reaching it requires a dated human attestation entry in `context/decisions.md`, and editing a chapter's file after it reaches `final` automatically falls it back to `revised` - both enforced by `hooks/post-tool-batch.mjs`, never by this skill. See the [ns-status CLI reference](../../docs/reference/cli/ns-status.md#the-promotion-ceremony-and-automatic-demotion) for the full ceremony; this skill only ever displays whatever `status` value `bin/ns-status`'s JSON output already carries.
 
-**Column sourcing.** Status, word count, and open claim count come exclusively from the `progress.json` chapters array (hook-maintained truth per TSK-050b (progress entry ownership)). Drift score and gate verdict come from the newest dot-form gate report per slug under `.studio/gate/` (filenames matching `<slug>.<YYYYMMDDTHHMMSSZ>.json`; the newest report per slug is identified by lexicographic sort of the timestamp suffix). A chapter with no gate report on record shows "-" in both the Drift and Gate cells. Whole-book `all.<YYYYMMDDTHHMMSSZ>.json` reports feed a totals-row annotation only, not per-chapter cells. The `progress.last_gate` per-chapter field is reserved and unpopulated in v1 per TSK-051 (run-quality-gate skill); the skill never reads it.
+**Column sourcing.** Every cell in the table, and the totals row, comes directly from `bin/ns-status`'s JSON output. The CLI itself reads `.studio/progress.json`, `.studio/config.json`, and the newest dot-form gate report per chapter slug under `.studio/gate/`, and has already resolved which row counts as highlighted and what the effective drift threshold is. See the [ns-status CLI reference](../../docs/reference/cli/ns-status.md) for exactly how each field is derived, including which report file counts as newest and why `progress.json`'s per-chapter `last_gate` and `drift_score` fields are never treated as authoritative.
 
 **Read-only covenant.** This skill writes nothing. No file writes, no `.studio/` mutations, no agent invocations. Grep-provable against the skill body.
 
 **No agents invoked.** No chain edges exist for this skill.
 
-Skill inputs read:
+Skill inputs read (by `bin/ns-status` via `--project=.`):
 - `.studio/progress.json` (chapter status, word count, open_claim_count; totals block; required)
-- `.studio/config.json` (thresholds.drift_score_max for highlight threshold; default 25 when absent)
-- `.studio/gate/` directory listing (filenames via Bash; then Read of newest dot-form report per slug for drift and verdict; newest all-report for totals annotation)
+- `.studio/config.json` (`thresholds.drift_score_max` for the highlight threshold; the CLI applies its own built-in default when the field is absent)
+- `.studio/gate/` directory listing, then the newest report per chapter slug (drift score and gate verdict per chapter; newest whole-book report for the totals annotation)
 
 No skill chain edges exist for this skill.
 
 ---
 
-## Step 1 - Progress.json presence and validity check (mandatory first tool call)
+## Step 1 - Resolve the plugin root
 
-Use the Bash tool to check whether the progress file is present:
-
+Use the Bash tool to run the primary lookup:
 ```
-test -f .studio/progress.json && echo HAS_PROGRESS || echo NO_PROGRESS
-```
-
-**NO_PROGRESS:** state the following and halt. Do not render any table.
-
-> Project not initialized. `.studio/progress.json` was not found. Run `/nonfiction-studio:init-project` to scaffold the project and create the progress file.
-
-**HAS_PROGRESS:** use the Read tool on `.studio/progress.json`. Parse the JSON and confirm the top-level object contains: `version` (integer equal to 2), `chapters` (array), and `totals` (object containing at least `word_count`, `open_claim_count`, and `chapters_final`). Each entry in `chapters` must contain `slug`, `status`, `word_count`, and `open_claim_count`. If the file is unreadable or any required field is absent or has the wrong type, state the following and halt. Never render a partial or incorrect dashboard.
-
-> `.studio/progress.json` is malformed or unreadable: [state the specific parse error or missing field]. Run `/nonfiction-studio:doctor` to diagnose and repair the project state file.
-
-On a valid parse, carry the `chapters` array and `totals` object forward to Step 2.
-
----
-
-## Step 2 - Gate directory listing and per-slug report identification
-
-Use the Bash tool to list the gate directory:
-
-```
-test -d .studio/gate && ls .studio/gate/ 2>/dev/null || echo NO_GATE_DIR
+node -e "const s=require('fs').readFileSync(require('os').homedir()+'/.claude/settings.json','utf8');const m=JSON.parse(s).extraKnownMarketplaces;const ns=m&&m['nonfiction-studio'];console.log(ns&&ns.source&&ns.source.path||'not-found')"
 ```
 
-If the output is `NO_GATE_DIR` or the listing returns no filenames, there are no gate reports on record. All Drift and Gate cells in the table render as "-". Proceed to Step 3.
+The output is the plugin root. If it prints `not-found`, run the platform cache fallback:
+```
+find "$HOME/.claude/plugins/cache" -maxdepth 3 -type d -name "nonfiction-studio*" 2>/dev/null | head -1
+```
 
-Otherwise, parse the filenames. Two patterns are significant:
+If that also returns nothing, run the dev-mode fallback:
+```
+test -f bin/ns-status && pwd || echo not-found
+```
 
-- **Per-chapter dot-form reports:** `<slug>.<YYYYMMDDTHHMMSSZ>.json` where `<slug>` matches a chapter slug from `progress.json`. Example: `01-listening-before-speaking.20260718T090000Z.json`.
-- **Whole-book reports:** `all.<YYYYMMDDTHHMMSSZ>.json`. These feed the totals-row annotation only, not per-chapter cells.
+If all three lookups fail: halt immediately. Report the settings.json path attempted (`$HOME/.claude/settings.json`) and the cache path attempted (`$HOME/.claude/plugins/cache`). Do not invoke ns-status. Ask the author how to proceed (verify plugin installation or provide the path manually).
 
-Ignore any file that does not match either pattern (for example `last-gate.json`).
+Carry the resolved path forward as `<plugin-root>` for Step 2.
 
-For each chapter slug that appears in the listing, identify the newest per-slug report: among all matching filenames for that slug, sort lexicographically by the timestamp suffix and take the last one. Use the Read tool to load the newest report for each slug that has one. From each loaded report, extract:
-
-- **Top-level `verdict`** (`pass`, `warn`, `block`, or `skip`): this becomes the Gate cell value.
-- **Drift score from the `stylometry` check entry:** find the entry with `"check": "stylometry"` and parse the numeric value embedded in its `detail` string. Example: `"drift_score 38 exceeds threshold 35"` yields `38`; `"drift_score 0 is within threshold 35"` yields `0`. If the stylometry entry is absent or its verdict is `skip`, the Drift cell is "-".
-
-For the whole-book annotation: among all `all.<ts>.json` files, identify the newest by lexicographic sort and use its top-level `verdict` as the totals-row annotation.
-
----
-
-## Step 3 - Config read for drift threshold
-
-Use the Read tool on `.studio/config.json`. Read the value at `thresholds.drift_score_max`. If the file is absent, unreadable, or the field is not present, use the default value `25` and record that the default was applied for the footer note in Step 5.
+**Shared plugin-root convention.** This three-tier resolution (settings.json lookup, plugins-cache search, dev-mode fallback) is the same routine as `skills/init-project/SKILL.md` Step 4.
 
 ---
 
-## Step 4 - Render the dashboard table
+## Step 2 - Single Bash invocation
 
-Build a Markdown table with these columns in this order:
+Use the Bash tool to invoke `bin/ns-status`. This is the ONE Bash call for this invocation.
 
-| # | Title | Status | Words | Drift | Open Claims | Gate |
-|---|---|---|---|---|---|---|
+```
+node "<plugin-root>/bin/ns-status" --project=. --json
+```
 
-For each entry in `progress.json.chapters` (in array order):
-
-- **#** - the two-digit numeric prefix from the slug (for example `01` from `01-listening-before-speaking`)
-- **Title** - the `title` field if present in the progress entry; otherwise derive from the slug: drop the numeric prefix and replace hyphens with spaces (for example `listening before speaking` from `01-listening-before-speaking`)
-- **Status** - the `status` field verbatim (one of `empty`, `outlined`, `drafting`, `drafted`, `revised`, `gated`, `final`)
-- **Words** - the `word_count` field
-- **Drift** - the numeric drift score parsed in Step 2; "-" if no gate report exists for this slug or if stylometry was skipped
-- **Open Claims** - the `open_claim_count` field
-- **Gate** - the top-level `verdict` from the newest gate report; "-" if no gate report exists for this slug
-
-Rows that require a highlight per Step 5 receive a `!` prefix in the `#` cell. State the highlight mechanism used in the footer below the table.
-
-After the chapter rows, add a totals row:
-- Words: `totals.word_count`
-- Open Claims: `totals.open_claim_count`
-- Chapters final: `totals.chapters_final` of `totals.chapters_total` (omit the "of" clause if `chapters_total` is absent)
-- If a whole-book all-report was identified in Step 2, append: `(whole-book gate: <verdict>)`
+Capture the exit code, stdout (JSON), and stderr. Proceed to Step 3.
 
 ---
 
-## Step 5 - Flag highlighted rows and add footer
+## Step 3 - Present the result (exit-code mapping)
 
-Evaluate each chapter row against these two conditions:
+`bin/ns-status` has no findings-based exit code: a highlighted row is reported inside the board, not signaled through the exit code. There are exactly two outcomes to handle.
 
-1. **Drift above threshold:** the Drift value is a number AND it exceeds the `thresholds.drift_score_max` value from Step 3.
-2. **Block verdict:** the Gate value is `block`.
+### Exit 0 - render the dashboard
 
-A row satisfying either condition receives the `!` prefix in the `#` cell (applied in the rendered table from Step 4). If no rows satisfy either condition, state "No rows flagged" after the table.
+Parse stdout as the board JSON. Build a Markdown table with columns `#`, `Title`, `Status`, `Words`, `Drift`, `Open Claims`, `Gate`. For each entry in the JSON's `chapters` array, in array order, render one row:
 
-Add a footer note:
+- **#** - the entry's `number` field; when the entry's `highlighted` field is `true`, prefix the cell with `! `.
+- **Title** - the entry's `title` field.
+- **Status** - the entry's `status` field, verbatim (see "Status vocabulary" above).
+- **Words** - the entry's `wordCount` field.
+- **Drift** - the entry's `drift` field; render `-` when it is `null`.
+- **Open Claims** - the entry's `openClaimCount` field.
+- **Gate** - the entry's `gate` field; render `-` when it is `null`.
 
-> Drift threshold: `thresholds.drift_score_max` = `<value>` (from `.studio/config.json`[; default 25 applied - field was absent] ).
+Add a totals row from the JSON's `totals` object: Words = `totals.wordCount`, Open Claims = `totals.openClaimCount`, and a "Chapters final" cell reading `totals.chaptersFinal` followed by `of <totals.chaptersTotal> final` when `chaptersTotal` is not `null`, or just `<totals.chaptersFinal> final` when it is. When the JSON's top-level `wholeBookGate` is not `null`, append `(whole-book gate: <wholeBookGate>)` to the totals row.
 
-Omit the bracketed clause when the field was actually present.
+Below the table, add a footer line built directly from the JSON's `thresholds` object: "Drift threshold: `thresholds.drift_score_max` = `<thresholds.driftScoreMax>` (from `.studio/config.json`)." when `driftScoreMaxIsDefault` is `false`, or "Drift threshold: `thresholds.drift_score_max` = `<thresholds.driftScoreMax>` (ns-status's built-in default; `.studio/config.json` does not set `thresholds.drift_score_max`)." when it is `true`. When `totals.chaptersRemaining` is not `null`, add a line: "`<totals.chaptersRemaining>` chapter(s) remaining to final."
 
----
+If no entry in `chapters` has `highlighted: true`, state "No rows flagged." after the footer. Otherwise, state that rows are marked with a leading `!` because `bin/ns-status` flagged them (drift above the configured threshold, or a block gate verdict).
 
-## Step 6 - Suggest next actions
+**Next actions.** After the table and footer, present a next-actions list:
 
-Present a next-actions list:
+- For each chapter whose `gate` field is `null` (no gate report on record): suggest `/nonfiction-studio:run-quality-gate <slug>`.
+- For each chapter whose `openClaimCount` is greater than 0: suggest `/nonfiction-studio:fact-check-pass <slug>`.
+- For each chapter with `highlighted: true` and `gate` equal to `block`: name the chapter and suggest `/nonfiction-studio:run-quality-gate <slug>` to inspect the blocking check details, then follow the remediation the gate report prescribes.
+- For each chapter with `highlighted: true` and `gate` not equal to `block`: the highlight reflects a drift score `bin/ns-status` has already flagged as above the configured threshold. Note that a dedicated revision pass (`revise-pass`) is a Phase 2 skill and is not available in v1; suggest `/nonfiction-studio:draft-chapter <slug>` to revise the chapter directly, then re-run `/nonfiction-studio:run-quality-gate <slug>` to confirm the drift score has improved.
+- If every chapter has a non-null `gate`, no chapter has `openClaimCount` greater than 0, and no chapter has `highlighted: true`: state that no immediate action is required and name the next un-started chapter from the `chapters` array (the first entry whose `status` is `empty`, `outlined`, or `drafting`).
 
-- For each chapter whose Gate cell is "-" (no gate report on record): suggest `/nonfiction-studio:run-quality-gate <slug>`.
-- For each chapter where `open_claim_count` is greater than 0: suggest `/nonfiction-studio:fact-check-pass <slug>`.
-- For each highlighted row where drift exceeds the threshold: note that a dedicated revision pass (`revise-pass`) is a Phase 2 skill and is not available in v1; suggest `/nonfiction-studio:draft-chapter <slug>` to revise the chapter directly, then re-run `/nonfiction-studio:run-quality-gate <slug>` to confirm the drift score has improved.
-- For each highlighted row where the gate verdict is `block`: name the chapter and suggest `/nonfiction-studio:run-quality-gate <slug>` to inspect the blocking check details, then follow the remediation the gate report prescribes.
+### Exit 2 - error
 
-If all chapters have gate reports, zero open claims, and no highlighted rows, state that no immediate action is required and name the next un-started chapter from the array (first entry with status `empty`, `outlined`, or `drafting`).
+`bin/ns-status` writes nothing regardless of the error; never render a partial or incorrect dashboard on exit 2.
+
+- If stderr contains "No book root found": state the following and halt.
+
+  > Project not initialized. No book root was found from the current directory. Run `/nonfiction-studio:init-project` to scaffold the project and create the progress file.
+
+- Else if stderr contains "Cannot read progress.json" together with either "ENOENT" or "no such file": state the following and halt.
+
+  > `.studio/progress.json` was not found. Run `/nonfiction-studio:init-project` to scaffold the project and create the progress file.
+
+- Otherwise (any other exit 2 - a malformed `progress.json`, `config.json`, or `meta.json`, or an internal argument error): state the following and halt.
+
+  > `bin/ns-status` reported an error: [stderr content verbatim]. Run `/nonfiction-studio:doctor` to diagnose and repair the project state.
 
 ---
 
 ## Failure behavior
 
-**Missing `progress.json`.** Step 1 halts on `NO_PROGRESS` with the not-initialized message and routes to `init-project`. No table is rendered.
+**Plugin root cannot be resolved.** Step 1 halts before invoking `bin/ns-status`. Reports the settings.json path and cache path attempted. No table is rendered.
 
-**Malformed or unreadable `progress.json`.** Step 1 halts on a parse error or missing required field with the malformed-file message and routes to `doctor`. Never renders a partial or incorrect dashboard.
+**No book root found.** Step 3 halts on the "No book root found" stderr message with the not-initialized message and routes to `init-project`. No table is rendered.
 
-**Missing or empty gate directory.** Step 2 produces no matching filenames. All Drift and Gate cells render as "-"; Step 6 suggests running the quality gate for every chapter.
+**`.studio/progress.json` missing.** Step 3 halts on the ENOENT-shaped `Cannot read progress.json` stderr message with the not-initialized message and routes to `init-project`. No table is rendered.
 
-**Missing or unreadable `.studio/config.json`.** Step 3 defaults to 25 and notes the default in the Step 5 footer. Not a halt condition; the dashboard renders normally.
+**Any other `bin/ns-status` error (malformed `progress.json`, `config.json`, or `meta.json`; an internal argument error).** Step 3 halts with the stderr content verbatim and routes to `doctor`. Never renders a partial or incorrect dashboard.
+
+**Missing or empty gate directory.** Not a halt condition: `bin/ns-status` itself returns `null` for `drift` and `gate` on every chapter with no matching report, which Step 3 renders as "-". Next actions suggests running the quality gate for every such chapter.
+
+**Missing or unreadable `.studio/config.json`.** Not a halt condition: `bin/ns-status` applies its own built-in default and reports `driftScoreMaxIsDefault: true`, which Step 3's footer states plainly.

@@ -1,6 +1,6 @@
 ---
 title: "status-dashboard worked example"
-description: "Condensed transcript of a status-dashboard run over the committed two-chapter sample book The Quiet Network - shows the progress.json read, gate directory listing, per-slug report parsing, table render, threshold evaluation, and next-actions list"
+description: "Condensed transcript of a status-dashboard run over the committed two-chapter sample book The Quiet Network - shows the single bin/ns-status Bash call, JSON parse, table render, and next-actions list, grounded in a real CLI run"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "status", "dashboard", "progress", "overview", "gate", "example"]
@@ -10,65 +10,21 @@ tags: ["skill", "status", "dashboard", "progress", "overview", "gate", "example"
 
 This is a condensed transcript of a `status-dashboard` run over the committed two-chapter sample book "The Quiet Network" (see `examples/sample-book/`). The example follows the flow specified in S-06 3.9 (skills and invocation surface) and the adjudications recorded in TSK-052 (status-dashboard skill).
 
-**Session provenance note.** All values in the rendered table are read directly from the committed fixture at `examples/sample-book/`. The files involved are:
+**Session provenance note.** This example is grounded in a live `--json` run executed 2026-08-15 against a scratch copy of the committed `examples/sample-book/` baseline, made outside the repository (this wave's discipline never runs a CLI against `examples/` in place, since the fixture suite asserts that tree stays byte-clean). The command, run after resolving the plugin root per Step 1 below, was `node "<plugin-root>/bin/ns-status" --project=. --json` from the book root; the scratch invocation used to produce the output below is equivalent. The JSON output is quoted verbatim, byte for byte, from that run. `bin/ns-status` is read-only; nothing under `.studio/` was written by generating this example, and the committed `examples/sample-book/` fixture itself was never touched.
 
-- `examples/sample-book/.studio/progress.json` - two chapters with reconciled word counts and open-claim totals
-- `examples/sample-book/.studio/config.json` - `thresholds.drift_score_max: 35`
-- `examples/sample-book/.studio/gate/01-listening-before-speaking.20260718T090000Z.json` - the one committed gate report; top-level `verdict: pass`, `stylometry` detail `"drift_score 0 is within threshold 35; chapter prose matches the baseline voice profile."`
-
-The dashboard is rendered as the skill would produce it from these files; no live gate run is performed and no files are written. Any scenario showing a `block` verdict, a highlighted row, or a non-zero open-claim count is explicitly synthetic and does not reflect the committed fixture.
+Any scenario showing a highlighted row or a non-zero exit code is explicitly labeled as a synthetic illustration and does not reflect the committed fixture or the live run output.
 
 ---
 
 ## Setup: what was already in place
 
-**`.studio/progress.json`** (committed, quoted in full):
+The committed `examples/sample-book/` baseline is a two-chapter bible for "The Quiet Network":
 
-```json
-{
-  "version": 2,
-  "updated": "2026-07-18T09:05:00Z",
-  "chapters": [
-    {
-      "slug": "01-listening-before-speaking",
-      "title": "Listening Before Speaking",
-      "status": "drafted",
-      "word_count": 422,
-      "drift_score": 0,
-      "open_claim_count": 0,
-      "last_gate": {
-        "ts": "2026-07-18T09:00:00Z",
-        "verdict": "pass",
-        "report": ".studio/gate/01-listening-before-speaking.20260718T090000Z.json"
-      }
-    },
-    {
-      "slug": "02-finding-your-network",
-      "title": "Finding Your Network",
-      "status": "drafted",
-      "word_count": 462,
-      "drift_score": 0,
-      "open_claim_count": 0,
-      "last_gate": null
-    }
-  ],
-  "totals": {
-    "word_count": 884,
-    "open_claim_count": 0,
-    "chapters_final": 0,
-    "chapters_total": 6
-  }
-}
-```
+- `.studio/progress.json` - two chapters, both `status: drafted`; chapter 01 (`01-listening-before-speaking`) has `word_count: 528`, chapter 02 (`02-finding-your-network`) has `word_count: 527`; `totals.chapters_total: 6`.
+- `.studio/config.json` - `thresholds.drift_score_max: 25`.
+- `.studio/gate/` - one dot-form report, `01-listening-before-speaking.20260810T091000Z.json` (top-level `verdict: "pass"`), plus `last-gate.json`, which does not match either gate-report filename pattern and is not read by `bin/ns-status`. No `all.<timestamp>.json` whole-book report is present. Chapter 02 has no gate report on record.
 
-Note: `progress.last_gate` is reserved and unpopulated in v1 per TSK-051 (run-quality-gate skill). The skill reads the gate directory directly and never reads `last_gate` from this file.
-
-**`.studio/gate/` directory** (committed filenames):
-- `01-listening-before-speaking.20260718T090000Z.json` - dot-form report for chapter 01
-- `last-gate.json` - does not match the dot-form pattern; the skill ignores it
-
-**`.studio/config.json`** (relevant field):
-- `thresholds.drift_score_max: 35`
+Note: `progress.json`'s per-chapter `drift_score` field (`10.86` for chapter 01, `10.75` for chapter 02) is a hook-maintained convenience field, not the authoritative source for the Drift column - see "Key assertions" below for what the live run actually returned for chapter 02.
 
 ---
 
@@ -76,115 +32,168 @@ Note: `progress.last_gate` is reserved and unpopulated in v1 per TSK-051 (run-qu
 
 **Author:** `/nonfiction-studio:status-dashboard`
 
-**Studio (Step 1 - Progress.json presence and validity check):**
+**Studio (Step 1 - Resolve the plugin root):**
 
-The skill uses the Bash tool:
+The skill uses the Bash tool to look up the `nonfiction-studio` marketplace source path in `~/.claude/settings.json`. The primary lookup resolves the plugin's installed path on the first try; the plugins-cache and dev-mode fallbacks are not needed for this run. Continue to Step 2.
 
-```
-test -f .studio/progress.json && echo HAS_PROGRESS || echo NO_PROGRESS
-```
+**Studio (Step 2 - Single Bash invocation):**
 
-Output: `HAS_PROGRESS`
-
-The skill uses the Read tool on `.studio/progress.json`. Parse confirms: `version: 2`, `chapters` array with 2 entries, `totals` object with `word_count`, `open_claim_count`, `chapters_final`. Each chapter entry carries `slug`, `status`, `word_count`, and `open_claim_count`. Validation passes. Continue to Step 2.
-
-**Studio (Step 2 - Gate directory listing and per-slug report identification):**
-
-The skill uses the Bash tool:
+The skill uses the Bash tool (this is the one call for this invocation; no other tool call is made):
 
 ```
-test -d .studio/gate && ls .studio/gate/ 2>/dev/null || echo NO_GATE_DIR
+node "<plugin-root>/bin/ns-status" --project=. --json
 ```
 
-Output:
+**ns-status stdout (verbatim, exit code 0):**
+
+```json
+{
+  "chapters": [
+    {
+      "slug": "01-listening-before-speaking",
+      "number": "01",
+      "title": "Listening Before Speaking",
+      "status": "drafted",
+      "wordCount": 528,
+      "openClaimCount": 0,
+      "drift": 10.86,
+      "gate": "pass",
+      "reportPath": ".studio/gate/01-listening-before-speaking.20260810T091000Z.json",
+      "highlighted": false
+    },
+    {
+      "slug": "02-finding-your-network",
+      "number": "02",
+      "title": "Finding Your Network",
+      "status": "drafted",
+      "wordCount": 527,
+      "openClaimCount": 0,
+      "drift": null,
+      "gate": null,
+      "reportPath": null,
+      "highlighted": false
+    }
+  ],
+  "totals": {
+    "wordCount": 1055,
+    "openClaimCount": 0,
+    "chaptersFinal": 0,
+    "chaptersTotal": 6,
+    "chaptersRemaining": 6
+  },
+  "wholeBookGate": null,
+  "thresholds": {
+    "driftScoreMax": 25,
+    "driftScoreMaxIsDefault": false
+  }
+}
 ```
-01-listening-before-speaking.20260718T090000Z.json
-last-gate.json
-```
 
-Parse filenames:
+ns-status exit code: 0. Parse stdout as the board JSON.
 
-- `01-listening-before-speaking.20260718T090000Z.json` matches the dot-form pattern `<slug>.<YYYYMMDDTHHMMSSZ>.json`. Slug: `01-listening-before-speaking`. This is the only report for this slug, so it is the newest.
-- `last-gate.json` does not match either pattern. Ignored.
-- No `all.<ts>.json` files found. No whole-book annotation for the totals row.
+**Studio (Step 3 - Present the result, exit 0):**
 
-Chapter `02-finding-your-network` has no matching gate file. Its Drift and Gate cells will be "-".
+Chapter rows, in array order from the JSON's `chapters` array:
 
-The skill uses the Read tool on `.studio/gate/01-listening-before-speaking.20260718T090000Z.json`. Relevant fields from the report:
+- Chapter 01: `#` = `01` (`highlighted: false`, no `!` prefix), Title = `Listening Before Speaking`, Status = `drafted`, Words = `528`, Drift = `10.86`, Open Claims = `0`, Gate = `pass`.
+- Chapter 02: `#` = `02`, Title = `Finding Your Network`, Status = `drafted`, Words = `527`, Drift = `-` (the `drift` field is `null`), Open Claims = `0`, Gate = `-` (the `gate` field is `null`).
 
-- Top-level `verdict`: `"pass"` - this is the Gate cell for chapter 01.
-- `stylometry` check entry: `"detail": "drift_score 0 is within threshold 35; chapter prose matches the baseline voice profile."` - parsing the numeric value yields `0`. This is the Drift cell for chapter 01.
-
-**Studio (Step 3 - Config read for drift threshold):**
-
-The skill uses the Read tool on `.studio/config.json`. `thresholds.drift_score_max` is `35`. Config value applied; no default needed.
-
-**Studio (Step 4 - Render the dashboard table):**
-
-Chapter rows, in array order from `progress.json.chapters`:
-
-- Chapter 01: # = `01`, Title = `Listening Before Speaking` (from `title` field), Status = `drafted`, Words = `422`, Drift = `0` (from gate report stylometry detail), Open Claims = `0`, Gate = `pass` (from gate report top-level verdict).
-- Chapter 02: # = `02`, Title = `Finding Your Network` (from `title` field), Status = `drafted`, Words = `462`, Drift = `-` (no gate report), Open Claims = `0`, Gate = `-` (no gate report).
-
-Totals row from `progress.json.totals`: Words = `884`, Open Claims = `0`, Chapters final = `0 of 6`. No whole-book all-report found; no gate annotation on the totals row.
+Totals row from the JSON's `totals` object: Words = `1055`, Open Claims = `0`, Chapters final = `0 of 6 final` (`chaptersFinal: 0`, `chaptersTotal: 6`). The top-level `wholeBookGate` is `null`, so no whole-book annotation is appended.
 
 **Studio:**
 
 > | # | Title | Status | Words | Drift | Open Claims | Gate |
 > |---|---|---|---|---|---|---|
-> | 01 | Listening Before Speaking | drafted | 422 | 0 | 0 | pass |
-> | 02 | Finding Your Network | drafted | 462 | - | 0 | - |
-> | **Totals** | | | **884** | | **0** | **0 of 6 final** |
+> | 01 | Listening Before Speaking | drafted | 528 | 10.86 | 0 | pass |
+> | 02 | Finding Your Network | drafted | 527 | - | 0 | - |
+> | **Totals** | | | **1055** | | **0** | **0 of 6 final** |
 >
-> Drift threshold: `thresholds.drift_score_max` = `35` (from `.studio/config.json`).
+> Drift threshold: `thresholds.drift_score_max` = `25` (from `.studio/config.json`).
+>
+> `6` chapter(s) remaining to final.
 >
 > No rows flagged.
 >
 > **Next actions:**
 >
-> - Chapter 02 (`02-finding-your-network`) has no gate report on record. Run `/nonfiction-studio:run-quality-gate 02-finding-your-network` to gate this chapter.
-> - No chapters have open claims.
-> - No rows are highlighted for drift or a block verdict.
+> - Chapter 02 (`02-finding-your-network`) has no gate report on record (`gate: null`). Run `/nonfiction-studio:run-quality-gate 02-finding-your-network` to gate this chapter.
+> - No chapter has `openClaimCount` greater than 0.
+> - No chapter has `highlighted: true`.
 
 ---
 
 ## Key assertions from this transcript
 
-- **Progress.json is the sole source for status, word count, and open claims.** The Drift and Gate columns come from the gate report; the other four chapter columns come from `progress.json`. The `drift_score` field inside `progress.json` (which is `0` for both chapters) is never read by the dashboard; that field is a hook-maintained convenience, not the authoritative source for the dashboard column.
+- **One Bash call, one parse, one render.** After resolving the plugin root in Step 1, the skill issued exactly one Bash call (`node "<plugin-root>/bin/ns-status" --project=. --json`), parsed its stdout as JSON, and read every table cell, the totals row, the footer, and the highlight decision directly from that JSON's fields. No directory listing, no separate file reads, no prose parsing, and no threshold comparison happen anywhere in this transcript.
 
-- **`progress.last_gate` is never read.** Chapter 01 has a `last_gate` object in `progress.json`, but the skill ignores it entirely. The gate directory listing is the sole discovery mechanism for gate reports.
+- **`progress.json`'s per-chapter `drift_score` is not the Drift column's source, proven by real data in this run.** `progress.json` carries `drift_score: 10.75` for chapter 02, but the live run's JSON output returns `"drift": null` for that same chapter, because no gate report exists for it under `.studio/gate/`. `bin/ns-status` never treats `progress.json`'s `drift_score` field as authoritative; this transcript shows that rule holding against real, live output, not merely asserted in prose.
 
-- **`last-gate.json` is ignored.** That file does not match the dot-form pattern `<slug>.<YYYYMMDDTHHMMSSZ>.json` or the whole-book pattern `all.<YYYYMMDDTHHMMSSZ>.json`. The skill silently excludes it from consideration.
+- **The highlight decision is read, not computed.** Both chapters carry `"highlighted": false` in the JSON. The skill applies the `!` prefix by reading that field directly; it never compares chapter 01's drift score of `10.86` against the threshold of `25` itself. See the synthetic illustration below for what a `highlighted: true` entry looks like and how the skill presents it.
 
-- **Drift is parsed from the gate report, not stored separately.** The drift score of `0` for chapter 01 comes from parsing the `stylometry` check `detail` string in `.studio/gate/01-listening-before-speaking.20260718T090000Z.json`, not from `progress.json.chapters[0].drift_score`.
+- **The effective threshold is read, not assumed.** The footer's `25` comes from the JSON's `thresholds.driftScoreMax` field, and `driftScoreMaxIsDefault: false` tells the skill that value came from `.studio/config.json` rather than `bin/ns-status`'s own built-in default. The skill body names neither number.
 
-- **Chapter 02 shows "-" in Drift and Gate because no gate report file exists for it.** The `last_gate: null` in `progress.json` for chapter 02 is consistent with this, but the null value is not the signal the skill reads; the absence of a matching file in `.studio/gate/` is.
+- **`last-gate.json` is never read by the CLI or the skill.** It is present in `.studio/gate/` (see Setup above) but matches neither the per-chapter dot-form pattern nor the whole-book pattern `bin/ns-status` recognizes, so it plays no part in this output.
 
-- **Threshold evaluation uses the config value.** The threshold is `35` from `.studio/config.json`. Chapter 01's drift of `0` is below `35`; chapter 02 has no drift value. No rows are flagged.
-
-- **The skill writes nothing.** No file was created, modified, or appended at any step. The gate report was read but not written; `progress.json` was read but not written.
-
-- **One Read call per gate report.** The skill issued one Read call for the single matching gate report (`01-listening-before-speaking.20260718T090000Z.json`). If multiple chapters had gate reports, each would require exactly one Read call for its newest report.
+- **The skill writes nothing.** No file was created, modified, or appended at any step. `bin/ns-status` is read-only by design; `.studio/gate/01-listening-before-speaking.20260810T091000Z.json` and `progress.json` were read by the CLI but not written.
 
 ---
 
-## Synthetic illustration: highlighted rows
+## Synthetic illustration: a highlighted row
 
-The following is explicitly synthetic. It shows what the table would look like if chapter 02 had a gate report with drift above the threshold or a block verdict:
+The following is explicitly synthetic. It shows what the JSON and the rendered table would look like if chapter 02 had a gate report `bin/ns-status` flagged as highlighted:
+
+**ns-status stdout (synthetic excerpt, chapter 02 only):**
+
+```json
+{
+  "slug": "02-finding-your-network",
+  "number": "02",
+  "title": "Finding Your Network",
+  "status": "drafted",
+  "wordCount": 527,
+  "openClaimCount": 3,
+  "drift": 41,
+  "gate": "warn",
+  "reportPath": ".studio/gate/02-finding-your-network.20260815T090000Z.json",
+  "highlighted": true
+}
+```
+
+**Studio:**
 
 > | # | Title | Status | Words | Drift | Open Claims | Gate |
 > |---|---|---|---|---|---|---|
-> | 01 | Listening Before Speaking | drafted | 422 | 0 | 0 | pass |
-> | ! 02 | Finding Your Network | drafted | 462 | 41 | 3 | warn |
-> | **Totals** | | | **884** | | **3** | **0 of 6 final** |
+> | 01 | Listening Before Speaking | drafted | 528 | 10.86 | 0 | pass |
+> | ! 02 | Finding Your Network | drafted | 527 | 41 | 3 | warn |
+> | **Totals** | | | **1055** | | **3** | **0 of 6 final** |
 >
-> Drift threshold: `thresholds.drift_score_max` = `35` (from `.studio/config.json`).
+> Drift threshold: `thresholds.drift_score_max` = `25` (from `.studio/config.json`).
 >
-> Row 02 is flagged: drift `41` exceeds threshold `35`.
+> `6` chapter(s) remaining to final.
+>
+> Rows marked with a leading `!` were flagged by `bin/ns-status`.
 >
 > **Next actions:**
 >
-> - Chapter 02 drift `41` exceeds threshold `35`: run `/nonfiction-studio:revise-pass 02-finding-your-network` to address voice drift, then re-run `/nonfiction-studio:run-quality-gate 02-finding-your-network`.
-> - Chapter 02 has `3` open claims: run `/nonfiction-studio:fact-check-pass 02-finding-your-network` to resolve them.
+> - Chapter 02 (`02-finding-your-network`) has `openClaimCount: 3`. Run `/nonfiction-studio:fact-check-pass 02-finding-your-network` to resolve them.
+> - Chapter 02 is highlighted (`gate` is `warn`, not `block`): `bin/ns-status` has already flagged its drift score as above the configured threshold. Run `/nonfiction-studio:draft-chapter 02-finding-your-network` to revise the chapter directly, then re-run `/nonfiction-studio:run-quality-gate 02-finding-your-network` to confirm the drift score has improved.
 
-This synthetic illustration does not reflect the committed fixture. The drift score of `41`, the warn verdict, and the `3` open claims are invented for illustration purposes only.
+The `!` prefix comes directly from the synthetic entry's `"highlighted": true`; the skill never re-derives it from comparing `41` against `25` itself. This synthetic illustration does not reflect the committed fixture. The drift score of `41`, the `warn` verdict, the `3` open claims, and the `highlighted: true` flag are invented for illustration purposes only.
+
+---
+
+## Synthetic illustration: an engine error
+
+The following is explicitly synthetic. It shows what Step 3 would present if `.studio/progress.json` were absent from an otherwise-initialized project.
+
+**ns-status stderr (synthetic, exit code 2):**
+
+```
+ns-status: Cannot read progress.json at /path/to/project/.studio/progress.json: ENOENT: no such file or directory, open '/path/to/project/.studio/progress.json'
+```
+
+**Studio:**
+
+> `.studio/progress.json` was not found. Run `/nonfiction-studio:init-project` to scaffold the project and create the progress file.
+
+No table is rendered; the exit-2 case is never treated as a pass.
