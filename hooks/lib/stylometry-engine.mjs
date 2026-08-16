@@ -487,8 +487,13 @@ export class StaleBaselineError extends Error {
  *   This is NOT just the markers sub-object: marker_set_version lives alongside markers,
  *   not inside it, and computeDrift needs both to score safely.
  * @param {object} thresholds - thresholds block from config.json
- * @returns {{ score: number, perMarker: object[], exceeded: boolean, maxMarkerContribution: number }}
+ * @returns {{ score: number, perMarker: object[], exceeded: boolean, maxMarkerContribution: number,
+ *   markerTolerance: number }}
  *   perMarker entries carry { marker, baseline, measured, deviationPct, contribution, capped, flagged }.
+ *   markerTolerance is the per-marker tolerance band (thresholds.stylometry_marker_tolerance,
+ *   default 2.0) that flagged is computed against, returned for the same reason
+ *   maxMarkerContribution is: so a caller can state the number a boolean was compared against,
+ *   not just the boolean itself.
  * @throws {StaleBaselineError} when baseline.marker_set_version does not match
  *   CURRENT_MARKER_SET_VERSION
  */
@@ -549,5 +554,5 @@ export function computeDrift(measured, baseline, thresholds) {
   }
 
   const exceeded = score >= driftScoreMax;
-  return { score, perMarker, exceeded, maxMarkerContribution };
+  return { score, perMarker, exceeded, maxMarkerContribution, markerTolerance };
 }

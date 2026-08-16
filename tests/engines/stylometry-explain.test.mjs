@@ -1,13 +1,17 @@
 // tests/engines/stylometry-explain.test.mjs
 // what-it-is:   CLI-level tests for `ns-stylometry --explain`
 // what-it-does: proves the explain flag renders every marker (baseline, measured, honest
-//               deviation, actual contribution, whether the per-marker bound was binding)
-//               ordered by contribution descending; that a capped marker's stated deviation
-//               exceeds its stated contribution and the output says so in words; that the
-//               rendering is deterministic and locale-independent; that it writes nothing to
-//               disk; that it composes with the existing text and --json modes without
-//               changing the exit-code taxonomy; and that a JSON consumer who never passes
-//               --explain sees byte-for-byte the same shape as before this flag existed.
+//               deviation, actual contribution, whether the per-marker bound was binding, and
+//               whether it crossed the per-marker tolerance band) ordered by contribution
+//               descending; that a capped marker's stated deviation exceeds its stated
+//               contribution and the output says so in words; that the rendering is
+//               deterministic and locale-independent; that it writes nothing to disk; that it
+//               composes with the existing text and --json modes without changing the
+//               exit-code taxonomy; and that a JSON consumer who never passes --explain sees
+//               byte-for-byte the same shape as before this flag existed. The fix-round tests
+//               near the end of this file prove text mode restores the flagged signal the
+//               pre-existing flagged-markers-only loop carried by construction, which the
+//               first version of this flag silently dropped.
 // why:          the drift score was opaque -- a marker's honest deviation and its actual
 //               (possibly capped) contribution could disagree with no way for an author to
 //               see why. computeDrift already computed both; this flag surfaces them.
@@ -324,6 +328,109 @@ test('--json without --explain carries no explain key at all', () => {
     const out = JSON.parse(result.stdout);
     assert.strictEqual(Object.prototype.hasOwnProperty.call(out, 'explain'), false,
       'a consumer that never passes --explain must see no explain key at all, not an empty or null one');
+  } finally {
+    cleanupClone(clone);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Fix round 1: text-mode --explain must restore the flagged signal the
+// pre-existing flagged-markers-only loop carried by construction (every line
+// it printed was, by definition, a marker that had crossed the tolerance
+// band). --explain lists every marker, not only the flagged ones, so that
+// signal has to be stated explicitly per marker rather than left implicit in
+// which rows appear. The voice-drift fixture's flagged set is structural to
+// its planted defect (PLANTED.md), not incidental: contraction_rate,
+// first_person_rate, and second_person_rate are the three markers the
+// register-shift transformation directly moves past the 2.0% tolerance band;
+// avg_sentence_length and punctuation_rate cross it as a knock-on effect;
+// function_word_rate, avg_word_length, and type_token_ratio stay under it.
+// ---------------------------------------------------------------------------
+
+// Finds the RANKED-TABLE row for a marker, not just any line mentioning its name: the "Top
+// driver: <marker>, contributing ..." summary line also contains the top marker's name, and
+// (as this test discovered against a real run, before this helper was fixed) the fixture's top
+// driver by contribution happens to be one of the flagged markers under test, so a naive
+// substring search on the whole stdout finds that summary line first and never reaches the
+// actual table row at all. A table row's content, once an optional leading "* " is stripped,
+// starts with the marker name; the summary line's does not.
+function findMarkerRow(stdout, marker) {
+  return stdout.split('\n').find(line => line.replace(/^\*?\s*/, '').startsWith(marker));
+}
+
+test('--explain (text): every flagged marker\'s row is marked, every unflagged marker\'s row is not', () => {
+  const clone = cloneFixture(VOICE_DRIFT_SRC, 'flag-signal-text');
+  try {
+    const result = run(['--all', '--explain'], clone);
+    assert.strictEqual(result.status, 1, 'stderr: ' + result.stderr);
+
+    const flaggedMarkers = ['contraction_rate', 'first_person_rate', 'second_person_rate',
+      'avg_sentence_length', 'punctuation_rate'];
+    const unflaggedMarkers = ['function_word_rate', 'avg_word_length', 'type_token_ratio'];
+
+    for (const marker of flaggedMarkers) {
+      const row = findMarkerRow(result.stdout, marker);
+      assert.ok(row, marker + ' table row must be present; got:\n' + result.stdout);
+      assert.ok(row.trimStart().startsWith('* '),
+        'flagged marker ' + marker + ' must be marked; got row: ' + JSON.stringify(row));
+    }
+    for (const marker of unflaggedMarkers) {
+      const row = findMarkerRow(result.stdout, marker);
+      assert.ok(row, marker + ' table row must be present; got:\n' + result.stdout);
+      assert.ok(!row.trimStart().startsWith('* '),
+        'unflagged marker ' + marker + ' must not be marked; got row: ' + JSON.stringify(row));
+    }
+  } finally {
+    cleanupClone(clone);
+  }
+});
+
+test('--explain (text): the tolerance value the flagged marks are measured against is stated once, in the header', () => {
+  const clone = cloneFixture(VOICE_DRIFT_SRC, 'flag-signal-tolerance');
+  try {
+    const result = run(['--all', '--explain'], clone);
+    assert.strictEqual(result.status, 1, 'stderr: ' + result.stderr);
+    assert.ok(result.stdout.includes('2.00%'),
+      'text output must state the 2.00% per-marker tolerance band somewhere (this fixture\'s ' +
+      'configured stylometry_marker_tolerance); got:\n' + result.stdout);
+  } finally {
+    cleanupClone(clone);
+  }
+});
+
+test('--explain --json: explain block carries markerTolerance, matching every marker\'s flagged boolean', () => {
+  const clone = cloneFixture(VOICE_DRIFT_SRC, 'flag-signal-json');
+  try {
+    const result = run(['--all', '--json', '--explain'], clone);
+    assert.strictEqual(result.status, 1, 'stderr: ' + result.stderr);
+    const out = JSON.parse(result.stdout);
+
+    assert.strictEqual(out.explain.markerTolerance, 2,
+      'explain.markerTolerance must equal this fixture\'s configured stylometry_marker_tolerance (2.0)');
+
+    for (const m of out.explain.perMarker) {
+      const shouldBeFlagged = m.deviationPct > out.explain.markerTolerance;
+      assert.strictEqual(m.flagged, shouldBeFlagged,
+        m.marker + ': flagged (' + m.flagged + ') must agree with deviationPct (' + m.deviationPct +
+        ') compared against markerTolerance (' + out.explain.markerTolerance + ')');
+    }
+  } finally {
+    cleanupClone(clone);
+  }
+});
+
+test('--explain (text): determinism still holds after the flagged-signal fix (byte-identical across two runs)', () => {
+  const clone = cloneFixture(VOICE_DRIFT_SRC, 'flag-signal-determinism');
+  try {
+    const result1 = run(['--all', '--explain'], clone);
+    assert.strictEqual(result1.status, 1, 'stderr: ' + result1.stderr);
+    assert.ok(result1.stdout.includes('*'), 'sanity: this fixture must produce at least one flagged row');
+
+    const result2 = run(['--all', '--explain'], clone);
+    assert.strictEqual(result2.status, 1, 'stderr: ' + result2.stderr);
+
+    assert.strictEqual(result1.stdout, result2.stdout,
+      'explain text output must still be byte-identical across two runs after the flagged-signal fix');
   } finally {
     cleanupClone(clone);
   }

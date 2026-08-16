@@ -211,7 +211,10 @@ if (chapterTexts.length === 0) {
     status: 'pass',
     markers: {},
     explain: opts.explain
-      ? { budget: driftScoreMax, maxMarkerContribution: null, perMarker: [], note: NO_CHAPTERS_EXPLAIN_NOTE }
+      ? {
+        budget: driftScoreMax, maxMarkerContribution: null, markerTolerance: null,
+        perMarker: [], note: NO_CHAPTERS_EXPLAIN_NOTE,
+      }
       : undefined,
     chapters: [],
     findings: [],
@@ -231,9 +234,10 @@ if (chapterTexts.length === 0) {
 // ---- measure and compute drift -------------------------------------------------
 
 const measured = measureBook(chapterTexts);
-let score, perMarker, exceeded, maxMarkerContribution;
+let score, perMarker, exceeded, maxMarkerContribution, markerTolerance;
 try {
-  ({ score, perMarker, exceeded, maxMarkerContribution } = computeDrift(measured, baseline, thresholds));
+  ({ score, perMarker, exceeded, maxMarkerContribution, markerTolerance } =
+    computeDrift(measured, baseline, thresholds));
 } catch (err) {
   // Covers both a malformed baseline (missing .markers) and a stale
   // marker_set_version (StaleBaselineError names capture-voice as the remedy).
@@ -295,15 +299,18 @@ const outJson = {
   threshold: driftScoreMax,
   status: exceeded ? 'block' : 'pass',
   markers: markersObj,
-  // --explain surfaces data computeDrift already computed (contribution, maxMarkerContribution)
-  // but the pre-existing markers/findings shape above never carried: ordered by contribution
-  // descending, so the marker that drove the verdict is first. Present only when the flag is
+  // --explain surfaces data computeDrift already computed (contribution, maxMarkerContribution,
+  // markerTolerance) but the pre-existing markers/findings shape above never carried: ordered by
+  // contribution descending, so the marker that drove the verdict is first. markerTolerance is
+  // included so the block is self-contained -- flagged is already a boolean on every entry, this
+  // is the number it was compared against, not a new signal. Present only when the flag is
   // passed -- JSON.stringify drops an undefined-valued key, so a consumer who never asks for
   // --explain sees byte-for-byte the same shape this CLI produced before this flag existed.
   explain: opts.explain
     ? {
       budget: driftScoreMax,
       maxMarkerContribution,
+      markerTolerance,
       perMarker: sortedForExplain.map(m => ({
         marker: m.marker,
         baseline: m.baseline,
@@ -324,10 +331,18 @@ const outJson = {
 
 /**
  * Renders the full per-marker breakdown for --explain's text output: every marker's baseline,
- * measured value, honest deviation, actual contribution, and whether the per-marker bound was
- * binding, ordered by contribution descending (sortedMarkers is pre-sorted by the caller) so the
- * driver of the score reads first. This is presentation only -- every number it prints already
- * came out of computeDrift; nothing here re-derives or re-measures anything.
+ * measured value, honest deviation, actual contribution, whether the per-marker bound was
+ * binding, and whether it crossed the per-marker tolerance band, ordered by contribution
+ * descending (sortedMarkers is pre-sorted by the caller) so the driver of the score reads first.
+ * This is presentation only -- every number it prints already came out of computeDrift; nothing
+ * here re-derives or re-measures anything.
+ *
+ * The leading "* " / "  " marker restores a signal the pre-existing flagged-markers-only text
+ * loop carried by construction (every line it printed was, by definition, a marker that had
+ * crossed the tolerance band) and that this rendering would otherwise have silently dropped,
+ * since it lists every marker rather than only the flagged ones. The tolerance value itself is
+ * stated once, in the header line, rather than repeated on every row, because it is the same
+ * number for every marker in a single run.
  *
  * Formatting matches hooks/lib/statusline-engine.mjs's own convention for deterministic output:
  * toFixed plus string concatenation, never toLocaleString or any other locale-sensitive
@@ -335,9 +350,10 @@ const outJson = {
  *
  * @param {object[]} sortedMarkers - perMarker records, already sorted by contribution descending
  * @param {number} maxMarkerContribution - the per-marker bound in absolute terms
+ * @param {number} markerTolerance - the per-marker tolerance band flagged is computed against
  * @returns {string} multi-line text, newline-terminated
  */
-function renderExplainText(sortedMarkers, maxMarkerContribution) {
+function renderExplainText(sortedMarkers, maxMarkerContribution, markerTolerance) {
   if (sortedMarkers.length === 0) return '  nothing to explain: no markers were measured\n';
 
   const top = sortedMarkers[0];
@@ -345,15 +361,17 @@ function renderExplainText(sortedMarkers, maxMarkerContribution) {
     ? ' (bound was binding; honest deviation is ' + top.deviationPct.toFixed(2) + '%)'
     : '';
   let out = 'Top driver: ' + top.marker + ', contributing ' + top.contribution.toFixed(2) + topBoundNote + '\n';
-  out += '\nMarkers ranked by contribution to the score (largest first):\n';
+  out += '\nMarkers ranked by contribution to the score (largest first); * marks a marker whose ' +
+    'honest deviation crosses the ' + markerTolerance.toFixed(2) + '% per-marker tolerance band:\n';
 
   const nameWidth = Math.max(...sortedMarkers.map(m => m.marker.length));
   for (const m of sortedMarkers) {
     const boundNote = m.capped
       ? 'bound was binding (max ' + maxMarkerContribution.toFixed(2) + ')'
       : 'bound not binding';
+    const flagPrefix = m.flagged ? '* ' : '  ';
     out +=
-      '  ' + m.marker.padEnd(nameWidth + 1) +
+      flagPrefix + m.marker.padEnd(nameWidth + 1) +
       ' contribution ' + m.contribution.toFixed(2).padStart(6) +
       '  deviation ' + (m.deviationPct.toFixed(2) + '%').padStart(8) +
       '  baseline ' + m.baseline.toFixed(4) +
@@ -375,14 +393,14 @@ if (opts.json) {
       prefix + ' pass: drift score ' + scoreStr + ' < threshold ' + driftScoreMax + '\n'
     );
     if (opts.explain) {
-      process.stdout.write(renderExplainText(sortedForExplain, maxMarkerContribution));
+      process.stdout.write(renderExplainText(sortedForExplain, maxMarkerContribution, markerTolerance));
     }
   } else {
     process.stdout.write(
       prefix + ' drift score ' + scoreStr + ' exceeds threshold ' + driftScoreMax + '\n'
     );
     if (opts.explain) {
-      process.stdout.write(renderExplainText(sortedForExplain, maxMarkerContribution));
+      process.stdout.write(renderExplainText(sortedForExplain, maxMarkerContribution, markerTolerance));
     } else {
       for (const m of flaggedMarkers) {
         process.stdout.write(
