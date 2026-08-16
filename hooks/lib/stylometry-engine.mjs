@@ -461,6 +461,13 @@ export class StaleBaselineError extends Error {
  * real deviation and say it was capped; only the running score total is bounded, never the
  * reported per-marker deviation itself.
  *
+ * Each per-marker record also carries its actual contribution (the bounded amount that marker
+ * added to score -- identical to deviationPct when capped is false, equal to
+ * maxMarkerContribution when capped is true), and the function returns maxMarkerContribution
+ * itself (the per-marker bound in absolute terms, driftScoreMax / MARKER_CONTRIBUTION_DIVISOR)
+ * so a caller can render an explain view without re-deriving the bound or importing the
+ * divisor, which stays a private implementation detail of this module.
+ *
  * Zero-baseline rule per brief:
  *   when baseline === 0: deviationPct = 0 if measured === 0, else 100
  *
@@ -480,7 +487,13 @@ export class StaleBaselineError extends Error {
  *   This is NOT just the markers sub-object: marker_set_version lives alongside markers,
  *   not inside it, and computeDrift needs both to score safely.
  * @param {object} thresholds - thresholds block from config.json
- * @returns {{ score: number, perMarker: object[], exceeded: boolean }}
+ * @returns {{ score: number, perMarker: object[], exceeded: boolean, maxMarkerContribution: number,
+ *   markerTolerance: number }}
+ *   perMarker entries carry { marker, baseline, measured, deviationPct, contribution, capped, flagged }.
+ *   markerTolerance is the per-marker tolerance band (thresholds.stylometry_marker_tolerance,
+ *   default 2.0) that flagged is computed against, returned for the same reason
+ *   maxMarkerContribution is: so a caller can state the number a boolean was compared against,
+ *   not just the boolean itself.
  * @throws {StaleBaselineError} when baseline.marker_set_version does not match
  *   CURRENT_MARKER_SET_VERSION
  */
@@ -534,11 +547,12 @@ export function computeDrift(measured, baseline, thresholds) {
       baseline: baselineVal,
       measured: measuredVal,
       deviationPct,
+      contribution,
       capped,
       flagged,
     });
   }
 
   const exceeded = score >= driftScoreMax;
-  return { score, perMarker, exceeded };
+  return { score, perMarker, exceeded, maxMarkerContribution, markerTolerance };
 }

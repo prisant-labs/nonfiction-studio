@@ -6,7 +6,10 @@
 //               (2) the golden sample-book (exit 0, score well below threshold);
 //               (3) the voice-drift fixture (exit 1, first_person_rate flagged);
 //               (4) the zero-baseline rule;
-//               (5) the missing-baseline exit-2 contract (via CLI invocation).
+//               (5) the missing-baseline exit-2 contract (via CLI invocation);
+//               (6) computeDrift's per-marker contribution and maxMarkerContribution fields
+//                   (the data ns-stylometry --explain renders; see tests/engines/
+//                   stylometry-explain.test.mjs for the CLI-level rendering tests).
 // runner:       node --test tests/engines/stylometry.test.mjs
 
 import { test } from 'node:test';
@@ -748,6 +751,51 @@ test('computeDrift: deviationPct stays honest (uncapped) even though the marker\
     m.deviationPct > score,
     'deviationPct (' + m.deviationPct + ') must exceed the marker\'s capped contribution to the total score (' + score + ')'
   );
+});
+
+// ---------------------------------------------------------------------------
+// computeDrift: explicit per-marker contribution and the per-run bound (TSK
+// "ns-stylometry --explain"; this data was computed internally but never
+// returned before -- surfacing it is the whole basis for the explain feature)
+// ---------------------------------------------------------------------------
+
+test('computeDrift: returns maxMarkerContribution equal to driftScoreMax divided by the (private) divisor', () => {
+  const baseline = { markers: { x: 1.0 }, marker_set_version: CURRENT_MARKER_SET_VERSION };
+  const measured = { x: 1.0 };
+  const { maxMarkerContribution } = computeDrift(measured, baseline,
+    { drift_score_max: 30, stylometry_marker_tolerance: 2.0 });
+  // The divisor (currently 3) is a private engine constant this test does not name or
+  // import; it only pins the OBSERVABLE result (30 / 3 = 10) the way a caller would.
+  assert.strictEqual(maxMarkerContribution, 10,
+    'maxMarkerContribution must be the per-marker bound derived from the configured budget; got ' + maxMarkerContribution);
+});
+
+test('computeDrift: each perMarker record carries its actual contribution -- capped equals the bound, uncapped equals the honest deviation', () => {
+  const baseline = {
+    markers: { cappedMarker: 1, plainMarker: 1 },
+    marker_set_version: CURRENT_MARKER_SET_VERSION,
+  };
+  // cappedMarker deviates 900% (honest), far past any single-digit-percent bound.
+  // plainMarker deviates exactly 1% (honest), comfortably under the bound at this budget.
+  const measured = { cappedMarker: 10, plainMarker: 1.01 };
+  const { perMarker, maxMarkerContribution } = computeDrift(
+    measured, baseline, { drift_score_max: 30, stylometry_marker_tolerance: 2.0 }
+  );
+
+  const capped = perMarker.find(m => m.marker === 'cappedMarker');
+  const plain = perMarker.find(m => m.marker === 'plainMarker');
+
+  assert.strictEqual(capped.capped, true, 'cappedMarker must be capped for this test to be meaningful');
+  assert.strictEqual(capped.contribution, maxMarkerContribution,
+    'a capped marker\'s contribution must equal the per-marker bound exactly; got ' + capped.contribution);
+  assert.ok(capped.deviationPct > capped.contribution,
+    'a capped marker\'s honest deviation must exceed its own contribution; deviation=' +
+    capped.deviationPct + ' contribution=' + capped.contribution);
+
+  assert.strictEqual(plain.capped, false, 'plainMarker must not be capped for this test to be meaningful');
+  assert.strictEqual(plain.contribution, plain.deviationPct,
+    'an uncapped marker\'s contribution must equal its honest deviation exactly; got ' +
+    plain.contribution + ' vs deviation ' + plain.deviationPct);
 });
 
 // ---------------------------------------------------------------------------

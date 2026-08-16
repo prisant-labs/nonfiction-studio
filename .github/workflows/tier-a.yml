@@ -102,10 +102,19 @@ jobs:
       - name: Skill CLI routing targets
         run: node scripts/checks/check-skill-cli-targets.mjs
 
-      # Live step 13: engine, lib, hook, and schema unit test suites (no API key required).
+      # Live step 13: component-count claim checker - derives the true CLI and skill counts from
+      # the tree at run time and fails on a stale prose claim about either total. This step is
+      # this checker's only proof of its git-tracked code path, the same reason step 12 above
+      # exists on its own: the Checkout action leaves .git present, exactly like every standalone
+      # checker step above it; the test suite exercises the degraded filesystem-walk fallback
+      # separately, by design, since its from-scratch fixtures never carry .git.
+      - name: Component count claims
+        run: node scripts/checks/check-component-counts.mjs
+
+      # Live step 14: engine, lib, hook, and schema unit test suites (no API key required).
       - name: Engine unit tests
         run: node scripts/test-engines.mjs
 
-      # Live step 14: bidirectional fixture matrix with temp-clone discipline.
+      # Live step 15: bidirectional fixture matrix with temp-clone discipline.
       - name: Fixture tests
         run: node scripts/test-fixtures.mjs
