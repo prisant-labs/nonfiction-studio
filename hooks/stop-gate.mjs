@@ -243,14 +243,18 @@ if (gateResult.error || gateExitCode === 2 || report === null) {
   // that was already parsed above, rather than the uninformative generic exit-code line.
   // Every check entry produced by that catch starts its detail with 'engine error: ',
   // the same prefix all six checks in gate-engine.mjs use, so that prefix is what
-  // identifies "the erroring check" here without adding a new report field.
+  // identifies "the erroring check" here without adding a new report field. Joined with
+  // '; ', not '\n': this module's own header documents the exit-2 path as one line, and
+  // more than one check can throw in the same run (for example a corrupt evidence log
+  // failing both claim_coverage and quote_fidelity), so a '\n' join would silently break
+  // that one-line contract exactly when two checks happen to fail together.
   const erroringChecks = (report && Array.isArray(report.checks))
     ? report.checks.filter(c => typeof c.detail === 'string' && c.detail.indexOf('engine error: ') === 0)
     : [];
   const errDetail = gateResult.error
     ? String(gateResult.error.message)
     : (stderrLine || (erroringChecks.length > 0
-        ? erroringChecks.map(c => c.check + ': ' + c.detail).join('\n')
+        ? erroringChecks.map(c => c.check + ': ' + c.detail).join('; ')
         : 'gate subprocess exited with code ' + gateExitCode));
   logError('ns-gate error', errDetail);
   process.stdout.write(

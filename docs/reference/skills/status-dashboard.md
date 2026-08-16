@@ -103,7 +103,8 @@ Presented after the table and footer, on exit 0 only:
 - For each chapter whose `openClaimCount` is greater than 0: suggest `/nonfiction-studio:fact-check-pass <slug>`.
 - For each chapter with `highlighted: true` and `gate` equal to `block`: suggest `/nonfiction-studio:run-quality-gate <slug>` to inspect the blocking check details.
 - For each chapter with `highlighted: true` and `gate` not equal to `block`: note that `revise-pass` is Phase 2 scope and not available in v1; suggest `/nonfiction-studio:draft-chapter <slug>` to revise, then re-run `/nonfiction-studio:run-quality-gate <slug>`.
-- If every chapter has a non-null `gate`, no chapter has open claims, and no chapter is highlighted: state that no immediate action is required and name the next un-started chapter (the first entry with `status` in `empty`, `outlined`, or `drafting`).
+- If any chapter has a non-null `gate` paired with a null `drift`: that chapter's stylometry check did not run on its latest gate report (most commonly a baseline missing or predating `marker_set_version`), even though the gate otherwise reads `pass`. Name every chapter matching this pairing and suggest `/nonfiction-studio:capture-voice`, then re-run `/nonfiction-studio:run-quality-gate <slug>` for each named chapter.
+- If every chapter has a non-null `gate`, no chapter has open claims, no chapter is highlighted, and no chapter pairs a non-null `gate` with a null `drift`: state that no immediate action is required and name the next un-started chapter (the first entry with `status` in `empty`, `outlined`, or `drafting`).
 
 ## Progress.json and the Totals Row
 

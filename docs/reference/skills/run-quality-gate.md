@@ -44,7 +44,7 @@ Alternate entry points:
 | `structure/chapter-list.md` | Step 2 (Bash probe + Read) when a chapter argument is supplied | Resolve the chapter slug or number to the canonical slug |
 | `chapters/<slug>.md` | Step 2 (Bash probe) | Confirm the chapter file exists before invoking the gate |
 | `context/style-profile.md` | Step 3 (Bash probe) | Presence check for the baseline pre-check; absence triggers the degraded check subset |
-| `.studio/config.json` | Step 3 (Read) when style-profile.md is present | Check `stylometry.baseline.markers`; absence or null triggers the degraded check subset |
+| `.studio/config.json` | Step 3 (Read) when style-profile.md is present | Check `stylometry.baseline.markers` and `stylometry.baseline.marker_set_version`; either field's absence, a null `markers`, or a `marker_set_version` that does not match the engine's current version triggers the degraded check subset |
 
 ### Outputs
 
@@ -64,7 +64,7 @@ The skill runs five steps.
 
 2. **Chapter resolution (mandatory first tool call).** When a chapter argument was supplied: probes `structure/chapter-list.md` for the registry (Bash) and resolves the slug or number (Read); probes `chapters/<slug>.md` (Bash). When no chapter argument was supplied: probes `.studio/progress.json` (Bash), reads it, and selects the most-recently-modified chapter by these criteria in order: (a) the chapter with the most recent `last_gate.ts`; (b) the last chapter in the array with `status: drafted` or `status: drafting`; (c) asks the author when no clear candidate emerges. Halts on any missing file that prevents resolution. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
 
-3. **Voice baseline pre-check.** Probes `context/style-profile.md` (Bash). If absent, or if present but `.studio/config.json` lacks `stylometry.baseline.markers`, the skill sets the check subset to `claims,scrub,continuity-quick,coherence`, warns that voice drift was skipped, and continues. If both the profile and the markers are present, the skill runs the full gate (all five checks). This is the degradation mechanism the brief describes: the gate engine exits 2 on a missing baseline, so the skill pre-checks and routes around the error with a clear warning rather than a halt.
+3. **Voice baseline pre-check.** Probes `context/style-profile.md` (Bash). If absent, or if present but `.studio/config.json` lacks `stylometry.baseline.markers`, or `stylometry.baseline.marker_set_version` is absent or does not match the engine's current version, the skill sets the check subset to `claims,scrub,continuity-quick,coherence`, warns that voice drift was skipped, and continues. Only when the profile, the markers, and a matching `marker_set_version` are all present does the skill run the full gate (all five checks). This is the degradation mechanism the brief describes: the gate engine exits 2 on a missing or stale baseline, so the skill pre-checks and routes around the error with a clear warning rather than a halt.
 
 4. **Resolve the plugin root.** Before ns-gate is invoked, the skill resolves the plugin's installed path: a primary lookup against `extraKnownMarketplaces['nonfiction-studio'].source.path` in `~/.claude/settings.json`, a `~/.claude/plugins/cache` search fallback, and a dev-mode fallback that checks for `bin/ns-gate` in the current directory. This is the same three-tier convention `init-project` uses to locate its scaffold templates; it exists because a literal relative `bin/ns-gate` path resolves against the invoking shell's working directory, not the installed plugin, and would silently fail for a marketplace-installed author. If all three lookups fail, the skill halts and names the settings.json and cache paths it attempted.
 
@@ -87,9 +87,9 @@ The mapping mirrors the Stop hook's exit-code semantics (hooks/stop-gate.mjs) bu
 
 ## Baseline Pre-Check and Degradation
 
-The `bin/ns-gate` engine exits 2 when `stylometry.baseline.markers` is absent from `.studio/config.json` but the stylometry check is enabled. Rather than surfacing an exit 2 error, the skill pre-checks both the style profile and the config baseline before invoking the gate.
+The `bin/ns-gate` engine exits 2 when `stylometry.baseline.markers` is absent from `.studio/config.json`, or when `stylometry.baseline.marker_set_version` does not match the engine's current marker set version (a `StaleBaselineError`, the state of every baseline captured before that field existed), while the stylometry check is enabled. Rather than surfacing an exit 2 error, the skill pre-checks the style profile and both parts of the config baseline before invoking the gate.
 
-When either is absent:
+When any of these is missing or stale:
 - The skill sets `--check=claims,scrub,continuity-quick,coherence` on the gate invocation
 - The stylometry check is excluded from this run
 - The skill warns the author explicitly: "Voice drift check skipped: [reason]. Run `/nonfiction-studio:capture-voice` to enable voice drift detection."
@@ -153,7 +153,7 @@ Reports are retained and pruned to the last 10 per chapter slug by `bin/ns-gate`
 
 **No argument and no `progress.json`.** Step 2 halts and asks the author which chapter to gate. No gate invocation until the author replies.
 
-**Voice baseline absent.** Step 3 sets the degraded check subset and warns. The gate still runs; baseline absence is not a halt condition.
+**Voice baseline absent or stale.** Step 3 sets the degraded check subset and warns, whether the baseline is missing entirely or its `marker_set_version` does not match the engine's current version. The gate still runs; neither condition is a halt condition.
 
 **Exit 2 from ns-gate.** Step 5 presents the stderr error. Never treated as a pass, warn, or block. Routes to `doctor` for diagnosis.
 
