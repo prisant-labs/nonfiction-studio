@@ -45,6 +45,7 @@ after(() => {
 // own source (see header comment).
 // ---------------------------------------------------------------------------
 
+function wordTwo() { return 'tw' + 'o'; }       // "two"
 function wordThree() { return 'thr' + 'ee'; }   // "three"
 function wordFour() { return 'fo' + 'ur'; }     // "four"
 function wordFive() { return 'fi' + 've'; }     // "five"
@@ -241,7 +242,12 @@ test('real-repo scope: decision-identifier handles are never flagged, including 
   try {
     const sameLinePath = join(root, 'agents', 'fact-checker.md');
     const sameLineText = readFileSync(sameLinePath, 'utf8');
-    assert.match(sameLineText, /\(D-05, five shipped CLIs\)/, 'agents/fact-checker.md must still carry the same-line D-05 handle for this test to be meaningful');
+    // Assembled via RegExp(string), not a /regex literal/, matching this file's own stated
+    // practice (see header comment): this text is currently safe as a literal only because it
+    // is also a genuinely exempt decision-identifier construction, which makes its safety
+    // depend on ID_HANDLE_OPEN_RE keeping its current shape - not a dependency worth taking.
+    const sameLineHandleRe = new RegExp('\\(D-05, ' + wordFive() + ' shipped CLIs\\)');
+    assert.match(sameLineText, sameLineHandleRe, 'agents/fact-checker.md must still carry the same-line D-05 handle for this test to be meaningful');
 
     const wrappedPath = join(root, 'docs', 'reference', 'agents', 'fact-checker.md');
     const wrappedText = readFileSync(wrappedPath, 'utf8');
@@ -254,6 +260,110 @@ test('real-repo scope: decision-identifier handles are never flagged, including 
     const result = runClonedChecker(root, SCRIPT);
     assert.equal(result.status, 0, 'got: ' + result.combined);
     assert.doesNotMatch(result.combined, /fact-checker\.md/, 'neither the same-line nor the line-wrapped D-05 handle may ever be flagged');
+  } finally {
+    cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Decision-identifier handle recognized through ordinary markdown formatting - fix round 1
+// closed a gap where any character between the ID and its handle-opening punctuation defeated
+// the exemption entirely. Each test below uses a synthetic root with only 3 real CLIs and a
+// claimed handle count of "five" (5 != 3): if the exemption fails to recognize the formatted
+// construction, the checker treats it as a live claim and 5 != 3 is a guaranteed false-positive
+// finding; if the exemption works, the claim is never even compared to the true count, so the
+// mismatch is irrelevant and the checker stays silent either way. This isolates the exemption
+// mechanism from the arithmetic entirely.
+// ---------------------------------------------------------------------------
+
+function buildIdHandleRoot(label, docContent) {
+  return buildSyntheticRoot(label, {
+    'bin/ns-a': '#!/usr/bin/env node\n',
+    'bin/ns-b': '#!/usr/bin/env node\n',
+    'bin/ns-c': '#!/usr/bin/env node\n',
+    'skills/widget-skill/SKILL.md': '# widget-skill\n',
+    'docs/claim.md': docContent,
+  });
+}
+
+test('synthetic: a bold-emphasized decision-identifier handle is not flagged', () => {
+  const { root, cleanup } = buildIdHandleRoot(
+    'id-bold',
+    'Governed by D-05 (**' + wordFive() + ' shipped CLIs**), a locked decision name.\n'
+  );
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 0, 'bold emphasis around the handle must not defeat the exemption; got: ' + result.combined);
+  } finally {
+    cleanup();
+  }
+});
+
+test('synthetic: a backtick-wrapped decision identifier is not flagged', () => {
+  const { root, cleanup } = buildIdHandleRoot(
+    'id-backtick',
+    'Governed by `D-05` (' + wordFive() + ' shipped CLIs), a locked decision name.\n'
+  );
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 0, 'a backtick-wrapped ID must not defeat the exemption; got: ' + result.combined);
+  } finally {
+    cleanup();
+  }
+});
+
+test('synthetic: a colon-joined decision identifier is not flagged', () => {
+  const { root, cleanup } = buildIdHandleRoot(
+    'id-colon',
+    'Governed by D-05: ' + wordFive() + ' shipped CLIs, a locked decision name.\n'
+  );
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 0, 'a colon in place of a paren or comma must not defeat the exemption; got: ' + result.combined);
+  } finally {
+    cleanup();
+  }
+});
+
+test('synthetic: a markdown-linked decision identifier, handle outside the link, is not flagged', () => {
+  // Mirrors this repository's own real convention for citing a reference ID as a markdown
+  // link - docs/reference/cli/ns-notes.md, ns-status.md, and ns-statusline.md all cite
+  // [ADR-0009](../../adr/ADR-0009-apparatus-cli.md) this same way - applied to D-05, which has
+  // no such link anywhere in the tree today but uses the identical bracket-then-paren shape.
+  const { root, cleanup } = buildIdHandleRoot(
+    'id-link',
+    'Governed by [D-05](../../adr/ADR-0009-apparatus-cli.md) (' + wordFive() + ' shipped CLIs).\n'
+  );
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 0, 'a markdown-linked ID with the handle outside the link must not defeat the exemption; got: ' + result.combined);
+  } finally {
+    cleanup();
+  }
+});
+
+test('synthetic: an "other N" construction wrapped across two "#"-prefixed comment lines is evaluated correctly, not falsely flagged', () => {
+  // Mirrors agents/_chain-permitted.yaml's real "#"-comment convention (an in-scope, shipped
+  // file) - fix round 1's Step 4 fix only stripped "//", not "#", so a YAML/shell-style
+  // comment-continuation line broke the same exemption bin/ns-statusline's real "//"-wrapped
+  // construction needed fixing for. 8 real CLIs here, so "other seven" (7 = 8 - 1) is the
+  // arithmetically correct claim; if the "#" strip is missing, the broken exemption falls
+  // through to the live-claim path and 7 != 8 is a guaranteed false-positive finding.
+  const { root, cleanup } = buildSyntheticRoot('other-hash-wrap', {
+    'bin/ns-a': '#!/usr/bin/env node\n',
+    'bin/ns-b': '#!/usr/bin/env node\n',
+    'bin/ns-c': '#!/usr/bin/env node\n',
+    'bin/ns-d': '#!/usr/bin/env node\n',
+    'bin/ns-e': '#!/usr/bin/env node\n',
+    'bin/ns-f': '#!/usr/bin/env node\n',
+    'bin/ns-g': '#!/usr/bin/env node\n',
+    'bin/ns-h': '#!/usr/bin/env node\n',
+    'skills/widget-skill/SKILL.md': '# widget-skill\n',
+    'templates/example.yaml': '# This tool differs from the other\n# ' + wordSeven() + ' CLIs in one respect: it is read-only.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 0, 'a "#"-wrapped other-N construction that is arithmetically correct must not be flagged; got: ' + result.combined);
   } finally {
     cleanup();
   }
@@ -296,8 +406,52 @@ test('real-repo scope: dated historical records (docs/adr/, docs/gates/) are nev
   }
 });
 
-test('real-repo scope: "the other N CLIs" self-referential claims are not flagged', () => {
-  const { root, cleanup } = cloneRealRepo('real-other-n');
+// "the other N CLIs" is a genuine live claim about the complement (true value = trueCount - 1),
+// not a blanket exemption - fix round 1 closed a gap where it was skipped unconditionally, which
+// silently missed exactly the sites (bin/ns-notes, bin/ns-statusline, hooks/lib/status-
+// engine.mjs) a previous wave's four human sweeps also missed. Both directions are proven below,
+// per F6 (checker negative tests): an assertion checked in only one direction is not proof.
+
+test('synthetic: a correct "other N" claim (N = trueCount - 1) is not flagged', () => {
+  const { root, cleanup } = buildSyntheticRoot('other-correct', {
+    'bin/ns-a': '#!/usr/bin/env node\n',
+    'bin/ns-b': '#!/usr/bin/env node\n',
+    'bin/ns-c': '#!/usr/bin/env node\n',
+    'skills/widget-skill/SKILL.md': '# widget-skill\n',
+    'docs/claim.md': 'This CLI is unlike the other ' + wordTwo() + ' CLIs in the project.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 0, 'three real CLIs means the true complement is two; "other two" must pass; got: ' + result.combined);
+  } finally {
+    cleanup();
+  }
+});
+
+test('synthetic: a stale "other N" claim (N != trueCount - 1) is caught, naming claimed, expected, and total', () => {
+  const { root, cleanup } = buildSyntheticRoot('other-stale', {
+    'bin/ns-a': '#!/usr/bin/env node\n',
+    'bin/ns-b': '#!/usr/bin/env node\n',
+    'bin/ns-c': '#!/usr/bin/env node\n',
+    'skills/widget-skill/SKILL.md': '# widget-skill\n',
+    'docs/claim.md': 'This CLI is unlike the other ' + wordFour() + ' CLIs in the project.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 1, 'three real CLIs means the true complement is two, not four; must be caught; got: ' + result.combined);
+    assert.match(result.combined, /docs\/claim\.md:1:/, 'must name the file and line');
+    assert.match(result.combined, new RegExp(wordFour()), 'must name the claimed (bogus) complement verbatim');
+    assert.match(result.combined, /2 other CLIs/, 'must name the true complement (2)');
+    // Assembled via RegExp(string) - see the wrapped-handle test above for why.
+    const trueTotalRe = new RegExp('3' + ' CLIs total');
+    assert.match(result.combined, trueTotalRe, 'must name the true total (3), not only the complement');
+  } finally {
+    cleanup();
+  }
+});
+
+test('real-repo scope: bin/ns-statusline\'s real "the other seven CLIs" (currently correct) is not flagged', () => {
+  const { root, cleanup } = cloneRealRepo('real-other-n-correct');
   try {
     const statuslineCliText = readFileSync(join(root, 'bin', 'ns-statusline'), 'utf8');
     // Assembled via RegExp(string) - see the wrapped-handle test above for why.
@@ -308,8 +462,90 @@ test('real-repo scope: "the other N CLIs" self-referential claims are not flagge
     );
 
     const result = runClonedChecker(root, SCRIPT);
-    assert.equal(result.status, 0, 'got: ' + result.combined);
-    assert.doesNotMatch(result.combined, /ns-statusline\b/, 'the other-precedes-count construction must never be flagged');
+    assert.equal(result.status, 0, 'seven is the correct complement of the true 8-CLI total; got: ' + result.combined);
+    assert.doesNotMatch(result.combined, /ns-statusline\b/, 'a correct other-N claim must never be flagged');
+  } finally {
+    cleanup();
+  }
+});
+
+test('real-repo scope: a deliberately corrupted "other N" claim in bin/ns-notes is caught', () => {
+  const { root, cleanup } = cloneRealRepo('real-other-n-stale');
+  try {
+    const notesPath = join(root, 'bin', 'ns-notes');
+    const before = readFileSync(notesPath, 'utf8');
+    const liveClaimText = 'other ' + wordSeven() + ' CLIs';
+    const bogus = wordThree();
+    const after = before.split(liveClaimText).join('other ' + bogus + ' CLIs');
+    assert.notEqual(after, before, 'bin/ns-notes must contain the real "other seven CLIs" claim for this test to be meaningful');
+    writeFileSync(notesPath, after);
+
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 1, 'a corrupted other-N claim must be caught; got: ' + result.combined);
+    assert.match(result.combined, /ns-notes:\d+:/, 'must name the corrupted file and line');
+    assert.match(result.combined, new RegExp(bogus), 'must name the claimed (bogus) complement verbatim');
+    assert.match(result.combined, /8 CLIs total/, 'must name the true total (8), not only the complement');
+  } finally {
+    cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Forward-growth simulation: the real acceptance test for fix round 1. Adding one CLI to a
+// clean clone (no other edit) simulates the next real growth event and asks what the checker
+// actually does at that instant, rather than only what a hand-picked planted fixture proves.
+// Before this fix round, this simulation caught 3 real sites and silently missed 3 more - the
+// "the other seven CLIs" self-referential comments in bin/ns-notes, bin/ns-statusline, and
+// hooks/lib/status-engine.mjs, exactly the shape a previous wave's four human sweeps also
+// missed. Running it against the round-1 fix turned up a SEVENTH real site the coordinator's
+// own enumeration had not named: docs/reference/cli/ns-statusline.md:20 carries the identical
+// "the other seven CLIs" construction in prose form, and the fixed checker catches it too - a
+// finding from running the simulation, not from re-reading the coordinator's list, which is the
+// point of running a simulation instead of only a curated set of planted cases.
+//
+// One expected, non-shipped side effect of cloning the FULL repo (this test file included) and
+// then mutating it: this file's own explanatory prose necessarily quotes real numbers ("seven",
+// "eight") to describe and test against the REAL, unmodified 8-CLI tree - correctly, as the
+// "real-repo scope: the current tree has no stale component-count claims" test above proves
+// (this file included, since it is committed and therefore part of that scan too). Once this
+// simulation mutates the SAME clone's true count to 9, those same quotes necessarily read as
+// stale relative to the mutated clone, which is not a tree defect - it never happens against the
+// real, unmutated repository - so those findings are filtered out below rather than asserted on,
+// and the shipped-site count is asserted precisely instead.
+// ---------------------------------------------------------------------------
+
+test('forward-growth simulation: adding a ninth CLI to a real-repo clone catches all seven real sites that go stale', () => {
+  const { root, cleanup } = cloneRealRepo('growth-simulation');
+  try {
+    const before = runClonedChecker(root, SCRIPT);
+    assert.equal(before.status, 0, 'the clone must start clean, matching the real tree; got: ' + before.combined);
+
+    // The only change: one new CLI, no other edit. Content is inert (no count-shaped text of
+    // its own), so every finding below is caused by the true CLI count moving from 8 to 9.
+    writeFile(root, 'bin/ns-zzz-simulated-growth', '#!/usr/bin/env node\n');
+
+    const after = runClonedChecker(root, SCRIPT);
+    assert.equal(after.status, 1, 'adding a ninth CLI must turn real sites stale; got: ' + after.combined);
+    assert.match(after.combined, /true counts: 9 CLI\(s\)/, 'must derive the new true count (9) from the tree, not a constant');
+
+    const errorLines = after.combined.split('\n').filter((l) => l.includes(' ERROR: '));
+    const shippedErrorLines = errorLines.filter((l) => !l.includes('check-component-counts.test.mjs'));
+
+    // The three direct "N shipped CLIs" claims a prior review already proved this checker
+    // catches (never regressed by this fix round).
+    assert.ok(shippedErrorLines.some((l) => l.includes('ns-claims.md:')), 'must still catch docs/reference/cli/ns-claims.md\'s direct "eight shipped CLIs" claim; got: ' + after.combined);
+    const bibleFindings = shippedErrorLines.filter((l) => l.includes('bible.mjs'));
+    assert.equal(bibleFindings.length, 2, 'must still catch both hooks/lib/bible.mjs "eight" claims (lines 5 and 7), not only one; got: ' + after.combined);
+
+    // The four "the other seven CLIs" sites fix round 1 exists to close (three code comments the
+    // coordinator named, plus the docs/reference/cli/ns-statusline.md prose instance the
+    // simulation itself turned up) - all silently missed before this round.
+    assert.ok(shippedErrorLines.some((l) => l.includes('ERROR: bin/ns-notes:')), 'must catch bin/ns-notes\'s "the other seven CLIs" now that the true complement is eight; got: ' + after.combined);
+    assert.ok(shippedErrorLines.some((l) => l.includes('ERROR: bin/ns-statusline:')), 'must catch bin/ns-statusline\'s LINE-WRAPPED "the other seven CLIs" now that the true complement is eight; got: ' + after.combined);
+    assert.ok(shippedErrorLines.some((l) => l.includes('ERROR: hooks/lib/status-engine.mjs:')), 'must catch hooks/lib/status-engine.mjs\'s "the other seven CLIs" now that the true complement is eight; got: ' + after.combined);
+    assert.ok(shippedErrorLines.some((l) => l.includes('ERROR: docs/reference/cli/ns-statusline.md:')), 'must catch the prose "the other seven CLIs" instance in docs/reference/cli/ns-statusline.md too - the extra real site this simulation found; got: ' + after.combined);
+
+    assert.equal(shippedErrorLines.length, 7, 'must report exactly the seven real shipped sites that go stale on this growth event, no more and no fewer; got: ' + after.combined);
   } finally {
     cleanup();
   }

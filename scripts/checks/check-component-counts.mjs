@@ -21,16 +21,22 @@
 //               Two further exemption classes are checked structurally before a candidate is
 //               compared against the true count:
 //                 - decision identifier: a reference-ID-shaped token (D-05, TSK-029b, ADR-0009,
-//                   OPP-D05, ...) immediately opening a parenthetical or comma-appositive right
-//                   before the count phrase, per this repository's own convention that every
-//                   reference ID carries a human-readable handle (a locked decision's own proper
-//                   name, such as D-05 (five shipped CLIs), is retained deliberately even after
-//                   the list it names has grown). Checked against the text
-//                   immediately preceding a candidate - the previous line joined with the
+//                   OPP-D05, ...) immediately opening a parenthetical, a colon, or a
+//                   comma-appositive right before the count phrase, per this repository's own
+//                   convention that every reference ID carries a human-readable handle (a locked
+//                   decision's own proper name, such as D-05 (five shipped CLIs), is retained
+//                   deliberately even after the list it names has grown). Checked against the
+//                   text immediately preceding a candidate - the previous line joined with the
 //                   current line up to the match, not a same-line-only regex lookbehind, because
 //                   a handle can wrap across a markdown line break (a real instance in the tree
 //                   opens its parenthetical at the end of one line and states the count phrase on
-//                   the next).
+//                   the next) - after normalizing away markdown formatting that carries no
+//                   meaning to a human reader but would otherwise defeat a literal-text match: a
+//                   reference link is resolved to its label ([D-05](url) -> D-05, this
+//                   repository's own convention for citing a reference ID - docs/reference/cli/
+//                   ns-notes.md, ns-status.md, and ns-statusline.md alone each carry multiple
+//                   such links), a backtick-wrapped ID is unwrapped, and bold/italic emphasis
+//                   markers around either the ID or the handle are stripped.
 //                 - dated historical record: any file under docs/adr/ or docs/gates/ is skipped
 //                   entirely. Both are point-in-time records by genre - an ADR's own Date: field
 //                   fixes what it describes to that date; a gate doc records what was true at a
@@ -39,14 +45,16 @@
 //                   section stating a plain past-tense count with no adjacent decision ID at
 //                   all; a gate doc's already-stale-today count table).
 //               A third construction, "the other N CLIs" (a claim about the complement of the
-//               subject, true value = total - 1, a different claim from a total-count assertion),
-//               is deliberately left unmatched rather than exempted after matching: every real
-//               instance in the tree is currently accurate, and this checker does not attempt the
-//               total-minus-one arithmetic that phrasing would require, the same way
-//               check-skill-cli-targets.mjs leaves a bare "ns-<name>" mention (no "bin/" prefix)
-//               unmatched. This is a bounded, stated scope gap, not a defect: a hypothetical
+//               subject, not the total itself), is a genuine live claim and IS checked, against
+//               trueCount - 1 rather than trueCount: a CLI's own self-referential comment naming
+//               how many sibling CLIs share its pattern is true today precisely because it
+//               excludes itself from the total, and goes stale the instant the total grows, in
+//               the same commit that makes every bare-total claim go stale - a checker that left
+//               this construction permanently unmatched would have the exact same blind spot the
+//               four prior human sweeps had, on the exact lines those sweeps missed
+//               (bin/ns-notes, bin/ns-statusline, hooks/lib/status-engine.mjs). A hypothetical
 //               future decision-identifier parenthetical that itself opens with a stale total
-//               would also be swallowed by the decision-identifier rule above with no live-claim
+//               would still be swallowed by the decision-identifier rule below with no live-claim
 //               check ever applied to it; no such text exists in the tree today.
 //               A fourth construction, "Phase N skills"/"Phase N agents" (a project-phase label
 //               immediately followed by a plural component noun - e.g.
@@ -301,15 +309,20 @@ function pluralize(kind, n) {
 
 // Decision identifier: a reference-ID-shaped token immediately opening a
 // parenthetical ("D-05 (five shipped CLIs)"), a possessive-parenthetical
-// ("D-05's (Five Shipped CLIs)"), or a comma-appositive ("D-05, five shipped
-// CLIs,"). Deliberately case-sensitive (every reference ID in this
-// repository's convention is upper-case) and deliberately general rather
-// than a hardcoded ID list, so a future decision ID that also carries a
-// count-shaped handle is exempted with no code change here.
-const ID_HANDLE_OPEN_RE = /[A-Z]{1,8}-[A-Za-z0-9]{1,6}(?:'s)?\s*[(,]\s*$/;
+// ("D-05's (Five Shipped CLIs)"), a colon ("D-05: five shipped CLIs"), or a
+// comma-appositive ("D-05, five shipped CLIs,"). Deliberately case-sensitive
+// (every reference ID in this repository's convention is upper-case) and
+// deliberately general rather than a hardcoded ID list, so a future decision
+// ID that also carries a count-shaped handle is exempted with no code
+// change here. Tested against normalizeMarkdown's output (see below), so a
+// markdown-linked, backtick-wrapped, or emphasis-wrapped ID or handle is
+// recognized the same as a plain one.
+const ID_HANDLE_OPEN_RE = /[A-Z]{1,8}-[A-Za-z0-9]{1,6}(?:'s)?\s*[(,:]\s*$/;
 
-// "the other N CLIs" - see header comment: a bounded, deliberate scope gap,
-// not exemption-by-list. Case-insensitive: "other" can open a sentence.
+// "the other N CLIs" is a genuine live claim about the complement of the
+// subject (true value = trueCount - 1), not a total-count claim - checked
+// against that arithmetic below rather than skipped. See header comment.
+// Case-insensitive: "other" can open a sentence.
 const OTHER_PRECEDES_RE = /\bother\s+$/i;
 
 // "Phase N skills"/"Phase N agents" is a project-phase label immediately
@@ -324,27 +337,49 @@ const OTHER_PRECEDES_RE = /\bother\s+$/i;
 // a sentence.
 const PHASE_PRECEDES_RE = /\bphase\s+$/i;
 
-function isStructurallyExempt(precedingText) {
-  return ID_HANDLE_OPEN_RE.test(precedingText) ||
-    OTHER_PRECEDES_RE.test(precedingText) ||
-    PHASE_PRECEDES_RE.test(precedingText);
+// Markdown-syntax normalization applied to the preceding-text window before
+// any exemption regex above runs, so a formatting choice that does not
+// change what a human reader parses ("ID (handle)") does not defeat the
+// exemption either: a reference link is resolved to its label
+// ([D-05](url) -> D-05, this repository's own convention for citing a
+// reference ID), a backtick-wrapped ID is unwrapped, and bold/italic
+// emphasis markers around either the ID or the handle are stripped. Order
+// matters - the link is resolved first, so its own brackets are gone before
+// the emphasis strip runs. Applied to the whole joined previous-line/
+// current-line window; every regex above is end-anchored, so removing
+// formatting noise earlier in that window can only reveal a real match at
+// the tail, never manufacture a false one.
+function normalizeMarkdown(text) {
+  return text
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/`/g, '')
+    .replace(/\*+|_+/g, '');
+}
+
+function isFullyExempt(precedingText) {
+  return ID_HANDLE_OPEN_RE.test(precedingText) || PHASE_PRECEDES_RE.test(precedingText);
+}
+
+function isOtherPreceded(precedingText) {
+  return OTHER_PRECEDES_RE.test(precedingText);
 }
 
 // The portion of the CURRENT line strictly before a match start is joined
 // onto the previous line to build the text a structural exemption is tested
 // against (see below). In a source-code file that portion can begin with a
-// "//" line-comment marker when the exempt construction itself wraps across
-// two comment lines (a real instance: bin/ns-statusline's other-precedes-
-// the-count-phrase construction wraps its "the other" / "CLIs" pair across
-// exactly this kind of "//"-prefixed continuation line) - "//" is not
-// whitespace, so left unstripped it would break the end-anchored \s*$/\s+$
-// exemption regexes above even though the two lines form one continuous
-// sentence to a human reader. Only the leading marker is stripped (not
-// indentation in general), so a
-// markdown continuation line's leading spaces are untouched and still
-// consumed by \s*/\s+ as before.
+// line-comment marker - "//" in a .mjs file, "#" in a .yaml/.yml file (both
+// occur in this checker's own scan scope, e.g. agents/_chain-permitted.yaml)
+// - when the exempt construction itself wraps across two comment lines (a
+// real instance: bin/ns-statusline's other-precedes-the-count-phrase
+// construction wraps its "the other" / "CLIs" pair across a "//"-prefixed
+// continuation line). Neither marker is whitespace, so left unstripped
+// either would break the end-anchored exemption regexes above even though
+// the two lines form one continuous sentence to a human reader. Only the
+// leading marker is stripped (not indentation in general), so a markdown
+// continuation line's leading spaces are untouched and still consumed by
+// \s*/\s+ as before.
 function stripLeadingLineComment(prefixText) {
-  return prefixText.replace(/^(\s*)\/\/ ?/, '$1');
+  return prefixText.replace(/^(\s*)(?:\/\/|#)\s?/, '$1');
 }
 
 // ---------------------------------------------------------------------------
@@ -371,17 +406,22 @@ for (const rel of filesToScan) {
       const matchStart = m.index;
       const numberText = m[1];
       const nounText = m[2];
-      const precedingText = (i > 0 ? lines[i - 1] : '') + '\n' + stripLeadingLineComment(line.slice(0, matchStart));
+      const currentPrefix = stripLeadingLineComment(line.slice(0, matchStart));
+      const precedingText = normalizeMarkdown((i > 0 ? lines[i - 1] : '') + '\n' + currentPrefix);
 
-      if (!isStructurallyExempt(precedingText)) {
+      if (!isFullyExempt(precedingText)) {
         const kind = NOUN_KIND_BY_TEXT.get(nounText.toLowerCase());
         const claimed = resolveNumber(numberText);
         const trueCount = TRUE_COUNTS[kind];
-        if (claimed !== null && claimed !== trueCount) {
+        const other = isOtherPreceded(precedingText);
+        const expected = other ? trueCount - 1 : trueCount;
+        if (claimed !== null && claimed !== expected) {
+          const label = other ? 'other ' : '';
+          const totalNote = other ? ' (' + trueCount + ' ' + pluralize(kind, trueCount) + ' total)' : '';
           findings.push(
             rel + ':' + (i + 1) + ': stale component-count claim "' + m[0].trim() + '" - claims ' +
-            claimed + ' ' + pluralize(kind, claimed) + ' but the tree currently has ' +
-            trueCount + ' ' + pluralize(kind, trueCount)
+            claimed + ' ' + label + pluralize(kind, claimed) + ' but the tree currently has ' +
+            expected + ' ' + label + pluralize(kind, expected) + totalNote
           );
         }
       }
