@@ -5,7 +5,8 @@
 //               a gate report; exits 0 when score is below threshold, 1 when exceeded, 2 on error
 // why:          the CLI is the public surface; all logic lives in stylometry-engine.mjs so hooks
 //               and CI share the same computation path per S-07 section 4
-// usage:        ns-stylometry [--chapter=<slug>|--all] [--baseline=<path>] [--project=<dir>] [--json]
+// usage:        ns-stylometry [--chapter=<slug>|--all] [--baseline=<path>] [--measure=<path>[,<path>...]]
+//               [--project=<dir>] [--json] [--explain]
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
@@ -23,6 +24,7 @@ try {
   opts = parseArgs(process.argv.slice(2), [
     'chapter', 'all', 'baseline', 'project', 'json',
     { name: 'measure', type: 'list' },
+    { name: 'explain', type: 'boolean' },
   ]);
 } catch (err) {
   if (err.name === 'ArgsError') {
@@ -193,9 +195,13 @@ for (const absPath of chapterPaths) {
   chapterFiles.push(relative(root, absPath).replace(/\\/g, '/'));
 }
 
-// Zero-chapter edge case: no chapters means no drift.
+// Zero-chapter edge case: no chapters means no drift. There is no measured vector and no
+// score here, so --explain has nothing to rank; per the judgment call recorded in
+// docs/reference/cli/ns-stylometry.md, it states that reason rather than staying silent,
+// matching how this branch already speaks (not silently) when --explain is absent.
 if (chapterTexts.length === 0) {
   const driftScoreMax = (thresholds && thresholds.drift_score_max != null) ? thresholds.drift_score_max : DEFAULT_DRIFT_SCORE_MAX;
+  const NO_CHAPTERS_EXPLAIN_NOTE = 'no chapters to scan; nothing to explain';
   const outJson = {
     check: 'stylometry',
     verdict: 'pass',
@@ -204,6 +210,9 @@ if (chapterTexts.length === 0) {
     threshold: driftScoreMax,
     status: 'pass',
     markers: {},
+    explain: opts.explain
+      ? { budget: driftScoreMax, maxMarkerContribution: null, perMarker: [], note: NO_CHAPTERS_EXPLAIN_NOTE }
+      : undefined,
     chapters: [],
     findings: [],
     ts: new Date().toISOString(),
@@ -212,6 +221,9 @@ if (chapterTexts.length === 0) {
     process.stdout.write(JSON.stringify(outJson, null, 2) + '\n');
   } else {
     process.stdout.write('[stylometry] pass: no chapters to scan\n');
+    if (opts.explain) {
+      process.stdout.write('  ' + NO_CHAPTERS_EXPLAIN_NOTE + '\n');
+    }
   }
   process.exit(0);
 }
@@ -219,9 +231,9 @@ if (chapterTexts.length === 0) {
 // ---- measure and compute drift -------------------------------------------------
 
 const measured = measureBook(chapterTexts);
-let score, perMarker, exceeded;
+let score, perMarker, exceeded, maxMarkerContribution;
 try {
-  ({ score, perMarker, exceeded } = computeDrift(measured, baseline, thresholds));
+  ({ score, perMarker, exceeded, maxMarkerContribution } = computeDrift(measured, baseline, thresholds));
 } catch (err) {
   // Covers both a malformed baseline (missing .markers) and a stale
   // marker_set_version (StaleBaselineError names capture-voice as the remedy).
@@ -233,8 +245,17 @@ const driftScoreMax = (thresholds && thresholds.drift_score_max != null) ? thres
 const flaggedMarkers = perMarker.filter(m => m.flagged);
 
 // Exit code is determined solely by score vs threshold; gate mode is not read.
-// exit 0: score < threshold (passes), exit 1: score >= threshold (exceeded).
+// exit 0: score < threshold (passes), exit 1: score >= threshold (exceeded). --explain never
+// reads or changes this: it composes with the existing modes rather than replacing them.
 const exitCode = exceeded ? 1 : 0;
+
+// perMarker ordered by actual contribution to the score, largest first, so the marker that
+// drove the verdict is always named first -- a stable sort, so markers tied on contribution
+// keep the baseline's own declared order rather than an arbitrary one. Only built when
+// --explain is requested.
+const sortedForExplain = opts.explain
+  ? [...perMarker].sort((a, b) => b.contribution - a.contribution)
+  : null;
 
 // Build per-marker delta map for the JSON shape (S-07 section 4 stdout schema).
 // deviationPct is always the honest, uncapped value; capped records whether the
@@ -274,10 +295,73 @@ const outJson = {
   threshold: driftScoreMax,
   status: exceeded ? 'block' : 'pass',
   markers: markersObj,
+  // --explain surfaces data computeDrift already computed (contribution, maxMarkerContribution)
+  // but the pre-existing markers/findings shape above never carried: ordered by contribution
+  // descending, so the marker that drove the verdict is first. Present only when the flag is
+  // passed -- JSON.stringify drops an undefined-valued key, so a consumer who never asks for
+  // --explain sees byte-for-byte the same shape this CLI produced before this flag existed.
+  explain: opts.explain
+    ? {
+      budget: driftScoreMax,
+      maxMarkerContribution,
+      perMarker: sortedForExplain.map(m => ({
+        marker: m.marker,
+        baseline: m.baseline,
+        measured: m.measured,
+        deviationPct: m.deviationPct,
+        contribution: m.contribution,
+        capped: m.capped,
+        flagged: m.flagged,
+      })),
+    }
+    : undefined,
   chapters: chapterFiles,
   findings,
   ts: new Date().toISOString(),
 };
+
+// ---- explain rendering (text mode) ----------------------------------------------
+
+/**
+ * Renders the full per-marker breakdown for --explain's text output: every marker's baseline,
+ * measured value, honest deviation, actual contribution, and whether the per-marker bound was
+ * binding, ordered by contribution descending (sortedMarkers is pre-sorted by the caller) so the
+ * driver of the score reads first. This is presentation only -- every number it prints already
+ * came out of computeDrift; nothing here re-derives or re-measures anything.
+ *
+ * Formatting matches hooks/lib/statusline-engine.mjs's own convention for deterministic output:
+ * toFixed plus string concatenation, never toLocaleString or any other locale-sensitive
+ * formatting, so this line is byte-identical on the Ubuntu and Windows CI legs.
+ *
+ * @param {object[]} sortedMarkers - perMarker records, already sorted by contribution descending
+ * @param {number} maxMarkerContribution - the per-marker bound in absolute terms
+ * @returns {string} multi-line text, newline-terminated
+ */
+function renderExplainText(sortedMarkers, maxMarkerContribution) {
+  if (sortedMarkers.length === 0) return '  nothing to explain: no markers were measured\n';
+
+  const top = sortedMarkers[0];
+  const topBoundNote = top.capped
+    ? ' (bound was binding; honest deviation is ' + top.deviationPct.toFixed(2) + '%)'
+    : '';
+  let out = 'Top driver: ' + top.marker + ', contributing ' + top.contribution.toFixed(2) + topBoundNote + '\n';
+  out += '\nMarkers ranked by contribution to the score (largest first):\n';
+
+  const nameWidth = Math.max(...sortedMarkers.map(m => m.marker.length));
+  for (const m of sortedMarkers) {
+    const boundNote = m.capped
+      ? 'bound was binding (max ' + maxMarkerContribution.toFixed(2) + ')'
+      : 'bound not binding';
+    out +=
+      '  ' + m.marker.padEnd(nameWidth + 1) +
+      ' contribution ' + m.contribution.toFixed(2).padStart(6) +
+      '  deviation ' + (m.deviationPct.toFixed(2) + '%').padStart(8) +
+      '  baseline ' + m.baseline.toFixed(4) +
+      '  measured ' + m.measured.toFixed(4) +
+      '  ' + boundNote + '\n';
+  }
+  return out;
+}
 
 // ---- emit ----------------------------------------------------------------------
 
@@ -290,15 +374,22 @@ if (opts.json) {
     process.stdout.write(
       prefix + ' pass: drift score ' + scoreStr + ' < threshold ' + driftScoreMax + '\n'
     );
+    if (opts.explain) {
+      process.stdout.write(renderExplainText(sortedForExplain, maxMarkerContribution));
+    }
   } else {
     process.stdout.write(
       prefix + ' drift score ' + scoreStr + ' exceeds threshold ' + driftScoreMax + '\n'
     );
-    for (const m of flaggedMarkers) {
-      process.stdout.write(
-        '  [' + m.marker + '] deviation ' + m.deviationPct.toFixed(2) +
-        '% (baseline=' + m.baseline.toFixed(4) + ' measured=' + m.measured.toFixed(4) + ')\n'
-      );
+    if (opts.explain) {
+      process.stdout.write(renderExplainText(sortedForExplain, maxMarkerContribution));
+    } else {
+      for (const m of flaggedMarkers) {
+        process.stdout.write(
+          '  [' + m.marker + '] deviation ' + m.deviationPct.toFixed(2) +
+          '% (baseline=' + m.baseline.toFixed(4) + ' measured=' + m.measured.toFixed(4) + ')\n'
+        );
+      }
     }
   }
 }

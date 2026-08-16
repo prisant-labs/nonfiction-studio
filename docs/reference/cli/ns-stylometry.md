@@ -31,6 +31,14 @@ number, and each entry also reports whether the cap was binding for that marker.
 Markers that deviate beyond the per-marker tolerance are flagged individually in the
 output (flagging uses the honest deviation, not the capped contribution).
 
+The flag output above states the score but not why it is what it is: with eight markers
+each capped independently, a score can be dominated by a bound the reader cannot see, and
+a marker can deviate enormously while contributing a fixed, much smaller amount. `--explain`
+renders the same data computeDrift already computes -- every marker's baseline, measured
+value, honest deviation, and actual contribution, plus whether the per-marker bound was
+binding for it -- ordered by contribution descending, so the marker that drove the verdict
+is named first. See Output, below, for real examples.
+
 The `voice-drift` fixture is designed so the passive impersonal register that replaces
 first-person and second-person address moves several markers at once: first-person rate
 drops to zero, second-person rate and contraction rate shift sharply, and sentence
@@ -43,7 +51,7 @@ drift score past its threshold of 20, per the 2026-07-18 reconciliation at TSK-0
 ## Invocation
 
 ```
-ns-stylometry [--chapter=<slug>] [--all] [--baseline=<path>] [--measure=<path>[,<path>...]] [--project=<dir>] [--json]
+ns-stylometry [--chapter=<slug>] [--all] [--baseline=<path>] [--measure=<path>[,<path>...]] [--project=<dir>] [--json] [--explain]
 ```
 
 ## Windows invocation
@@ -53,7 +61,7 @@ system does not add `bin/` to PATH (ADR-0005, bin PATH on Windows). Hook, skill,
 and agent contexts must resolve the plugin root first, then invoke:
 
 ```
-node "<plugin-root>/bin/ns-stylometry" [--chapter=<slug>] [--all] [--baseline=<path>] [--measure=<path>[,<path>...]] [--project=<dir>] [--json]
+node "<plugin-root>/bin/ns-stylometry" [--chapter=<slug>] [--all] [--baseline=<path>] [--measure=<path>[,<path>...]] [--project=<dir>] [--json] [--explain]
 ```
 
 where `<plugin-root>` is the resolved plugin installation path. Direct
@@ -70,6 +78,7 @@ or use the same `node` plus full-path form.
 | `--measure=<path>[,<path>...]` | list | Measure mode: compute and print the raw vector for the given files without consulting a baseline; JSON output only; exits 0. Used by `voice-capture` to build a new baseline. |
 | `--project=<dir>` | string | Override the book root to `<dir>`. |
 | `--json` | boolean | Emit the full drift report as JSON to stdout. |
+| `--explain` | boolean | Render every marker's baseline, measured value, honest deviation, actual contribution, and whether the per-marker bound was binding, ordered by contribution descending. Composes with both the human-readable and `--json` modes (see Output, below) rather than replacing either one; writes nothing to disk. |
 
 ## Exit taxonomy
 
@@ -79,6 +88,11 @@ or use the same `node` plus full-path form.
 | 1 | Drift score at or above threshold; per-marker flags identify which markers drove the score |
 | 2 | Missing baseline, stale baseline (`marker_set_version` does not match the engine's current version -- run `capture-voice` to recapture it), missing chapters directory, invalid `--measure` argument, or operational error |
 
+`--explain` never changes this taxonomy: it only adds detail to whichever exit code the run
+already produces. A run with `--explain` and the same run without it always exit with the
+same code for the same input, including on the exit-2 operational-error paths, where
+`--explain` is never reached at all.
+
 ## Output
 
 Human-readable pass:
@@ -87,17 +101,112 @@ Human-readable pass:
 [stylometry] pass: drift score 2.34 < threshold 25
 ```
 
-Human-readable failure:
+Human-readable failure (`ns-stylometry --all` against the `voice-drift` fixture; pasted from
+the same real run as the `--explain` example below, so the two are directly comparable):
 
 ```
-[stylometry] drift score 28.41 exceeds threshold 20
-  [first_person_rate] deviation 87.32% (baseline=0.2262 measured=0.0289)
+[stylometry] drift score 28.49 exceeds threshold 20
+  [contraction_rate] deviation 49.75% (baseline=0.0299 measured=0.0448)
+  [first_person_rate] deviation 100.00% (baseline=0.2262 measured=0.0000)
+  [second_person_rate] deviation 48.47% (baseline=3.3937 measured=1.7486)
+  [avg_sentence_length] deviation 3.51% (baseline=13.1940 measured=13.6567)
+  [punctuation_rate] deviation 3.39% (baseline=13.0090 measured=12.5683)
 ```
 
 JSON output (with `--json`) follows the S-08 drift-report shape with `verdict`, `driftScore`,
 `threshold`, `markers` (per-marker baseline/measured/deviationPct/capped/flagged), `chapters`,
 `findings`, and `ts` fields. `capped` records whether the per-marker contribution bound was
 binding for that marker; `deviationPct` is always the honest, uncapped number regardless.
+A consumer who never passes `--explain` sees exactly this shape, unchanged -- no `explain`
+key is present at all, not an empty or null one.
+
+### `--explain` output
+
+`--explain` composes with both the human-readable and `--json` modes rather than replacing
+either one, and never changes the exit code. It writes nothing to disk. The two real runs
+below are pasted verbatim from a scratch copy of the shipped fixtures, not hand-authored.
+
+Human-readable, a passing chapter (`ns-stylometry --chapter=01-listening-before-speaking
+--explain` against the sample book's own chapter 1, no marker capped at this budget):
+
+```
+[stylometry] pass: drift score 10.86 < threshold 25
+Top driver: second_person_rate, contributing 6.57
+
+Markers ranked by contribution to the score (largest first):
+  second_person_rate   contribution   6.57  deviation    6.57%  baseline 2.8436  measured 3.0303  bound not binding
+  type_token_ratio     contribution   2.30  deviation    2.30%  baseline 0.7329  measured 0.7498  bound not binding
+  avg_word_length      contribution   1.02  deviation    1.02%  baseline 5.0095  measured 4.9583  bound not binding
+  function_word_rate   contribution   0.69  deviation    0.69%  baseline 0.4882  measured 0.4848  bound not binding
+  first_person_rate    contribution   0.10  deviation    0.10%  baseline 0.7583  measured 0.7576  bound not binding
+  avg_sentence_length  contribution   0.09  deviation    0.09%  baseline 13.1875  measured 13.2000  bound not binding
+  punctuation_rate     contribution   0.09  deviation    0.09%  baseline 13.2701  measured 13.2576  bound not binding
+  contraction_rate     contribution   0.00  deviation    0.00%  baseline 0.1250  measured 0.1250  bound not binding
+```
+
+Human-readable, a blocking book (`ns-stylometry --all --explain` against the `voice-drift`
+fixture, three markers pinned at the per-marker bound):
+
+```
+[stylometry] drift score 28.49 exceeds threshold 20
+Top driver: contraction_rate, contributing 6.67 (bound was binding; honest deviation is 49.75%)
+
+Markers ranked by contribution to the score (largest first):
+  contraction_rate     contribution   6.67  deviation   49.75%  baseline 0.0299  measured 0.0448  bound was binding (max 6.67)
+  first_person_rate    contribution   6.67  deviation  100.00%  baseline 0.2262  measured 0.0000  bound was binding (max 6.67)
+  second_person_rate   contribution   6.67  deviation   48.47%  baseline 3.3937  measured 1.7486  bound was binding (max 6.67)
+  avg_sentence_length  contribution   3.51  deviation    3.51%  baseline 13.1940  measured 13.6567  bound not binding
+  punctuation_rate     contribution   3.39  deviation    3.39%  baseline 13.0090  measured 12.5683  bound not binding
+  function_word_rate   contribution   0.79  deviation    0.79%  baseline 0.4717  measured 0.4754  bound not binding
+  avg_word_length      contribution   0.70  deviation    0.70%  baseline 5.1923  measured 5.2284  bound not binding
+  type_token_ratio     contribution   0.11  deviation    0.11%  baseline 0.7516  measured 0.7525  bound not binding
+```
+
+`first_person_rate` is the clearest case of the opacity this flag exists to close: its
+honest deviation is 100.00%, but the bound (one third of this fixture's 20-point budget,
+6.67) is binding, so it contributes the same 6.67 points as the other two capped markers --
+a fact the pre-`--explain` output never stated, leaving a reader to notice it only by
+comparing two numbers that disagree.
+
+With `--json --explain` together, the JSON output above gains one additional top-level key,
+`explain`, positioned after `markers`:
+
+```json
+"explain": {
+  "budget": 20,
+  "maxMarkerContribution": 6.666666666666667,
+  "perMarker": [
+    {
+      "marker": "contraction_rate",
+      "baseline": 0.0299,
+      "measured": 0.04477611940298507,
+      "deviationPct": 49.75290770229122,
+      "contribution": 6.666666666666667,
+      "capped": true,
+      "flagged": true
+    }
+  ]
+}
+```
+
+`budget` is the same value as the top-level `threshold` field, repeated here so the explain
+block is self-contained. `maxMarkerContribution` is the per-marker bound in absolute terms
+(`budget` divided by the engine's internal divisor, currently 3 -- read from the engine's
+own computation, never a literal in the CLI). `perMarker` carries every marker from `markers`
+again, this time ordered by `contribution` descending and including `contribution` itself,
+which the plain `markers` object does not.
+
+When there are no chapters to scan, there is no measured vector and nothing to rank.
+`--explain` states that rather than staying silent, matching how this CLI already speaks
+(not silently) in the same branch without the flag:
+
+```
+[stylometry] pass: no chapters to scan
+  no chapters to scan; nothing to explain
+```
+
+and, with `--json --explain` together, `explain.perMarker` is an empty array and
+`explain.note` carries the same stated reason as a string.
 
 ## Eight-marker vector
 
