@@ -1,10 +1,13 @@
 // scripts/test-fixtures.mjs
 // what-it-is:   bidirectional fixture matrix runner
-// what-it-does: runs the golden fixture and the four planted-bad fixtures through the
-//               five engine CLIs (ns-claims, ns-stylometry, ns-scrub, ns-doctor, ns-gate)
-//               using TEMP CLONES ONLY so committed fixture files are never modified; asserts
-//               each engine exits at the code declared in Q-01 section 1.2 (corrected tables,
-//               dated 2026-07-18); asserts the committed tree is clean after all runs complete.
+// what-it-does: runs the golden fixture and the four planted-bad fixtures through the five
+//               bidirectional engine CLIs (ns-claims, ns-stylometry, ns-scrub, ns-doctor,
+//               ns-gate); the golden fixture alone also runs ns-notes and ns-status (seven
+//               engine CLIs total; see the MATRIX comments below for why those two carry no
+//               planted-bad row) using TEMP CLONES ONLY so committed fixture files are never
+//               modified; asserts each engine exits at the code declared in Q-01 section 1.2
+//               (corrected tables, dated 2026-07-18); asserts the committed tree is clean
+//               after all runs complete.
 // why:          Q-02 1.2 fixture-tests step; bidirectionality confirms checkers fire on
 //               known-bad input and pass on known-good; temp-clone discipline is the
 //               queued residue-hygiene decision codified as a gate.

@@ -1,7 +1,7 @@
 // what-it-is:   the uniform CLI flag parser for all seven engine CLIs
 // what-it-does: parses process.argv against a declared flag spec and returns a normalized options object;
 //               unknown flags produce a typed exit-2 error with a usage hint
-// why:          all seven engine CLIs share the same S-07 flag families; one parser keeps the contract uniform
+// why:          all seven engine CLIs share the same S-07 (hooks and scripts) flag families; one parser keeps the contract uniform
 //               and ensures every CLI exits 2 on bad arguments with the same message shape
 // used-by:      imported by bin/ns-gate, bin/ns-claims, bin/ns-stylometry, bin/ns-scrub, bin/ns-doctor, bin/ns-notes, bin/ns-status
 
