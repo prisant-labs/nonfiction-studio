@@ -1,7 +1,7 @@
 // tests/hooks/stop-gate.test.mjs
 // what-it-is:   behaviour tests for hooks/stop-gate.mjs (TSK-034)
 // what-it-does: spawns the real script with crafted snake_case Stop events against temp clones
-//               of the sample-book and broken fixtures, covering eleven cases; never mutates
+//               of the sample-book and broken fixtures, covering thirteen cases; never mutates
 //               committed fixtures
 // runner:       node --test "tests/hooks/*.test.mjs"
 //
@@ -10,10 +10,14 @@
 //   (b) flag absent: exit 0, empty stdout, no last-gate.json change
 //   (c) golden clone + flag: pass path, empty stdout, last-gate.json byte-identical to newest
 //       timestamped report, flag consumed
+//   (c2) Stop-hook-driven gate report includes quote_fidelity (derived check list, not a
+//       second hardcoded one)
 //   (d) block-mode ai-injection clone + flag: block decision JSON, hook exit 0, last-gate
 //       written, flag consumed
 //   (e) warn-mode ai-injection clone (default config) + flag: additionalContext warn summary
 //   (f) corrupt-config clone + flag: one errors.jsonl line, one-line additionalContext, exit 0
+//   (f2) two simultaneous engine errors + flag: additionalContext stays one line, checks
+//       joined with "; " rather than a newline
 //   (g) second event with stop_hook_active true after (c)-style run: last-gate.json unchanged
 //   (h) no book root: exit 0, empty stdout
 //   (i) malformed stdin: exit 0, empty stdout
@@ -429,6 +433,63 @@ test('(f) missing-baseline config + flag: one errors.jsonl line, one-line additi
   );
   // No block decision on error path
   assert.ok(hookOut.decision === undefined, 'exit-2 path does not set decision field');
+});
+
+// ---------------------------------------------------------------------------
+// (f2) two simultaneous engine errors + flag: additionalContext stays one line, joined
+// with "; ", not "\n" -- regression guard for the join-separator fix.
+//
+// Approach: replace research/evidence-log.md with a directory of the same name.
+// existsSync sees it as present, so both claim_coverage and quote_fidelity (each
+// independently calling readFileSync on that same path per hooks/lib/gate-engine.mjs)
+// throw EISDIR, giving two simultaneous "engine error: " check entries in one gate run.
+// Test (f) above can only ever exercise the one-check case, because
+// Array.prototype.join never inserts a separator for a single-element array; this is
+// the case where a "\n" join would have silently broken the file's own documented
+// one-line-additionalContext contract on the exit-2 path.
+// ---------------------------------------------------------------------------
+test('(f2) two simultaneous engine errors + flag: additionalContext stays one line, joined with "; "', () => {
+  const book = cloneSampleBook('f2');
+  setFlag(book);
+
+  const ledgerPath = join(book, 'research', 'evidence-log.md');
+  unlinkSync(ledgerPath);
+  mkdirSync(ledgerPath);
+
+  const result = runHook(makeStopEvent(book));
+
+  assert.strictEqual(result.status, 0, 'hook exits 0 on gate error (fail-open)');
+
+  let out;
+  try {
+    out = JSON.parse(result.stdout.trim());
+  } catch {
+    assert.fail('stdout is not valid JSON: ' + result.stdout);
+  }
+
+  const hookOut = out.hookSpecificOutput;
+  assert.ok(hookOut, 'hookSpecificOutput present');
+  const detail = hookOut.additionalContext;
+  assert.ok(
+    typeof detail === 'string' && detail.includes('Gate error'),
+    'additionalContext mentions "Gate error"; got: ' + detail
+  );
+
+  // Both erroring checks named, proving the fallback read the report (stderr is
+  // empty on this path, same as test (f)) rather than falling through to the
+  // generic exit-code line.
+  assert.ok(detail.includes('claim_coverage'), 'names claim_coverage; got: ' + detail);
+  assert.ok(detail.includes('quote_fidelity'), 'names quote_fidelity; got: ' + detail);
+
+  // The regression this test exists to catch.
+  assert.ok(
+    !detail.includes('\n'),
+    'additionalContext is a single line even with two erroring checks; got: ' + detail
+  );
+  assert.ok(
+    detail.includes('; '),
+    'two erroring checks are joined with "; "; got: ' + detail
+  );
 });
 
 // ---------------------------------------------------------------------------

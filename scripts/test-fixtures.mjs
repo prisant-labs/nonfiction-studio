@@ -1,10 +1,13 @@
 // scripts/test-fixtures.mjs
 // what-it-is:   bidirectional fixture matrix runner
-// what-it-does: runs the golden fixture and the four planted-bad fixtures through the
-//               five engine CLIs (ns-claims, ns-stylometry, ns-scrub, ns-doctor, ns-gate)
-//               using TEMP CLONES ONLY so committed fixture files are never modified; asserts
-//               each engine exits at the code declared in Q-01 section 1.2 (corrected tables,
-//               dated 2026-07-18); asserts the committed tree is clean after all runs complete.
+// what-it-does: runs the golden fixture and the four planted-bad fixtures through the five
+//               bidirectional engine CLIs (ns-claims, ns-stylometry, ns-scrub, ns-doctor,
+//               ns-gate); the golden fixture alone also runs ns-notes and ns-status (seven
+//               engine CLIs total; see the MATRIX comments below for why those two carry no
+//               planted-bad row) using TEMP CLONES ONLY so committed fixture files are never
+//               modified; asserts each engine exits at the code declared in Q-01 section 1.2
+//               (corrected tables, dated 2026-07-18); asserts the committed tree is clean
+//               after all runs complete.
 // why:          Q-02 1.2 fixture-tests step; bidirectionality confirms checkers fire on
 //               known-bad input and pass on known-good; temp-clone discipline is the
 //               queued residue-hygiene decision codified as a gate.
@@ -32,6 +35,7 @@ const NS_SCRUB = join(BIN, 'ns-scrub');
 const NS_DOCTOR = join(BIN, 'ns-doctor');
 const NS_GATE = join(BIN, 'ns-gate');
 const NS_NOTES = join(BIN, 'ns-notes');
+const NS_STATUS = join(BIN, 'ns-status');
 
 // ---------------------------------------------------------------------------
 // Fixture source directories (committed; never modified)
@@ -71,6 +75,13 @@ const MATRIX = [
       // the run leaves no residue; tests/engines/notes-cli.test.mjs is the more detailed,
       // dedicated proof of exit-code mapping and byte-identical regeneration.
       { engine: NS_NOTES, args: [], expected: 1 },
+      // ns-status is read-only and has no findings-based exit code (only 0 on success or 2 on
+      // an operational error); the golden book is a well-formed project, so it always exits 0.
+      // This proves the CLI runs end to end against the real committed progress.json,
+      // config.json, and .studio/gate/ report via the shared temp-clone harness; the dedicated,
+      // more detailed proof of the read-only and determinism guarantees is
+      // tests/engines/status-cli.test.mjs.
+      { engine: NS_STATUS, args: [], expected: 0 },
     ],
   },
   {

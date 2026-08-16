@@ -260,6 +260,63 @@ test('T05: voice-drift block clone: exit 1; stylometry block; drift-threshold in
   }
 });
 
+// ---- WORDING CONTRACT: stylometry detail phrasing, pinned at the writer -------
+// hooks/lib/status-engine.mjs (the ns-status engine) recovers the numeric drift score
+// by parsing this exact detail string, because the shipped gate-report shape carries
+// no structured numeric field for it (docs/formats/gate-report.md). T05 above already
+// pins the exceeds-case wording LOOSELY (a bare number followed by "exceeds threshold
+// N", not requiring the words "drift" or "score"), and the pass-case wording - the
+// common case, since most chapters pass - was pinned by no test anywhere before this
+// pair. These two tests pin the LITERAL phrasing this engine emits for both cases,
+// against real spawned ns-gate output (never a synthetic string), so a future
+// rewording fails loudly here at the writer instead of silently degrading every
+// reader to null.
+
+test('WORDING CONTRACT: stylometry pass-case detail literally reads "drift score N.NN within threshold N"', () => {
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    const result = spawnGate(tmp, ['--json']);
+    assert.strictEqual(result.status, 0,
+      'golden book warn mode must exit 0; stderr: ' + result.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    const styloEntry = report.checks.find(c => c.check === 'stylometry');
+    assert.ok(styloEntry, 'stylometry check must be present in report');
+    assert.strictEqual(styloEntry.verdict, 'pass', 'stylometry must pass on the golden book');
+
+    assert.match(
+      styloEntry.detail,
+      /^drift score \d+\.\d{2} within threshold \d+(?:\.\d+)?$/,
+      'pass-case detail must literally read "drift score N.NN within threshold N"; got: ' + styloEntry.detail
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('WORDING CONTRACT: stylometry exceeds-case detail literally reads "drift score N.NN exceeds threshold N; stylometry.drift-threshold"', () => {
+  const tmp = makeTempClone(join(EXAMPLES, 'fixtures', 'voice-drift'));
+  try {
+    writeBlockConfig(tmp);
+    const result = spawnGate(tmp, ['--json']);
+    assert.strictEqual(result.status, 1,
+      'voice-drift block mode must exit 1; stderr: ' + result.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    const styloEntry = report.checks.find(c => c.check === 'stylometry');
+    assert.ok(styloEntry, 'stylometry check must be present in report');
+    assert.strictEqual(styloEntry.verdict, 'block', 'stylometry must block on the voice-drift fixture');
+
+    assert.match(
+      styloEntry.detail,
+      /^drift score \d+\.\d{2} exceeds threshold \d+(?:\.\d+)?; stylometry\.drift-threshold$/,
+      'exceeds-case detail must literally read "drift score N.NN exceeds threshold N; stylometry.drift-threshold"; got: ' + styloEntry.detail
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 // ---- T06: ai-injection block clone --------------------------------------------
 
 test('T06: ai-injection block clone: exit 1; prompt_scrub block; injection.pattern-match; file+line evidence', () => {

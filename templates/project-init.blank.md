@@ -94,7 +94,7 @@ confirmed brief, not a drafted chapter.
         Maps to: gate.checks.claim_coverage.mode
 
     [ ] Voice drift - prose stays within the style-profile baseline
-        Max drift score 0-100 (default 35, lower is stricter): ___
+        Max drift score 0-100 (default 25, lower is stricter): ___
         Maps to: thresholds.drift_score_max
 
     [ ] Prompt scrub - no confidential or legally sensitive material in the chapter

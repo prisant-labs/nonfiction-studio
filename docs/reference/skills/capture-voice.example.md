@@ -100,32 +100,33 @@ The agent reads `context/brief.md` section 6, analyzes the three samples against
 node "<plugin-root>/bin/ns-stylometry" --measure=<sample-paths>
 ```
 
-The engine prints the eight-marker vector to stdout. The agent reads the output:
+The engine prints the eight-marker vector to stdout, alongside a `marker_set_version` number. The agent reads the output:
 ```json
 {
   "markers": {
     "function_word_rate": 0.4717,
     "contraction_rate": 0.0299,
-    "first_person_rate": 0.2268,
-    "second_person_rate": 3.4014,
-    "type_token_ratio": 0.4558,
-    "avg_word_length": 5.2041,
-    "avg_sentence_length": 13.1642,
+    "first_person_rate": 0.2262,
+    "second_person_rate": 3.3937,
+    "type_token_ratio": 0.7516,
+    "avg_word_length": 5.1923,
+    "avg_sentence_length": 13.1940,
     "punctuation_rate": 13.0090
-  }
+  },
+  "marker_set_version": 2
 }
 ```
 
 The agent drafts the eleven-field profile in `context/style-profile.md` and presents it for author review. The author confirms. The agent writes:
 
 1. `context/style-profile.md` (the confirmed eleven-field profile, `bootstrapped: false`)
-2. `.studio/config.json` (the `stylometry.baseline.markers` block written via read-modify-write; no other config fields are touched)
+2. `.studio/config.json` (the `stylometry.baseline.markers` block AND `stylometry.baseline.marker_set_version` written via read-modify-write; no other config fields are touched)
 
 **Studio (Step 4 - Confirm output files):**
 
 The skill uses the Read tool on `context/style-profile.md`. The file is present with all eleven fields populated and `bootstrapped: false`.
 
-The skill uses the Read tool on `.studio/config.json`. The `stylometry.baseline.markers` key is present with all eight markers.
+The skill uses the Read tool on `.studio/config.json`. The `stylometry.baseline.markers` key is present with all eight markers, and `stylometry.baseline.marker_set_version` is present.
 
 Both checks pass. The skill continues to Step 5.
 
@@ -154,7 +155,7 @@ Using the marker values already in the `.studio/config.json` read in Step 4:
 
 - **Existing-profile check is a tool call.** The Bash call on `context/style-profile.md` determines whether an existing profile is present before any other work begins.
 - **Word-count check is a tool call.** The Bash count of submitted words (1,247 in this run) determines the processing band; no prose estimate is made.
-- **The agent writes both files; the skill writes neither.** `context/style-profile.md` and the `stylometry.baseline.markers` block in `config.json` are written by the `voice-capture` agent only after the author confirms the draft profile.
+- **The agent writes both files; the skill writes neither.** `context/style-profile.md` and the `stylometry.baseline.markers` and `stylometry.baseline.marker_set_version` fields in `config.json` are written by the `voice-capture` agent only after the author confirms the draft profile.
 - **No `.studio/progress.json` write.** The captured signal is the presence of `context/style-profile.md` on disk per D-06 (single-writer state discipline); no secondary status field is set.
 - **Confirmation before commit.** Neither output file is written until the author explicitly confirms the draft profile in the agent session.
 - **Read checks are mandatory.** The skill reads both files after the agent completes. Only when both pass does the skill continue to the preview.

@@ -12,7 +12,7 @@ The `capture-voice` skill is the studio's voice-capture front door. It collects 
 
 ## Purpose
 
-`capture-voice` builds the author's stylometric voice baseline: the numeric anchor the drift scorer uses to detect when a drafted chapter has moved away from the author's natural style. The baseline is stored in two places: `context/style-profile.md` (the eleven-field human-readable profile the author can edit directly) and `.studio/config.json` (the `stylometry.baseline.markers` block the CLI tools read).
+`capture-voice` builds the author's stylometric voice baseline: the numeric anchor the drift scorer uses to detect when a drafted chapter has moved away from the author's natural style. The baseline is stored in two places: `context/style-profile.md` (the eleven-field human-readable profile the author can edit directly) and `.studio/config.json` (the `stylometry.baseline.markers` block the CLI tools read, alongside `stylometry.baseline.marker_set_version`, which the drift scorer checks before trusting the markers).
 
 The skill handles three entry conditions:
 
@@ -50,7 +50,7 @@ All outputs are written by the `voice-capture` agent, not by the skill directly.
 | Path | Written | Contents |
 |---|---|---|
 | `context/style-profile.md` | After author confirmation in agent session | Eleven-field voice profile: tone, diction, rhythm, POV, tense, do list, do-not list, banned tics, exemplar passages, narrator voice note, bootstrapped flag |
-| `.studio/config.json` | Alongside the profile | `stylometry.baseline.markers` block: the eight-marker vector printed by `bin/ns-stylometry --measure` |
+| `.studio/config.json` | Alongside the profile | `stylometry.baseline.markers` block AND `stylometry.baseline.marker_set_version` number, both printed by `bin/ns-stylometry --measure` |
 
 The skill writes no `.studio/` state. The captured signal is the presence of a non-empty `context/style-profile.md` on disk; no secondary status field is needed per D-06 (single-writer state discipline).
 
@@ -62,7 +62,7 @@ The skill runs six steps in order.
 
 2. **Sample collection and word-count assessment.** Asks the author to paste samples. If no samples are provided, offers the bootstrap path and delegates to the agent with a Path B signal. If samples are submitted, uses a Bash tool call to count the total words and branches: fewer than 500 requests more; 500 to 999 proceeds with a stated caution; 1,000 or more proceeds without a caution.
 
-3. **Delegate to the voice-capture agent.** Reads `context/brief.md`, then spawns the `voice-capture` agent (the `capture-voice -> voice-capture` chain edge) with the samples, the brief content, and the word-count band. The agent runs `bin/ns-stylometry --measure`, reads the vector from stdout, writes `context/style-profile.md`, and writes the baseline markers into `.studio/config.json`.
+3. **Delegate to the voice-capture agent.** Reads `context/brief.md`, then spawns the `voice-capture` agent (the `capture-voice -> voice-capture` chain edge) with the samples, the brief content, and the word-count band. The agent runs `bin/ns-stylometry --measure`, reads the vector and the `marker_set_version` number from stdout, writes `context/style-profile.md`, and writes the baseline markers and marker_set_version into `.studio/config.json`.
 
 4. **Confirm output files.** Uses the Read tool on `context/style-profile.md` and `.studio/config.json` to confirm both files are present and contain the expected content. Halts and reports clearly if either is missing.
 

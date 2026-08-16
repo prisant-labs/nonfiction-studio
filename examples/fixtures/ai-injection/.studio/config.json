@@ -12,7 +12,7 @@
     }
   },
   "thresholds": {
-    "drift_score_max": 35,
+    "drift_score_max": 25,
     "claim_coverage_min": 1.0,
     "stylometry_marker_tolerance": 2.0
   },
@@ -26,16 +26,17 @@
     "baseline": {
       "captured": "2026-07-18T09:00:00Z",
       "sample_count": 2,
-      "method": "word-tokenized prose from chapters/01 and chapters/02 combined; markers and headings stripped",
+      "marker_set_version": 2,
+      "method": "word-tokenized prose from the TSK-019 golden two-chapter text (chapters/01-listening-before-speaking.md and chapters/02-finding-your-network.md as originally committed, before this fixture's own planted prompt-injection content); markers and headings stripped. Re-captured under the corrected engine (roadmap row 1.7, voice registers) with type_token_ratio as a moving average over 100-token windows. This fixture's own committed chapter 1 is NOT the measurement source for this baseline, because it carries the planted injection content (see PLANTED.md); the baseline represents the pre-injection golden voice this fixture's other checks are measured against. This recapture also supersedes the un-reconciled TSK-019 function_word_rate and punctuation_rate this baseline previously carried.",
       "markers": {
-        "function_word_rate": 0.4501,
+        "function_word_rate": 0.4717,
         "contraction_rate": 0.0299,
-        "first_person_rate": 0.2268,
-        "second_person_rate": 3.4014,
-        "type_token_ratio": 0.4558,
-        "avg_word_length": 5.2041,
-        "avg_sentence_length": 13.1642,
-        "punctuation_rate": 13.1519
+        "first_person_rate": 0.2262,
+        "second_person_rate": 3.3937,
+        "type_token_ratio": 0.7516,
+        "avg_word_length": 5.1923,
+        "avg_sentence_length": 13.1940,
+        "punctuation_rate": 13.0090
       }
     }
   },

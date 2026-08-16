@@ -93,10 +93,19 @@ jobs:
       - name: Workspace reference guard
         run: node scripts/checks/check-workspace-refs.mjs
 
-      # Live step 12: engine, lib, hook, and schema unit test suites (no API key required).
+      # Live step 12: skill-to-CLI routing-target resolution check (F-CI-07) - asserts every
+      # bin/ns-<name> a skill names as its routing target is actually shipped under bin/. This
+      # step is this checker's only proof of its git-tracked code path: the Checkout action
+      # above leaves .git present, exactly like the plugin-root, self-sufficiency, inventory,
+      # and workspace-reference steps above it; the test suite exercises only the degraded
+      # filesystem-walk fallback, by design, since its fixtures never carry .git.
+      - name: Skill CLI routing targets
+        run: node scripts/checks/check-skill-cli-targets.mjs
+
+      # Live step 13: engine, lib, hook, and schema unit test suites (no API key required).
       - name: Engine unit tests
         run: node scripts/test-engines.mjs
 
-      # Live step 13: bidirectional fixture matrix with temp-clone discipline.
+      # Live step 14: bidirectional fixture matrix with temp-clone discipline.
       - name: Fixture tests
         run: node scripts/test-fixtures.mjs

@@ -11,7 +11,10 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
 import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
-import { measureChapter, measureBook, computeDrift, countWords } from '../hooks/lib/stylometry-engine.mjs';
+import {
+  measureChapter, measureBook, computeDrift, countWords, CURRENT_MARKER_SET_VERSION,
+  DEFAULT_DRIFT_SCORE_MAX,
+} from '../hooks/lib/stylometry-engine.mjs';
 
 // ---- arg parsing ---------------------------------------------------------------
 
@@ -33,6 +36,12 @@ try {
 // usage: ns-stylometry --measure=<path>[,<path>...]
 // single file: measureChapter; multiple files: measureBook (aggregated counts before ratios).
 // JSON implied; exit 0 on success, exit 2 on missing or unreadable file.
+// Output carries marker_set_version alongside markers so the capture path (voice-capture
+// agent) writes both into stylometry.baseline by construction, rather than depending on
+// prose in several separate files staying in sync with a constant in this engine. Without
+// this, a freshly captured baseline would carry no marker_set_version at all, which
+// computeDrift's stale-baseline guard treats as version 1 and rejects -- the exact defect
+// this field closes.
 
 if (opts.measure !== null) {
   if (opts.measure.length === 0) {
@@ -59,7 +68,9 @@ if (opts.measure !== null) {
   }
 
   const markers = texts.length === 1 ? measureChapter(texts[0]) : measureBook(texts);
-  const out = { markers, files: resolvedPaths, totalWords };
+  const out = {
+    markers, marker_set_version: CURRENT_MARKER_SET_VERSION, files: resolvedPaths, totalWords,
+  };
   process.stdout.write(JSON.stringify(out, null, 2) + '\n');
   process.exit(0);
 }
@@ -99,10 +110,19 @@ if (opts.baseline) {
     process.stderr.write('ns-stylometry: cannot read baseline file ' + bPath + ': ' + err.message + '\n');
     process.exit(2);
   }
-  // Accept either a raw markers object or a config-shaped object.
-  baseline = (bData && bData.stylometry && bData.stylometry.baseline && bData.stylometry.baseline.markers)
-    ? bData.stylometry.baseline.markers
-    : bData;
+  // Accept a config-shaped object (stylometry.baseline.markers), a bare baseline
+  // object (markers plus marker_set_version), or a raw flat markers object. A raw
+  // flat markers object has no marker_set_version, so computeDrift treats it as
+  // version 1 and rejects it via the stale-baseline guard -- the same rule applied
+  // everywhere else, because a hand-saved flat vector predates this engine's
+  // correction to type_token_ratio just as surely as an old config.json baseline.
+  if (bData && bData.stylometry && bData.stylometry.baseline && bData.stylometry.baseline.markers) {
+    baseline = bData.stylometry.baseline;
+  } else if (bData && bData.markers) {
+    baseline = bData;
+  } else {
+    baseline = { markers: bData };
+  }
   thresholds = (bData && bData.thresholds) ? bData.thresholds : null;
 } else {
   // Default: read from .studio/config.json
@@ -129,7 +149,7 @@ if (opts.baseline) {
     );
     process.exit(2);
   }
-  baseline = config.stylometry.baseline.markers;
+  baseline = config.stylometry.baseline;
   thresholds = config.thresholds || null;
 }
 
@@ -175,7 +195,7 @@ for (const absPath of chapterPaths) {
 
 // Zero-chapter edge case: no chapters means no drift.
 if (chapterTexts.length === 0) {
-  const driftScoreMax = (thresholds && thresholds.drift_score_max != null) ? thresholds.drift_score_max : 35;
+  const driftScoreMax = (thresholds && thresholds.drift_score_max != null) ? thresholds.drift_score_max : DEFAULT_DRIFT_SCORE_MAX;
   const outJson = {
     check: 'stylometry',
     verdict: 'pass',
@@ -199,9 +219,17 @@ if (chapterTexts.length === 0) {
 // ---- measure and compute drift -------------------------------------------------
 
 const measured = measureBook(chapterTexts);
-const { score, perMarker, exceeded } = computeDrift(measured, baseline, thresholds);
+let score, perMarker, exceeded;
+try {
+  ({ score, perMarker, exceeded } = computeDrift(measured, baseline, thresholds));
+} catch (err) {
+  // Covers both a malformed baseline (missing .markers) and a stale
+  // marker_set_version (StaleBaselineError names capture-voice as the remedy).
+  process.stderr.write('ns-stylometry: ' + err.message + '\n');
+  process.exit(2);
+}
 
-const driftScoreMax = (thresholds && thresholds.drift_score_max != null) ? thresholds.drift_score_max : 35;
+const driftScoreMax = (thresholds && thresholds.drift_score_max != null) ? thresholds.drift_score_max : DEFAULT_DRIFT_SCORE_MAX;
 const flaggedMarkers = perMarker.filter(m => m.flagged);
 
 // Exit code is determined solely by score vs threshold; gate mode is not read.
@@ -209,12 +237,17 @@ const flaggedMarkers = perMarker.filter(m => m.flagged);
 const exitCode = exceeded ? 1 : 0;
 
 // Build per-marker delta map for the JSON shape (S-07 section 4 stdout schema).
+// deviationPct is always the honest, uncapped value; capped records whether the
+// per-marker contribution bound (roadmap row 1.7, voice registers) was binding
+// for that marker, i.e. whether its actual contribution to driftScore was less
+// than its deviationPct.
 const markersObj = {};
 for (const m of perMarker) {
   markersObj[m.marker] = {
     baseline: m.baseline,
     measured: m.measured,
     deviationPct: m.deviationPct,
+    capped: m.capped,
     flagged: m.flagged,
   };
 }

@@ -17,7 +17,7 @@ drift band, and gate state, visible continuously instead of only after a command
 ## Purpose
 
 `ns-statusline` is the sixth CLI shipped under `bin/` (D-05, five shipped CLIs, grown by one per
-OPP-P03). Unlike the other five CLIs, it never reads its input from `--project` or the working
+OPP-P03). Unlike the other seven CLIs, it never reads its input from `--project` or the working
 directory: the platform's statusLine and subagentStatusLine features pipe a JSON event to stdin on
 every invocation, and this CLI reads the project directory out of that event
 (`workspace.current_dir` or `cwd`), never from `process.cwd()`. It reads at most four small files
@@ -151,8 +151,8 @@ fixture, in `tests/engines/statusline-cli.test.mjs`. See ADR-0008 for the full r
 ## Relationship to other CLIs
 
 `ns-statusline` is the sixth CLI shipped under `bin/`, alongside `ns-claims`, `ns-doctor`,
-`ns-gate`, `ns-scrub`, and `ns-stylometry` (D-05, five shipped CLIs). It is the only one of the
-six that is never invoked by a hook or another CLI: `hooks/stop-gate.mjs` writes
+`ns-gate`, `ns-scrub`, and `ns-stylometry` (D-05, five shipped CLIs). It is never invoked by a
+hook or another CLI: `hooks/stop-gate.mjs` writes
 `.studio/gate/last-gate.json`, and `ns-statusline` only ever reads that file, never runs
 `ns-gate` itself. This is a deliberate performance boundary: spawning `ns-gate` as a subprocess
 on every assistant message would make the status line as slow as a full gate run, defeating the

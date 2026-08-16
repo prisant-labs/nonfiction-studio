@@ -1,0 +1,76 @@
+#!/usr/bin/env node
+// what-it-is:   the ns-status CLI (thin shell over hooks/lib/status-engine.mjs)
+// what-it-does: computes and renders the project's chapter board and completion numbers - per-
+//               chapter status, word count, open claims, drift score, and gate verdict, plus
+//               whole-book totals - as JSON or as a human-readable Markdown board; never writes
+// why:          the CLI is the public surface; all computation lives in status-engine.mjs so the
+//               status-dashboard skill can narrate this CLI's own JSON output directly, instead of
+//               asking the model to list a directory, parse filenames, and read numbers out of
+//               prose by eye, with nothing asserting it parsed correctly the same way twice
+//               (ADR-0009 (apparatus CLI), growth-policy criterion 1)
+// usage:        ns-status [--project=<dir>] [--json]
+//
+// READ-ONLY BY DESIGN: this CLI never writes to .studio/ or anywhere else. State changes (a
+// future promotion ceremony onto the existing `final` chapter status, for example) belong to a
+// hook: D-06 (single-writer state discipline) reserves .studio/ machine-state writes for hooks,
+// not for a CLI a narrating skill can invoke mid-conversation.
+
+import { resolve } from 'node:path';
+import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
+import { findBookRoot, readProgress, BibleError } from '../hooks/lib/bible.mjs';
+import { computeStatusBoard, renderBoardMarkdown } from '../hooks/lib/status-engine.mjs';
+
+// ---- arg parsing ---------------------------------------------------------------
+
+let opts;
+try {
+  opts = parseArgs(process.argv.slice(2), ['project', 'json']);
+} catch (err) {
+  if (err.name === 'ArgsError') {
+    process.stderr.write('ns-status: ' + err.message + '\n');
+    process.exit(2);
+  }
+  throw err;
+}
+
+// ---- book root discovery -------------------------------------------------------
+
+const startDir = opts.project ? resolve(opts.project) : process.cwd();
+
+let root, config;
+try {
+  ({ root, config } = findBookRoot(startDir));
+} catch (err) {
+  if (err.name === 'BibleError') {
+    process.stderr.write('ns-status: ' + err.message + '\n');
+    process.exit(2);
+  }
+  throw err;
+}
+
+// ---- progress.json ---------------------------------------------------------------
+
+let progress;
+try {
+  progress = readProgress(root);
+} catch (err) {
+  if (err.name === 'BibleError') {
+    process.stderr.write('ns-status: ' + err.message + '\n');
+    process.exit(2);
+  }
+  throw err;
+}
+
+// ---- compute (hooks/lib/status-engine.mjs; read-only, no writes) -----------------
+
+const board = computeStatusBoard(root, progress, config);
+
+// ---- emit --------------------------------------------------------------------------
+
+if (opts.json) {
+  process.stdout.write(JSON.stringify(board, null, 2) + '\n');
+} else {
+  process.stdout.write(renderBoardMarkdown(board) + '\n');
+}
+
+process.exit(0);

@@ -6,7 +6,7 @@
 //               gate-shaped report
 // why:          the CLI is the public surface; all logic lives in apparatus-engine.mjs so the
 //               build-apparatus skill and any future caller share the same computation path,
-//               matching the pattern the other six CLIs already use (ADR-0009, apparatus CLI)
+//               matching the pattern the other seven CLIs already use (ADR-0009, apparatus CLI)
 // usage:        ns-notes [--project=<dir>] [--json]
 
 import { readFileSync, readdirSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';

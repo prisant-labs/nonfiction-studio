@@ -12,9 +12,11 @@
 //         - tool_calls: array of {tool_name, tool_input, tool_use_id, tool_response}
 //         - field names verified live by TSK-030 (hooks.json Phase 1 wiring)
 // stdout: {"hookSpecificOutput":{"hookEventName":"PostToolBatch","additionalContext":"..."}}
-//         when at least one chapter write was processed; EMPTY stdout otherwise
-//         (dispatch-only batches append ai-use-log lines silently; batches with neither
-//         chapter writes nor dispatches write nothing at all).
+//         when at least one chapter write was processed, OR when the eligibility sweep
+//         (see PROMOTION CEREMONY below) demoted a chapter even with no chapter write in
+//         the batch; EMPTY stdout otherwise (dispatch-only batches append ai-use-log
+//         lines silently; batches with no chapter writes, no dispatches, no
+//         progress.json write, and no demotion write nothing at all).
 //
 // NS_HOOK_TRACE: when set, appends one trace line (event, own path, raw stdin) to the named
 //                file before any other logic; inert when unset (preserved from TSK-030 stub).
@@ -31,13 +33,41 @@
 //   - Chapter file unreadable for recount: log to errors.jsonl, word_count set to 0
 //   - ai-use-log append failure: log to errors.jsonl, exit 0
 //   - Malformed stdin: exit 0, empty stdout (fail-open, cannot identify writes)
+//   - context/decisions.md unreadable (exists but errors on read): log to errors.jsonl,
+//     skip the eligibility sweep this batch only (does not block the recount/write above it)
+//
+// PROMOTION CEREMONY AND AUTOMATIC DEMOTION: this hook is the only place a chapter's
+// status ever moves off `final` (D-06, single-writer state discipline: this hook is
+// progress.json's sole writer). It never moves a chapter TO `final` - promotion is
+// always a human editing progress.json directly; this hook only ever enforces that an
+// unattested or since-edited `final` does not stand. Two rules, both driven by
+// hooks/lib/status-engine.mjs's isEligibleForFinal (the ONE shared eligibility
+// predicate; see that module's header for why it lives there):
+//   (a) EDITED THIS BATCH: a chapters/ Write or Edit call recognized for a `final`
+//       chapter demotes it to DEMOTION_FALLBACK_STATUS UNCONDITIONALLY - regardless of
+//       whether the new content differs from the old, and regardless of whether a
+//       matching attestation still exists. docs/formats/decisions.md's grammar carries
+//       no content fingerprint, so there is no principled way to tell "reverted to the
+//       exact attested text" apart from "coincidentally identical" without adding
+//       infrastructure the format does not have; re-attesting is cheap, trusting a
+//       stale attestation after any further write is not.
+//   (b) NOT ELIGIBLE: a chapter reads `final` in progress.json but no valid
+//       (actor: author, all required fields present) attestation names its slug in
+//       context/decisions.md. This is what makes an unattested promotion attempt not
+//       take effect even when nothing in chapters/ was touched this batch - a direct
+//       Edit to .studio/progress.json already lands on disk before this hook fires, so
+//       this sweep is what reverts it, in the same batch (see progressTouched below).
+// A batch that both writes a chapter's file AND sets it final in the same batch is
+// still caught by (a): promotion must land in a batch with no write to that chapter's
+// own file, or the write clobbers it immediately.
 
-import { readFileSync, appendFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, appendFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, resolve, sep, relative, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findBookRoot, readProgress, writeProgressAtomic } from './lib/bible.mjs';
 import { countWords } from './lib/stylometry-engine.mjs';
 import { resolveAgentLabel, foldForCompare } from './lib/agent-identity.mjs';
+import { DEMOTION_FALLBACK_STATUS, parseDecisionsLog, isEligibleForFinal } from './lib/status-engine.mjs';
 
 // ---------------------------------------------------------------------------
 // Drain stdin - the platform delivers event JSON here on every invocation.
@@ -176,6 +206,17 @@ function isChapterPath(absPath) {
   return norm.startsWith(chaptersDirPrefix);
 }
 
+// Promotion ceremony and automatic demotion: a direct Write/Edit to
+// .studio/progress.json itself (for example a human hand-setting a chapter's
+// status to `final`) must also be recognized, even though it carries no
+// chapters/ path, so the eligibility sweep below runs for a batch that
+// contains ONLY a progress.json edit and no chapter file write at all.
+const progressJsonPathNorm = foldForCompare(resolve(bookRoot, '.studio', 'progress.json'));
+
+function isProgressJsonPath(absPath) {
+  return foldForCompare(absPath) === progressJsonPathNorm;
+}
+
 // ---------------------------------------------------------------------------
 // Chapter-list registry helpers (TSK-050b create-if-absent).
 //
@@ -275,6 +316,9 @@ const chapterWrites = new Map();
 const chapterCallLog = [];
 // Array of dispatch descriptors
 const dispatches = [];
+// Promotion ceremony and automatic demotion: true when this batch contains a
+// recognized Write/Edit targeting .studio/progress.json itself.
+let progressTouched = false;
 
 for (const call of toolCalls) {
   const toolName = typeof call.tool_name === 'string' ? call.tool_name : '';
@@ -297,6 +341,8 @@ for (const call of toolCalls) {
       const scope = toolName === 'Write' ? 'generated' : 'assisted';
       chapterWrites.set(absPath, { scope });
       chapterCallLog.push({ absPath, scope });
+    } else if (isProgressJsonPath(absPath)) {
+      progressTouched = true;
     }
   } else if (DISPATCH_TOOLS.has(toolName)) {
     dispatches.push({ toolName, toolInput });
@@ -304,10 +350,10 @@ for (const call of toolCalls) {
 }
 
 // ---------------------------------------------------------------------------
-// No-op: batch with neither chapter writes nor dispatches.
-// Empty stdout, nothing written, exit 0.
+// No-op: batch with no chapter writes, no dispatches, and no progress.json
+// write either. Empty stdout, nothing written, exit 0.
 // ---------------------------------------------------------------------------
-if (chapterWrites.size === 0 && dispatches.length === 0) {
+if (chapterWrites.size === 0 && dispatches.length === 0 && !progressTouched) {
   process.exit(0);
 }
 
@@ -362,8 +408,15 @@ for (const [absPath, { scope }] of chapterWrites.entries()) {
 const prevCounts = new Map();
 // Per-chapter summary tokens for the additionalContext line.
 const summaryParts = [];
+// Demotion descriptors from the eligibility sweep below: { slug, to, reason }.
+const demotions = [];
 
-if (chapterWrites.size > 0) {
+// Runs for an ordinary chapter-write batch (chapterWrites.size > 0, unchanged
+// from before) AND for a progress.json-only batch (progressTouched, no
+// chapters/ write at all) - the second arm exists so the eligibility sweep
+// below can revert an unattested direct promotion in the SAME batch it
+// happened in, per this file's header comment.
+if (chapterWrites.size > 0 || progressTouched) {
   let progress = null;
 
   try {
@@ -394,9 +447,12 @@ if (chapterWrites.size > 0) {
     // recompute below sums ALL entries, so untouched entries retain their stored
     // counts. See countOpenMarkers above for the open-marker definition.
     //
-    // Status boundary: status is set ONLY when CREATING a new entry; the hook
-    // never transitions an existing status (e.g. drafting -> drafted). Final-pass
-    // transitions remain future authorial scope outside this hook.
+    // Status boundary: status is set ONLY when CREATING a new entry in THIS loop;
+    // it never transitions an existing status here (e.g. drafting -> drafted stays
+    // outside this hook's scope). The one exception lives below, in the eligibility
+    // sweep: that loop may move a chapter OFF `final` (never onto it, and never any
+    // other transition) per the promotion ceremony and automatic demotion rules in
+    // this file's header comment.
     for (const { slug, newCount, markerCount } of chapterDetails.values()) {
       const ch = chapters.find(c => c.slug === slug);
       if (ch) {
@@ -421,7 +477,55 @@ if (chapterWrites.size > 0) {
     // Ensure progress.chapters always points to the (possibly extended) array.
     progress.chapters = chapters;
 
+    // -----------------------------------------------------------------------
+    // ELIGIBILITY SWEEP (promotion ceremony and automatic demotion; see this
+    // file's header comment for the two rules in full). Runs over EVERY
+    // chapter currently `final` in the just-read progress, not only the ones
+    // this batch wrote to chapters/ - a stray direct edit to
+    // .studio/progress.json (progressTouched, chapterWrites possibly empty)
+    // must be caught in this same pass too.
+    // -----------------------------------------------------------------------
+    let decisionsEntries = [];
+    let decisionsReadFailed = false;
+    const decisionsPath = join(bookRoot, 'context', 'decisions.md');
+    if (existsSync(decisionsPath)) {
+      try {
+        decisionsEntries = parseDecisionsLog(readFileSync(decisionsPath, 'utf8'));
+      } catch (err) {
+        // Fail-open, scoped: skip ONLY the sweep this batch (a `final` chapter
+        // keeps its current status rather than being demoted on a transient
+        // read error); the recount/write above this block is unaffected.
+        decisionsReadFailed = true;
+        logError('context/decisions.md unreadable; eligibility sweep skipped this batch', err);
+      }
+    }
+    // decisionsPath absent: decisionsEntries stays [] - a deliberate "no
+    // attestations exist" state (not a read failure), so the sweep still
+    // runs and correctly finds nothing eligible.
+
+    if (!decisionsReadFailed) {
+      const editedSlugsThisBatch = new Set([...chapterDetails.values()].map(d => d.slug));
+      for (const ch of chapters) {
+        if (ch.status !== 'final') continue;
+        const slug = typeof ch.slug === 'string' ? ch.slug : null;
+        if (!slug) continue;
+        const editedThisBatch = editedSlugsThisBatch.has(slug);
+        // Rule (a) short-circuits rule (b): an edit demotes even when a valid
+        // attestation is still on record (isEligibleForFinal is not even
+        // called in that case) - see the header comment for why.
+        const eligible = !editedThisBatch && isEligibleForFinal(slug, decisionsEntries);
+        if (eligible) continue;
+        const reason = editedThisBatch
+          ? 'edited without a new promotion attestation'
+          : 'no matching author attestation in context/decisions.md';
+        ch.status = DEMOTION_FALLBACK_STATUS;
+        demotions.push({ slug, to: DEMOTION_FALLBACK_STATUS, reason });
+      }
+    }
+
     // Recompute derived totals in-place; unknown totals fields are untouched.
+    // Runs AFTER the sweep so chapters_final correctly excludes any chapter
+    // the sweep just demoted.
     const totals = (progress.totals && typeof progress.totals === 'object')
       ? progress.totals
       : {};
@@ -433,16 +537,26 @@ if (chapterWrites.size > 0) {
       (sum, ch) => sum + (typeof ch.open_claim_count === 'number' ? ch.open_claim_count : 0), 0
     );
     totals.chapters_final = chapters.filter(ch => ch.status === 'final').length;
-    progress.updated = ts;
 
-    // Atomic write: write to progress.tmp.json then rename to progress.json.
-    // writeProgressAtomic is the sole writer; grep for writeProgressAtomic in
-    // this file confirms no other progress write path exists.
-    try {
-      writeProgressAtomic(bookRoot, progress);
-    } catch (err) {
-      // Rename failure: log, progress retains last-valid state per S-07 failure row.
-      logError('writeProgressAtomic failed; progress retains last-valid state', err);
+    // Write only when there is something to persist. An ordinary chapter-write
+    // batch always has something (the recount itself, unchanged from before);
+    // a progress.json-only batch (chapterWrites.size === 0) has nothing worth
+    // persisting UNLESS the sweep found and reverted an ineligible `final` -
+    // otherwise this would rewrite progress.json (bumping `updated`) on every
+    // incidental .studio/progress.json touch, which is not this hook's job.
+    const shouldWrite = chapterWrites.size > 0 || demotions.length > 0;
+    if (shouldWrite) {
+      progress.updated = ts;
+
+      // Atomic write: write to progress.tmp.json then rename to progress.json.
+      // writeProgressAtomic is the sole writer; grep for writeProgressAtomic in
+      // this file confirms no other progress write path exists.
+      try {
+        writeProgressAtomic(bookRoot, progress);
+      } catch (err) {
+        // Rename failure: log, progress retains last-valid state per S-07 (hooks and scripts) failure row.
+        logError('writeProgressAtomic failed; progress retains last-valid state', err);
+      }
     }
   }
 }
@@ -474,6 +588,13 @@ for (const { slug, newCount, relPath } of chapterDetails.values()) {
 // The recount/progress update above uses chapterWrites (the Map) and is
 // unaffected: each unique file is still recounted exactly once.
 // ---------------------------------------------------------------------------
+// slug -> demotion descriptor, for enriching the ai-use-log summary of the
+// exact call that triggered an edit-driven demotion (rule (a) in this file's
+// header comment). A chapter demoted by rule (b) (the sweep, no chapter write
+// this batch) has no chapterCallLog entry to enrich - its non-silence comes
+// from the additionalContext block below instead.
+const demotionsBySlug = new Map(demotions.map(d => [d.slug, d]));
+
 for (const { absPath, scope } of chapterCallLog) {
   const detail = chapterDetails.get(absPath);
   if (!detail) continue;
@@ -482,7 +603,11 @@ for (const { absPath, scope } of chapterCallLog) {
   const delta = newCount - prev;
   const deltaStr = delta >= 0 ? '+' + delta : String(delta);
   const verb = scope === 'generated' ? 'Wrote' : 'Edited';
-  const summary = verb + ' ' + relPath + ': ' + newCount + ' words (delta ' + deltaStr + ').';
+  let summary = verb + ' ' + relPath + ': ' + newCount + ' words (delta ' + deltaStr + ').';
+  const demotion = demotionsBySlug.get(slug);
+  if (demotion) {
+    summary += ' Status demoted: final -> ' + demotion.to + ' (' + demotion.reason + ').';
+  }
 
   appendAiUseLog({
     ts,
@@ -518,16 +643,36 @@ for (const { toolName, toolInput } of dispatches) {
 }
 
 // ---------------------------------------------------------------------------
-// Output: emit additionalContext when at least one chapter write was processed;
-// empty stdout otherwise (dispatch-only batches are intentionally silent here).
+// Output: emit additionalContext when at least one chapter write was processed
+// and/or the eligibility sweep demoted something (so a demotion is never
+// silent even when it happened via a bare progress.json edit with no chapter
+// write at all - AC4 (gate run reports a demotion), "the next gate run after
+// a demotion says so"). This hook's additionalContext reports the demotion at
+// the next check-in, not at the next gate run, so AC4 remains unmet as
+// written; closing it needs a durable demotion marker plus a warn-level gate
+// check, tracked as a separate task. Empty stdout otherwise (dispatch-only
+// batches, and progress.json touches that changed nothing, are intentionally
+// silent here, unchanged from before).
 // ---------------------------------------------------------------------------
+const contextLines = [];
 if (chapterWrites.size > 0 && summaryParts.length > 0) {
-  const additionalContext = 'Progress updated: ' + summaryParts.join(', ') + '.';
+  contextLines.push('Progress updated: ' + summaryParts.join(', ') + '.');
+}
+if (demotions.length > 0) {
+  for (const d of demotions) {
+    contextLines.push(
+      'Chapter ' + d.slug + ' demoted: final -> ' + d.to + ' (' + d.reason + '). ' +
+      'Run the quality gate and add a new context/decisions.md attestation to restore final.'
+    );
+  }
+}
+
+if (contextLines.length > 0) {
   process.stdout.write(
     JSON.stringify({
       hookSpecificOutput: {
         hookEventName: 'PostToolBatch',
-        additionalContext
+        additionalContext: contextLines.join('\n')
       }
     }) + '\n'
   );

@@ -193,7 +193,7 @@ The following is explicitly a synthetic illustration and does NOT reflect the co
 > | Check | Verdict | Detail | Next action |
 > |---|---|---|---|
 > | claim_coverage | pass | claim coverage 100%; no open markers | - |
-> | stylometry | warn | drift score 222.38 exceeds threshold 35; stylometry.drift-threshold | Review the flagged markers against the voice baseline and revise the drifted chapter. |
+> | stylometry | warn | drift score 31.07 exceeds threshold 25; stylometry.drift-threshold | Review the flagged markers against the voice baseline and revise the drifted chapter. |
 > | prompt_scrub | pass | no agent scaffolding or prompt residue found | - |
 > | continuity | pass | no name consistency issues found | - |
 > | state_coherence | pass | word-count coherence pass | - |
@@ -201,7 +201,7 @@ The following is explicitly a synthetic illustration and does NOT reflect the co
 >
 > To address the stylometry warn: revise the chapter with `/nonfiction-studio:revise-pass 02-finding-your-network`, then re-run the quality gate. To opt stylometry into blocking mode once the baseline is calibrated, set `gate.checks.stylometry.mode` to `block` in `.studio/config.json`.
 
-The drift score of 222.38 in this synthetic illustration is consistent with a verified fresh run: `node "<plugin-root>/bin/ns-gate" --project=. --chapter=02-finding-your-network --json` over a clean clone of the committed sample book yields exactly this score, because a single chapter's marker vector naturally deviates from the book-aggregate baseline. The committed Chapter 2 is a teaching fixture; the high drift score reflects the fact that the sample-book baseline was set for illustrative purposes, not for a calibrated voice capture. The primary provenance-honest example above (four-check pass with baseline absent) is the grounded transcript.
+The drift score in this synthetic illustration is invented for the example, not drawn from any real `bin/ns-gate` run: running `node "<plugin-root>/bin/ns-gate" --project=. --chapter=02-finding-your-network --json` against a clean clone of the committed sample book does not reproduce it. Unlike the primary transcript above (baseline absent, four-check pass, run against a real temp clone), this warn scenario exists only to show the report shape and the wording a warn verdict uses when stylometry is included and enabled, matching the same synthetic-only pattern the block-verdict illustration below uses. The primary provenance-honest example above is the only grounded transcript in this document; treat every number in this warn section as illustrative.
 
 ---
 

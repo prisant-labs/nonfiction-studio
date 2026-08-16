@@ -83,14 +83,18 @@ The engine prints to stdout:
     "avg_sentence_length": 11.0000,
     "punctuation_rate": 11.4286
   },
+  "marker_set_version": 2,
   "files": ["context/samples/voice-sample-01.md"],
   "totalWords": 98
 }
 ```
 
-The agent reads the `markers` object from stdout and writes it into
-`.studio/config.json` at `stylometry.baseline.markers` using read-modify-write
-(all other config fields are preserved untouched).
+The agent reads both the `markers` object AND the `marker_set_version` number
+from stdout and writes them into `.studio/config.json` at
+`stylometry.baseline.markers` and `stylometry.baseline.marker_set_version`
+using read-modify-write (all other config fields are preserved untouched).
+Writing `markers` alone, without `marker_set_version`, would leave a baseline
+the drift scorer refuses to score against.
 
 **voice-capture:**
 
@@ -178,9 +182,9 @@ The agent writes the confirmed `context/style-profile.md` with `bootstrapped: fa
   then invokes `node "<plugin-root>/bin/ns-stylometry" --measure=...` via the
   Bash tool; it reads the printed markers from stdout and writes them into
   `.studio/config.json`. The engine computes; the agent writes.
-- **Config write uses read-modify-write.** Only `stylometry.baseline.markers` is
-  changed; all other config fields (gate modes, thresholds, model overrides) are
-  preserved.
+- **Config write uses read-modify-write.** Only `stylometry.baseline.markers`
+  and `stylometry.baseline.marker_set_version` are changed; all other config
+  fields (gate modes, thresholds, model overrides) are preserved.
 - **No profile without a baseline.** The vector is written to `.studio/config.json`
   before the profile draft is presented. A confirmed profile always pairs with a
   numeric baseline.
