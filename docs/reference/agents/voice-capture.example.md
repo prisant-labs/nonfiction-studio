@@ -83,7 +83,7 @@ The engine prints to stdout:
     "avg_sentence_length": 11.0000,
     "punctuation_rate": 11.4286
   },
-  "marker_set_version": 3,
+  "marker_set_version": 4,
   "files": ["context/samples/voice-sample-01.md"],
   "totalWords": 98
 }

@@ -11,7 +11,8 @@
 //               (ADR-0009 (apparatus CLI), growth-policy criterion 1: correctness here is a
 //               byte-for-byte, machine-checkable property a failing test can be written against
 //               before the feature exists)
-// used-by:      bin/ns-status
+// used-by:      bin/ns-status, and hooks/post-tool-batch.mjs, which imports
+//               DEMOTION_FALLBACK_STATUS, parseDecisionsLog, and isEligibleForFinal directly
 //
 // GATE-SOURCE INVARIANT: gate verdict and drift score for a chapter come ONLY from the newest
 // report file per chapter slug under .studio/gate/, never from progress.json's per-chapter

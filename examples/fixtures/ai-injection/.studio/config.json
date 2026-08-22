@@ -26,7 +26,7 @@
     "baseline": {
       "captured": "2026-07-18T09:00:00Z",
       "sample_count": 2,
-      "marker_set_version": 3,
+      "marker_set_version": 4,
       "method": "word-tokenized prose from the TSK-019 golden two-chapter text (chapters/01-listening-before-speaking.md and chapters/02-finding-your-network.md as originally committed, before this fixture's own planted prompt-injection content); markers and headings stripped. Re-captured under the corrected engine (roadmap row 1.7, voice registers) with type_token_ratio as a moving average over 100-token windows. This fixture's own committed chapter 1 is NOT the measurement source for this baseline, because it carries the planted injection content (see PLANTED.md); the baseline represents the pre-injection golden voice this fixture's other checks are measured against. This recapture also supersedes the un-reconciled TSK-019 function_word_rate and punctuation_rate this baseline previously carried.",
       "markers": {
         "function_word_rate": 0.4717,

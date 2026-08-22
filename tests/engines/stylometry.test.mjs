@@ -921,8 +921,9 @@ test('typography: the fold carries a marker-set version bump, so a pre-fold base
   // old meaning. Scoring against it must fail loudly rather than report the difference
   // as drift. This is the guard ADR-0011 (tranche 2 decisions) established, exercised
   // for the version it was bumped to here.
-  assert.equal(CURRENT_MARKER_SET_VERSION, 3,
-    'the typographic fold changes what contraction_rate means, so it must carry a version bump');
+  assert.ok(CURRENT_MARKER_SET_VERSION >= 3,
+    'the typographic fold changes what contraction_rate means, so the version this fold ' +
+    'bumped to (3) must still be reachable; not a literal, so a later bump does not break it');
 
   const preFold = { markers: measureChapter(ASCII_PROSE), marker_set_version: 2 };
   assert.throws(
@@ -930,4 +931,106 @@ test('typography: the fold carries a marker-set version bump, so a pre-fold base
     /capture-voice/,
     'a version-2 baseline must be rejected as stale, not scored against'
   );
+});
+
+// ---------------------------------------------------------------------------
+// Word tokenization (marker_set_version 4).
+//
+// WORD_RE was ASCII-only ([a-zA-Z]), so an accented letter split a word in two:
+// "cafe" with an acute became "caf" plus a lost fragment, "Munchen" with an umlaut
+// became "M" plus "nchen". Every word-denominated marker moved for any chapter
+// mentioning an accented name or a borrowed word. WORD_RE now matches \p{L}, the
+// Unicode letter category, instead.
+//
+// Every non-ASCII character under test is written as an escape sequence rather than
+// a literal, for the same reason as the typography tests above: this file stays pure
+// ASCII and each test names the exact codepoint it covers.
+// ---------------------------------------------------------------------------
+
+const E_ACUTE = '\u00e9';      // e with acute, as in "cafe" and "resume"
+const U_DIAERESIS = '\u00fc';  // u with diaeresis, as in "Munchen"
+const I_DIAERESIS = '\u00ef';  // i with diaeresis, as in "naive"
+const E_DIAERESIS = '\u00eb';  // e with diaeresis, as in "Zoe" -> "Zoe with an umlaut"
+
+const PLAIN_ACCENT_PROSE =
+  'The cafe owner in Munchen was naive about the resume he had written.';
+const ACCENTED_PROSE =
+  'The caf' + E_ACUTE + ' owner in M' + U_DIAERESIS + 'nchen was na' + I_DIAERESIS +
+  've about the r' + E_ACUTE + 'sum' + E_ACUTE + ' he had written.';
+
+test('word tokenization: precomposed accented Latin prose measures identically to its plain-ASCII original', () => {
+  assert.notEqual(ACCENTED_PROSE, PLAIN_ACCENT_PROSE,
+    'the two strings must actually differ as text');
+
+  const plain = measureChapter(PLAIN_ACCENT_PROSE);
+  const accented = measureChapter(ACCENTED_PROSE);
+
+  assert.deepEqual(accented, plain,
+    'prose written with precomposed accented letters must produce the same eight-marker ' +
+    'vector as the same prose with the accents stripped; a difference here means WORD_RE ' +
+    'is fragmenting the accented words again. Before this fix the accented sentence ' +
+    'measured 16 tokens against the plain sentence\'s 13, because each of the three ' +
+    'accented words fragmented into two tokens');
+});
+
+test('word tokenization: a Cyrillic sentence tokenizes as one token per space-delimited word', () => {
+  // U+041C U+043E U+0441 U+043A U+0432 U+0430 (space) U+0431 U+043E U+043B U+044C
+  // U+0448 U+043E U+0439 (space) U+0433 U+043E U+0440 U+043E U+0434 -- "Moskva bolshoy
+  // gorod" (Moscow [is a] big city), an alphabetic, space-delimited script, the case
+  // the History comment's "tokenize as whole words" claim actually covers.
+  const cyrillicSentence =
+    '\u041c\u043e\u0441\u043a\u0432\u0430 \u0431\u043e\u043b\u044c\u0448\u043e\u0439 ' +
+    '\u0433\u043e\u0440\u043e\u0434.';
+  assert.equal(countWords(cyrillicSentence), 3,
+    'a Cyrillic sentence with three space-delimited words must count as three words, not ' +
+    'zero; the pre-fix ASCII-only regex matched no Cyrillic letters at all');
+});
+
+test('word tokenization: a space-free script matches as one run, not one token per word (documented limitation, not a correctness claim)', () => {
+  // \p{L}+ has no notion of a word boundary inside a script written without spaces
+  // between words. A whole run of CJK letters matches as ONE token, not one token per
+  // intended word. This is a residual limitation, not something this fix claims to
+  // solve: the pre-fix regex produced ZERO tokens for this sentence (it matched no
+  // character outside a-z/A-Z), and the post-fix regex produces exactly ONE token for
+  // the whole ten-character sentence. Neither is a correct word count; the fix changes
+  // which wrong number comes out, not whether the number is right. A book written
+  // primarily in such a script needs a different tokenizer, not a wider character class.
+  // U+3053 U+308C U+306F U+65E5 U+672C U+8A9E U+306E U+6587 U+3067 U+3059 -- "Kore wa
+  // nihongo no bun desu" (This is a Japanese sentence).
+  const japaneseSentence =
+    '\u3053\u308c\u306f\u65e5\u672c\u8a9e\u306e\u6587\u3067\u3059';
+  assert.equal(countWords(japaneseSentence), 1,
+    'the whole space-free sentence matches as a single token; this pins the documented ' +
+    'limitation so a future change to it is a deliberate decision, not an accident');
+});
+
+test('word tokenization: a hyphenated compound with an accented part still counts as one token', () => {
+  const sentence = 'The caf' + E_ACUTE + '-owner smiled.';
+  assert.equal(countWords(sentence), 3,
+    'caf' + E_ACUTE + '-owner must count as one hyphenated token (three words total: The, ' +
+    'cafe-owner, smiled), the same hyphen-join behavior WORD_RE already gave ASCII ' +
+    'compounds like "well-curated"; a regex missing the hyphen-join group would split it ' +
+    'into two words (four total), and a regex missing the u flag would fail to match ' +
+    '\\p{L} as a Unicode property at all (zero words)');
+});
+
+test('word tokenization: CONTRACTION_RE stays ASCII-only, unaffected by the WORD_RE widening (residual limitation and a guard against an unintended coupling)', () => {
+  // Zoe-with-diaeresis's is the discriminating case: the letter immediately before the
+  // apostrophe is non-ASCII, so under the current ASCII-only CONTRACTION_RE it
+  // contributes ZERO matches. If CONTRACTION_RE were ever widened to \p{L} the same way
+  // WORD_RE was widened here, this would become ONE match and contraction_rate would
+  // move. "Muller's" (u with diaeresis) is NOT a discriminating case: it yields exactly
+  // one match either way, because the FINAL letter before the apostrophe is plain ASCII
+  // ("r"); only the matched substring changes ("ller's" to "Muller's"), not the count
+  // contraction_rate actually reads. A test written on that case would be decorative.
+  const withNonAsciiStem =
+    'It is fine. She agreed with it. Zo' + E_DIAERESIS + '\'s idea worked out well in the end.';
+  const withoutIt =
+    'It is fine. She agreed with it. The idea worked out well in the end.';
+
+  assert.equal(measureChapter(withNonAsciiStem).contraction_rate,
+    measureChapter(withoutIt).contraction_rate,
+    'a possessive whose stem ends in a non-ASCII letter must not be counted as a ' +
+    'contraction; if this fails, CONTRACTION_RE has been widened to match non-ASCII ' +
+    'letters, which is a deliberate decision this test exists to force, not an accident');
 });

@@ -11,8 +11,10 @@
 //                     "derives from the tree" property, and the multiple-findings property can
 //                     all be proven without depending on this repo's real shipped components;
 //                 (2) real-repo clones (clone-helper.mjs's cloneRepoToTemp), which exercise the
-//                     checker against the actual scan scope and its three real exemption classes
-//                     (decision identifier, dated historical record, historical ordinal).
+//                     checker against the actual scan scope and its exemption classes (decision
+//                     identifier, dated historical record - both the whole-file form under
+//                     docs/adr/ and docs/gates/ and the section-scoped form in CHANGELOG.md and
+//                     RELEASE-NOTES.md, historical ordinal).
 //               Every planted count in this file is assembled from string parts at runtime
 //               (never written as a contiguous literal), the same discipline
 //               check-skill-cli-targets.test.mjs uses for its bogus CLI name
@@ -190,8 +192,9 @@ test('the true count is derived from the tree: adding a CLI moves the verdict wi
 
 // ---------------------------------------------------------------------------
 // Real-repo integration: proves the mechanism against the actual scan scope,
-// and against its three exemption classes (decision identifier, dated
-// historical record, historical ordinal).
+// and against its exemption classes (decision identifier, dated historical
+// record - whole-file under docs/adr/ and docs/gates/, section-scoped in
+// CHANGELOG.md and RELEASE-NOTES.md - historical ordinal).
 // ---------------------------------------------------------------------------
 
 test('real-repo scope: the current tree has no stale component-count claims', () => {
@@ -386,7 +389,7 @@ test('real-repo scope: historical-ordinal claims are never flagged', () => {
   }
 });
 
-test('real-repo scope: dated historical records (docs/adr/, docs/gates/) are never scanned', () => {
+test('real-repo scope: whole-file dated historical records (docs/adr/, docs/gates/) are never scanned', () => {
   const { root, cleanup } = cloneRealRepo('real-historical');
   try {
     const adrText = readFileSync(join(root, 'docs', 'adr', 'ADR-0005-bin-path-windows.md'), 'utf8');
@@ -401,6 +404,188 @@ test('real-repo scope: dated historical records (docs/adr/, docs/gates/) are nev
     assert.equal(result.status, 0, 'got: ' + result.combined);
     assert.doesNotMatch(result.combined, /ADR-0005/, 'docs/adr/** must never be scanned for component-count claims');
     assert.doesNotMatch(result.combined, /phase-1-gate\.md/, 'docs/gates/** must never be scanned for component-count claims');
+  } finally {
+    cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Gap A / Gap B - fix round 2 closed two formatting shapes that could still false-positive the
+// decision-identifier exemption (PF-15, count checker exemption gaps), plus the section-scoped
+// dated-heading toggle protecting CHANGELOG.md and RELEASE-NOTES.md (PF-16, changelog path
+// protection). All eight fixtures below use an 8-CLI synthetic root, matching the true CLI count
+// this repository ships today, so a mismatched claim ("seven" vs 8) is unambiguously a live
+// finding unless a structural exemption correctly applies.
+// ---------------------------------------------------------------------------
+
+function buildEightCliSyntheticRoot(label, files) {
+  return buildSyntheticRoot(label, {
+    'bin/ns-a': '#!/usr/bin/env node\n',
+    'bin/ns-b': '#!/usr/bin/env node\n',
+    'bin/ns-c': '#!/usr/bin/env node\n',
+    'bin/ns-d': '#!/usr/bin/env node\n',
+    'bin/ns-e': '#!/usr/bin/env node\n',
+    'bin/ns-f': '#!/usr/bin/env node\n',
+    'bin/ns-g': '#!/usr/bin/env node\n',
+    'bin/ns-h': '#!/usr/bin/env node\n',
+    'skills/widget-skill/SKILL.md': '# widget-skill\n',
+    ...files,
+  });
+}
+
+// Gap A: the handle-opening parenthetical itself wrapped as a markdown link's label, e.g.
+// "D-05 ([five shipped CLIs](url))". The candidate match starts INSIDE the link label, so the
+// preceding-text window only ever contains the truncated opening "D-05 ([" - the link's own
+// closing "](url)" comes after the match and is never part of the window, so the full-link
+// resolution in normalizeMarkdown (which needs both the closing "]" and the trailing "(url)")
+// never fires, and the exemption regex sees a dangling "[" instead of the "(" it expects.
+// Mutation proof: removing the trailing normalizeMarkdown `.replace(/\[\s*$/, '')` step turns
+// this from exit 0 (exempt) back into exit 1 (false positive) - confirmed by hand, restored.
+test('synthetic: gap A - a decision-identifier handle whose parenthetical is itself a markdown link is not flagged', () => {
+  const { root, cleanup } = buildEightCliSyntheticRoot('gapA-positive', {
+    'docs/claim.md': 'Governed by D-05 ([' + wordFive() + ' shipped CLIs](url)), a locked decision name.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 0, 'a handle-shaped parenthetical wrapped as a markdown link must still be recognized; got: ' + result.combined);
+  } finally {
+    cleanup();
+  }
+});
+
+// Gap A guard: proves the ID requirement in ID_HANDLE_OPEN_RE is load-bearing, not merely the
+// trailing-bracket strip alone. "Note:" is not a decision-identifier shape, so a handle-looking
+// count phrase written the same way must still be caught. Mutation proof: making the leading ID
+// token optional in ID_HANDLE_OPEN_RE flips this from exit 1 to exit 0 - confirmed by hand,
+// restored. A same-shape fixture with a real ID present (the test above) does NOT distinguish
+// this mutation, because it stays exempt either way; this fixture is the one that does.
+test('synthetic: gap A guard - a handle-shaped count phrase with no real decision identifier is still caught', () => {
+  const { root, cleanup } = buildEightCliSyntheticRoot('gapA-guard', {
+    'docs/claim.md': 'Note: [' + wordSeven() + ' shipped CLIs](url) exist.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 1, 'a live claim shaped like a link-wrapped handle, with no real ID present, must still be caught; got: ' + result.combined);
+    assert.match(result.combined, /docs\/claim\.md:1:/, 'must name the planted file and line');
+  } finally {
+    cleanup();
+  }
+});
+
+// Gap B: a decision-identifier handle wrapping across TWO line breaks (ID on one line, its
+// opening punctuation alone on the next, the count phrase only on the third) - the shape a
+// single-previous-line join cannot see. Mutation proof: reverting the bounded backward walk to
+// the original single-previous-line join flips this from exit 0 (exempt) to exit 1 (false
+// positive) - confirmed by hand, restored.
+test('synthetic: gap B - a decision-identifier handle wrapping across two line breaks is not flagged', () => {
+  const { root, cleanup } = buildEightCliSyntheticRoot('gapB-positive', {
+    'docs/claim.md': 'Governed by D-05\n(\n' + wordSeven() + ' shipped CLIs) exist today.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 0, 'an ID / punctuation / count-phrase wrap across two line breaks must still be recognized; got: ' + result.combined);
+  } finally {
+    cleanup();
+  }
+});
+
+// Gap B guard: proves the backward walk's blank-line stop is load-bearing, not merely widening
+// the window count. A blank line between the ID and the count phrase is a real paragraph break, so
+// this must never be bridged even though it falls within the 3-line join budget. Mutation proof:
+// deleting the `priorLine.trim() === ''` stop flips this from exit 1 to exit 0 - confirmed by
+// hand, restored.
+test('synthetic: gap B guard - a blank line between the ID and the count phrase is never bridged', () => {
+  const { root, cleanup } = buildEightCliSyntheticRoot('gapB-guard', {
+    'docs/claim.md': 'Governed by D-05 (\n\n' + wordSeven() + ' shipped CLIs) exist today.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 1, 'a paragraph break between the ID and the count phrase must never be silently bridged; got: ' + result.combined);
+    assert.match(result.combined, /docs\/claim\.md:3:/, 'must name the planted file and line');
+  } finally {
+    cleanup();
+  }
+});
+
+// CHANGELOG.md / RELEASE-NOTES.md section-scoped dated-heading toggle (PF-16). A stale claim
+// under a dated release heading is a historical record and must be exempt; a stale claim under
+// any other heading (CHANGELOG.md's "## Unreleased" in any of its forms, or RELEASE-NOTES.md's
+// permanent meta sections) is live and must still be caught. Mutation proof: removing the
+// `inHistoricalSection = true` branch flips this from exit 0 to exit 1 - confirmed by hand,
+// restored.
+test('CHANGELOG.md: a stale claim under a dated release heading is exempt (section-scoped, not file-scoped)', () => {
+  const { root, cleanup } = buildEightCliSyntheticRoot('changelog-dated', {
+    'CHANGELOG.md':
+      '# Changelog\n\n## Unreleased\n\n### Fixed\n\n- nothing yet\n\n## 1.0.0 - 2026-08-21\n\n### Fixed\n\n- This release ships ' +
+      wordSeven() + ' shipped CLIs total, a stale historical snapshot.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 0, 'a stale claim under a dated release heading must be exempt as a historical record; got: ' + result.combined);
+  } finally {
+    cleanup();
+  }
+});
+
+// Proves the fail-open risk this checker must not have: the canonical Keep a Changelog
+// compare-link "## [Unreleased](url)" heading form must reset the toggle back to live just like
+// the plain form does, even after a preceding dated section. Mutation proof: removing the
+// `CHANGELOG_LIVE_HEADING_RE` reset branch flips this from exit 1 to exit 0 - confirmed by hand,
+// restored.
+test('CHANGELOG.md: a stale claim under a compare-link "## [Unreleased](...)" heading, after a dated section, is still caught', () => {
+  const { root, cleanup } = buildEightCliSyntheticRoot('changelog-unreleased-link', {
+    'CHANGELOG.md':
+      '# Changelog\n\n## 1.0.0 - 2026-08-21\n\n### Fixed\n\n- Historical note, correctly ignored.\n\n' +
+      '## [Unreleased](https://example.com/compare/v0.1.0...HEAD)\n\n### Fixed\n\n- A live claim: ' +
+      wordSeven() + ' shipped CLIs, which must still be caught.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 1, 'a live claim under a compare-link Unreleased heading must still be caught, not silently exempted; got: ' + result.combined);
+    assert.match(result.combined, /CHANGELOG\.md:\d+:/, 'must name the planted file and line');
+  } finally {
+    cleanup();
+  }
+});
+
+// RELEASE-NOTES.md gets the same section-scoped toggle, not a blanket path exemption: a dated
+// release section is exempt, but the maintainer runbook section beneath it - a live, permanent
+// section this file always carries, and the section GitHub publishes verbatim as the release
+// body - is still checked. Mutation proof: removing 'RELEASE-NOTES.md' from
+// CHANGELOG_SCOPED_FILES flips the dated section's claim from silently exempt to also flagged
+// (2 findings instead of 1) - confirmed by hand, restored.
+test('RELEASE-NOTES.md: a dated release section is exempt but the maintainer runbook section beneath it is still checked', () => {
+  const { root, cleanup } = buildEightCliSyntheticRoot('release-notes-both', {
+    'RELEASE-NOTES.md':
+      '# Release Notes\n\n## 1.0.0 - 2026-08-21\n\nA historical claim of ' + wordSeven() +
+      ' shipped CLIs, correctly ignored.\n\n## Cutting a release (maintainer runbook)\n\nA live claim: ' +
+      wordSeven() + ' shipped CLIs, which must still be caught.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 1, 'the live claim under the runbook section must be caught; got: ' + result.combined);
+    const findingLines = result.combined.split('\n').filter((l) => l.includes('RELEASE-NOTES.md'));
+    assert.equal(findingLines.length, 1, 'exactly one finding expected (the runbook line), not the dated section too; got: ' + result.combined);
+  } finally {
+    cleanup();
+  }
+});
+
+// Fenced code state must be tracked separately from heading state: a documented worked example
+// that itself shows a dated heading shape (RELEASE-NOTES.md's real "Format of a release entry"
+// section does exactly this) must never toggle the rest of the file to exempt. Mutation proof:
+// removing the FENCE_MARKER_RE branch flips this from exit 1 to exit 0 - confirmed by hand,
+// restored.
+test('CHANGELOG.md: a fenced worked example containing a dated heading never toggles the file to exempt', () => {
+  const { root, cleanup } = buildEightCliSyntheticRoot('changelog-fence-guard', {
+    'CHANGELOG.md':
+      '# Changelog\n\n## Unreleased\n\nExample section shape:\n\n```markdown\n## 0.2.0 - 2026-01-01\n\n' +
+      'A worked example, not a real dated section.\n```\n\nA live claim right after the fence: ' +
+      wordSeven() + ' shipped CLIs, must still be caught.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 1, 'a live claim following a fenced dated-heading example must still be caught; got: ' + result.combined);
   } finally {
     cleanup();
   }
@@ -514,7 +699,7 @@ test('real-repo scope: a deliberately corrupted "other N" claim in bin/ns-notes 
 // and the shipped-site count is asserted precisely instead.
 // ---------------------------------------------------------------------------
 
-test('forward-growth simulation: adding a ninth CLI to a real-repo clone catches all ten real sites that go stale', () => {
+test('forward-growth simulation: adding a ninth CLI to a real-repo clone catches all eight real sites that go stale', () => {
   const { root, cleanup } = cloneRealRepo('growth-simulation');
   try {
     const before = runClonedChecker(root, SCRIPT);
@@ -531,11 +716,17 @@ test('forward-growth simulation: adding a ninth CLI to a real-repo clone catches
     const errorLines = after.combined.split('\n').filter((l) => l.includes(' ERROR: '));
     const shippedErrorLines = errorLines.filter((l) => !l.includes('check-component-counts.test.mjs'));
 
-    // The three direct "N shipped CLIs" claims a prior review already proved this checker
+    // The one direct "N shipped CLIs" claim a prior review already proved this checker
     // catches (never regressed by this fix round).
     assert.ok(shippedErrorLines.some((l) => l.includes('ns-claims.md:')), 'must still catch docs/reference/cli/ns-claims.md\'s direct "eight shipped CLIs" claim; got: ' + after.combined);
+
+    // hooks/lib/bible.mjs's used-by line was rewritten (PF-10 (bible.mjs importer counts)) from
+    // a bare count ("seven of the eight shipped CLIs... thirteen importers total") to a rule
+    // ("every CLI under bin/ imports this directly except ns-statusline"), which carries no
+    // number-plus-noun shape for CANDIDATE_RE to match. Growing the true CLI count must not
+    // manufacture a finding here, the same way it must not leave a stale one behind.
     const bibleFindings = shippedErrorLines.filter((l) => l.includes('bible.mjs'));
-    assert.equal(bibleFindings.length, 2, 'must still catch both hooks/lib/bible.mjs "eight" claims (lines 5 and 7), not only one; got: ' + after.combined);
+    assert.equal(bibleFindings.length, 0, 'hooks/lib/bible.mjs\'s used-by line is rule-based, not count-based, so it must produce no findings even as the CLI count grows; got: ' + after.combined);
 
     // The four "the other seven CLIs" sites fix round 1 exists to close (three code comments the
     // coordinator named, plus the docs/reference/cli/ns-statusline.md prose instance the
@@ -558,7 +749,7 @@ test('forward-growth simulation: adding a ninth CLI to a real-repo clone catches
       'shape this checker cannot see, which is the exact failure the alt text is written ' +
       'to avoid; got: ' + after.combined);
 
-    assert.equal(shippedErrorLines.length, 10, 'must report exactly the ten real shipped sites that go stale on this growth event, no more and no fewer; got: ' + after.combined);
+    assert.equal(shippedErrorLines.length, 8, 'must report exactly the eight real shipped sites that go stale on this growth event, no more and no fewer; got: ' + after.combined);
   } finally {
     cleanup();
   }
