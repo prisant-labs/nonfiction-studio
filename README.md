@@ -21,9 +21,9 @@ Most AI writing tools generate plausible prose and leave the verification to you
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/version-0.1.0-blue?style=flat-square" alt="Version 0.1.0">
   <img src="https://img.shields.io/badge/tier-universal%20(Bronze)-CD7F32?style=flat-square" alt="Conformance tier: universal (Bronze)">
-  <a href="#the-catalog"><img src="https://img.shields.io/badge/skills-14-brightgreen?style=flat-square" alt="Skills: 14"></a>
+  <a href="#the-catalog"><img src="https://img.shields.io/badge/skills-14-brightgreen?style=flat-square" alt="14 skills"></a>
   <a href="#subagents"><img src="https://img.shields.io/badge/subagents-8-brightgreen?style=flat-square" alt="Subagents: 8"></a>
-  <a href="#command-line-engines"><img src="https://img.shields.io/badge/CLIs-8-brightgreen?style=flat-square" alt="CLIs: 8"></a>
+  <a href="#command-line-engines"><img src="https://img.shields.io/badge/CLIs-8-brightgreen?style=flat-square" alt="8 CLIs"></a>
   <a href="https://agentskills.io/specification"><img src="https://img.shields.io/badge/spec-agentskills.io-orange?style=flat-square" alt="Agent Skills Spec"></a>
 </p>
 
@@ -173,7 +173,7 @@ A verdict is `pass`, `warn`, or `block`, and a block names the check and the fin
 
 ## The catalog
 
-**14 skills, 8 subagents, and 8 command-line engines**, plus hooks on six events. Every component has a reference page under `docs/reference/`, indexed from [docs/README.md](docs/README.md), and most ship a worked example alongside it.
+**14 skills, 8 subagents, and 8 CLIs**, plus hooks on six events. Every component has a reference page under `docs/reference/`, indexed from [docs/README.md](docs/README.md), and most ship a worked example alongside it.
 
 ### Skills
 
