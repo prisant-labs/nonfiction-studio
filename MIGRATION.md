@@ -56,6 +56,33 @@ A new skill, agent, hook, or template, a new optional config key, a new warn-onl
 
 An author partway through a book must be able to take a MINOR or PATCH update with no migration step required at all. A MAJOR update may require running `ns-doctor --migrate`, but the migration must be runnable from the `doctor` skill without leaving the author's working session, any manual steps are surfaced before automated ones run, and no book content may be destroyed. `doctor` warns at session start whenever the installed plugin is ahead of a book's schema version, pointing at this file.
 
+## Word-count note: chapters containing accented or non-Latin words
+
+The stylometry engine's word tokenizer previously matched only the ASCII letters A to Z, so an
+accented letter split a word in two: a chapter mentioning a cafe with an acute, or Munchen with
+an umlaut, counted those as two tokens each. The tokenizer now matches any Unicode letter, so
+they count as one word, which is what they always should have been.
+
+That tokenizer is also `countWords`, the single word-counting authority for the whole plugin.
+`hooks/post-tool-batch.mjs` uses it to write chapter word counts into `.studio/progress.json`,
+and the doctor's coherence check reads those counts back and compares them against a fresh
+recount.
+
+**What this means if your book contains accented or non-Latin words.** The counts already
+stored in `progress.json` were produced by the old tokenizer and are too high. On your next
+gate or doctor run the recount will disagree with them, and you will see
+`coherence.word-count-mismatch` findings naming the affected chapters. The default severity is
+warn, so nothing blocks.
+
+**The remedy is to touch the chapter.** `hooks/post-tool-batch.mjs` recounts and rewrites the
+stored count whenever a chapter is edited, so the mismatch clears on the next edit to each
+affected chapter. `/nonfiction-studio:doctor` will tell you which chapters are affected.
+
+Unlike the `marker_set_version` case below, nothing versions a stored word count, so this
+cannot be made to fail loudly. It is called out here because `MIGRATION.md` is where an author
+would think to look, and because a book written entirely in unaccented English sees no change
+at all.
+
 ## Voice-baseline note: marker_set_version (not a schema_version change)
 
 Independent of `.studio/meta.json`'s `schema_version` (unchanged by this release), the stylometry engine now requires `stylometry.baseline.marker_set_version` on every voice baseline. Every book's baseline captured before this release lacks the field entirely, and the drift scorer treats an absent field as version 1, which no longer matches the engine's current marker set version.

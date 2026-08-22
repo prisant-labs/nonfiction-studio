@@ -186,11 +186,14 @@ export const DEFAULT_DRIFT_SCORE_MAX = 25;
 //           carries a different contraction_rate than a post-fix capture would.
 //   3 -> 4  WORD_RE moved from an ASCII-only [a-zA-Z] character class to \p{L}, the
 //           Unicode letter category. Before this, an accented letter split a word in
-//           two ("cafe" with an acute became "caf" plus a lost fragment), which lowered
-//           totalWords, raised avg_word_length's denominator error, and moved every
-//           word-denominated marker (function_word_rate, first_person_rate,
-//           second_person_rate, avg_word_length, type_token_ratio) for any chapter
-//           mentioning an accented name or borrowed word. Nothing in this repository
+//           two ("cafe" with an acute became "caf" plus a lost fragment), which changed
+//           totalWords and therefore SEVEN of the eight markers for any chapter mentioning
+//           an accented name or borrowed word. Only contraction_rate is unaffected, because
+//           its denominator is sentences rather than words. The other seven all move:
+//           function_word_rate, first_person_rate, second_person_rate, type_token_ratio,
+//           and avg_word_length share the word denominator directly; avg_sentence_length is
+//           words per sentence; and punctuation_rate is punctuation per hundred words. An
+//           earlier version of this comment listed five and read as exhaustive. Nothing in this repository
 //           uses a non-ASCII letter, so no baseline value stored here moves; the bump is
 //           for baselines captured OUTSIDE it, where a pre-fix capture of accented prose
 //           carries different word-denominated markers than a post-fix capture would.

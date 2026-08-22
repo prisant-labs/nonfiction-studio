@@ -448,8 +448,8 @@ function buildPrecedingWindow(lines, i) {
 // underneath a dated one is still caught. The live-heading match is
 // deliberately general (any H2 that is not itself dated), not a literal
 // "Unreleased"-only string, so the canonical Keep a Changelog compare-link
-// form ("## [Unreleased](https://.../compare/v0.1.0...HEAD)", which this
-// file's own line 3 commits this project to) resets to live exactly the
+// form ("## [Unreleased](https://.../compare/v0.1.0...HEAD)", which
+// CHANGELOG.md's own line 3 commits this project to) resets to live exactly the
 // same as the plain form - a dated heading that fails to match fails SAFE
 // (content under it stays checked), but a live-reset heading that fails to
 // match would fail OPEN (the rest of the file goes silently exempt), so

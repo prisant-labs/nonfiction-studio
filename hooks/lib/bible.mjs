@@ -6,7 +6,11 @@
 //               progress.json
 // used-by:      every CLI under bin/ imports this directly except ns-statusline, which reaches
 //               it one hop away through hooks/lib/statusline-engine.mjs; also imported directly
-//               by every hook script under hooks/ and by hooks/lib/orientation.mjs
+//               by every hook script under hooks/, and under hooks/lib/ by orientation.mjs and
+//               statusline-engine.mjs. Stated as a rule rather than a count on purpose: the
+//               previous wording carried "thirteen importers total" against a true fifteen, and
+//               a count here is checked by nothing. The tradeoff is that this rule is also
+//               unchecked, and a future CLI that does NOT import this module would falsify it.
 
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
