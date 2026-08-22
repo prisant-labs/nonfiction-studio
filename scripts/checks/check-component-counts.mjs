@@ -43,7 +43,14 @@
 //                   named past gate - not living documents that track the current tree, and a
 //                   real instance in each genre is saved only by this rule (an ADR context
 //                   section stating a plain past-tense count with no adjacent decision ID at
-//                   all; a gate doc's already-stale-today count table).
+//                   all; a gate doc's already-stale-today count table). The same genre applies at
+//                   SECTION scope, not file scope, to CHANGELOG.md and RELEASE-NOTES.md: a dated
+//                   release section in either file is skipped, but neither file is skipped
+//                   wholesale, because both always carry a live, non-dated section too (CHANGELOG.
+//                   md's "## Unreleased"; RELEASE-NOTES.md's "## Format of a release entry" and
+//                   "## Cutting a release (maintainer runbook)"), and RELEASE-NOTES.md is
+//                   published verbatim as the GitHub release body. See the dedicated comment
+//                   block above the scan loop below for the exact toggle mechanism.
 //               A third construction, "the other N CLIs" (a claim about the complement of the
 //               subject, not the total itself), is a genuine live claim and IS checked, against
 //               trueCount - 1 rather than trueCount: a CLI's own self-referential comment naming
@@ -349,11 +356,23 @@ const PHASE_PRECEDES_RE = /\bphase\s+$/i;
 // current-line window; every regex above is end-anchored, so removing
 // formatting noise earlier in that window can only reveal a real match at
 // the tail, never manufacture a false one.
+// A fourth step handles a shape the full-link regex above cannot: the
+// handle-opening parenthetical itself wrapped as a markdown link's label,
+// e.g. "D-05 ([five shipped CLIs](url))". The candidate match starts INSIDE
+// the link label, so the preceding-text window only ever contains the
+// truncated opening "D-05 ([" - the link's own closing "](url)" comes after
+// the match and is never part of the window, so the full-link regex above
+// (which requires both the closing "]" and the trailing "(url)") never
+// fires. Stripping a trailing, otherwise-unmatched "[" (with only
+// whitespace after it) restores the visible "D-05 (" the exemption regex
+// expects, without touching a "[" that opens real unresolved bracket text
+// anywhere else in the window (this step is anchored to the very end).
 function normalizeMarkdown(text) {
   return text
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/`/g, '')
-    .replace(/\*+|_+/g, '');
+    .replace(/\*+|_+/g, '')
+    .replace(/\[\s*$/, '');
 }
 
 function isFullyExempt(precedingText) {
@@ -382,6 +401,72 @@ function stripLeadingLineComment(prefixText) {
   return prefixText.replace(/^(\s*)(?:\/\/|#)\s?/, '$1');
 }
 
+// Bounded backward walk building the preceding-text window from more than
+// one prior line, so a decision-identifier handle can wrap across two line
+// breaks, not only one - the shape a single-previous-line join misses: an
+// ID token on one line, its opening punctuation alone on the next, and the
+// count phrase only on the third. Walks back at most MAX_PRECEDING_JOIN_LINES
+// lines and stops (without including it) at the first blank line, so a
+// paragraph break can never be silently crossed - every exemption regex
+// above is end-anchored, so if a blank line's worth of nothing were joined
+// in, \s* would absorb it and manufacture an exemption for text that a human
+// reader would never read as one continuous construction (proven by the
+// mutation test below: deleting this stop turns exactly that shape from a
+// real finding into a silently exempt one). 3 is chosen with headroom over
+// the 2-line case that already exists in the tree; the residual gap this
+// still does not reach is a wrap of four or more lines, unobserved in the
+// tree today.
+const MAX_PRECEDING_JOIN_LINES = 3;
+
+function buildPrecedingWindow(lines, i) {
+  const collected = [];
+  for (let back = 1; back <= MAX_PRECEDING_JOIN_LINES && i - back >= 0; back++) {
+    const priorLine = lines[i - back];
+    if (priorLine.trim() === '') break;
+    collected.unshift(priorLine);
+  }
+  return collected.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// CHANGELOG.md / RELEASE-NOTES.md section-scoped dated-heading toggle.
+// Both files are Keep a Changelog format documents where a DATED release
+// section is a point-in-time historical record - the same genre as
+// docs/adr/ and docs/gates/ (see header comment) - but unlike those two
+// directories, neither file can be path-exempted wholesale: CHANGELOG.md
+// always carries a live "## Unreleased" section, and RELEASE-NOTES.md
+// always carries two live, non-dated sections ("## Format of a release
+// entry", "## Cutting a release (maintainer runbook)") that document
+// current, live procedure and are never replaced by a release. RELEASE-
+// NOTES.md is additionally published verbatim as the GitHub release body by
+// .github/workflows/release.yml, so a blanket path exemption would blind
+// this checker on the most public artifact of a release. Instead, only the
+// text under a DATED H2 heading ("## 1.0.0 - 2026-08-21", "## [1.0.0] -
+// 2026-08-21") is skipped; any OTHER H2 heading - a plain or compare-link
+// "## Unreleased" heading, or one of RELEASE-NOTES.md's named meta-section
+// headings - resumes scanning, so a stale count claim in a live section
+// underneath a dated one is still caught. The live-heading match is
+// deliberately general (any H2 that is not itself dated), not a literal
+// "Unreleased"-only string, so the canonical Keep a Changelog compare-link
+// form ("## [Unreleased](https://.../compare/v0.1.0...HEAD)", which this
+// file's own line 3 commits this project to) resets to live exactly the
+// same as the plain form - a dated heading that fails to match fails SAFE
+// (content under it stays checked), but a live-reset heading that fails to
+// match would fail OPEN (the rest of the file goes silently exempt), so
+// this side is deliberately the more general, harder-to-miss pattern.
+// Fenced code blocks are tracked and never toggle this state, so a fenced
+// worked example that itself documents a dated heading shape - RELEASE-
+// NOTES.md's own "Format of a release entry" section does exactly this,
+// lines 11-32 - cannot silently exempt the real content that follows it.
+// Only these two root-level files carry this state; every other scanned
+// file is unaffected.
+// ---------------------------------------------------------------------------
+
+const CHANGELOG_SCOPED_FILES = new Set(['CHANGELOG.md', 'RELEASE-NOTES.md']);
+const CHANGELOG_DATED_HEADING_RE = /^##\s+.*\b\d{4}-\d{2}-\d{2}\b/;
+const CHANGELOG_LIVE_HEADING_RE = /^##\s+/;
+const FENCE_MARKER_RE = /^\s*```/;
+
 // ---------------------------------------------------------------------------
 // Scan
 // ---------------------------------------------------------------------------
@@ -397,9 +482,24 @@ for (const rel of filesToScan) {
     continue; // unreadable entry - skip, not fatal
   }
   const lines = text.split('\n');
+  const trackSections = CHANGELOG_SCOPED_FILES.has(rel);
+  let insideFence = false;
+  let inHistoricalSection = false;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    if (trackSections) {
+      if (FENCE_MARKER_RE.test(line)) {
+        insideFence = !insideFence;
+      } else if (!insideFence) {
+        if (CHANGELOG_DATED_HEADING_RE.test(line)) {
+          inHistoricalSection = true;
+        } else if (CHANGELOG_LIVE_HEADING_RE.test(line)) {
+          inHistoricalSection = false;
+        }
+      }
+      if (inHistoricalSection) continue;
+    }
     CANDIDATE_RE.lastIndex = 0;
     let m;
     while ((m = CANDIDATE_RE.exec(line)) !== null) {
@@ -407,7 +507,7 @@ for (const rel of filesToScan) {
       const numberText = m[1];
       const nounText = m[2];
       const currentPrefix = stripLeadingLineComment(line.slice(0, matchStart));
-      const precedingText = normalizeMarkdown((i > 0 ? lines[i - 1] : '') + '\n' + currentPrefix);
+      const precedingText = normalizeMarkdown(buildPrecedingWindow(lines, i) + '\n' + currentPrefix);
 
       if (!isFullyExempt(precedingText)) {
         const kind = NOUN_KIND_BY_TEXT.get(nounText.toLowerCase());
