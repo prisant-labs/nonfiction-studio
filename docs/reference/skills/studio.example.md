@@ -36,29 +36,29 @@ No files are written during this session. Any scenario leaving the committed sta
 ```json
 {
   "version": 2,
-  "updated": "2026-07-18T09:05:00Z",
+  "updated": "2026-08-10T09:10:00Z",
   "chapters": [
     {
       "slug": "01-listening-before-speaking",
       "title": "Listening Before Speaking",
       "status": "drafted",
-      "word_count": 422,
-      "drift_score": 0,
+      "word_count": 528,
+      "drift_score": 10.86,
       "open_claim_count": 0,
-      "last_gate": { "ts": "2026-07-18T09:00:00Z", "verdict": "pass", "report": ".studio/gate/01-listening-before-speaking.20260718T090000Z.json" }
+      "last_gate": { "ts": "2026-08-10T09:10:00Z", "verdict": "pass", "report": ".studio/gate/01-listening-before-speaking.20260810T091000Z.json" }
     },
     {
       "slug": "02-finding-your-network",
       "title": "Finding Your Network",
       "status": "drafted",
-      "word_count": 462,
-      "drift_score": 0,
+      "word_count": 527,
+      "drift_score": 10.75,
       "open_claim_count": 0,
       "last_gate": null
     }
   ],
   "totals": {
-    "word_count": 884,
+    "word_count": 1055,
     "open_claim_count": 0,
     "chapters_final": 0,
     "chapters_total": 6
@@ -72,14 +72,14 @@ No files are written during this session. Any scenario leaving the committed sta
 
 | # | Slug | Title | Status | Word count |
 |---|---|---|---|---|
-| 1 | 01-listening-before-speaking | Listening Before Speaking | drafted | 420 |
-| 2 | 02-finding-your-network | Finding Your Network | drafted | 462 |
+| 1 | 01-listening-before-speaking | Listening Before Speaking | drafted | 528 |
+| 2 | 02-finding-your-network | Finding Your Network | drafted | 527 |
 | 3 | 03-your-curation-practice | Your Curation Practice | outlined | 0 |
 | 4 | 04-making-connections | Making Connections | outlined | 0 |
 | 5 | 05-contributing-value | Contributing Value | outlined | 0 |
 | 6 | 06-the-compounding-effect | The Compounding Effect | outlined | 0 |
 
-**Total drafted:** 882 words across 2 chapters.
+**Total drafted:** 1055 words across 2 chapters.
 **Open claims:** 0 (all markers in drafted chapters resolve to verified or interpretation-status ledger entries).
 ```
 
