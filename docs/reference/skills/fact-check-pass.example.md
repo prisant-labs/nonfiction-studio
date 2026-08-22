@@ -43,7 +43,7 @@ Output: `HAS_REGISTRY`
 The skill uses the Read tool on `structure/chapter-list.md`. The registry has six rows. The argument `02-finding-your-network` matches the slug in row 2:
 
 ```
-| 2 | 02-finding-your-network | Finding Your Network | drafted | 462 |
+| 2 | 02-finding-your-network | Finding Your Network | drafted | 527 |
 ```
 
 Chapter resolved: number 2, working title "Finding Your Network", slug `02-finding-your-network`.

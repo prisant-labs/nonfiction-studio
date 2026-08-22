@@ -89,7 +89,7 @@ Human-readable findings:
 
 ```
 [doctor] 1 finding(s):
-  chapters/02-finding-your-network.md [coherence.word-count-mismatch]: chapter 02-finding-your-network: progress.json records 462 words but the file contains 485 words (by stylometry tokenizer)
+  chapters/02-finding-your-network.md [coherence.word-count-mismatch]: chapter 02-finding-your-network: progress.json records 462 words but the file contains 481 words (by stylometry tokenizer)
 ```
 
 JSON output (with `--json`) follows the S-08 doctor-report shape with `check`, `schemaVersion`, `status`, `findings`, and `notices` fields.

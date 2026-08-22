@@ -45,7 +45,7 @@ Output: `HAS_REGISTRY`
 The skill uses the Read tool on `structure/chapter-list.md`. The argument `02-finding-your-network` matches the slug in row 2:
 
 ```
-| 2 | 02-finding-your-network | Finding Your Network | drafted | 462 |
+| 2 | 02-finding-your-network | Finding Your Network | drafted | 527 |
 ```
 
 Chapter resolved: number 2, working title "Finding Your Network", slug `02-finding-your-network`.
@@ -199,7 +199,7 @@ The following is explicitly a synthetic illustration and does NOT reflect the co
 > | state_coherence | pass | word-count coherence pass | - |
 > | session_write_flag | skip | no chapter writes detected in this session | - |
 >
-> To address the stylometry warn: revise the chapter with `/nonfiction-studio:revise-pass 02-finding-your-network`, then re-run the quality gate. To opt stylometry into blocking mode once the baseline is calibrated, set `gate.checks.stylometry.mode` to `block` in `.studio/config.json`.
+> To address the stylometry warn: revise the chapter with `/nonfiction-studio:draft-chapter 02-finding-your-network`, which produces diff proposals against the existing chapter, then re-run the quality gate. A dedicated revision pass is Phase 2 scope and is not available in v1. To opt stylometry into blocking mode once the baseline is calibrated, set `gate.checks.stylometry.mode` to `block` in `.studio/config.json`.
 
 The drift score in this synthetic illustration is invented for the example, not drawn from any real `bin/ns-gate` run: running `node "<plugin-root>/bin/ns-gate" --project=. --chapter=02-finding-your-network --json` against a clean clone of the committed sample book does not reproduce it. Unlike the primary transcript above (baseline absent, four-check pass, run against a real temp clone), this warn scenario exists only to show the report shape and the wording a warn verdict uses when stylometry is included and enabled, matching the same synthetic-only pattern the block-verdict illustration below uses. The primary provenance-honest example above is the only grounded transcript in this document; treat every number in this warn section as illustrative.
 
