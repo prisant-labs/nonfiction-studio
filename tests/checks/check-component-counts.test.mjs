@@ -514,7 +514,7 @@ test('real-repo scope: a deliberately corrupted "other N" claim in bin/ns-notes 
 // and the shipped-site count is asserted precisely instead.
 // ---------------------------------------------------------------------------
 
-test('forward-growth simulation: adding a ninth CLI to a real-repo clone catches all seven real sites that go stale', () => {
+test('forward-growth simulation: adding a ninth CLI to a real-repo clone catches all ten real sites that go stale', () => {
   const { root, cleanup } = cloneRealRepo('growth-simulation');
   try {
     const before = runClonedChecker(root, SCRIPT);
@@ -545,7 +545,20 @@ test('forward-growth simulation: adding a ninth CLI to a real-repo clone catches
     assert.ok(shippedErrorLines.some((l) => l.includes('ERROR: hooks/lib/status-engine.mjs:')), 'must catch hooks/lib/status-engine.mjs\'s "the other seven CLIs" now that the true complement is eight; got: ' + after.combined);
     assert.ok(shippedErrorLines.some((l) => l.includes('ERROR: docs/reference/cli/ns-statusline.md:')), 'must catch the prose "the other seven CLIs" instance in docs/reference/cli/ns-statusline.md too - the extra real site this simulation found; got: ' + after.combined);
 
-    assert.equal(shippedErrorLines.length, 7, 'must report exactly the seven real shipped sites that go stale on this growth event, no more and no fewer; got: ' + after.combined);
+    // The three README sites, added when the README was rewritten as a full front page.
+    // All three are deliberately written in the shape this checker matches, including the
+    // shields.io badge, whose ALT TEXT carries the claim in matchable form ("8 CLIs")
+    // precisely so the badge line is covered: the checker cannot see the count inside the
+    // badge URL itself ("badge/CLIs-8-..."), so an alt text written as "CLIs: 8" would
+    // have left the most visible count in the repository silently unenforced.
+    const readmeFindings = shippedErrorLines.filter((l) => l.includes('ERROR: README.md:'));
+    assert.equal(readmeFindings.length, 3,
+      'must catch all three README count claims (the badge alt text, the catalog heading, ' +
+      'and the status table row); a drop to two means one of them was rephrased into a ' +
+      'shape this checker cannot see, which is the exact failure the alt text is written ' +
+      'to avoid; got: ' + after.combined);
+
+    assert.equal(shippedErrorLines.length, 10, 'must report exactly the ten real shipped sites that go stale on this growth event, no more and no fewer; got: ' + after.combined);
   } finally {
     cleanup();
   }
