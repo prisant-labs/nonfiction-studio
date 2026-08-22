@@ -113,7 +113,7 @@ The engine prints the eight-marker vector to stdout, alongside a `marker_set_ver
     "avg_sentence_length": 13.1940,
     "punctuation_rate": 13.0090
   },
-  "marker_set_version": 2
+  "marker_set_version": 3
 }
 ```
 
