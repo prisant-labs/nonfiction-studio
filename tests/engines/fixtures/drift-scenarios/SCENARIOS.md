@@ -17,6 +17,15 @@ that happens, not to silently re-measure whatever `examples/` currently contains
 committed on 2026-08-15 (`markers` plus `marker_set_version`), copied verbatim from
 `examples/sample-book/.studio/config.json`.
 
+One field is exempt from the freeze, and only one: `marker_set_version`. It is a claim about
+which engine the stored `markers` were captured under, not a measurement, and `computeDrift`
+refuses to score against a version it does not recognise. So when the engine's marker set
+version moves, this field moves with it, or every scenario in this suite fails with a
+stale-baseline error instead of producing a score. The `markers` values themselves stay
+frozen, which is what the freeze is actually protecting. It was bumped from 2 to 3 alongside
+the typographic-normalization fix, whose fold changes no value here because none of these
+fixtures contain a smart quote.
+
 ## Transformation methodology
 
 Two pronoun families are tracked by the engine: `FIRST_PERSON` (i, me, my, mine, myself, we,

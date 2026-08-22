@@ -828,3 +828,106 @@ test('computeDrift: a baseline with no marker_set_version field at all is treate
     'an absent marker_set_version field must be treated as version 1 and rejected as stale'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Typographic normalization (marker_set_version 3).
+//
+// Word processors emit U+2019 for an apostrophe and U+201C/U+201D for double
+// quotes. Before version 3, CONTRACTION_RE and PUNCT_RE were ASCII-only with no
+// fold in front of them, so an author who pasted samples out of Word captured a
+// baseline with contraction_rate = 0 and an understated punctuation_rate. Every
+// chapter they later wrote with a plain apostrophe then read as a 100 percent
+// deviation on contraction_rate.
+//
+// Every non-ASCII character under test is written as an escape sequence rather
+// than a literal, so this file stays pure ASCII (the repository sweeps for stray
+// invisible characters, and a literal smart quote here would be indistinguishable
+// from an accident) and so each test names the exact codepoint it covers.
+//
+// The assertions are written against the pair-equality property -- the two
+// encodings of the same prose must measure identically -- rather than against a
+// fixed expected number, because that property is what the fix guarantees and it
+// stays true if a marker's definition is later refined.
+// ---------------------------------------------------------------------------
+
+const RSQUO = '\u2019';   // right single quotation mark, the default Word apostrophe
+const LSQUO = '\u2018';
+const LDQUO = '\u201C';
+const RDQUO = '\u201D';
+const HELLIP = '\u2026';
+
+const ASCII_PROSE = "I've been here a while. It's fine, really. What's next for us? " +
+                    "I'm sure they're right. Don't stop now.";
+
+test('typography: a U+2019 apostrophe measures identically to an ASCII one across every marker', () => {
+  const curly = ASCII_PROSE.replace(/'/g, RSQUO);
+  assert.notEqual(curly, ASCII_PROSE, 'the two encodings must actually differ as text');
+
+  const a = measureChapter(ASCII_PROSE);
+  const c = measureChapter(curly);
+
+  assert.deepEqual(c, a,
+    'prose written with U+2019 must produce the same eight-marker vector as the same ' +
+    'prose written with U+0027; a difference here means the fold in preprocess() is gone');
+});
+
+test('typography: contraction_rate is non-zero for U+2019 apostrophes (the defect this closes)', () => {
+  const curly = ASCII_PROSE.replace(/'/g, RSQUO);
+  const rate = measureChapter(curly).contraction_rate;
+
+  assert.ok(rate > 0,
+    'contraction_rate read ' + rate + ' for prose containing five contractions; before ' +
+    'version 3 this was exactly 0, which silently zeroed the marker for any author ' +
+    'writing in a mainstream word processor');
+});
+
+test('typography: U+201C and U+201D count toward punctuation_rate the same as U+0022', () => {
+  const ascii = 'He said "one two three" and left. She said "four five six" and left.';
+  const smart = ascii.replace(/"([^"]*)"/g, LDQUO + '$1' + RDQUO);
+  assert.notEqual(smart, ascii, 'the two encodings must actually differ as text');
+
+  assert.equal(measureChapter(smart).punctuation_rate, measureChapter(ascii).punctuation_rate,
+    'smart double quotes must be counted as punctuation, the same as the ASCII form');
+});
+
+test('typography: a folded single quotation mark does not become a false contraction', () => {
+  // The fold turns U+2018/U+2019 into an ASCII apostrophe, so a quoted word becomes
+  // 'good'. CONTRACTION_RE requires a letter on BOTH sides, and a quotation mark has
+  // whitespace or punctuation on one side by construction, so it cannot match.
+  const quoted = 'That was a ' + LSQUO + 'good' + RSQUO + ' idea back then. They agreed with it.';
+
+  assert.equal(measureChapter(quoted).contraction_rate, 0,
+    'a quoted word must not be counted as a contraction after folding');
+});
+
+test('typography: U+2026 (ellipsis) is deliberately left alone', () => {
+  // U+2026 is NOT folded. Expanding it to three periods would count as three
+  // punctuation characters instead of one and could introduce a spurious sentence
+  // boundary mid-sentence, since SENTENCE_END_RE treats a run of periods followed by
+  // whitespace as a sentence end. This test pins that decision so a later change to
+  // the fold has to confront it rather than make it by accident.
+  const withEllipsis = 'They waited' + HELLIP + ' and then they left. It ended there.';
+  const withoutEllipsis = 'They waited and then they left. It ended there.';
+
+  assert.equal(
+    measureChapter(withEllipsis).avg_sentence_length,
+    measureChapter(withoutEllipsis).avg_sentence_length,
+    'U+2026 must not create a sentence boundary; if this fails, the ellipsis was folded'
+  );
+});
+
+test('typography: the fold carries a marker-set version bump, so a pre-fold baseline is rejected', () => {
+  // A baseline captured before the fold carries a contraction_rate measured under the
+  // old meaning. Scoring against it must fail loudly rather than report the difference
+  // as drift. This is the guard ADR-0011 (tranche 2 decisions) established, exercised
+  // for the version it was bumped to here.
+  assert.equal(CURRENT_MARKER_SET_VERSION, 3,
+    'the typographic fold changes what contraction_rate means, so it must carry a version bump');
+
+  const preFold = { markers: measureChapter(ASCII_PROSE), marker_set_version: 2 };
+  assert.throws(
+    () => computeDrift(measureChapter(ASCII_PROSE), preFold, { drift_score_max: 25 }),
+    /capture-voice/,
+    'a version-2 baseline must be rejected as stale, not scored against'
+  );
+});
