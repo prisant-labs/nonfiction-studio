@@ -6,7 +6,8 @@
 // why:          one engine module isolates all logic for testing without CLI overhead;
 //               integrates ledger.mjs parsers, claims-engine.mjs marker scan, and
 //               stylometry-engine.mjs word counter as the single word-counting authority
-// used-by:      bin/ns-doctor
+// used-by:      bin/ns-doctor, and hooks/lib/gate-engine.mjs, which imports
+//               checkWordCountCoherence directly
 //
 // READ-ONLY COVENANT: this module NEVER writes to any bible file or directory.
 // All filesystem access is readFileSync / readdirSync / existsSync only.

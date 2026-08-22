@@ -699,7 +699,7 @@ test('real-repo scope: a deliberately corrupted "other N" claim in bin/ns-notes 
 // and the shipped-site count is asserted precisely instead.
 // ---------------------------------------------------------------------------
 
-test('forward-growth simulation: adding a ninth CLI to a real-repo clone catches all ten real sites that go stale', () => {
+test('forward-growth simulation: adding a ninth CLI to a real-repo clone catches all eight real sites that go stale', () => {
   const { root, cleanup } = cloneRealRepo('growth-simulation');
   try {
     const before = runClonedChecker(root, SCRIPT);
@@ -716,11 +716,17 @@ test('forward-growth simulation: adding a ninth CLI to a real-repo clone catches
     const errorLines = after.combined.split('\n').filter((l) => l.includes(' ERROR: '));
     const shippedErrorLines = errorLines.filter((l) => !l.includes('check-component-counts.test.mjs'));
 
-    // The three direct "N shipped CLIs" claims a prior review already proved this checker
+    // The one direct "N shipped CLIs" claim a prior review already proved this checker
     // catches (never regressed by this fix round).
     assert.ok(shippedErrorLines.some((l) => l.includes('ns-claims.md:')), 'must still catch docs/reference/cli/ns-claims.md\'s direct "eight shipped CLIs" claim; got: ' + after.combined);
+
+    // hooks/lib/bible.mjs's used-by line was rewritten (PF-10 (bible.mjs importer counts)) from
+    // a bare count ("seven of the eight shipped CLIs... thirteen importers total") to a rule
+    // ("every CLI under bin/ imports this directly except ns-statusline"), which carries no
+    // number-plus-noun shape for CANDIDATE_RE to match. Growing the true CLI count must not
+    // manufacture a finding here, the same way it must not leave a stale one behind.
     const bibleFindings = shippedErrorLines.filter((l) => l.includes('bible.mjs'));
-    assert.equal(bibleFindings.length, 2, 'must still catch both hooks/lib/bible.mjs "eight" claims (lines 5 and 7), not only one; got: ' + after.combined);
+    assert.equal(bibleFindings.length, 0, 'hooks/lib/bible.mjs\'s used-by line is rule-based, not count-based, so it must produce no findings even as the CLI count grows; got: ' + after.combined);
 
     // The four "the other seven CLIs" sites fix round 1 exists to close (three code comments the
     // coordinator named, plus the docs/reference/cli/ns-statusline.md prose instance the
@@ -743,7 +749,7 @@ test('forward-growth simulation: adding a ninth CLI to a real-repo clone catches
       'shape this checker cannot see, which is the exact failure the alt text is written ' +
       'to avoid; got: ' + after.combined);
 
-    assert.equal(shippedErrorLines.length, 10, 'must report exactly the ten real shipped sites that go stale on this growth event, no more and no fewer; got: ' + after.combined);
+    assert.equal(shippedErrorLines.length, 8, 'must report exactly the eight real shipped sites that go stale on this growth event, no more and no fewer; got: ' + after.combined);
   } finally {
     cleanup();
   }

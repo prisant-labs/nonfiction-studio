@@ -7,7 +7,7 @@
 //               writes and prunes gate reports under .studio/gate/
 // why:          all engine logic lives in lib modules per S-07 section 4; bin/ns-gate is
 //               a thin shell; hooks/stop-gate.mjs (TSK-034) is the subprocess boundary
-// used-by:      bin/ns-gate
+// used-by:      bin/ns-gate, and hooks/stop-gate.mjs, which imports ALL_FLAGS directly
 
 // EXIT TAXONOMY - the gate is the policy layer and is mode-DEPENDENT by design.
 // CONTRAST with individual engines (ns-claims, ns-stylometry, ns-scrub, ns-doctor),

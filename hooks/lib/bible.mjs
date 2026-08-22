@@ -2,11 +2,11 @@
 // what-it-does: walks up from a start directory to find the book root, reads meta.json and config.json,
 //               and provides atomic progress.json read/write with unknown-field preservation
 // why:          all engine CLIs and hooks share the same root-finding and bible-access logic;
-//               one module eliminates drift across the seven of the eight shipped CLIs and all
-//               six hook scripts that import it (thirteen importers total)
-// used-by:      imported by seven of the eight CLIs under bin/ (ns-claims, ns-doctor, ns-gate,
-//               ns-notes, ns-scrub, ns-status, ns-stylometry; not ns-statusline) and by all six
-//               hook scripts under hooks/
+//               one module eliminates drift across every caller that needs the book root or
+//               progress.json
+// used-by:      every CLI under bin/ imports this directly except ns-statusline, which reaches
+//               it one hop away through hooks/lib/statusline-engine.mjs; also imported directly
+//               by every hook script under hooks/ and by hooks/lib/orientation.mjs
 
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
