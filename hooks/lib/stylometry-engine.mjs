@@ -72,9 +72,19 @@ const FIRST_PERSON = new Set(['i', 'me', 'my', 'mine', 'myself', 'we', 'us', 'ou
 // Second-person pronouns used for second_person_rate.
 const SECOND_PERSON = new Set(['you', 'your', 'yours', 'yourself', 'yourselves']);
 
-// Word regex: alpha sequences, hyphenated compounds as a single token.
+// Word regex: Unicode letter sequences, hyphenated compounds as a single token.
 // Matches "well-curated" as one token, "listening-to-speaking" as one token.
-const WORD_RE = /[a-zA-Z]+(?:-[a-zA-Z]+)*/g;
+// \p{L} (marker_set_version 4) matches any Unicode letter, not just a-z/A-Z, so a
+// precomposed (NFC) accented word like "cafe" with an acute or a Cyrillic or Greek
+// word tokenizes as one whole word instead of fragmenting at the accented letter.
+// Two residual limits, both deliberate and both left alone rather than guessed at:
+// a script written without spaces between words (CJK, Thai, Khmer) has no word
+// boundary for this regex to find, so a whole run of such letters matches as ONE
+// token, not one token per intended word; and NFD-decomposed text (a base letter
+// followed by a separate combining mark, U+0301 and similar, category \p{M} not
+// \p{L}) still fragments at the combining mark, the same way the old regex
+// fragmented every accented letter, because \p{L}+ does not include \p{M}.
+const WORD_RE = /\p{L}+(?:-\p{L}+)*/gu;
 
 // Contraction regex: apostrophe-bonded tokens (captures both contractions like
 // "don't" and possessives like "community's"). The character class is ASCII-only by
@@ -174,7 +184,17 @@ export const DEFAULT_DRIFT_SCORE_MAX = 25;
 //           uses those characters, so no baseline value stored here moves; the bump is
 //           for baselines captured OUTSIDE it, where a pre-fix capture of the same prose
 //           carries a different contraction_rate than a post-fix capture would.
-export const CURRENT_MARKER_SET_VERSION = 3;
+//   3 -> 4  WORD_RE moved from an ASCII-only [a-zA-Z] character class to \p{L}, the
+//           Unicode letter category. Before this, an accented letter split a word in
+//           two ("cafe" with an acute became "caf" plus a lost fragment), which lowered
+//           totalWords, raised avg_word_length's denominator error, and moved every
+//           word-denominated marker (function_word_rate, first_person_rate,
+//           second_person_rate, avg_word_length, type_token_ratio) for any chapter
+//           mentioning an accented name or borrowed word. Nothing in this repository
+//           uses a non-ASCII letter, so no baseline value stored here moves; the bump is
+//           for baselines captured OUTSIDE it, where a pre-fix capture of accented prose
+//           carries different word-denominated markers than a post-fix capture would.
+export const CURRENT_MARKER_SET_VERSION = 4;
 
 // ---------------------------------------------------------------------------
 // Internal helpers

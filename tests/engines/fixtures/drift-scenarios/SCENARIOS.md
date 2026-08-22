@@ -24,7 +24,9 @@ version moves, this field moves with it, or every scenario in this suite fails w
 stale-baseline error instead of producing a score. The `markers` values themselves stay
 frozen, which is what the freeze is actually protecting. It was bumped from 2 to 3 alongside
 the typographic-normalization fix, whose fold changes no value here because none of these
-fixtures contain a smart quote.
+fixtures contain a smart quote. It was bumped again from 3 to 4 alongside the WORD_RE
+Unicode-letter fix (PF-07, accented words fragment), which changes no value here either,
+because none of these fixtures contain a non-ASCII letter.
 
 ## Transformation methodology
 

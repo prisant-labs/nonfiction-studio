@@ -26,7 +26,7 @@
     "baseline": {
       "captured": "2026-07-18T09:00:00Z",
       "sample_count": 2,
-      "marker_set_version": 3,
+      "marker_set_version": 4,
       "method": "word-tokenized prose from the TSK-019 golden two-chapter text (chapters/01-listening-before-speaking.md and chapters/02-finding-your-network.md as originally committed, before this fixture's own planted continuity defect); markers and headings stripped. Re-captured under the corrected engine (roadmap row 1.7, voice registers) with type_token_ratio as a moving average over 100-token windows; this recapture also supersedes the un-reconciled TSK-019 function_word_rate and punctuation_rate this baseline previously carried (TSK-026 reconciled the same golden text for the voice-drift fixture's baseline; this recapture brings this fixture's baseline into agreement).",
       "markers": {
         "function_word_rate": 0.4717,
