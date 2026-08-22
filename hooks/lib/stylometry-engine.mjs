@@ -77,12 +77,17 @@ const SECOND_PERSON = new Set(['you', 'your', 'yours', 'yourself', 'yourselves']
 const WORD_RE = /[a-zA-Z]+(?:-[a-zA-Z]+)*/g;
 
 // Contraction regex: apostrophe-bonded tokens (captures both contractions like
-// "don't" and possessives like "community's").
+// "don't" and possessives like "community's"). The character class is ASCII-only by
+// design: preprocess() folds typographic apostrophes to U+0027 before this runs, so
+// this regex never has to know about them. Do not widen it here without removing
+// the fold, or the two mechanisms will drift apart.
 const CONTRACTION_RE = /[a-zA-Z]+'[a-zA-Z]+/g;
 
 // Punctuation regex: common prose punctuation characters counted per 100 words.
 // Hyphens within hyphenated words are NOT counted (they are part of the word token).
 // Hyphens standing alone between spaces (used as dashes) are counted.
+// ASCII-only by design, for the same reason as CONTRACTION_RE: preprocess() folds
+// typographic double quotes to U+0022 before this runs.
 const PUNCT_RE = /[.,;:!?()"]/g;
 
 // Sentence-end detection: one or more .!? followed by whitespace or end of string.
@@ -154,13 +159,22 @@ const MARKER_CONTRIBUTION_DIVISOR = 3;
 export const DEFAULT_DRIFT_SCORE_MAX = 25;
 
 // Current stylometry marker-set version. Bumped whenever a marker's computation changes
-// meaning under the same key name: type_token_ratio moved from a flat ratio to a
-// TTR_WINDOW_SIZE-token moving average in this bump, version 1 to version 2. A baseline
-// captured under an earlier version would be silently misread as enormous drift if scored
-// without the guard in computeDrift; a stylometry.baseline object predating this field
-// entirely is treated as version 1. Exported so tests and callers can reference it by
-// name instead of hardcoding the number.
-export const CURRENT_MARKER_SET_VERSION = 2;
+// meaning under the same key name. A baseline captured under an earlier version would be
+// silently misread as enormous drift if scored without the guard in computeDrift; a
+// stylometry.baseline object predating this field entirely is treated as version 1.
+// Exported so tests and callers can reference it by name instead of hardcoding the number.
+//
+// History:
+//   1 -> 2  type_token_ratio moved from a flat ratio to a TTR_WINDOW_SIZE-token moving
+//           average, which changed the same key's value on the same prose.
+//   2 -> 3  preprocess() folds typographic quotation characters to their ASCII
+//           equivalents. Before this, contraction_rate read 0 for any text written with
+//           the smart apostrophe every mainstream word processor emits by default, and
+//           punctuation_rate omitted every smart double quote. Nothing in this repository
+//           uses those characters, so no baseline value stored here moves; the bump is
+//           for baselines captured OUTSIDE it, where a pre-fix capture of the same prose
+//           carries a different contraction_rate than a post-fix capture would.
+export const CURRENT_MARKER_SET_VERSION = 3;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -181,7 +195,40 @@ function preprocess(text) {
   t = t.replace(/\[quote:\s*EV-\d{4}\]/g, '');
   t = t.replace(/\[UNVERIFIED\]/g, '');
   t = t.replace(/\[SOURCE-UNVERIFIABLE\]/g, '');
+  t = foldTypographicQuotes(t);
   return t;
+}
+
+/**
+ * Folds typographic quotation characters to their ASCII equivalents, so that
+ * CONTRACTION_RE and PUNCT_RE, both deliberately ASCII-only, see prose written in
+ * a word processor the same way they see prose written in a plain-text editor.
+ *
+ * Why this exists: Word, Google Docs, Obsidian, and most modern editors emit
+ * U+2019 for an apostrophe by default. CONTRACTION_RE matched only U+0027, so an
+ * author who pasted writing samples from any of them captured a baseline with
+ * contraction_rate = 0, and every chapter they later wrote with a plain apostrophe
+ * then read as a 100 percent deviation on that marker. The same applied, less
+ * severely, to PUNCT_RE and the smart double quotes U+201C and U+201D.
+ *
+ * Deliberately NOT folded: U+2026 (horizontal ellipsis). Expanding it to three
+ * periods would count as three punctuation characters instead of one and could
+ * introduce a spurious sentence boundary mid-sentence, since SENTENCE_END_RE
+ * treats a run of periods followed by whitespace as a sentence end. Its correct
+ * treatment is a separate question from this fold and is left alone rather than
+ * guessed at.
+ *
+ * A folded single quote cannot become a false contraction: CONTRACTION_RE requires
+ * a letter on BOTH sides of the apostrophe, and a quotation mark has whitespace or
+ * punctuation on one side by construction.
+ *
+ * @param {string} t - text after marker stripping
+ * @returns {string} the same text with smart quotes folded to ASCII
+ */
+function foldTypographicQuotes(t) {
+  return t
+    .replace(/[\u2018\u2019\u201A\u201B\u02BC]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F]/g, '"');
 }
 
 /**

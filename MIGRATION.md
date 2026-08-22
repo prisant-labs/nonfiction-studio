@@ -64,6 +64,10 @@ What happens if you take this update without re-running `capture-voice`: the sty
 
 The remedy is one command: re-run `/nonfiction-studio:capture-voice` to recapture the baseline. A freshly captured baseline always carries the current `marker_set_version` and clears the skip.
 
+**The current marker set version is 3, and it moved twice.** Version 1 to 2 changed what `type_token_ratio` measures (a flat ratio became a moving average over a fixed token window). Version 2 to 3 made the engine fold typographic quotation characters to their ASCII equivalents before measuring. Before that fold, `contraction_rate` read exactly 0 for prose written with the smart apostrophe (U+2019) that Word, Google Docs, and Obsidian emit by default, and `punctuation_rate` omitted every smart double quote. An author who captured a baseline from samples pasted out of a word processor therefore stored a zeroed contraction marker, and every chapter they later wrote with a plain apostrophe read as a 100 percent deviation on it.
+
+The same one command fixes any of these. If your baseline predates this release for any reason, whether it lacks the field, carries version 1, or carries version 2, re-run `/nonfiction-studio:capture-voice`. If your writing samples contain smart apostrophes, the recaptured `contraction_rate` will be genuinely different from the stored one rather than merely re-stamped, because the old value was wrong.
+
 Separately, and not book-affecting the same way: this release also lowers the default `thresholds.drift_score_max` from 35 to 25, but every scaffolded book carries an explicit value for that key, so only a book that omits it from `.studio/config.json` sees a different default.
 
 Neither change is a MAJOR version bump under "What counts as a breaking change" above (no field was renamed, retyped, or removed; `marker_set_version` is additive), so `ns-doctor --migrate`'s `schema_version` check does not see either one, and the migration log format above does not apply. Both are called out here, outside that format, because the mid-book update promise above is the one place an author would think to look.
