@@ -12,7 +12,7 @@ The `doctor` skill is the bible integrity front door per D-12 (versioned bible w
 
 ## Purpose
 
-`doctor` bridges the deterministic bible integrity engine and the author conversation. The `bin/ns-doctor` engine it invokes runs up to ten checks (bible structure, progress.json schema, meta.json and config.json shape, EV grammar, SRC grammar, orphan claim markers, orphan SRC references, word-count coherence, config-coercion notice, snapshot naming) composed into a single pass. The skill's role is to select the right mode flag, invoke the engine, and present the verdict honestly with per-group counts and routing hints.
+`doctor` bridges the deterministic bible integrity engine and the author conversation. The `bin/ns-doctor` engine it invokes runs up to eleven checks (bible structure, progress.json schema, meta.json and config.json shape, EV grammar, SRC grammar, orphan claim markers, orphan SRC references, word-count coherence, config-coercion notice, snapshot naming, style-profile structure and baseline consistency) composed into a single pass. The skill's role is to select the right mode flag, invoke the engine, and present the verdict honestly with per-group counts and routing hints.
 
 **`bin/ns-doctor` is read-only without exception.** Proven by the grep in the engine's own header (`hooks/lib/doctor-engine.mjs:13-14`; TSK-028, ns-doctor engine). The skill's `report`, `migrate`, and `packs` modes add no log file and write nothing. The `.studio/logs/doctor-<ts>.json` write and bible mutations that appear in the S-06 3.11 specification predate the built engine and describe the Phase 2 `fix` mode contract, unrelated to `install-statusline`.
 
@@ -32,7 +32,7 @@ The mode argument is optional; the default is `report`.
 
 | Mode | Description |
 |---|---|
-| `report` (default) | Full 10-check inventory; exit 0 (clean), exit 1 (findings), exit 2 (error or migration-required prelude) |
+| `report` (default) | Full 11-check inventory; exit 0 (clean), exit 1 (findings), exit 2 (error or migration-required prelude) |
 | `migrate` | Schema-version diagnosis only; never writes; exit 0 when already current, exit 2 when migration is required (genuinely incompatible version) |
 | `packs` | Craft-pack validity check; exit 0 in all v1 cases (no packs directory or no validator yet) |
 | `install-statusline` | Offers a one-time consented write of the main Claude Code status line into `~/.claude/settings.json`; does not invoke `bin/ns-doctor`; writes only on an explicit yes |
@@ -57,6 +57,7 @@ Alternate entry points:
 | `research/evidence-log.md` | Step 3 (via engine) | EV grammar (required fields, enum values, SRC ID format); orphan-marker cross-reference |
 | `research/sources.md` | Step 3 (via engine) | SRC grammar (type enum, retrieval-status enum); SRC cross-reference check |
 | `chapters/*.md` | Step 3 (via engine) | Scanned for `[claim: EV-nnnn]` markers in the orphan-marker check |
+| `context/style-profile.md` | Step 3 (via engine) | Style-profile structure (seven sections, present and in order); Baseline reference field completeness; agreement with `config.json`'s stylometry baseline; Exemplars path resolution; a pre-capture stub is a notice unless `config.json` already carries a baseline |
 | `~/.claude/settings.json` | `install-statusline` mode only, by the skill itself (not the engine) | Read first to merge into, never to validate against the bible; a user-scope file, outside any book project |
 
 ### Outputs
@@ -83,7 +84,7 @@ flow (Steps A-D) that never invokes `bin/ns-doctor` at all; see "Install-statusl
 3. **Single Bash invocation (one call per mode).** Runs one Bash call: `node "<plugin-root>/bin/ns-doctor" --project=. [--report|--migrate|--validate-packs] --json`. Captures exit code, stdout (JSON), and stderr. No individual sub-CLI calls are made; the engine composes its checks internally.
 
 4. **Present the result (exit-code mapping).** Maps exit code to the presented verdict:
-   - **Report mode, exit 0:** clean pass; no findings; names the ten checks run.
+   - **Report mode, exit 0:** clean pass; no findings; names the eleven checks run.
    - **Report mode, exit 1:** findings grouped by check-type prefix with per-group counts and routing hints; closes with total count and re-run invitation.
    - **Report mode, exit 2:** surfaces stderr error; NEVER treated as a pass.
    - **Migrate mode:** exit 0 when the schema is already current (stdout JSON with status "current"); exit 2 when migration is required (stderr content); presents each clearly.
@@ -93,7 +94,7 @@ flow (Steps A-D) that never invokes `bin/ns-doctor` at all; see "Install-statusl
 
 | Mode | Exit code | Meaning | Skill action |
 |---|---|---|---|
-| `report` | 0 | All checks passed; no findings | Present clean pass; name the ten checks; note any notices |
+| `report` | 0 | All checks passed; no findings | Present clean pass; name the eleven checks; note any notices |
 | `report` | 1 | One or more findings | Present grouped findings with counts and routing hints; invite re-run |
 | `report` | 2 | Operational error (e.g. BibleError, bad args) or schema-version prelude | Surface stderr; NEVER treat as a pass; route to `doctor migrate` if version mismatch indicated |
 | `migrate` | 0 | Schema is already current; nothing to migrate | Present the current-schema message; note writes are never performed in v1 |
@@ -103,7 +104,7 @@ flow (Steps A-D) that never invokes `bin/ns-doctor` at all; see "Install-statusl
 
 ## Check Inventory (Report Mode)
 
-The engine runs ten checks in order. The `type` prefix of each finding identifies the group.
+The engine runs eleven checks in order. The `type` prefix of each finding identifies the group.
 
 | Check | Engine section | Finding type prefix | What it checks |
 |---|---|---|---|
@@ -117,6 +118,7 @@ The engine runs ten checks in order. The `type` prefix of each finding identifie
 | Word-count coherence | 8 | `coherence` | Chapter word count in progress.json matches the file on disk (single authority: stylometry tokenizer per TSK-029b (state-coherence gate check)) |
 | Config-coercion notice | 9 | `config-coercion` | Reports `thesis_alignment.mode: block` as a notice (informational; never affects exit code; D-03 (layered Stop gate) coercion happens at gate time, not here) |
 | Snapshot naming | 10 | `snapshot` | Files in `.studio/snapshots/` match the pattern `<slug>.<YYYYMMDDTHHMMSSZ>.md` |
+| Style profile structure | 11 | `style-profile` | `context/style-profile.md` (F-CI-08, voice quality unchecked, deterministic half): a pre-capture stub is a notice unless `config.json` already carries a stylometry baseline (then a finding); once populated, all seven sections present and in order, the `Baseline reference` block's three required fields, agreement with `config.json`'s stylometry baseline when one exists, and Exemplars path resolution |
 
 ## Finding Grouping and Routing Hints
 
@@ -132,6 +134,7 @@ When exit 1 is returned, findings are grouped by the prefix of their `type` fiel
 | `src-ref` | Orphan SRC references | Run `/nonfiction-studio:research-pass` to add the missing SRC entry, or `/nonfiction-studio:fact-check-pass` to reconcile cross-references. |
 | `coherence` | Word-count coherence | This typically self-resolves when the PostToolBatch hook runs on the next chapter write. If the mismatch persists, check whether a manual edit bypassed the hook. |
 | `snapshot` | Snapshot naming | Rename the file in `.studio/snapshots/` to match the pattern `<slug>.<YYYYMMDDTHHMMSSZ>.md`. |
+| `style-profile` | Style profile structure | Edit `context/style-profile.md` to add the named missing section, reorder sections, fill in the named `Baseline reference` field, or fix the named `Exemplars` path. A `captured` or `sample_count` disagreement, or a stub sitting alongside an existing `config.json` baseline, typically means re-running `/nonfiction-studio:capture-voice` to resynchronize both files. |
 
 ## Migrate Mode
 

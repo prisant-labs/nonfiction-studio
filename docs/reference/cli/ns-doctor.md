@@ -9,9 +9,9 @@ tags: ["cli", "doctor", "integrity", "schema", "coherence"]
 # ns-doctor
 
 Validates the book project's bible structure, schema versions, EV/SRC grammar, orphan
-references, word-count coherence, snapshot naming, and config shape. Exits 0 when the
-bible is clean; exits 1 when findings are present; exits 2 on schema migration required
-or operational error.
+references, word-count coherence, snapshot naming, config shape, and style-profile
+structure and baseline consistency. Exits 0 when the bible is clean; exits 1 when findings
+are present; exits 2 on schema migration required or operational error.
 
 ## Purpose
 
@@ -64,7 +64,7 @@ or use the same `node` plus full-path form.
 
 ## Check inventory
 
-`ns-doctor` runs ten checks in order:
+`ns-doctor` runs eleven checks in order:
 
 1. **Bible structure** - all scaffold-mandated paths are present (progress.json, config.json, evidence-log.md, etc.)
 2. **progress.json schema** - validated against `templates/book-scaffold/.studio/progress.schema.json`; missing or wrong-typed required fields are named findings
@@ -76,6 +76,7 @@ or use the same `node` plus full-path form.
 8. **Word-count coherence** - chapter file word counts vs progress.json recorded values; names the chapter and both counts on mismatch
 9. **Config coercion notice** - informational report when thesis_alignment is set to block (D-03 coerces it to warn at gate time); never affects exit code
 10. **Snapshot naming** - `.studio/snapshots/` files must match `<slug>.<YYYYMMDDTHHMMSSZ>.md`
+11. **Style profile structure** - `context/style-profile.md` (F-CI-08, voice quality unchecked, deterministic half): a pre-capture stub (no `# Style profile` heading) is a NOTICE unless `config.json` already carries a stylometry baseline, in which case it is a finding; once populated, the seven required sections (`## Voice`, `## Diction`, `## Rhythm`, `## Do`, `## Do not`, `## Exemplars`, `## Baseline reference`) must be present and in order, the `Baseline reference` block's `vector`, `captured`, and `sample_count` fields must be present, `captured` and `sample_count` must agree with `config.json`'s stylometry baseline when one exists, and every `Exemplars` path must resolve relative to the book root
 
 ## Output
 

@@ -26,14 +26,21 @@ The `Baseline reference` section carries three fixed fields and must not duplica
 | `captured` | string | required | RFC 3339 UTC timestamp of the voice-capture run; must agree with `config.json` `stylometry.baseline.captured` |
 | `sample_count` | integer | required | Number of voice samples used in the baseline; must agree with `config.json` `stylometry.baseline.sample_count` |
 
-`bin/ns-doctor` warns if the `captured` timestamp here disagrees with the corresponding value in `config.json`.
+`bin/ns-doctor` reports a finding if the `captured` timestamp or `sample_count` here disagrees with the corresponding value in `config.json`, whenever `config.json` carries a stylometry baseline to compare against.
+
+## Doctor validation
+
+`bin/ns-doctor` treats `context/style-profile.md` differently depending on whether it has been captured yet:
+
+- **Pre-capture stub.** Before `capture-voice` runs, `context/style-profile.md` is an HTML-comment stub with no `# Style profile` heading (see `templates/book-scaffold/context/style-profile.md`). This is a legitimate state: the doctor reports a NOTICE ("style profile not yet captured; run capture-voice"), not a finding, and this does not affect the exit code. The one exception is a stub sitting alongside a `config.json` that already carries a stylometry baseline: `capture-voice` writes the profile and the baseline together, so a baseline with no captured profile is inconsistent state, and the doctor reports that as a finding instead.
+- **Populated profile.** Once the `# Style profile` heading is present, the doctor reports a finding for any of the seven sections listed above that is missing or out of order; a `Baseline reference` block missing `vector`, `captured`, or `sample_count`; a `captured` or `sample_count` value that disagrees with `config.json`'s stylometry baseline (only checked when `config.json` carries one); or an `Exemplars` path that does not resolve relative to the book root. Each finding names the section, field, or path at fault.
 
 ## Placement rules
 
-- `context/style-profile.md` is not append-only. `voice-capture` writes the file in full at intake; the author may edit any section at any time.
+- `context/style-profile.md` is not append-only. `capture-voice` writes the file in full at intake; the author may edit any section at any time.
 - Changes to `## Voice`, `## Diction`, `## Rhythm`, `## Do`, and `## Do not` take effect immediately; the `SessionStart` hook injects a compact form of these sections into the orientation block at each session start.
-- Changes to `## Baseline reference` must be synchronized with `config.json`; `bin/ns-doctor` warns on a timestamp mismatch.
-- Paths listed under `## Exemplars` must be valid relative paths under `context/samples/`; `bin/ns-doctor` reports broken sample paths.
+- Changes to `## Baseline reference` must be synchronized with `config.json`; `bin/ns-doctor` reports a finding on a `captured` or `sample_count` mismatch.
+- Paths listed under `## Exemplars` must be valid relative paths under `context/samples/`; `bin/ns-doctor` reports a finding for a broken sample path.
 
 ## Example
 
