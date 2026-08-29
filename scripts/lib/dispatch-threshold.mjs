@@ -6,18 +6,20 @@
 // why:          roadmap row 1.12 requires that a deliberately broken dispatch table turns a
 //               live Tier B run red. Before this module existed, scripts/run-evals.mjs always
 //               exited 0 once every case had been graded, whatever the pass rate: dispatch
-//               accuracy was advisory signal only, never a gate. 70% is the chosen threshold:
-//               grading uses a small model (haiku) against an intentionally loose match (does
-//               the response name the expected callee, not exact phrasing or output quality),
-//               so occasional misses from a HEALTHY dispatch table are expected noise, not a
-//               defect. Against the evals/ set's size when this was written (34 cases across
-//               16 files, verified by counting the .eval.json cases[] arrays directly rather
-//               than trusting a comment elsewhere), a healthy table can absorb roughly a third
-//               of cases missing before this gate fails it, while a genuinely broken table
-//               (most of an eval file, or several files, misrouting) drops well below it.
-//               Chosen to catch severe breakage without flagging normal grading variance; not
-//               a claim that 70% is the ceiling of a healthy table, and not pinned to the exact
-//               case count above, which will drift as evals/ grows.
+//               accuracy was advisory signal only, never a gate. 70% is the chosen threshold,
+//               carried forward unchanged through F-CI-10 (weak eval grading)'s fail-closed
+//               DISPATCH-token grading rewrite (see scripts/run-evals.mjs's grading contract):
+//               re-tuning it is a decision for the maintainer's next live Tier B run, once the
+//               actual pass rate under the stricter contract has been observed, not something
+//               either change should guess at. Against the evals/ set's size when this was
+//               written (34 cases across 16 files, verified by counting the .eval.json
+//               cases[] arrays directly rather than trusting a comment elsewhere), a healthy
+//               table can absorb roughly a third of cases missing before this gate fails it,
+//               while a genuinely broken table (most of an eval file, or several files,
+//               misrouting) drops well below it. Chosen to catch severe breakage without
+//               flagging normal grading variance; not a claim that 70% is the ceiling of a
+//               healthy table, and not pinned to the exact case count above, which will drift
+//               as evals/ grows.
 // used-by:      scripts/run-evals.mjs
 // exit taxonomy: n/a (library module; the caller chooses its own exit code)
 

@@ -82,7 +82,8 @@ The `Baseline reference` section carries three fixed fields and must not duplica
 ## Consumed by
 
 - `voice-capture` skill: writes the initial profile at intake, populating all seven sections from the structured author interview.
-- `bin/ns-stylometry` (TSK-026 (ns-stylometry engine)): reads the `Baseline reference` block to locate the numeric vector in `config.json` and cross-checks the `captured` timestamp; computes the `drift_score` stored in `progress.json`.
+- `bin/ns-stylometry` (TSK-026 (ns-stylometry engine)): reads the numeric vector directly from `.studio/config.json`'s `stylometry.baseline.markers`, the location this file's `Baseline reference` block points to, and computes the `drift_score` stored in `progress.json`. It does not read this file itself and does not cross-check the `captured` timestamp; that cross-check is `bin/ns-doctor`'s, described under "Doctor validation" above.
+- `bin/ns-doctor` (the eleventh check in `hooks/lib/doctor-engine.mjs`'s `runChecks`): reads this file's `Baseline reference` block directly and cross-checks its `captured` and `sample_count` fields against `.studio/config.json`'s stylometry baseline, per "Doctor validation" above.
 - `drafting-partner`: reads `## Voice`, `## Diction`, `## Rhythm`, `## Do`, and `## Do not` for craft guidance when generating chapter prose.
 - `line-editor`: reads the same craft sections to calibrate line edits against the author's voice.
 - `voice-guardian`: monitors the active writing session against the profile and raises stylometry alerts when drift exceeds the threshold in `config.json`.
