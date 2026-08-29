@@ -17,9 +17,15 @@
 // used-by:      .github/workflows/tier-b.yml
 //
 // Grading contract (F-CI-10 (weak eval grading), replacing a prior substring check): the
-// prompt built below never states the expected callee anywhere, in any form - not the callee
-// name, not the covers description it is derived from. The model is asked only to name the
-// component it believes would be dispatched, as exactly one line of the form
+// construction code below never states the expected callee anywhere, in any form - not the
+// callee name, not the covers description it is derived from - except where an eval case's own
+// "given" text names its hook literally (e.g. post-tool-use.eval.json's given text opens
+// "PostToolUse fires for a WebFetch result..."), a pre-existing eval-content property this
+// change does not touch: all 16 cases across the 6 hook eval files (post-tool-batch,
+// post-tool-use, pre-compact, pre-tool-use, session-start, stop) name their hook this way, while
+// the 10 chain eval files' 18 cases describe a triggering situation without naming the callee.
+// The model is asked only to name the component it believes would be dispatched, as exactly one
+// line of the form
 // "DISPATCH: <component-name>", optionally followed by one sentence of reasoning. Grading
 // (gradeResponse, exported below and unit-tested directly with zero model calls in
 // tests/checks/run-evals.test.mjs) parses the FIRST such line out of the reply - a later,
@@ -43,10 +49,14 @@
 // in the prompt, which is a fundamentally easier task than answering cold with an exclusive
 // token it was never shown. No live run against evals/ has been made since this change landed
 // (no live model calls are made by this task's tests or by its own verification), so the new
-// pass rate under the stricter contract is not yet known. The dispatch-accuracy threshold in
-// scripts/lib/dispatch-threshold.mjs is deliberately left untouched at 0.70: re-tuning it is a
-// decision for the maintainer's next live Tier B run, once the actual pass rate under this
-// contract has been observed, not something this change should guess at.
+// pass rate under the stricter contract is not yet known. Pass rates are also not comparable
+// ACROSS the two eval shapes for the reason noted above: the 6 hook files' cases name their
+// hook inside "given" itself, so their pass rate measures something closer to reading
+// comprehension than the 10 chain files' cold-inference task, and will tend to run higher for
+// that reason alone, not because chain dispatch is less reliable. The dispatch-accuracy
+// threshold in scripts/lib/dispatch-threshold.mjs is deliberately left untouched at 0.70:
+// re-tuning it is a decision for the maintainer's next live Tier B run, once the actual pass
+// rate under this contract has been observed, not something this change should guess at.
 //
 // Exit taxonomy:
 //   0  - every case graded AND the dispatch-accuracy threshold was met, OR a named green skip
@@ -365,12 +375,17 @@ for (const s of sets) {
       process.exit(3);
     }
 
-    // Build prompt: give the model ONLY the trigger text, never the callee it is being graded
-    // against. Deliberately excludes coversDesc (used above and below for the runner's own
-    // logging only): describeCovers() renders "chain: draft-chapter -> drafting-partner" or
-    // "hook: PostToolUse", which names the expected callee just as directly as the deleted
-    // "Expected callee: " line did. Naming any component in the prompt at all would let the
-    // model pass by repeating what it was handed, rather than by actually deciding.
+    // Build prompt: the construction code here injects nothing that names the callee it is
+    // being graded against. Deliberately excludes coversDesc (used above and below for the
+    // runner's own logging only): describeCovers() renders "chain: draft-chapter ->
+    // drafting-partner" or "hook: PostToolUse", which names the expected callee just as
+    // directly as the deleted "Expected callee: " line did, so it must never reach the prompt.
+    // This is a claim about what this code adds, not about the prompt as sent: c.given is
+    // interpolated verbatim below, and for the 6 hook eval files (post-tool-batch,
+    // post-tool-use, pre-compact, pre-tool-use, session-start, stop) that eval-authored text
+    // already names the hook itself (e.g. "PostToolUse fires for..."), a pre-existing property
+    // of those eval files this change does not touch. The 10 chain eval files' given text does
+    // not name their callee, so only those cases exercise a genuinely cold inference.
     const callee = covers.chain ? covers.chain[1] : covers.hook;
     const prompt =
       'Context: Nonfiction Studio plugin evaluation.\n' +
