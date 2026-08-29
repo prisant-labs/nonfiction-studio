@@ -19,6 +19,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildEnv, runNodeScript, pathWithoutClaudeCli } from './spawn-helper.mjs';
+import { gradeResponse } from '../../scripts/run-evals.mjs';
 
 const SCRIPT = 'scripts/run-evals.mjs';
 
@@ -92,4 +93,76 @@ test('requirement 5: run-integration.mjs and run-evals.mjs agree given the ident
   assert.equal(b.status, 0, 'run-evals.mjs must skip green; got: ' + b.combined);
   assert.match(a.combined, /CLAUDE_CODE_OAUTH_TOKEN/);
   assert.match(b.combined, /CLAUDE_CODE_OAUTH_TOKEN/);
+});
+
+// ---------------------------------------------------------------------------
+// F-CI-10 (weak eval grading): the fail-closed DISPATCH-token grading contract.
+// gradeResponse is imported directly (see the top of this file), never spawned, so every
+// scenario below runs with zero model calls and zero claude CLI dependency. main()'s own guard
+// in scripts/run-evals.mjs (see that file) is what makes this safe: importing the module for
+// gradeResponse alone must never execute the credential decision, eval loading, or a live call
+// as a side effect of the import statement.
+// ---------------------------------------------------------------------------
+
+test('exact match on a DISPATCH: line passes', () => {
+  assert.equal(
+    gradeResponse('drafting-partner', 'DISPATCH: drafting-partner\nBecause it drafts the chapter.'),
+    true
+  );
+});
+
+test('a wrong DISPATCH: line fails even when the correct callee is named elsewhere in prose', () => {
+  // This is the shape the deleted callee-echo fallback (`|| text.includes(callee)`) used to
+  // pass: the correct name appears somewhere in the reply, but the model's actual DISPATCH:
+  // line names something else. Fail-closed grading must not rescue a wrong answer just because
+  // the right word shows up nearby.
+  assert.equal(
+    gradeResponse(
+      'drafting-partner',
+      'DISPATCH: line-editor\nThough drafting-partner handles drafting, line-editor fits here.'
+    ),
+    false
+  );
+});
+
+test('no DISPATCH: line at all fails, even when the correct callee is named in prose', () => {
+  // The exact shape of the old echo behavior: the model names the right component in prose
+  // without ever committing to the exclusive DISPATCH: token the new contract requires.
+  assert.equal(
+    gradeResponse('drafting-partner', 'I would call drafting-partner for this job.'),
+    false
+  );
+});
+
+test('a bare "DISPATCH:" with no name after the colon fails (empty name)', () => {
+  assert.equal(
+    gradeResponse('drafting-partner', 'DISPATCH:   \nSome reasoning that never names anything.'),
+    false
+  );
+});
+
+test('hook names normalize across PascalCase, kebab-case, and spacing', () => {
+  assert.equal(gradeResponse('PostToolUse', 'DISPATCH: post-tool-use'), true);
+  assert.equal(gradeResponse('PostToolUse', 'dispatch: POST TOOL USE'), true);
+});
+
+test('the FIRST DISPATCH: line wins: a wrong first line is not rescued by a correct later one', () => {
+  assert.equal(
+    gradeResponse('drafting-partner', 'DISPATCH: line-editor\nDISPATCH: drafting-partner'),
+    false
+  );
+});
+
+test('the FIRST DISPATCH: line wins: a correct first line is not spoiled by a wrong later one', () => {
+  assert.equal(
+    gradeResponse('drafting-partner', 'DISPATCH: drafting-partner\nDISPATCH: line-editor'),
+    true
+  );
+});
+
+test('naming the correct callee only in prose (no DISPATCH: line) fails - the old echo shape', () => {
+  assert.equal(
+    gradeResponse('drafting-partner', 'The correct component here is drafting-partner.'),
+    false
+  );
 });
