@@ -37,7 +37,7 @@ The `Baseline reference` section carries three fixed fields and must not duplica
 
 ## Placement rules
 
-- `context/style-profile.md` is not append-only. `capture-voice` writes the file in full at intake; the author may edit any section at any time.
+- `context/style-profile.md` is not append-only. `voice-capture` writes the file in full at intake; the author may edit any section at any time.
 - Changes to `## Voice`, `## Diction`, `## Rhythm`, `## Do`, and `## Do not` take effect immediately; the `SessionStart` hook injects a compact form of these sections into the orientation block at each session start.
 - Changes to `## Baseline reference` must be synchronized with `config.json`; `bin/ns-doctor` reports a finding on a `captured` or `sample_count` mismatch.
 - Paths listed under `## Exemplars` must be valid relative paths under `context/samples/`; `bin/ns-doctor` reports a finding for a broken sample path.
