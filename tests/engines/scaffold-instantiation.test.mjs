@@ -3,34 +3,34 @@
 //               skills/init-project/SKILL.md Steps 5-6 instantiate it, is doctor-clean
 // what-it-does: clones templates/book-scaffold/ into a mkdtempSync temp dir, applies the exact
 //               token substitutions Steps 5-6 specify ({{DATE}}, {{DATETIME}}, {{BOOK_TITLE}},
-//               {{PLUGIN_VERSION}}) with fixed deterministic values, asserts no template tokens
-//               survive substitution, then runs a real spawned bin/ns-doctor against the temp
+//               {{PLUGIN_VERSION}}) with fixed deterministic values ONLY to the named files, then
+//               recursively scans the ENTIRE cloned tree (not just the named files) for any
+//               surviving {{TOKEN}} marker, so a future scaffold file that gains a token without
+//               SUBSTITUTION_FILES (and the skill) being updated fails this scan loudly instead
+//               of shipping unnoticed. Then runs a real spawned bin/ns-doctor against the temp
 //               dir (exit 0, zero findings, the Task 5 style-profile.not-captured NOTICE
 //               present) and cross-checks the same result via a direct hooks/lib/doctor-engine.mjs
-//               runChecks call. A deliberately corrupted clone (.studio/progress.json replaced
-//               with invalid JSON) is the negative control: the raw un-substituted scaffold was
-//               checked by hand and already doctors clean (none of the four templated fields are
-//               validated for format or content by doctor-engine.mjs, only for being a string),
-//               so an un-substituted clone cannot serve as the negative control here.
+//               runChecks call. Two deliberately corrupted clones are the negative controls: one
+//               with .studio/progress.json replaced with invalid JSON (schema.invalid-json), one
+//               with structure/outline.md deleted (structure.missing-path), so load-bearing
+//               coverage spans more than the JSON-parse layer. The raw un-substituted scaffold
+//               was checked by hand and already doctors clean (none of the four templated fields
+//               are validated for format or content by doctor-engine.mjs, only for being a
+//               string), so an un-substituted clone cannot serve as a negative control here.
 // why:          F-CI-06 (scaffold untested): the scaffold every new book starts from had never
 //               been proven, in CI, to survive the instantiation an author actually runs.
 // exit taxonomy: n/a (test file; node --test)
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, cpSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { mkdtempSync, cpSync, rmSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { runChecks } from '../../hooks/lib/doctor-engine.mjs';
+import { REPO_ROOT, runNodeScript, buildEnv } from '../checks/spawn-helper.mjs';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const REPO_ROOT = join(__dirname, '..', '..');
 const SCAFFOLD_SRC = join(REPO_ROOT, 'templates', 'book-scaffold');
-const DOCTOR_BIN = join(REPO_ROOT, 'bin', 'ns-doctor');
 const PLUGIN_MANIFEST_PATH = join(REPO_ROOT, '.claude-plugin', 'plugin.json');
 
 // ---------------------------------------------------------------------------
@@ -105,28 +105,46 @@ function applyInitProjectSubstitutions(root) {
   }
 }
 
-function assertNoLeftoverTokens(root) {
-  const TOKEN_RE = /\{\{[A-Z_]+\}\}/;
-  for (const rel of SUBSTITUTION_FILES) {
-    const abs = join(root, ...rel.split('/'));
+const LEFTOVER_TOKEN_RE = /\{\{[A-Z_]+\}\}/;
+
+// Recursively scans the ENTIRE cloned tree (every file, not only the ones
+// substitution touched) for a surviving {{TOKEN}} marker. This is the
+// completeness proof: SUBSTITUTION_FILES and skills/init-project/SKILL.md
+// name the files that currently carry tokens, but if a future scaffold
+// change adds a templated file to templates/book-scaffold/ without updating
+// both of those, nothing else in this file would catch the stray {{TOKEN}}
+// string. Scanning the whole tree, rather than trusting the named-files
+// list to stay complete, is what makes that assumption self-enforcing.
+function scanForLeftoverTokens(root) {
+  const violations = [];
+  const entries = readdirSync(root, { recursive: true, withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const abs = join(entry.parentPath, entry.name);
     const text = readFileSync(abs, 'utf8');
-    const match = TOKEN_RE.exec(text);
-    assert.equal(match, null, rel + ' still contains an unsubstituted token: ' + (match && match[0]));
+    const match = LEFTOVER_TOKEN_RE.exec(text);
+    if (match) {
+      violations.push(relative(root, abs).split('\\').join('/') + ': ' + match[0]);
+    }
   }
+  return violations;
+}
+
+function assertNoLeftoverTokens(root) {
+  const violations = scanForLeftoverTokens(root);
+  assert.deepEqual(violations, [], 'unsubstituted token(s) survived in the cloned tree: ' + violations.join(', '));
 }
 
 // ---------------------------------------------------------------------------
-// bin/ns-doctor spawn helper. No shell involved: process.execPath plus an
-// argv array, so nothing here depends on OS shell syntax.
+// bin/ns-doctor spawn helper, reusing tests/checks/spawn-helper.mjs's
+// runNodeScript (process.execPath plus an argv array, no shell involved, so
+// nothing here depends on OS shell syntax) and buildEnv (doctor needs no
+// credentials; buildEnv's credential stripping is inert here but keeps this
+// spawn on the same env-construction path as the rest of the suite).
 // ---------------------------------------------------------------------------
 
 function spawnDoctorJson(projectDir) {
-  const result = spawnSync(process.execPath, [DOCTOR_BIN, '--project=' + projectDir, '--json'], {
-    encoding: 'utf8',
-    cwd: REPO_ROOT,
-    env: process.env,
-  });
-  return result;
+  return runNodeScript('bin/ns-doctor', ['--project=' + projectDir, '--json'], buildEnv());
 }
 
 // ---------------------------------------------------------------------------
@@ -231,5 +249,26 @@ test('negative control: a clone with invalid .studio/progress.json fails doctor'
   assert.ok(
     parsed.findings.some((f) => f.type === 'schema.invalid-json'),
     'expected a schema.invalid-json finding, got: ' + JSON.stringify(parsed.findings)
+  );
+});
+
+// Second corruption shape: a required scaffold path removed outright, so
+// negative-control coverage spans more than the JSON-parse layer above.
+test('negative control: a clone missing a required scaffold path fails doctor with structure.missing-path', () => {
+  const tempDir = makeTempClone('negative-missing-path');
+  tempDirsToClean.push(tempDir);
+
+  applyInitProjectSubstitutions(tempDir);
+
+  const outlinePath = join(tempDir, 'structure', 'outline.md');
+  rmSync(outlinePath);
+
+  const result = spawnDoctorJson(tempDir);
+  assert.notEqual(result.status, 0, 'ns-doctor should not exit 0 with a required scaffold path missing');
+
+  const parsed = JSON.parse(result.stdout);
+  assert.ok(
+    parsed.findings.some((f) => f.type === 'structure.missing-path' && f.path === 'structure/outline.md'),
+    'expected a structure.missing-path finding for structure/outline.md, got: ' + JSON.stringify(parsed.findings)
   );
 });
