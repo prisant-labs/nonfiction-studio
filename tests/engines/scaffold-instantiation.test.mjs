@@ -1,6 +1,6 @@
 // tests/engines/scaffold-instantiation.test.mjs
 // what-it-is:   proof that the literal templates/book-scaffold/ tree, instantiated the way
-//               skills/init-project/SKILL.md Steps 5-6 instantiate it, is doctor-clean
+//               skills/nfs-new-book/SKILL.md Steps 5-6 instantiate it, is doctor-clean
 // what-it-does: clones templates/book-scaffold/ into a mkdtempSync temp dir, applies the exact
 //               token substitutions Steps 5-6 specify ({{DATE}}, {{DATETIME}}, {{BOOK_TITLE}},
 //               {{PLUGIN_VERSION}}) with fixed deterministic values ONLY to the named files, then
@@ -45,7 +45,7 @@ const FIXED_BOOK_TITLE = 'The Fixture Book';
 const PLUGIN_VERSION = JSON.parse(readFileSync(PLUGIN_MANIFEST_PATH, 'utf8')).version;
 
 // ---------------------------------------------------------------------------
-// Per-file substitution map, derived directly from skills/init-project/SKILL.md
+// Per-file substitution map, derived directly from skills/nfs-new-book/SKILL.md
 // Steps 5-6 and confirmed against the template tree with:
 //   grep -rn "{{" templates/book-scaffold/
 // which returns exactly these four files and no others:
@@ -109,7 +109,7 @@ const LEFTOVER_TOKEN_RE = /\{\{[A-Z_]+\}\}/;
 
 // Recursively scans the ENTIRE cloned tree (every file, not only the ones
 // substitution touched) for a surviving {{TOKEN}} marker. This is the
-// completeness proof: SUBSTITUTION_FILES and skills/init-project/SKILL.md
+// completeness proof: SUBSTITUTION_FILES and skills/nfs-new-book/SKILL.md
 // name the files that currently carry tokens, but if a future scaffold
 // change adds a templated file to templates/book-scaffold/ without updating
 // both of those, nothing else in this file would catch the stray {{TOKEN}}
@@ -159,7 +159,7 @@ test.after(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Positive case: the scaffold instantiated the way init-project instantiates it
+// Positive case: the scaffold instantiated the way nfs-new-book instantiates it
 // ---------------------------------------------------------------------------
 
 test('instantiated scaffold: token substitution leaves no {{TOKEN}} markers', () => {

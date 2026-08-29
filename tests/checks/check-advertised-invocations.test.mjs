@@ -247,10 +247,10 @@ test('real-repo scope: every advertised invocation in the current tree resolves 
   }
 });
 
-test('real-repo scope: a deliberately corrupted advertised invocation in skills/studio/SKILL.md is caught', () => {
+test('real-repo scope: a deliberately corrupted advertised invocation in skills/nfs-start/SKILL.md is caught', () => {
   const { root, cleanup } = cloneRealRepo('real-studio-corrupted');
   try {
-    const skillPath = join(root, 'skills', 'studio', 'SKILL.md');
+    const skillPath = join(root, 'skills', 'nfs-start', 'SKILL.md');
     const before = readFileSync(skillPath, 'utf8');
     const bogusName = 'phantom-corrupt-tool';
     const after = before + '\n\nRun `/nonfiction-studio:' + bogusName + '` for a corrupted reference.\n';

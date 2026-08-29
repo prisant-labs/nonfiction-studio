@@ -18,7 +18,7 @@ tools:
   - Read
   - Write
 chain:
-  - init-project
+  - nfs-new-book
 metadata:
   version: 0.1.0
   tier: convergent

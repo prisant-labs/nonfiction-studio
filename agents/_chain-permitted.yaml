@@ -4,8 +4,8 @@
 # Schema: caller-component-name to yaml-sequence of callee-component-names.
 # The vendored check (S4, chain-contract.mjs) validates this file when chaining is
 # in use. Under --profile plain-plugin, S4 is provenance "house" and is turned off
-# (HOUSE_REQIDS). Phantom errors for skill callers not yet on disk (intake-interview,
-# capture-voice, outline-book, research-pass, draft-chapter, fact-check-pass) are
+# (HOUSE_REQIDS). Phantom errors for skill callers not yet on disk (nfs-interview,
+# nfs-capture-voice, nfs-outline, nfs-research, nfs-draft, nfs-fact-check) are
 # suppressed in that profile. Enforcement of those edges is pending TSK-055 (Tier A
 # check scripts). See X-02 (task catalog) TSK-044 acceptance note, dated 2026-07-19.
 #
@@ -23,7 +23,7 @@
 # If not, invoke the init-project skill so the directory structure appears
 # before the interview begins."
 interviewer:
-  - init-project
+  - nfs-new-book
 
 # =============================================================================
 # Agent-to-agent edge
@@ -41,33 +41,33 @@ drafting-partner:
 
 # S-06 (skills and invocation surface), section 3.2 (intake-interview):
 # "Agents invoked: interviewer"
-intake-interview:
+nfs-interview:
   - interviewer
 
 # S-06 (skills and invocation surface), section 3.3 (capture-voice):
 # "Agents invoked: voice-capture"
-capture-voice:
+nfs-capture-voice:
   - voice-capture
 
 # S-06 (skills and invocation surface), section 3.4 (outline-book):
 # "Agents invoked: thesis-architect (conditional on missing thesis);
 # structure-architect"
-outline-book:
+nfs-outline:
   - thesis-architect
   - structure-architect
 
 # S-06 (skills and invocation surface), section 3.5 (research-pass):
 # "Agents invoked: research-librarian"
-research-pass:
+nfs-research:
   - research-librarian
 
 # S-06 (skills and invocation surface), section 3.6 (draft-chapter):
 # "Agents invoked: drafting-partner; line-editor"
-draft-chapter:
+nfs-draft:
   - drafting-partner
   - line-editor
 
 # S-06 (skills and invocation surface), section 3.7 (fact-check-pass):
 # "Agents invoked: fact-checker"
-fact-check-pass:
+nfs-fact-check:
   - fact-checker

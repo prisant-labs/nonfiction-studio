@@ -43,7 +43,7 @@ after(() => {
 // ---------------------------------------------------------------------------
 
 const WATCHED_LIVE_PATHS = [
-  'skills/draft-chapter/SKILL.md',
+  'skills/nfs-draft/SKILL.md',
   'agents/voice-capture.md',
   'README.md',
   'docs/formats/decisions.md',
@@ -70,13 +70,13 @@ after(() => {
 test('pre-existing scope: a relative "node bin/ns-*" invocation planted in a SKILL.md is caught', () => {
   const { root, cleanup } = cloneRepoToTemp('plugin-root-skill');
   try {
-    const target = join(root, 'skills', 'draft-chapter', 'SKILL.md');
+    const target = join(root, 'skills', 'nfs-draft', 'SKILL.md');
     appendFileSync(target, '\nPlanted for F6: run `node bin/ns-claims --project=.` directly.\n');
 
     const result = runClonedChecker(root, SCRIPT);
 
     assert.equal(result.status, 1, 'must exit 1; got: ' + result.combined);
-    assert.match(result.combined, /skills\/draft-chapter\/SKILL\.md/, 'message must name the planted file');
+    assert.match(result.combined, /skills\/nfs-draft\/SKILL\.md/, 'message must name the planted file');
     assert.match(result.combined, /relative bin invocation/, 'message must name the violation type');
   } finally {
     cleanup();

@@ -150,11 +150,11 @@ test('real-repo scope: every shipped skill\'s bin/ns-<name> routing target resol
 test('real-repo scope: status-dashboard names bin/ns-status as its routing target, and the checker confirms it resolves', () => {
   const { root, cleanup } = cloneRealRepo('real-status-dashboard-positive');
   try {
-    const skillPath = join(root, 'skills', 'status-dashboard', 'SKILL.md');
+    const skillPath = join(root, 'skills', 'nfs-status-dashboard', 'SKILL.md');
     const text = readFileSync(skillPath, 'utf8');
     assert.match(
       text, /bin\/ns-status\b/,
-      'skills/status-dashboard/SKILL.md must name bin/ns-status as its routing target for this test to be meaningful'
+      'skills/nfs-status-dashboard/SKILL.md must name bin/ns-status as its routing target for this test to be meaningful'
     );
 
     const result = runClonedChecker(root, SCRIPT);
@@ -168,20 +168,20 @@ test('real-repo scope: status-dashboard names bin/ns-status as its routing targe
 test('real-repo scope: a deliberately corrupted bin/ns-status reference in status-dashboard/SKILL.md is caught', () => {
   const { root, cleanup } = cloneRealRepo('real-status-dashboard-corrupted');
   try {
-    const skillPath = join(root, 'skills', 'status-dashboard', 'SKILL.md');
+    const skillPath = join(root, 'skills', 'nfs-status-dashboard', 'SKILL.md');
     const before = readFileSync(skillPath, 'utf8');
     const bogusName = 'ns-statu' + 'z'; // assembled so this file's own source never reads as a real CLI name
     const after = before.split('bin/ns-status').join('bin/' + bogusName);
     assert.notEqual(
       after, before,
-      'skills/status-dashboard/SKILL.md must contain at least one "bin/ns-status" occurrence to corrupt for this test to be meaningful'
+      'skills/nfs-status-dashboard/SKILL.md must contain at least one "bin/ns-status" occurrence to corrupt for this test to be meaningful'
     );
     writeFileSync(skillPath, after);
 
     const result = runClonedChecker(root, SCRIPT);
 
     assert.equal(result.status, 1, 'must exit 1 once the routing target is corrupted; got: ' + result.combined);
-    assert.match(result.combined, /skills\/status-dashboard\/SKILL\.md:\d+:/, 'message must name the corrupted file and line');
+    assert.match(result.combined, /skills\/nfs-status-dashboard\/SKILL\.md:\d+:/, 'message must name the corrupted file and line');
     assert.match(result.combined, new RegExp(bogusName), 'message must name the corrupted CLI name verbatim');
   } finally {
     cleanup();
