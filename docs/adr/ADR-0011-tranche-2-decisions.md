@@ -7,6 +7,7 @@
 - Task: Wave 1 tranche 2 (PR #5) and its follow-ups (PR #6), roadmap rows 1.4 and 1.7
 - Decision: REUSE `final`, NOT a new `locked` value; `bin/ns-status` READ-ONLY with state writes in the hook; drift budget default 25 with the per-marker contribution bound at one third of budget; `marker_set_version` REQUIRED on a stylometry baseline
 - Amends: D-05 (five shipped CLIs) grows to eight; D-06 (single-writer state discipline) is preserved rather than amended, which is itself the decision; D-08 (hybrid voice scoring) gains a length-invariant vocabulary marker, a bounded per-marker contribution, and a versioned marker set; D-10 (compliance layer is a feature) gains the human-final-pass attestation trail it called for
+- Amended by: ADR-0012 (voice verdict scope), accepted 2026-08-29, which retires this ADR's Decision 3 (the budget of 25 and the per-marker bound) once implemented; Decision 4 (`marker_set_version` required) is reused by that ADR rather than replaced
 - PA resolved: F-CI-07 (dispatcher and CLI-wrapper skills uncovered) partly closed by a routing-target checker; the acceptance clause "the next gate run after a demotion says so" is recorded as NOT met rather than reworded, and is scoped as separate work
 
 ---
