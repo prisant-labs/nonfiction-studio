@@ -241,7 +241,11 @@ const MISLEADING_PATTERNS = [
     'i'
   ),
   // requirement-of-credential, object before verb (passive): "an API key is
-  // required", "an access token is needed", "zero API keys needed".
+  // required", "an access token is needed", "zero API keys needed". Window
+  // is 15 chars, shorter than the active pattern's 25: the passive verb
+  // ("is/are required"/"needed") sits immediately after the object in every
+  // real and test shape, so a tighter bound here also narrows the negation
+  // guard's own false-suppression surface for this branch (finding 2 below).
   new RegExp('\\b' + CREDENTIAL_NOUN + '\\b[^.\\n]{0,15}\\b(?:is\\s+|are\\s+)?(?:required|needed)\\b', 'i'),
   // paid-service: "sign up for a paid ...".
   /\bsign\s+up\s+for\s+a\s+paid\b/i,
@@ -265,7 +269,26 @@ const MISLEADING_PATTERNS = [
 // no/not/without/never/zero list because the real README.md:332 guarantee
 // ("none require a separate API key...") uses it, not "no"; a tighter list
 // would false-positive on the plugin's own shipped self-sufficiency claim.
-const MISLEADING_NEGATION_WORDS = /\b(?:no|not|never|without|zero|none)\b/i;
+// Contraction-aware: JS's \b splits "don't" into "don" + "t", so a bare
+// \bnot\b never matches inside a contraction. don't/doesn't/isn't/aren't are
+// matched as their own alternatives, each accepting a straight (') or
+// typographic (U+2019) apostrophe, so "You don't need an API key" and "This
+// tool doesn't require an API key" negate correctly either way it was typed.
+// Known, accepted limitation of this proximity-window approach (not fixed
+// here; the brief explicitly authorizes a window mechanism over real clause
+// parsing): a negation word merely co-occurring within the window, without
+// actually negating the matched clause, still suppresses - e.g. "Not sure
+// why, but this requires an API key to work." is wrongly treated as
+// negated, because "Not" sits inside the lookbehind window even though it
+// negates nothing about the requirement. Pinned by its own regression test
+// (see tests/checks/check-self-sufficiency.test.mjs) so a future change to
+// this mechanism trips a named assertion instead of silently changing
+// behavior.
+const APOSTROPHE = "['\\u2019]";
+const MISLEADING_NEGATION_WORDS = new RegExp(
+  '\\b(?:no|not|never|without|zero|none|don' + APOSTROPHE + 't|doesn' + APOSTROPHE + 't|isn' + APOSTROPHE + 't|aren' + APOSTROPHE + 't)\\b',
+  'i'
+);
 const MISLEADING_NEGATION_LOOKBEHIND_CHARS = 25;
 
 function isNegatedMatch(line, matchIndex, matchText) {
