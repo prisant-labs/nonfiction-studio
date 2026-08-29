@@ -719,3 +719,77 @@ test('style profile: broken Exemplars path is a finding', () => {
     removeTempClone(dir);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Fix round 2 (whole-branch review, Critical): a config baseline present but
+// missing captured/sample_count (voice-capture's current write contract sets
+// only markers/marker_set_version, per agents/voice-capture.md) must not
+// false-positive a "disagrees with ... undefined" finding, and an empty
+// baseline object ({}) must not count as a captured baseline for the stub
+// rule either.
+// ---------------------------------------------------------------------------
+
+test('style profile: config baseline missing captured/sample_count does not false-positive a disagreement', () => {
+  const dir = makeTempSampleBookClone();
+  try {
+    const config = readBookConfig(dir);
+    // Simulate the real, current write contract: only markers/marker_set_version,
+    // no captured/sample_count.
+    config.stylometry.baseline = {
+      marker_set_version: config.stylometry.baseline.marker_set_version,
+      markers: config.stylometry.baseline.markers
+    };
+    writeBookConfig(dir, config);
+
+    // The profile still declares its own captured/sample_count (conforming to the
+    // format's required fields); there is nothing in config to disagree with.
+    const content = buildValidStyleProfile({ captured: '2026-08-10T09:00:00Z', sample_count: 2 });
+    writeBookStyleProfile(dir, content);
+
+    const { findings } = runChecks(dir);
+    const disagreeFindings = findings.filter(
+      f => f.type === 'style-profile.captured-disagreement' ||
+           f.type === 'style-profile.sample-count-disagreement'
+    );
+    assert.equal(disagreeFindings.length, 0,
+      'no disagreement finding when config baseline lacks captured/sample_count; got: ' +
+      JSON.stringify(disagreeFindings));
+    // The exact bug the review reproduced: a finding message literally containing "undefined".
+    for (const f of findings) {
+      assert.ok(!f.message.includes('undefined'),
+        'no finding message may ever contain the literal "undefined": ' + f.message);
+    }
+
+    const r = spawnDoctor(['--report', '--project=' + dir]);
+    assert.equal(r.status, 0,
+      'exit stays 0: a config baseline missing the temporal fields is not itself a defect; ' +
+      'stdout: ' + r.stdout + ' stderr: ' + r.stderr);
+  } finally {
+    removeTempClone(dir);
+  }
+});
+
+test('style profile: an empty config baseline object ({}) counts as no baseline; stub is a notice', () => {
+  const dir = makeTempSampleBookClone();
+  try {
+    writeBookStyleProfile(dir, STUB_STYLE_PROFILE);
+    const config = readBookConfig(dir);
+    config.stylometry.baseline = {};
+    writeBookConfig(dir, config);
+
+    const { findings, notices } = runChecks(dir);
+    const stubFindings = findings.filter(f => f.type === 'style-profile.stub-with-baseline');
+    assert.equal(stubFindings.length, 0,
+      'an empty baseline object must not trigger stub-with-baseline; got: ' + JSON.stringify(stubFindings));
+    const notCaptured = notices.filter(n => n.type === 'style-profile.not-captured');
+    assert.equal(notCaptured.length, 1,
+      'expected the not-captured notice instead; notices: ' + JSON.stringify(notices));
+
+    const r = spawnDoctor(['--report', '--project=' + dir]);
+    assert.equal(r.status, 0,
+      'exit stays 0 on a pre-capture stub with an empty (field-less) baseline object; ' +
+      'stdout: ' + r.stdout + ' stderr: ' + r.stderr);
+  } finally {
+    removeTempClone(dir);
+  }
+});

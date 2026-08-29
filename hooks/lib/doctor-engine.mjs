@@ -329,6 +329,22 @@ function styleProfileParseFieldBlock(bodyLines) {
   return fields;
 }
 
+// A stylometry.baseline object counts as an actual captured baseline only if
+// it carries at least one of the fields a real capture run would set. Without
+// this, `stylometry.baseline: {}` (present but empty) would read as "config
+// carries a baseline" for the stub rule below, when nothing has actually been
+// captured. captured/sample_count are the fields this check itself compares;
+// markers/marker_set_version are included too because voice-capture's current
+// write contract (agents/voice-capture.md) sets only those two, not
+// captured/sample_count - a real, current baseline that has never carried the
+// two temporal fields must still count as substantive.
+function styleProfileConfigBaselineHasSubstance(baseline) {
+  return baseline.captured !== undefined ||
+    baseline.sample_count !== undefined ||
+    baseline.markers !== undefined ||
+    baseline.marker_set_version !== undefined;
+}
+
 // Parses "- <path>" bullet lines into a plain array of trimmed path strings.
 function styleProfileParseBulletPaths(bodyLines) {
   const paths = [];
@@ -354,10 +370,17 @@ function checkStyleProfile(root, config, findings, notices) {
     return;
   }
 
-  const configBaseline =
+  const rawConfigBaseline =
     config && config.stylometry && config.stylometry.baseline &&
     typeof config.stylometry.baseline === 'object' && config.stylometry.baseline !== null
       ? config.stylometry.baseline
+      : null;
+  // An empty (or field-less) baseline object is treated as no baseline at
+  // all: nothing has actually been captured yet, so it must not trip the
+  // stub-with-baseline finding below (see styleProfileConfigBaselineHasSubstance).
+  const configBaseline =
+    rawConfigBaseline && styleProfileConfigBaselineHasSubstance(rawConfigBaseline)
+      ? rawConfigBaseline
       : null;
 
   const hasH1 = STYLE_PROFILE_H1_RE.test(text);
@@ -441,9 +464,16 @@ function checkStyleProfile(root, config, findings, notices) {
     }
 
     // Config agreement (the format doc's first promised behavior): only
-    // checked when config.json actually carries a baseline to compare against.
+    // checked when config.json actually carries a baseline to compare against,
+    // AND only per-field when config's own baseline actually carries that
+    // field. voice-capture's current write contract (agents/voice-capture.md)
+    // sets only markers/marker_set_version, not captured/sample_count, so a
+    // real, current baseline commonly has neither; comparing against an
+    // absent config field would otherwise report a false "disagrees with ...
+    // undefined" finding on an otherwise-correct profile.
     if (configBaseline) {
-      if (baselineFields.captured !== undefined &&
+      if (configBaseline.captured !== undefined &&
+          baselineFields.captured !== undefined &&
           String(baselineFields.captured) !== String(configBaseline.captured)) {
         findings.push({
           type: 'style-profile.captured-disagreement',
@@ -454,7 +484,7 @@ function checkStyleProfile(root, config, findings, notices) {
             configBaseline.captured + '"'
         });
       }
-      if (baselineFields.sample_count !== undefined) {
+      if (configBaseline.sample_count !== undefined && baselineFields.sample_count !== undefined) {
         const profileCount = Number(baselineFields.sample_count);
         if (profileCount !== configBaseline.sample_count) {
           findings.push({
