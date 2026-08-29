@@ -8,11 +8,11 @@ tags: ["skill", "quick-scan", "stylometry", "voice", "claims", "onboarding", "ge
 
 # nfs-quick-scan
 
-The `quick-scan` skill is the five-minute first win per OPP-D17 (five-minute first win). It takes 500 to 1000 words of pasted prose and returns three things: a voice profile measured by the deterministic `bin/ns-stylometry` engine, a claim scan identifying sentences that assert a fact needing a source, and a one-paragraph editorial read on what the excerpt seems to be about.
+The `nfs-quick-scan` skill is the five-minute first win per OPP-D17 (five-minute first win). It takes 500 to 1000 words of pasted prose and returns three things: a voice profile measured by the deterministic `bin/ns-stylometry` engine, a claim scan identifying sentences that assert a fact needing a source, and a one-paragraph editorial read on what the excerpt seems to be about.
 
 ## Purpose
 
-Before this skill existed, the shortest path to any value in this plugin ran through the intake interview, a genuine 45 to 90 minute session. That duration is honest and stays honest (see D-16, honest, resumable interview), but gating all value behind it loses a stranger who cannot see anything useful in the first five minutes. `quick-scan` closes that gap: paste writing, get a real measurement back.
+Before this skill existed, the shortest path to any value in this plugin ran through the intake interview, a genuine 45 to 90 minute session. That duration is honest and stays honest (see D-16, honest, resumable interview), but gating all value behind it loses a stranger who cannot see anything useful in the first five minutes. `nfs-quick-scan` closes that gap: paste writing, get a real measurement back.
 
 **It never requires an initialized book project and reads no project file.** This is the property, stated in OPP-D17, that makes it "the only flow that works identically on all three surfaces since it needs no project tree." The only input is the prose the author pastes into the conversation.
 
@@ -23,13 +23,13 @@ Before this skill existed, the shortest path to any value in this plugin ran thr
 ## Invocation
 
 ```
-/nonfiction-studio:quick-scan
+/nonfiction-studio:nfs-quick-scan
 ```
 
 Paste 500 to 1000 words of prose either in the same message or in reply to the skill's prompt. No book project, `.studio/` directory, or prior setup is required.
 
 Alternate entry points:
-- The `studio` dispatcher, Path 6 (Quick preview), including directly from the `NO_PROGRESS` branch before any project exists
+- The `nfs-start` dispatcher, Path 6 (Quick preview), including directly from the `NO_PROGRESS` branch before any project exists
 - The README quickstart and `docs/quickstart.md`
 
 ## Inputs and Outputs
@@ -42,7 +42,7 @@ Alternate entry points:
 
 ### Outputs
 
-`quick-scan` writes exactly one file, transiently: the pasted prose is written to a temporary file under the operating system's own temp directory (never inside this repository or inside `examples/`) so `bin/ns-stylometry --measure` can read it, then the file is deleted immediately after the measurement completes. No project file, and nothing under `examples/`, is ever written.
+`nfs-quick-scan` writes exactly one file, transiently: the pasted prose is written to a temporary file under the operating system's own temp directory (never inside this repository or inside `examples/`) so `bin/ns-stylometry --measure` can read it, then the file is deleted immediately after the measurement completes. No project file, and nothing under `examples/`, is ever written.
 
 ## Flow Summary
 
@@ -54,11 +54,11 @@ The skill runs seven steps:
 4. **Word-count banding.** Reads `totalWords` from the measurement and branches: under 500 words gets a noisy-measurement caveat with the option to proceed anyway or paste more; 500 to 1000 needs no caveat; over 1000 is measured in full (never truncated) with a note stating the actual count measured.
 5. **Present the voice profile (measured).** All eight markers by name, in plain language, labeled explicitly as coming from the engine.
 6. **Claim scan (this skill's reading, not a measurement).** Lists sentences that assert a fact a reader would want a source for, labeled explicitly as a judgment call with no engine behind it.
-7. **One-paragraph read and next step.** A short editorial read on the excerpt's apparent subject and audience, ending with a pointer to `/nonfiction-studio:tour` or to starting a real project (`studio` or `init-project`, followed honestly by the real 45 to 90 minute intake interview).
+7. **One-paragraph read and next step.** A short editorial read on the excerpt's apparent subject and audience, ending with a pointer to `/nonfiction-studio:nfs-tour` or to starting a real project (`nfs-start` or `nfs-new-book`, followed honestly by the real 45 to 90 minute intake interview).
 
 ## The `--measure` Mechanism
 
-`bin/ns-stylometry` has a standalone `--measure=<path>[,<path>...]` mode that skips book-root discovery entirely, always emits JSON, and exits 0 on success or 2 on a missing or unreadable file. This is the deterministic, project-free measurement path quick-scan depends on; see the [ns-stylometry CLI reference](../cli/ns-stylometry.md) for the full flag and exit-code contract, and `hooks/lib/stylometry-engine.mjs`'s `measureChapter` function for the eight-marker computation itself. The marker names quick-scan presents are the same vocabulary `capture-voice` uses for a project's permanent baseline, so an author who later runs `capture-voice` sees consistent terminology.
+`bin/ns-stylometry` has a standalone `--measure=<path>[,<path>...]` mode that skips book-root discovery entirely, always emits JSON, and exits 0 on success or 2 on a missing or unreadable file. This is the deterministic, project-free measurement path quick-scan depends on; see the [ns-stylometry CLI reference](../cli/ns-stylometry.md) for the full flag and exit-code contract, and `hooks/lib/stylometry-engine.mjs`'s `measureChapter` function for the eight-marker computation itself. The marker names quick-scan presents are the same vocabulary `nfs-capture-voice` uses for a project's permanent baseline, so an author who later runs `nfs-capture-voice` sees consistent terminology.
 
 ## Word-Count Bands
 
@@ -80,11 +80,11 @@ The skill runs seven steps:
 
 ## Relationship to Other Skills
 
-`quick-scan` shares its underlying engine call with `capture-voice`, which uses the same `--measure` mode to build a project's permanent voice baseline; `quick-scan` never writes that baseline and never touches `.studio/config.json`. `quick-scan` pairs with [`tour`](./tour.md): the two together are the try-before-you-commit path per OPP-D17 (five-minute first win), reachable from `studio`'s Path 6 (Quick preview).
+`nfs-quick-scan` shares its underlying engine call with `nfs-capture-voice`, which uses the same `--measure` mode to build a project's permanent voice baseline; `nfs-quick-scan` never writes that baseline and never touches `.studio/config.json`. `nfs-quick-scan` pairs with [`nfs-tour`](./nfs-tour.md): the two together are the try-before-you-commit path per OPP-D17 (five-minute first win), reachable from `nfs-start`'s Path 6 (Quick preview).
 
 ## See also
 
-- [tour skill reference](./tour.md) - the paired guided walkthrough of the bundled sample book
+- [tour skill reference](./nfs-tour.md) - the paired guided walkthrough of the bundled sample book
 - [ns-stylometry CLI reference](../cli/ns-stylometry.md) - the engine this skill measures with
-- [capture-voice skill reference](./capture-voice.md) - builds a project's permanent voice baseline using the same engine mode
-- [studio skill reference](./studio.md) - the dispatcher's Path 6 routes here
+- [capture-voice skill reference](./nfs-capture-voice.md) - builds a project's permanent voice baseline using the same engine mode
+- [studio skill reference](./nfs-start.md) - the dispatcher's Path 6 routes here

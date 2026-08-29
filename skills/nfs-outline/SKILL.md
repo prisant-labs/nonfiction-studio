@@ -3,7 +3,7 @@ name: nfs-outline
 user-invocable: true
 argument-hint: "[scope: full | chapters | thesis]"
 description: "Produces a structured chapter-by-chapter outline grounded in the confirmed thesis and project brief. Confirms the brief, optionally invokes thesis-architect to produce or sharpen the controlling idea, delegates chapter architecture to structure-architect, presents the outline for author review, and confirms the written structure files via Read checks. Scope argument controls which phases run: full (default), thesis (thesis flow only), or chapters (structure-architect only, requires existing thesis). Use when the author says 'help me outline,' wants to 'structure my book,' or needs to 'sharpen my thesis' before chapters are drafted."
-when_to_use: "Use when the author types the /outline verb alias, completes intake-interview and wants to structure the book, or studio routes here from Path 2. Do not invoke when context/brief.md is missing or unconfirmed (the skill halts and routes to intake-interview in that case), or for unrelated queries."
+when_to_use: "Use when the author completes intake-interview and wants to structure the book, or studio routes here from Path 2. Do not invoke when context/brief.md is missing or unconfirmed (the skill halts and routes to intake-interview in that case), or for unrelated queries."
 chain:
   - thesis-architect
   - structure-architect
@@ -22,8 +22,8 @@ Skill inputs read:
 - `research/evidence-log.md` (if it exists; read at Step 3 and passed to structure-architect for evidence hooks)
 
 Skill chain edges:
-- `outline-book -> thesis-architect` (conditional: invoked when `structure/thesis.md` is absent on `full` or `thesis` scopes, per `agents/_chain-permitted.yaml`)
-- `outline-book -> structure-architect` (invoked on `full` and `chapters` scopes, per `agents/_chain-permitted.yaml`)
+- `nfs-outline -> thesis-architect` (conditional: invoked when `structure/thesis.md` is absent on `full` or `thesis` scopes, per `agents/_chain-permitted.yaml`)
+- `nfs-outline -> structure-architect` (invoked on `full` and `chapters` scopes, per `agents/_chain-permitted.yaml`)
 
 ---
 
@@ -35,7 +35,7 @@ if [ ! -f context/brief.md ] || grep -q '<!-- DRAFT' context/brief.md; then echo
 ```
 
 The output is a binary token:
-- `UNCONFIRMED` (absent file or any DRAFT-block marker found): halt immediately. State that the project brief is missing or not yet confirmed and direct the author to complete it first: "Run `/nonfiction-studio:intake-interview` to complete or confirm the project brief before outlining."
+- `UNCONFIRMED` (absent file or any DRAFT-block marker found): halt immediately. State that the project brief is missing or not yet confirmed and direct the author to complete it first: "Run `/nonfiction-studio:nfs-interview` to complete or confirm the project brief before outlining."
 - `CONFIRMED`: continue to Step 2.
 
 Do not proceed past Step 1 on `UNCONFIRMED`. Do not attempt to infer brief content from conversation context.
@@ -49,23 +49,23 @@ Do not proceed past Step 1 on `UNCONFIRMED`. Do not attempt to infer brief conte
 Use the Read tool on `structure/thesis.md`.
 
 - **File exists and is non-empty:** present the thesis to the author. Ask whether to proceed with the existing thesis or re-invoke `thesis-architect` to revise it before structuring the outline.
-  - If the author wants to revise: invoke `thesis-architect` via the `outline-book -> thesis-architect` chain edge. Apply the two-revision-pass cap below.
+  - If the author wants to revise: invoke `thesis-architect` via the `nfs-outline -> thesis-architect` chain edge. Apply the two-revision-pass cap below.
   - If the author accepts the existing thesis: continue to Step 3 (`full` scope) or close (`thesis` scope).
 
-- **File is absent or empty:** invoke `thesis-architect` via the `outline-book -> thesis-architect` chain edge to produce the controlling idea.
+- **File is absent or empty:** invoke `thesis-architect` via the `nfs-outline -> thesis-architect` chain edge to produce the controlling idea.
 
 **Two-revision-pass cap.** After each thesis-architect run, present the produced thesis to the author for confirmation.
 - If the author accepts: continue to Step 3 (`full`) or close (`thesis`).
 - If the author rejects: note this as revision pass 1 and re-invoke `thesis-architect` with the rejection rationale.
 - If the author rejects again: note this as revision pass 2 and re-invoke `thesis-architect` once more.
-- If the author rejects after the second revision pass: halt. State: "The thesis has not reached consensus after two revision passes. Edit `structure/thesis.md` directly to state the controlling idea, then re-invoke with `/nonfiction-studio:outline-book`."
+- If the author rejects after the second revision pass: halt. State: "The thesis has not reached consensus after two revision passes. Edit `structure/thesis.md` directly to state the controlling idea, then re-invoke with `/nonfiction-studio:nfs-outline`."
 
 ### Thesis scope close
 
 For `thesis` scope: after the thesis is confirmed (author accepts or `thesis-architect` produces an accepted thesis), close this session. State that the thesis is confirmed and suggest running the full or chapters scope next:
 
 > The thesis is confirmed. To build the chapter outline, run:
-> `/nonfiction-studio:outline-book` (full scope) or `/nonfiction-studio:outline-book chapters`
+> `/nonfiction-studio:nfs-outline` (full scope) or `/nonfiction-studio:nfs-outline chapters`
 
 Do not continue to Steps 3-5 in `thesis` scope.
 
@@ -74,7 +74,7 @@ Do not continue to Steps 3-5 in `thesis` scope.
 Use the Read tool on `structure/thesis.md`.
 
 - **File exists and is non-empty:** continue to Step 3.
-- **File is absent or empty:** halt. State: "The `chapters` scope requires a confirmed `structure/thesis.md`. Run `/nonfiction-studio:outline-book thesis` to produce the controlling idea first."
+- **File is absent or empty:** halt. State: "The `chapters` scope requires a confirmed `structure/thesis.md`. Run `/nonfiction-studio:nfs-outline thesis` to produce the controlling idea first."
 
 ---
 
@@ -82,7 +82,7 @@ Use the Read tool on `structure/thesis.md`.
 
 Use the Read tool on `research/evidence-log.md`. If the file exists and contains evidence entries, note this for the agent context. If the file is absent or empty, note the absence.
 
-Spawn `structure-architect` via the `outline-book -> structure-architect` chain edge, passing:
+Spawn `structure-architect` via the `nfs-outline -> structure-architect` chain edge, passing:
 - The content of `context/brief.md`
 - The content of `structure/thesis.md`
 - Any evidence entries from `research/evidence-log.md`, or a note that the log is absent
@@ -116,12 +116,12 @@ Use the Read tool on `structure/outline.md` and `structure/chapter-list.md` to c
 State: "The chapter list in `structure/chapter-list.md` is the locked chapter registry. The slug rows in that file are the authoritative identifiers for all downstream work: drafting, fact-checking, and the quality gate all resolve chapters by slug. The skill writes no `.studio/` state; the PostToolBatch hook creates progress entries the first time each chapter file is written."
 
 Offer optional next steps:
-- If `context/style-profile.md` is absent: suggest `capture-voice` to build the voice baseline before drafting.
-- In all cases: suggest `research-pass` or `draft-chapter` as the natural continuation.
+- If `context/style-profile.md` is absent: suggest `nfs-capture-voice` to build the voice baseline before drafting.
+- In all cases: suggest `nfs-research` or `nfs-draft` as the natural continuation.
 
 Name the invocation paths:
-- `/nonfiction-studio:research-pass`
-- `/nonfiction-studio:draft-chapter <chapter-slug>`
+- `/nonfiction-studio:nfs-research`
+- `/nonfiction-studio:nfs-draft <chapter-slug>`
 
 Neither suggestion is mandatory or sequential.
 
@@ -129,7 +129,7 @@ Neither suggestion is mandatory or sequential.
 
 ## Failure behavior
 
-**Brief missing or unconfirmed.** The Step 1 Bash probe halts on `UNCONFIRMED` and routes to `intake-interview`. No inference is made from conversation context; the check is deterministic.
+**Brief missing or unconfirmed.** The Step 1 Bash probe halts on `UNCONFIRMED` and routes to `nfs-interview`. No inference is made from conversation context; the check is deterministic.
 
 **Thesis revision cap reached.** After two revision passes on a rejected thesis, the skill halts and directs the author to edit `structure/thesis.md` manually. The file retains the last thesis-architect output; the author amends it directly rather than through another agent cycle.
 

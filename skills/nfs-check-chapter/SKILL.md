@@ -3,7 +3,7 @@ name: nfs-check-chapter
 user-invocable: true
 argument-hint: "[chapter: slug or number]"
 description: "Runs the surface-independent deterministic quality gate over a chapter by wrapping bin/ns-gate in a single Bash call: maps exit 0 to a pass or warn verdict summary from the report JSON, exit 1 to a block verdict with per-check details and next actions, and exit 2 to an error that is never treated as a pass. Pre-checks the voice baseline before invoking the gate; degrades to a four-check subset (claims, scrub, continuity-quick, coherence) with a voice-drift-skipped warning when the baseline is absent or stale. Resolves the chapter argument from the supplied value, the most-recently-modified chapter in progress.json, or by asking the author when neither is available. Deep mode (Phase 2) is acknowledged and politely declined in v1. Use when the author asks 'is this chapter done' or wants to 'run the quality gate,' seeking the overall pass, warn, or block verdict rather than the claims-only check that fact-check-pass performs."
-when_to_use: "Use when the author types the /gate verb alias, invokes explicitly on chat after any chapter-writing flow, draft-chapter or revise-pass prompts for it on completion, or wants an explicit deterministic gate verdict. Do not invoke for project status overviews (use status-dashboard for that), to re-trigger the Stop hook gate (automatic on CLI and Cowork), in deep mode (Phase 2, not yet available), or for unrelated queries."
+when_to_use: "Use when the author invokes explicitly on chat after any chapter-writing flow, draft-chapter or revise-pass prompts for it on completion, or wants an explicit deterministic gate verdict. Do not invoke for project status overviews (use status-dashboard for that), to re-trigger the Stop hook gate (automatic on CLI and Cowork), in deep mode (Phase 2, not yet available), or for unrelated queries."
 ---
 
 This skill is the surface-independent quality gate. It resolves the chapter argument, pre-checks the voice baseline to determine which check set to run, invokes `bin/ns-gate` in a single Bash call, and maps the exit code to a presented verdict: exit 0 presents the pass or warn summary from the report JSON, exit 1 presents the block verdict with per-check details and next actions, and exit 2 surfaces an error that is never treated as a pass. The `bin/ns-gate` orchestrator is the sole writer of `.studio/gate/<slug>.<ts>.json` reports and handles its own prune policy; the skill writes no `.studio/` state.
@@ -29,7 +29,7 @@ Parse the supplied argument (if any). Split on whitespace; check whether any tok
 
 If `deep` is present in the argument tokens: state the following and halt, making no tool calls:
 
-> Deep mode (adding the parallel review fleet of `fact-checker`, `voice-guardian`, and `continuity-checker`) is a Phase 2 capability and is not available in v1 - no fleet is running. Run the quality gate without the `deep` argument to get the deterministic layer verdict: `/nonfiction-studio:run-quality-gate [chapter]`
+> Deep mode (adding the parallel review fleet of `fact-checker`, `voice-guardian`, and `continuity-checker`) is a Phase 2 capability and is not available in v1 - no fleet is running. Run the quality gate without the `deep` argument to get the deterministic layer verdict: `/nonfiction-studio:nfs-check-chapter [chapter]`
 
 Do not proceed to Step 2 when `deep` is present.
 
@@ -57,7 +57,7 @@ After resolving the slug, probe the chapter file:
 test -f chapters/<slug>.md && echo HAS_CHAPTER || echo NO_CHAPTER
 ```
 
-- `NO_CHAPTER`: halt immediately. State: "Chapter file `chapters/<slug>.md` was not found. Produce the chapter with `/nonfiction-studio:draft-chapter <slug>` before running the quality gate."
+- `NO_CHAPTER`: halt immediately. State: "Chapter file `chapters/<slug>.md` was not found. Produce the chapter with `/nonfiction-studio:nfs-draft <slug>` before running the quality gate."
 - `HAS_CHAPTER`: carry the slug forward to Step 3.
 
 **Branch B - No chapter argument supplied.** Use the Bash tool to check whether the progress file is present:
@@ -66,7 +66,7 @@ test -f chapters/<slug>.md && echo HAS_CHAPTER || echo NO_CHAPTER
 test -f .studio/progress.json && echo HAS_PROGRESS || echo NO_PROGRESS
 ```
 
-- `NO_PROGRESS`: ask the author directly. State: "No chapter argument was supplied and no `progress.json` was found. Which chapter would you like to gate? Supply the slug or number, for example `/nonfiction-studio:run-quality-gate 02-finding-your-network`." Halt until the author supplies an argument; then restart from Step 2 Branch A.
+- `NO_PROGRESS`: ask the author directly. State: "No chapter argument was supplied and no `progress.json` was found. Which chapter would you like to gate? Supply the slug or number, for example `/nonfiction-studio:nfs-check-chapter 02-finding-your-network`." Halt until the author supplies an argument; then restart from Step 2 Branch A.
 - `HAS_PROGRESS`: use the Read tool on `.studio/progress.json`. Select the most-recently-modified chapter using these criteria in order:
   1. The chapter with the most recent `last_gate.ts` (the one that was gated most recently and may need re-gating after revision).
   2. If no chapters have a gate record, the last chapter in the array with `status: drafted` or `status: drafting`.
@@ -90,17 +90,17 @@ test -f context/style-profile.md && echo HAS_PROFILE || echo NO_PROFILE
 
 **If `NO_PROFILE`:** the voice baseline is absent. Set the check subset to `claims,scrub,continuity-quick,coherence` and present the following warning to the author before continuing:
 
-> Voice drift check skipped: `context/style-profile.md` was not found. The gate will run claim coverage, prompt scrub, continuity, and state coherence checks only. Capture your voice baseline with `/nonfiction-studio:capture-voice` to enable voice drift detection.
+> Voice drift check skipped: `context/style-profile.md` was not found. The gate will run claim coverage, prompt scrub, continuity, and state coherence checks only. Capture your voice baseline with `/nonfiction-studio:nfs-capture-voice` to enable voice drift detection.
 
 Continue to Step 4 to resolve the plugin root; the gate invocation in Step 5 uses check subset `claims,scrub,continuity-quick,coherence`.
 
 **If `HAS_PROFILE`:** use the Read tool on `.studio/config.json` to check whether `stylometry.baseline.markers` is present and non-null. If the field is absent or null, treat this the same as the `NO_PROFILE` case: set the check subset to `claims,scrub,continuity-quick,coherence` and present:
 
-> Voice drift check skipped: `context/style-profile.md` is present but `stylometry.baseline.markers` is absent or null in `.studio/config.json`. Run `/nonfiction-studio:capture-voice` to populate the baseline and enable voice drift detection.
+> Voice drift check skipped: `context/style-profile.md` is present but `stylometry.baseline.markers` is absent or null in `.studio/config.json`. Run `/nonfiction-studio:nfs-capture-voice` to populate the baseline and enable voice drift detection.
 
 If `stylometry.baseline.markers` is present and non-null, also check `stylometry.baseline.marker_set_version` in that same read. If it is absent, null, or different from the value of `CURRENT_MARKER_SET_VERSION` exported by `hooks/lib/stylometry-engine.mjs`, read that constant rather than comparing against a number written here, the stored baseline predates the current engine and `ns-gate` will reject it. Route this the same as the case above: set the check subset to `claims,scrub,continuity-quick,coherence` and present:
 
-> Voice drift check skipped: the stored baseline in `.studio/config.json` was captured under an earlier version of the stylometry engine (`stylometry.baseline.marker_set_version` is missing or does not match the engine's current version). Run `/nonfiction-studio:capture-voice` to re-capture the baseline with the corrected engine and enable voice drift detection.
+> Voice drift check skipped: the stored baseline in `.studio/config.json` was captured under an earlier version of the stylometry engine (`stylometry.baseline.marker_set_version` is missing or does not match the engine's current version). Run `/nonfiction-studio:nfs-capture-voice` to re-capture the baseline with the corrected engine and enable voice drift detection.
 
 Only when `stylometry.baseline.markers` is present and non-null AND `marker_set_version` matches the engine's current version, run the full gate. Set no check subset (all five checks will be included by ns-gate's default).
 
@@ -127,7 +127,7 @@ If all three lookups fail: halt immediately. Report the settings.json path attem
 
 Carry the resolved path forward as `<plugin-root>` for Step 5.
 
-**Shared plugin-root convention.** This three-tier resolution (settings.json lookup, plugins-cache search, dev-mode fallback) is the same routine as `skills/init-project/SKILL.md` Step 4; a future wave extracts it to a shared reference.
+**Shared plugin-root convention.** This three-tier resolution (settings.json lookup, plugins-cache search, dev-mode fallback) is the same routine as `skills/nfs-new-book/SKILL.md` Step 4; a future wave extracts it to a shared reference.
 
 ---
 
@@ -174,14 +174,14 @@ Parse stdout as the gate report JSON. The top-level `verdict` is `block`. State 
 For each check entry with `verdict: block`, present the check name, detail, evidence pointers (if any), and next action. These are the specific conditions the author must address. For checks with other verdicts, list them as secondary context.
 
 Suggest the appropriate remediation skill for each blocking check type:
-- `claim_coverage` block: `/nonfiction-studio:fact-check-pass <slug>`
+- `claim_coverage` block: `/nonfiction-studio:nfs-fact-check <slug>`
 - `prompt_scrub` block: manual edit to remove agent scaffolding or prompt residue from the chapter file
 
 **Exit 2 - gate error:**
 
 Surface the error from stderr and halt. Never report the chapter as passed, warned, or blocked based on an exit 2 result.
 
-> Gate error (exit 2): [first line of stderr, or "gate subprocess exited with code 2" if stderr is empty]. The gate run did not complete. This result is never treated as a pass. Check that the project bible is intact (run `/nonfiction-studio:doctor` to diagnose) and re-run the quality gate.
+> Gate error (exit 2): [first line of stderr, or "gate subprocess exited with code 2" if stderr is empty]. The gate run did not complete. This result is never treated as a pass. Check that the project bible is intact (run `/nonfiction-studio:nfs-doctor` to diagnose) and re-run the quality gate.
 
 If stdout also contains output (partial JSON or other text), include it verbatim for diagnostic purposes.
 
@@ -193,10 +193,10 @@ If stdout also contains output (partial JSON or other text), include it verbatim
 
 **Chapter argument not matched.** Step 2 halts with the supplied value, the registry file path, and the list of valid slugs. No gate invocation and no `.studio/` writes occur.
 
-**Chapter file missing.** The Step 2 Bash probe halts on `NO_CHAPTER`. The halt message names the file path and routes to `draft-chapter`. No gate invocation occurs.
+**Chapter file missing.** The Step 2 Bash probe halts on `NO_CHAPTER`. The halt message names the file path and routes to `nfs-draft`. No gate invocation occurs.
 
 **No argument and no progress.json.** Step 2 halts and asks the author which chapter to gate. No gate invocation until the author replies with a chapter.
 
 **Voice baseline absent or stale.** Step 3 sets the degraded check subset and warns about the skipped voice drift check, whether the baseline is missing entirely or its `marker_set_version` is absent or does not match the engine's current version. The gate still runs; neither condition is a halt condition. The four remaining checks run normally.
 
-**Exit 2 from ns-gate.** Step 5 presents the error from stderr and halts. Never treated as a pass, warn, or block verdict. Re-run after diagnosing with `doctor`.
+**Exit 2 from ns-gate.** Step 5 presents the error from stderr and halts. Never treated as a pass, warn, or block verdict. Re-run after diagnosing with `nfs-doctor`.

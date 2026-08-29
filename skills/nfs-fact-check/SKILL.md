@@ -3,7 +3,7 @@ name: nfs-fact-check
 user-invocable: true
 argument-hint: "<chapter: slug or number>"
 description: "Runs the adversarial verification pass on a drafted chapter: an engine-backed marker inventory via bin/ns-claims, then the fact-checker agent's authoritative five-step pass that advances EV entry statuses, updates chapter markers, and writes the per-chapter fact-check report. Reports three counts (verified, unresolved, source-unverifiable) from the agent's report and names the report path. Writes no progress.json - the PostToolBatch hook owns the open-claims total. Use when the author says 'check my facts' or 'verify my claims,' wanting claim-level verification rather than the full pass-or-block verdict that run-quality-gate produces."
-when_to_use: "Use when the author types the /factcheck <ch> verb alias, finishes drafting and wants claims verified, run-quality-gate reports unresolved claims, or studio routes here from Path 3 (Research and verify). Do not invoke when no chapter argument is supplied (the skill halts if the chapter file is absent), or for unrelated queries."
+when_to_use: "Use when the author finishes drafting and wants claims verified, run-quality-gate reports unresolved claims, or studio routes here from Path 3 (Research and verify). Do not invoke when no chapter argument is supplied (the skill halts if the chapter file is absent), or for unrelated queries."
 chain:
   - fact-checker
 ---
@@ -22,7 +22,7 @@ Skill inputs read:
 - `.studio/config.json` (web gate check at Step 4)
 - `.claude/agent-memory/nonfiction-studio-fact-checker/` (verified-claims cache; read by fact-checker at session start per D-09)
 
-Skill chain edge: `fact-check-pass -> fact-checker` per `agents/_chain-permitted.yaml`.
+Skill chain edge: `nfs-fact-check -> fact-checker` per `agents/_chain-permitted.yaml`.
 
 ---
 
@@ -46,7 +46,7 @@ test -f chapters/<slug>.md && echo HAS_CHAPTER || echo NO_CHAPTER
 ```
 
 The output is a binary token:
-- `NO_CHAPTER`: halt immediately. State: "Chapter file `chapters/<slug>.md` was not found. Produce the chapter with `/nonfiction-studio:draft-chapter <slug>` before running the verification pass."
+- `NO_CHAPTER`: halt immediately. State: "Chapter file `chapters/<slug>.md` was not found. Produce the chapter with `/nonfiction-studio:nfs-draft <slug>` before running the verification pass."
 - `HAS_CHAPTER`: continue to Step 2.
 
 A chapter argument is required. Do not proceed without a resolved slug pointing to an existing chapter file.
@@ -74,7 +74,7 @@ If all three lookups fail: halt immediately. Report the settings.json path attem
 
 Carry the resolved path forward as `<plugin-root>` for Step 3.
 
-**Shared plugin-root convention.** This three-tier resolution (settings.json lookup, plugins-cache search, dev-mode fallback) is the same routine as `skills/init-project/SKILL.md` Step 4; a future wave extracts it to a shared reference.
+**Shared plugin-root convention.** This three-tier resolution (settings.json lookup, plugins-cache search, dev-mode fallback) is the same routine as `skills/nfs-new-book/SKILL.md` Step 4; a future wave extracts it to a shared reference.
 
 ---
 
@@ -108,7 +108,7 @@ Use the Read tool on `.studio/config.json` to check whether `research.web_enable
 - **Gate closed** (field absent, `false`, or any other value): "Online pass is not enabled for this project (`research.web_enabled` is not `true` in `.studio/config.json`). To enable it, add `\"research\": { \"web_enabled\": true }` to `.studio/config.json`. For claims that remain unresolved, source text can be pasted; the agent analyzes pasted content with the same quote-and-attribute discipline per D-13 (security posture)."
 - **On chat** (even when gate is open): "Note: WebSearch and WebFetch may not be available on the chat surface. Paste source content for any claims the agent cannot resolve from the evidence ledger alone."
 
-Spawn `fact-checker` via the `fact-check-pass -> fact-checker` chain edge, passing:
+Spawn `fact-checker` via the `nfs-fact-check -> fact-checker` chain edge, passing:
 - The chapter slug and file path (`chapters/<slug>.md`)
 - The ns-claims pre-count from Step 3 (total markers, resolved, coverage)
 - The web gate status from the config read
@@ -153,20 +153,20 @@ Name the report path explicitly:
 Note: the per-chapter `open_claim_count` in `.studio/progress.json` is maintained by the PostToolBatch hook, not by this skill. The hook updates the open-claims total when the agent writes chapter files. The three counts above are conversation-level reporting only.
 
 Suggest next steps based on the counts:
-- Unresolved or source-unverifiable entries remain: run `/nonfiction-studio:research-pass <slug>` to add source material, or paste source content and re-run `/nonfiction-studio:fact-check-pass <slug>`.
-- Coverage is 100% and no open claims remain: run the quality gate: `/nonfiction-studio:run-quality-gate <slug>`.
+- Unresolved or source-unverifiable entries remain: run `/nonfiction-studio:nfs-research <slug>` to add source material, or paste source content and re-run `/nonfiction-studio:nfs-fact-check <slug>`.
+- Coverage is 100% and no open claims remain: run the quality gate: `/nonfiction-studio:nfs-check-chapter <slug>`.
 
-On the chat surface, state that the Stop hook gate does not fire automatically: "On chat the Stop hook gate does not fire automatically. Run `/nonfiction-studio:run-quality-gate <slug>` explicitly when all claims are resolved."
+On the chat surface, state that the Stop hook gate does not fire automatically: "On chat the Stop hook gate does not fire automatically. Run `/nonfiction-studio:nfs-check-chapter <slug>` explicitly when all claims are resolved."
 
 ---
 
 ## Failure behavior
 
-**Chapter file missing.** The Step 1 Bash probe halts on `NO_CHAPTER`. The halt message names the chapter file path and routes to `draft-chapter`. No state is written by a halted Step 1.
+**Chapter file missing.** The Step 1 Bash probe halts on `NO_CHAPTER`. The halt message names the chapter file path and routes to `nfs-draft`. No state is written by a halted Step 1.
 
 **Chapter argument not matched.** Step 1 halts with the supplied value, the registry file name (`structure/chapter-list.md`), and the list of valid slugs when the registry is present but the argument matches no row. No state is written.
 
-**ns-claims failure.** If `bin/ns-claims` exits non-zero (evidence log absent, chapter unreadable, BibleError), the exact stderr message is reported and the skill halts at Step 3. Do not proceed to agent delegation with a failed inventory. The most common cause is a missing `research/evidence-log.md`; run `/nonfiction-studio:research-pass` to create it.
+**ns-claims failure.** If `bin/ns-claims` exits non-zero (evidence log absent, chapter unreadable, BibleError), the exact stderr message is reported and the skill halts at Step 3. Do not proceed to agent delegation with a failed inventory. The most common cause is a missing `research/evidence-log.md`; run `/nonfiction-studio:nfs-research` to create it.
 
 **Agent incomplete or report missing.** If the Step 5 Read checks find the chapter file or report absent after the agent ran, report the gap and offer to re-run from Step 4. The re-run is safe: the agent's cache marks known-good entries and skips their re-verification; the agent's status-field writes and marker operations are idempotent against current state.
 

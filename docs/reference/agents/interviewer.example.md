@@ -19,12 +19,12 @@ context agents) and honors D-16 (honest, resumable interview).
 
 ## Session 1: start, opening turn, sections 1 and 2
 
-**Author:** `/nonfiction-studio:intake-interview`
+**Author:** `/nonfiction-studio:nfs-interview`
 
 **Interviewer:**
 
 > No `context/brief.md` was found, so this is a new intake. First, the book tree
-> needs to exist, so I am running `init-project` to scaffold it.
+> needs to exist, so I am running `nfs-new-book` to scaffold it.
 >
 > The `book/` tree and `.studio/` state files are in place.
 >
@@ -92,7 +92,7 @@ The author pauses after section 6.
 
 ## Session 2: resume, remaining sections, confirm, commit
 
-**Author:** `/nonfiction-studio:intake-interview`
+**Author:** `/nonfiction-studio:nfs-interview`
 
 **Interviewer:**
 
@@ -144,7 +144,7 @@ The `context/decisions.md` entry records the completion:
 
 ## Key assertions from this transcript
 
-- **Scaffold first.** `init-project` runs and the `book/` tree appears before the
+- **Scaffold first.** `nfs-new-book` runs and the `book/` tree appears before the
   first interview question, per D-16 (honest, resumable interview).
 - **Honest time expectation.** The opening turn states the 45-to-90-minute range,
   unprompted.

@@ -8,9 +8,9 @@ tags: ["skill", "draft", "chapter", "drafting-partner", "line-editor", "complian
 
 # nfs-draft - worked example
 
-This is a condensed transcript of a `draft-chapter` session on the chat surface for the sample book "The Quiet Network" (see `examples/sample-book/`). The session drafts Chapter 3 (Your Curation Practice, slug `03-your-curation-practice`) for the first time. The example follows the flow specified in S-06 3.6 (skills and invocation surface) and the adjudications recorded in TSK-049 (draft-chapter skill).
+This is a condensed transcript of a `nfs-draft` session on the chat surface for the sample book "The Quiet Network" (see `examples/sample-book/`). The session drafts Chapter 3 (Your Curation Practice, slug `03-your-curation-practice`) for the first time. The example follows the flow specified in S-06 3.6 (skills and invocation surface) and the adjudications recorded in TSK-049 (draft-chapter skill).
 
-**Session provenance note.** This example continues from the committed sample-book baseline after a `research-pass` session added EV-0011 (information-volume-overload) and EV-0012 (intentional-selection-sustainability) for Chapter 3, as shown in `docs/reference/skills/research-pass.example.md`. Chapters 1 and 2 in `examples/sample-book/chapters/` are committed fixtures; the content of Chapter 3 shown here is a hypothetical draft that does not contradict those committed chapters. The session runs on the chat surface to illustrate the compliance append that does not occur on CLI or Cowork.
+**Session provenance note.** This example continues from the committed sample-book baseline after a `nfs-research` session added EV-0011 (information-volume-overload) and EV-0012 (intentional-selection-sustainability) for Chapter 3, as shown in `docs/reference/skills/nfs-research.example.md`. Chapters 1 and 2 in `examples/sample-book/chapters/` are committed fixtures; the content of Chapter 3 shown here is a hypothetical draft that does not contradict those committed chapters. The session runs on the chat surface to illustrate the compliance append that does not occur on CLI or Cowork.
 
 ---
 
@@ -31,7 +31,7 @@ The session runs on the chat surface. No hooks fire on chat; the skill appends t
 
 ## Session: Chapter 3 first draft, chat surface, evidence present
 
-**Author:** `/nonfiction-studio:draft-chapter 03-your-curation-practice`
+**Author:** `/nonfiction-studio:nfs-draft 03-your-curation-practice`
 
 **Studio (Step 1 - Registry probe and chapter argument resolution):**
 
@@ -68,7 +68,7 @@ Two relevant EV entries found: EV-0011, EV-0012. Continue to Step 4.
 
 **Studio (Step 4 - Delegate to drafting-partner):**
 
-The skill spawns `drafting-partner` via the `draft-chapter -> drafting-partner` chain edge, passing:
+The skill spawns `drafting-partner` via the `nfs-draft -> drafting-partner` chain edge, passing:
 - Chapter 3 outline section (promise, beats, evidence-needed items)
 - EV-0011 (information-volume-overload) and EV-0012 (intentional-selection-sustainability)
 - `context/style-profile.md`
@@ -122,7 +122,7 @@ The skill uses the Read tool on `chapters/03-your-curation-practice.md`. The fil
 
 **Studio (Step 5 - Delegate to line-editor):**
 
-The skill spawns `line-editor` via the `draft-chapter -> line-editor` chain edge, passing:
+The skill spawns `line-editor` via the `nfs-draft -> line-editor` chain edge, passing:
 - `chapters/03-your-curation-practice.md` (current content)
 - `context/style-profile.md`
 
@@ -196,12 +196,12 @@ The skill uses the Read tool on `chapters/03-your-curation-practice.md`. The fil
 > - 2 open placeholders: `[UNVERIFIED]` (sentence about 15-20 minute daily block duration; sentence about 30-minute weekly review)
 >
 > Run the quality gate to check claim coverage, voice drift, and prompt scrub:
-> `/nonfiction-studio:run-quality-gate 03-your-curation-practice`
+> `/nonfiction-studio:nfs-check-chapter 03-your-curation-practice`
 >
 > Or advance the EV entries from `status: pending` to verified first:
-> `/nonfiction-studio:fact-check-pass 03-your-curation-practice`
+> `/nonfiction-studio:nfs-fact-check 03-your-curation-practice`
 >
-> Note: on chat the Stop hook gate does not fire automatically. The `/nonfiction-studio:run-quality-gate` prompt above is the substitute per S-06 1.3.
+> Note: on chat the Stop hook gate does not fire automatically. The `/nonfiction-studio:nfs-check-chapter` prompt above is the substitute per S-06 1.3.
 
 ---
 
@@ -223,4 +223,4 @@ The skill uses the Read tool on `chapters/03-your-curation-practice.md`. The fil
 
 - **Chat compliance append, not hook.** The two ai-use-log records (scope `generated` for `drafting-partner`, scope `assisted` for `line-editor`) are appended by the skill at Step 6 because this session runs on the chat surface. On CLI or Cowork the PostToolBatch hook writes those records; the skill would not append in that case.
 
-- **Explicit quality gate prompt on chat.** The skill closes with an explicit `/nonfiction-studio:run-quality-gate` prompt. On CLI and Cowork the Stop hook fires automatically; on chat this prompt is the substitute per S-06 1.3 (gate closure compensation).
+- **Explicit quality gate prompt on chat.** The skill closes with an explicit `/nonfiction-studio:nfs-check-chapter` prompt. On CLI and Cowork the Stop hook fires automatically; on chat this prompt is the substitute per S-06 1.3 (gate closure compensation).

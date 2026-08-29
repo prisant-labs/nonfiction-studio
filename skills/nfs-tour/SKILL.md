@@ -140,8 +140,8 @@ Summarize in a few lines what the gate's seven checks cover (claim coverage, quo
 Restate that `<tour-dir>` is disposable and can be deleted any time, and that the shipped `examples/sample-book` was never opened for writing during this walkthrough.
 
 Point to a concrete next step:
-- **`/nonfiction-studio:quick-scan`** if the author has not tried it yet - paste their own prose for a voice and claim read.
-- **Starting a real project** - `/nonfiction-studio:studio` (or `/nonfiction-studio:init-project` directly), followed by `/nonfiction-studio:intake-interview` when ready. State honestly that the intake interview is a real 45 to 90 minute session per D-16 (honest, resumable interview); this tour is a demonstration, not a substitute for it.
+- **`/nonfiction-studio:nfs-quick-scan`** if the author has not tried it yet - paste their own prose for a voice and claim read.
+- **Starting a real project** - `/nonfiction-studio:nfs-start` (or `/nonfiction-studio:nfs-new-book` directly), followed by `/nonfiction-studio:nfs-interview` when ready. State honestly that the intake interview is a real 45 to 90 minute session per D-16 (honest, resumable interview); this tour is a demonstration, not a substitute for it.
 
 ---
 

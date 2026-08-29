@@ -54,7 +54,7 @@ A new skill, agent, hook, or template, a new optional config key, a new warn-onl
 
 ## Mid-book update promise
 
-An author partway through a book must be able to take a MINOR or PATCH update with no migration step required at all. A MAJOR update may require running `ns-doctor --migrate`, but the migration must be runnable from the `doctor` skill without leaving the author's working session, any manual steps are surfaced before automated ones run, and no book content may be destroyed. `doctor` warns at session start whenever the installed plugin is ahead of a book's schema version, pointing at this file.
+An author partway through a book must be able to take a MINOR or PATCH update with no migration step required at all. A MAJOR update may require running `ns-doctor --migrate`, but the migration must be runnable from the `nfs-doctor` skill without leaving the author's working session, any manual steps are surfaced before automated ones run, and no book content may be destroyed. `nfs-doctor` warns at session start whenever the installed plugin is ahead of a book's schema version, pointing at this file.
 
 ## Word-count note: chapters containing accented or non-Latin words
 
@@ -76,7 +76,7 @@ warn, so nothing blocks.
 
 **The remedy is to touch the chapter.** `hooks/post-tool-batch.mjs` recounts and rewrites the
 stored count whenever a chapter is edited, so the mismatch clears on the next edit to each
-affected chapter. `/nonfiction-studio:doctor` will tell you which chapters are affected.
+affected chapter. `/nonfiction-studio:nfs-doctor` will tell you which chapters are affected.
 
 Unlike the `marker_set_version` case below, nothing versions a stored word count, so this
 cannot be made to fail loudly. It is called out here because `MIGRATION.md` is where an author
@@ -87,16 +87,43 @@ at all.
 
 Independent of `.studio/meta.json`'s `schema_version` (unchanged by this release), the stylometry engine now requires `stylometry.baseline.marker_set_version` on every voice baseline. Every book's baseline captured before this release lacks the field entirely, and the drift scorer treats an absent field as version 1, which no longer matches the engine's current marker set version.
 
-What happens if you take this update without re-running `capture-voice`: the stylometry check inside `ns-gate` throws a stale-baseline error on every gate run. The gate turns that into a `skip` verdict for the stylometry check alone, with exit code 2 for that run; the top-level gate verdict is unaffected by the skip and can still read `pass`, so voice drift checking goes quiet without the run looking like a failure.
+What happens if you take this update without re-running `nfs-capture-voice`: the stylometry check inside `ns-gate` throws a stale-baseline error on every gate run. The gate turns that into a `skip` verdict for the stylometry check alone, with exit code 2 for that run; the top-level gate verdict is unaffected by the skip and can still read `pass`, so voice drift checking goes quiet without the run looking like a failure.
 
-The remedy is one command: re-run `/nonfiction-studio:capture-voice` to recapture the baseline. A freshly captured baseline always carries the current `marker_set_version` and clears the skip.
+The remedy is one command: re-run `/nonfiction-studio:nfs-capture-voice` to recapture the baseline. A freshly captured baseline always carries the current `marker_set_version` and clears the skip.
 
 **The current marker set version is whatever `CURRENT_MARKER_SET_VERSION` in `hooks/lib/stylometry-engine.mjs` says it is; this document deliberately does not restate the number, because an earlier revision restated it, went stale, and shipped a false claim.** The version has moved three times so far. Version 1 to 2 changed what `type_token_ratio` measures (a flat ratio became a moving average over a fixed token window). Version 2 to 3 made the engine fold typographic quotation characters to their ASCII equivalents before measuring; before that fold, `contraction_rate` read exactly 0 for prose written with the smart apostrophe (U+2019) that Word, Google Docs, and Obsidian emit by default, and `punctuation_rate` omitted every smart double quote. Version 3 to 4 widened `WORD_RE` to the Unicode letter category, so an accented word tokenizes as one whole word instead of fragmenting; the word-count consequence of that change is disclosed in its own section above.
 
-The same one command fixes any of these. If your baseline predates the current marker set version for any reason, whether it lacks the field entirely or carries any older version number, re-run `/nonfiction-studio:capture-voice`. If your writing samples contain smart apostrophes, the recaptured `contraction_rate` will be genuinely different from the stored one rather than merely re-stamped, because the old value was wrong.
+The same one command fixes any of these. If your baseline predates the current marker set version for any reason, whether it lacks the field entirely or carries any older version number, re-run `/nonfiction-studio:nfs-capture-voice`. If your writing samples contain smart apostrophes, the recaptured `contraction_rate` will be genuinely different from the stored one rather than merely re-stamped, because the old value was wrong.
 
 One caveat on fresh captures, temporary: `ns-doctor` now validates the style profile's structure (the seven named sections and the `Baseline reference` fields) against `docs/formats/style-profile.md`, and the capture flow has not yet been reworked to write everything that check reads, so a fresh capture may draw doctor findings on a correct book until the voice-verdict wave reworks capture. If that happens, the normative grammar in `docs/formats/style-profile.md` is the reference for filling the gap by hand; do not invest in elaborate hand-authoring beyond it, because the rework will supersede the manual steps.
 
 Separately, and not book-affecting the same way: this release also lowers the default `thresholds.drift_score_max` from 35 to 25, but every scaffolded book carries an explicit value for that key, so only a book that omits it from `.studio/config.json` sees a different default.
 
 Neither change is a MAJOR version bump under "What counts as a breaking change" above (no field was renamed, retyped, or removed; `marker_set_version` is additive), so `ns-doctor --migrate`'s `schema_version` check does not see either one, and the migration log format above does not apply. Both are called out here, outside that format, because the mid-book update promise above is the one place an author would think to look.
+
+## Skill-invocation note: the `nfs-` rename (not a schema_version change)
+
+Independent of `.studio/meta.json`'s `schema_version` (unchanged by this release), every skill this plugin ships has been renamed to carry the `nfs-` prefix, and `studio` is renamed outright to `nfs-start` rather than prefixed. This is a breaking change under "What counts as a breaking change" above: it renames every shipped skill slug. It is being made deliberately, before this plugin's first tagged release, precisely so it never has to be made after one. Renaming a skill after an author has learned its invocation form, written it into their own notes, or scripted around it costs a deprecation cycle and a MAJOR version bump; renaming it now, while the install count is zero, costs nothing but this note.
+
+Every skill in this plugin is invoked as `/nonfiction-studio:<name>`; the table below lists the `<name>` portion only, old to new.
+
+| Old name | New name |
+|---|---|
+| `build-apparatus` | `nfs-build-apparatus` |
+| `capture-voice` | `nfs-capture-voice` |
+| `doctor` | `nfs-doctor` |
+| `draft-chapter` | `nfs-draft` |
+| `fact-check-pass` | `nfs-fact-check` |
+| `init-project` | `nfs-new-book` |
+| `intake-interview` | `nfs-interview` |
+| `outline-book` | `nfs-outline` |
+| `quick-scan` | `nfs-quick-scan` |
+| `research-pass` | `nfs-research` |
+| `run-quality-gate` | `nfs-check-chapter` |
+| `status-dashboard` | `nfs-status-dashboard` |
+| `studio` | `nfs-start` |
+| `tour` | `nfs-tour` |
+
+The eight verb-alias shortcuts (`/draft`, `/factcheck`, `/book-init`, `/interview`, `/outline`, `/research`, `/gate`, `/status`) are also gone, with no replacement alias. They were never registered commands, since this plugin ships no `commands/` directory at all, only documentation shorthand for the same underlying invocation; the new short skill name in the table above is now the shortcut.
+
+No book content, bible schema, or `.studio/` state is affected by this rename: it changes the invocation surface only. If you have notes, scripts, or saved prompts that name a skill by its old invocation form, update them to the new form above; the old form no longer resolves to anything this plugin ships.

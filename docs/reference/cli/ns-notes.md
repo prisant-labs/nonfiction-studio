@@ -61,7 +61,7 @@ appears exactly once), so there is no coherent single-chapter output for this CL
 |---|---|
 | 0 | Clean - every `[claim: EV-nnnn]` anchor resolved to a complete, renderable Chicago citation; the attention list is empty |
 | 1 | One or more attention items: a blank locator, a source that does not exist or is missing a field its type requires, a source of a type the citation style does not define, or a chapter anchor naming an EV ID absent from the ledger |
-| 2 | Argument error, missing project bible, missing evidence log or sources registry, or missing `chapters/` directory |
+| 2 | Argument error, missing project bible (the book's canonical reference files under `context/`, `structure/`, `chapters/`, `research/`, and `production/`), missing evidence log or sources registry, or missing `chapters/` directory |
 
 `production/endnotes.md`, `production/bibliography.md`, `production/index-candidates.md`,
 and `production/apparatus-attention.md` are all written whenever the run reaches the write
@@ -169,6 +169,6 @@ CLI writes to the other's output, and `ns-notes` never writes to the ledger itse
 
 ## See also
 
-- [build-apparatus skill reference](../skills/build-apparatus.md) - the skill that fronts this CLI
+- [build-apparatus skill reference](../skills/nfs-build-apparatus.md) - the skill that fronts this CLI
 - [ns-claims CLI reference](./ns-claims.md) - the claim-coverage engine that reads the same ledger
 - [ADR-0009: apparatus CLI](../../adr/ADR-0009-apparatus-cli.md) - why an engine CLI, and the standing growth-policy test for any future CLI

@@ -8,7 +8,7 @@ tags: ["skill", "voice", "stylometry", "example"]
 
 # nfs-capture-voice - worked example
 
-This is a condensed transcript of a `capture-voice` run for the sample book "The Quiet Network" (see `examples/sample-book/`). The author submits three writing samples that total over 1,000 words. The skill assesses the word count, delegates to the `voice-capture` agent, confirms both output files via Read checks, and previews two marker values from the baseline. The committed `context/style-profile.md` and `stylometry.baseline.markers` block in `examples/sample-book/.studio/config.json` are the live outcome of this run. The example follows the flow specified in S-06 3.3 (skills and invocation surface) and the writer-role alignment adjudicated in TSK-046 (capture-voice skill).
+This is a condensed transcript of a `nfs-capture-voice` run for the sample book "The Quiet Network" (see `examples/sample-book/`). The author submits three writing samples that total over 1,000 words. The skill assesses the word count, delegates to the `voice-capture` agent, confirms both output files via Read checks, and previews two marker values from the baseline. The committed `context/style-profile.md` and `stylometry.baseline.markers` block in `examples/sample-book/.studio/config.json` are the live outcome of this run. The example follows the flow specified in S-06 3.3 (skills and invocation surface) and the writer-role alignment adjudicated in TSK-046 (capture-voice skill).
 
 For the no-samples bootstrap path (when an author has no writing samples of their own), see `agents/voice-capture.md` Path B. That path is run by the `voice-capture` agent and is not reproduced here.
 
@@ -16,7 +16,7 @@ For the no-samples bootstrap path (when an author has no writing samples of thei
 
 ## Session: samples submitted, baseline captured, profile confirmed
 
-**Author:** `/nonfiction-studio:capture-voice`
+**Author:** `/nonfiction-studio:nfs-capture-voice`
 
 **Studio (Step 1 - Existing-profile check):**
 
@@ -88,7 +88,7 @@ Output: `1247`
 
 The skill uses the Read tool on `context/brief.md` and loads the confirmed project brief for "The Quiet Network" (genre: practical non-fiction; voice section: plainspoken, warm, practical; second person for instruction; first person for occasional anecdote).
 
-The `voice-capture` agent is spawned via the `capture-voice -> voice-capture` chain edge with:
+The `voice-capture` agent is spawned via the `nfs-capture-voice -> voice-capture` chain edge with:
 - The three submitted samples
 - The content of `context/brief.md`
 - Word-count band: 1,000-or-more (full confidence)
@@ -146,8 +146,8 @@ Using the marker values already in the `.studio/config.json` read in Step 4:
 >
 > Two optional next steps:
 >
-> 1. Run `outline-book` to produce the chapter-by-chapter structure: `/nonfiction-studio:outline-book`
-> 2. If the project brief has not been completed yet, run `intake-interview` first: `/nonfiction-studio:intake-interview`
+> 1. Run `nfs-outline` to produce the chapter-by-chapter structure: `/nonfiction-studio:nfs-outline`
+> 2. If the project brief has not been completed yet, run `nfs-interview` first: `/nonfiction-studio:nfs-interview`
 
 ---
 

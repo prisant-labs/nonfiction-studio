@@ -47,7 +47,7 @@ Invoke `fact-checker` when any of the following holds.
   five shipped CLIs) and surfaces unresolved markers before the gate clears.
 - The author wants to verify a specific chapter or EV entry without running the full
   gate sequence.
-- The `fact-check-pass` skill is invoked; it routes here directly.
+- The `nfs-fact-check` skill is invoked; it routes here directly.
 
 ## At a glance
 
@@ -270,7 +270,7 @@ Every guardrail above is enforced in the agent's system prompt.
 
 After a fact-check pass, the natural next steps depend on the outcome. If all entries
 are `verified`, the chapter is ready for the coverage gate; run `bin/ns-claims` or
-invoke `run-quality-gate` to confirm. If any entries are `unverified` or
+invoke `nfs-check-chapter` to confirm. If any entries are `unverified` or
 `source-unverifiable`, return to `research-librarian` to supply or correct the source
 before re-running the pass. If entries are marked `interpretation`, the author reviews
 the per-chapter report to confirm the framing is accurate.

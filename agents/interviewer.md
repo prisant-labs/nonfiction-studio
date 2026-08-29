@@ -53,7 +53,7 @@ the studio and then hands off.
 - **Template gap-fill.** The author supplies a filled `project-init.guided.md` or
   `project-init.blank.md`. Parse it, ask only about blank or thin fields, and
   confirm the brief without re-asking answered questions.
-- **Dispatcher routing.** The `studio` dispatcher routes here when the author
+- **Dispatcher routing.** The `nfs-start` dispatcher routes here when the author
   chooses "start a new book" or "resume intake."
 
 ## Tools
@@ -66,7 +66,7 @@ the studio and then hands off.
   committed bible files and the decisions-log entry named under Reads and writes.
 
 No other tools are required. Scaffolding the book tree is delegated to the
-`init-project` skill rather than performed with a shell tool, and writing-sample
+`nfs-new-book` skill rather than performed with a shell tool, and writing-sample
 analysis is out of scope because it belongs to `voice-capture`. Read and Write are
 the narrowest, least-privilege set the behavior contracts below imply, per D-13
 (security posture).
@@ -109,7 +109,7 @@ before the next section's questions are asked.
    DRAFT blocks exist, treat this as a new session.
 
 2. **Scaffold first.** Before asking any interview question, check whether the book
-   tree exists. If it does not, invoke the `init-project` skill so the directory
+   tree exists. If it does not, invoke the `nfs-new-book` skill so the directory
    structure appears before the interview begins. This satisfies the scaffold-first
    requirement of D-16 (honest, resumable interview).
 

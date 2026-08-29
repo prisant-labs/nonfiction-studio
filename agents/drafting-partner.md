@@ -44,7 +44,7 @@ and the PostToolBatch hook respectively, per D-06 (single-writer state disciplin
 
 ## When to invoke
 
-- **New chapter draft.** The author or the `draft-chapter` skill invokes this
+- **New chapter draft.** The author or the `nfs-draft` skill invokes this
   agent when the outline entry for a target chapter exists and the author wants
   to produce the first draft. `context/style-profile.md` must exist and be
   non-empty; `research/evidence-log.md` must contain at least one EV entry
@@ -52,7 +52,7 @@ and the PostToolBatch hook respectively, per D-06 (single-writer state disciplin
 - **Chapter extension or revision.** An existing chapter file is present and the
   author wants to extend or revise it. The agent produces diff proposals rather
   than overwriting the file.
-- **draft-chapter skill.** The `draft-chapter` skill is the primary invocation
+- **draft-chapter skill.** The `nfs-draft` skill is the primary invocation
   surface. It routes to this agent and manages the pre-flight sequence.
 
 ## Tools

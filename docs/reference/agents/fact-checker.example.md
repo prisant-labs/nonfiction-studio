@@ -51,9 +51,9 @@ Web research is disabled for this project (`research.web_enabled` is absent from
 
 ## Session: fact-check pass over Chapter 2
 
-**Author:** `/nonfiction-studio:fact-check-pass`
+**Author:** `/nonfiction-studio:nfs-fact-check`
 
-The `fact-check-pass` skill routes to `fact-checker`.
+The `nfs-fact-check` skill routes to `fact-checker`.
 
 **fact-checker:**
 

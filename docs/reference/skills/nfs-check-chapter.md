@@ -8,11 +8,11 @@ tags: ["skill", "gate", "quality", "deterministic", "claims", "stylometry", "scr
 
 # nfs-check-chapter
 
-The `run-quality-gate` skill is the surface-independent Definition-of-Done gate per D-03 (layered Stop gate) and D-14 (three-surface compatibility). On CLI and Cowork the Stop hook runs the same `bin/ns-gate` orchestrator automatically at session end; on chat the author invokes this skill explicitly as the substitute. The skill wraps a single `bin/ns-gate` Bash call, maps the exit code to a presented verdict, pre-checks the voice baseline, and resolves the chapter argument from progress.json when none is supplied. It is a Phase 1 skill specified in S-06 3.8 (skills and invocation surface) and governed by D-03 (layered Stop gate), D-05 (five shipped CLIs), D-06 (single-writer state discipline), and D-14 (three-surface compatibility).
+The `nfs-check-chapter` skill is the surface-independent Definition-of-Done gate per D-03 (layered Stop gate) and D-14 (three-surface compatibility). On CLI and Cowork the Stop hook runs the same `bin/ns-gate` orchestrator automatically at session end; on chat the author invokes this skill explicitly as the substitute. The skill wraps a single `bin/ns-gate` Bash call, maps the exit code to a presented verdict, pre-checks the voice baseline, and resolves the chapter argument from progress.json when none is supplied. It is a Phase 1 skill specified in S-06 3.8 (skills and invocation surface) and governed by D-03 (layered Stop gate), D-05 (five shipped CLIs), D-06 (single-writer state discipline), and D-14 (three-surface compatibility).
 
 ## Purpose
 
-`run-quality-gate` bridges the deterministic gate layer and the author conversation. The `bin/ns-gate` orchestrator it invokes runs up to five checks (claim coverage, voice drift, prompt scrub, continuity, state coherence) composed into a single policy verdict; policy including D-03 coercions and the warn-cap lives inside the orchestrator per TSK-029 (ns-gate orchestrator). The skill's role is to pre-check the baseline, select the right check set, invoke the gate, and present the verdict honestly.
+`nfs-check-chapter` bridges the deterministic gate layer and the author conversation. The `bin/ns-gate` orchestrator it invokes runs up to five checks (claim coverage, voice drift, prompt scrub, continuity, state coherence) composed into a single policy verdict; policy including D-03 coercions and the warn-cap lives inside the orchestrator per TSK-029 (ns-gate orchestrator). The skill's role is to pre-check the baseline, select the right check set, invoke the gate, and present the verdict honestly.
 
 **The verdict this skill presents is the deterministic layer only.** On CLI and Cowork the Stop hook additionally runs a thesis-alignment judgment prompt (warn-only, never blocks in Phase 1). That judgment layer is not available when invoking this skill directly; on chat it does not exist in v1 and the skill states this fact when presenting the verdict.
 
@@ -23,16 +23,15 @@ The `run-quality-gate` skill is the surface-independent Definition-of-Done gate 
 ## Invocation
 
 ```
-/nonfiction-studio:run-quality-gate [chapter]
+/nonfiction-studio:nfs-check-chapter [chapter]
 ```
 
 The chapter argument is optional. The chapter may be a slug (for example `02-finding-your-network`) or a number (for example `2`). When omitted the skill resolves the target chapter from `progress.json`. A `deep` argument is not part of the invocation form: if supplied anyway, Step 1 acknowledges and politely declines it in v1.
 
 Alternate entry points:
-- Via the `studio` dispatcher: routes here from Path 4 (Review quality and status) after `status-dashboard`
-- Via `draft-chapter` Step 6: that skill closes with an explicit prompt to run `run-quality-gate` on chat because the Stop hook does not fire automatically there
-- Via `fact-check-pass` Step 6: when coverage reaches 100% the skill suggests running the quality gate
-- Verb alias: `/gate` (introduced in v2; the namespaced `/nonfiction-studio:run-quality-gate` form also works)
+- Via the `nfs-start` dispatcher: routes here from Path 4 (Review quality and status) after `nfs-status-dashboard`
+- Via `nfs-draft` Step 6: that skill closes with an explicit prompt to run `nfs-check-chapter` on chat because the Stop hook does not fire automatically there
+- Via `nfs-fact-check` Step 6: when coverage reaches 100% the skill suggests running the quality gate
 
 ## Inputs and Outputs
 
@@ -66,12 +65,12 @@ The skill runs five steps.
 
 3. **Voice baseline pre-check.** Probes `context/style-profile.md` (Bash). If absent, or if present but `.studio/config.json` lacks `stylometry.baseline.markers`, or `stylometry.baseline.marker_set_version` is absent or does not match the engine's current version, the skill sets the check subset to `claims,scrub,continuity-quick,coherence`, warns that voice drift was skipped, and continues. Only when the profile, the markers, and a matching `marker_set_version` are all present does the skill run the full gate (all five checks). This is the degradation mechanism the brief describes: the gate engine exits 2 on a missing or stale baseline, so the skill pre-checks and routes around the error with a clear warning rather than a halt.
 
-4. **Resolve the plugin root.** Before ns-gate is invoked, the skill resolves the plugin's installed path: a primary lookup against `extraKnownMarketplaces['nonfiction-studio'].source.path` in `~/.claude/settings.json`, a `~/.claude/plugins/cache` search fallback, and a dev-mode fallback that checks for `bin/ns-gate` in the current directory. This is the same three-tier convention `init-project` uses to locate its scaffold templates; it exists because a literal relative `bin/ns-gate` path resolves against the invoking shell's working directory, not the installed plugin, and would silently fail for a marketplace-installed author. If all three lookups fail, the skill halts and names the settings.json and cache paths it attempted.
+4. **Resolve the plugin root.** Before ns-gate is invoked, the skill resolves the plugin's installed path: a primary lookup against `extraKnownMarketplaces['nonfiction-studio'].source.path` in `~/.claude/settings.json`, a `~/.claude/plugins/cache` search fallback, and a dev-mode fallback that checks for `bin/ns-gate` in the current directory. This is the same three-tier convention `nfs-new-book` uses to locate its scaffold templates; it exists because a literal relative `bin/ns-gate` path resolves against the invoking shell's working directory, not the installed plugin, and would silently fail for a marketplace-installed author. If all three lookups fail, the skill halts and names the settings.json and cache paths it attempted.
 
 5. **Gate invocation (single Bash call; maps exit code to verdict).** Runs one Bash call: `node "<plugin-root>/bin/ns-gate" --chapter=<slug> [--check=<subset>] --json`. Captures exit code, stdout (JSON report), and stderr. Maps as follows:
    - **Exit 0:** present the pass or warn verdict summary. Pass is never silent. For warn, lists each non-passing check with its detail and next action. Notes that this verdict is the deterministic layer only.
    - **Exit 1:** present the block verdict with each blocking check's detail, evidence pointers, and next action. Suggests the appropriate remediation skill per blocking check type.
-   - **Exit 2:** surface the stderr error. NEVER treated as a pass, warn, or block verdict. Routes to `doctor` for diagnosis.
+   - **Exit 2:** surface the stderr error. NEVER treated as a pass, warn, or block verdict. Routes to `nfs-doctor` for diagnosis.
 
 ## Exit-Code Mapping
 
@@ -83,7 +82,7 @@ The mapping mirrors the Stop hook's exit-code semantics (hooks/stop-gate.mjs) bu
 | 0, verdict `warn` | Checks ran; highest severity was warn (gate top-level mode capped block to warn) | Present warn summary per non-passing check with detail and next action; note deterministic-only scope |
 | 0, verdict `skip` | No checks ran (extremely rare; means all checks were disabled) | Present skip summary and recommend checking `.studio/config.json` |
 | 1 | Final verdict is block; at least one check is in block mode and fired | Present block verdict; list each blocking check with detail, evidence, and next action; route to remediation |
-| 2 | Gate error: config parse error, engine throw, or spawn failure | Surface error from stderr; NEVER treat as a pass; route to `doctor` for diagnosis |
+| 2 | Gate error: config parse error, engine throw, or spawn failure | Surface error from stderr; NEVER treat as a pass; route to `nfs-doctor` for diagnosis |
 
 ## Baseline Pre-Check and Degradation
 
@@ -92,10 +91,10 @@ The `bin/ns-gate` engine exits 2 when `stylometry.baseline.markers` is absent fr
 When any of these is missing or stale:
 - The skill sets `--check=claims,scrub,continuity-quick,coherence` on the gate invocation
 - The stylometry check is excluded from this run
-- The skill warns the author explicitly: "Voice drift check skipped: [reason]. Run `/nonfiction-studio:capture-voice` to enable voice drift detection."
+- The skill warns the author explicitly: "Voice drift check skipped: [reason]. Run `/nonfiction-studio:nfs-capture-voice` to enable voice drift detection."
 - The gate still runs the four remaining checks and produces a valid report
 
-The baseline must be established via `/nonfiction-studio:capture-voice`, which runs `bin/ns-stylometry --measure` and writes the marker vector to `.studio/config.json`.
+The baseline must be established via `/nonfiction-studio:nfs-capture-voice`, which runs `bin/ns-stylometry --measure` and writes the marker vector to `.studio/config.json`.
 
 ## Chapter Resolution from Progress.json
 
@@ -113,7 +112,7 @@ This skill works identically across all three surfaces per D-14 (three-surface c
 
 **On CLI and Cowork.** The Stop hook fires the same `bin/ns-gate` call automatically at session end when a chapter write occurred during the session. Authors invoke this skill explicitly for an on-demand mid-session gate run or on surfaces where the hook does not fire. The Stop hook's thesis-alignment judgment prompt (warn-only) is separate from this skill; the skill's verdict does not include it.
 
-**On chat.** The Stop hook does not fire. Any skill that produces chapter content closes with an explicit prompt to run `run-quality-gate`. This skill is the primary gate mechanism on chat. The thesis-alignment judgment layer does not exist in v1 on chat; the skill states this explicitly when presenting a verdict.
+**On chat.** The Stop hook does not fire. Any skill that produces chapter content closes with an explicit prompt to run `nfs-check-chapter`. This skill is the primary gate mechanism on chat. The thesis-alignment judgment layer does not exist in v1 on chat; the skill states this explicitly when presenting a verdict.
 
 ## Gate Report
 
@@ -141,7 +140,7 @@ The top-level `verdict` is the most severe check verdict subject to the D-03 coe
 - `thesis_alignment.mode: block` is coerced to `warn` (judgment checks cannot block in v1)
 - When `gate.mode` is `warn` (the default), the top-level verdict is capped at `warn` even if per-check entries carry `block`; per-check entries keep their actual verdict so authors see what would block once they opt in
 
-Reports are retained and pruned to the last 10 per chapter slug by `bin/ns-gate`. `bin/ns-status` reads the timestamp in the most recent report file name per slug to derive the drift score and gate verdict in its JSON output; `status-dashboard` narrates that JSON rather than reading report files itself.
+Reports are retained and pruned to the last 10 per chapter slug by `bin/ns-gate`. `bin/ns-status` reads the timestamp in the most recent report file name per slug to derive the drift score and gate verdict in its JSON output; `nfs-status-dashboard` narrates that JSON rather than reading report files itself.
 
 ## Failure Behavior
 
@@ -149,14 +148,14 @@ Reports are retained and pruned to the last 10 per chapter slug by `bin/ns-gate`
 
 **Chapter argument not matched.** Step 2 halts with the supplied value, the registry file path, and the list of valid slugs. No gate invocation.
 
-**Chapter file missing.** The Step 2 Bash probe halts on `NO_CHAPTER`. The halt message names the file path and routes to `draft-chapter`.
+**Chapter file missing.** The Step 2 Bash probe halts on `NO_CHAPTER`. The halt message names the file path and routes to `nfs-draft`.
 
 **No argument and no `progress.json`.** Step 2 halts and asks the author which chapter to gate. No gate invocation until the author replies.
 
 **Voice baseline absent or stale.** Step 3 sets the degraded check subset and warns, whether the baseline is missing entirely or its `marker_set_version` does not match the engine's current version. The gate still runs; neither condition is a halt condition.
 
-**Exit 2 from ns-gate.** Step 5 presents the stderr error. Never treated as a pass, warn, or block. Routes to `doctor` for diagnosis.
+**Exit 2 from ns-gate.** Step 5 presents the stderr error. Never treated as a pass, warn, or block. Routes to `nfs-doctor` for diagnosis.
 
 ## Worked Example
 
-See [nfs-check-chapter.example.md](./nfs-check-chapter.example.md) for a condensed transcript of a `run-quality-gate` session over the committed Chapter 2 of the sample book "The Quiet Network" (see `examples/sample-book/`). The example is a baseline-absent run (voice drift skipped) that demonstrates the pre-check mechanism and the degraded four-check pass; the gate exits 0 with verdict `pass`. This example is grounded in a live temp-clone gate run at `<temp-dir>` on 2026-07-19.
+See [nfs-check-chapter.example.md](./nfs-check-chapter.example.md) for a condensed transcript of a `nfs-check-chapter` session over the committed Chapter 2 of the sample book "The Quiet Network" (see `examples/sample-book/`). The example is a baseline-absent run (voice drift skipped) that demonstrates the pre-check mechanism and the degraded four-check pass; the gate exits 0 with verdict `pass`. This example is grounded in a live temp-clone gate run at `<temp-dir>` on 2026-07-19.

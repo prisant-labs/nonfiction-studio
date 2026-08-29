@@ -34,7 +34,7 @@ is logged.
 
 Invoke the `voice-capture` agent when any of the following holds.
 
-- `intake-interview` has confirmed the project brief and the author provided writing
+- `nfs-interview` has confirmed the project brief and the author provided writing
   samples in section 6 during intake.
 - The author supplies new writing samples at any project stage and wants the profile
   and baseline updated.
@@ -43,7 +43,7 @@ Invoke the `voice-capture` agent when any of the following holds.
   applies.
 - The author has no writing samples and wants a bootstrapped profile built through
   the three-passage generation and reaction loop.
-- The `studio` dispatcher, per D-17 (guided front door), routes here when the
+- The `nfs-start` dispatcher, per D-17 (guided front door), routes here when the
   author says "capture my voice," "set my writing style," or "I have samples to
   share."
 

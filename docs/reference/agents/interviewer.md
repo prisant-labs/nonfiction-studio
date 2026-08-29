@@ -16,7 +16,8 @@ context agents) and governed by D-16 (honest, resumable interview).
 ## Purpose
 
 The `interviewer` gathers an author's intent for a book and turns it into the
-project bible that every other agent reads. It scaffolds the book tree, walks the
+project bible (the book's canonical reference files under `context/`, `structure/`,
+`chapters/`, `research/`, and `production/`) that every other agent reads. It scaffolds the book tree, walks the
 author through ten intake sections, records each confirmed section to
 `context/brief.md` as a resumable DRAFT block, and commits the bible files only
 after the author confirms a single written brief. The first-session goal is a
@@ -35,7 +36,7 @@ Invoke the `interviewer` when any of the following holds.
   a title pivot, or a thesis revision.
 - The author supplies a filled `project-init.guided.md` or `project-init.blank.md`
   template and wants only the gaps filled and the brief confirmed.
-- The `studio` dispatcher, per D-17 (guided front door), routes the author here
+- The `nfs-start` dispatcher, per D-17 (guided front door), routes the author here
   after they choose to start a new book or resume intake.
 
 ## At a glance
@@ -87,7 +88,7 @@ agents) pending ratification in S-08 (schemas and file formats).
 ## Guardrails
 
 - **Scaffold before interviewing.** The book tree is created (by the
-  `init-project` skill) before the first question, so the author sees real
+  `nfs-new-book` skill) before the first question, so the author sees real
   structure appear, per D-16 (honest, resumable interview).
 - **Flush every confirmed section.** A DRAFT block reaches `context/brief.md`
   before the next section's questions are asked. Earlier DRAFT blocks are never

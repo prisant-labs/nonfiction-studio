@@ -44,7 +44,7 @@ whether the captured voice is good: it observes, describes, and records.
 
 ## When to invoke
 
-- **Post-intake with samples.** `intake-interview` has confirmed the project brief
+- **Post-intake with samples.** `nfs-interview` has confirmed the project brief
   and the author provided writing samples in section 6. Invoke to extract the voice
   profile from those samples and set the numeric baseline.
 - **New samples available.** The author supplies new writing samples at any project

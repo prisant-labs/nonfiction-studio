@@ -8,7 +8,7 @@ when_to_use: "Use when the author types /doctor, reports unexpected structural o
 
 This skill is the bible integrity front door per D-12 (versioned bible with a doctor) and S-06 3.11 (skills and invocation surface). It fronts `bin/ns-doctor` in a single Bash call per invocation, maps the exit code to a presented result, and groups findings by check type with routing hints. **`bin/ns-doctor` and its engine (`hooks/lib/doctor-engine.mjs`) are read-only without exception, in every mode**, proven by the grep in the engine's own header (D-12, versioned bible with a doctor). The `report`, `migrate`, and `packs` modes of this skill write nothing either. **The one exception is the `install-statusline` mode** (OPP-P03, studio HUD; ADR-0008, status HUD and CANON 3.5), which writes `~/.claude/settings.json`'s `statusLine` key, and only that file, and only after the author answers an explicit yes to a stated, one-time consent prompt; see "Mode `install-statusline`" below. The `.studio/logs/doctor-<ts>.json` write and other bible mutations described for a future `fix` mode remain unimplemented and are unrelated Phase 2 scope.
 
-**The fix mode is not in v1.** The skill responds to a `fix` argument by stating that it is Phase 2+ scope and is not available. The Phase 2 contract (dry-run default, explicit `apply` argument required, fixable-issue list) is recorded in `docs/reference/skills/doctor.md` as the future contract. No files are written; no engine is invoked.
+**The fix mode is not in v1.** The skill responds to a `fix` argument by stating that it is Phase 2+ scope and is not available. The Phase 2 contract (dry-run default, explicit `apply` argument required, fixable-issue list) is recorded in `docs/reference/skills/nfs-doctor.md` as the future contract. No files are written; no engine is invoked.
 
 **No agents invoked.** This is a deterministic-CLI-only skill in the `report`, `migrate`, and `packs` modes. `install-statusline` invokes no agent either: it uses the Write or Edit tool directly against `~/.claude/settings.json`, the only file any mode of this skill ever writes. No chain edges exist in any mode.
 
@@ -47,11 +47,11 @@ Parse the mode argument from the supplied tokens. The default mode when no argum
 
 - **`fix`:** State the following and halt without making any tool calls:
 
-  > The `fix` mode is Phase 2+ scope and is not available in v1. No changes have been made to any file. When `fix` arrives in Phase 2 its contract will be: dry-run default, explicit `apply` argument required to commit changes, fixable-issue list includes duplicate EV IDs, malformed JSONL log lines, and broken internal cross-references, and each change is logged to `.studio/logs/doctor-<ts>.json`. To diagnose issues without repairing them, run `/nonfiction-studio:doctor` (no argument) to run the full check inventory in report mode.
+  > The `fix` mode is Phase 2+ scope and is not available in v1. No changes have been made to any file. When `fix` arrives in Phase 2 its contract will be: dry-run default, explicit `apply` argument required to commit changes, fixable-issue list includes duplicate EV IDs, malformed JSONL log lines, and broken internal cross-references, and each change is logged to `.studio/logs/doctor-<ts>.json`. To diagnose issues without repairing them, run `/nonfiction-studio:nfs-doctor` (no argument) to run the full check inventory in report mode.
 
 - **Any other token:** unrecognized mode. State the following and halt without making any tool calls:
 
-  > Unrecognized mode `[token]`. Valid modes are `report` (default), `migrate`, `packs`, and `install-statusline`. The `fix` mode is Phase 2+ scope and is not available in v1. Run `/nonfiction-studio:doctor` with no argument to run the full check inventory.
+  > Unrecognized mode `[token]`. Valid modes are `report` (default), `migrate`, `packs`, and `install-statusline`. The `fix` mode is Phase 2+ scope and is not available in v1. Run `/nonfiction-studio:nfs-doctor` with no argument to run the full check inventory.
 
 ---
 
@@ -79,7 +79,7 @@ Use the Read tool on `$HOME/.claude/settings.json`. Three outcomes:
 - **File exists and parses as JSON.** Continue to Step C with the parsed object in hand.
 - **File exists but does not parse as JSON.** Halt. State: "`~/.claude/settings.json` exists but
   is not valid JSON, so I cannot safely merge into it without risking the rest of your settings.
-  Please fix or back up that file, then run `/nonfiction-studio:doctor install-statusline` again,
+  Please fix or back up that file, then run `/nonfiction-studio:nfs-doctor install-statusline` again,
   or run the built-in `/statusline` command instead." Write nothing.
 
 ### Step C - State exactly what will be written, and ask
@@ -107,10 +107,10 @@ Wait for an explicit answer before continuing to Step D.
 **Non-interactive (headless) context.** There is nobody present to answer the question above. Do
 not proceed as though "yes" were implied: a top-level settings write is exactly the kind of
 action that requires an explicit yes (OPP-P03's "exactly one consent prompt"), unlike some other
-skills' low-risk non-interactive defaults (for example `init-project`'s idempotent re-stamp of
+skills' low-risk non-interactive defaults (for example `nfs-new-book`'s idempotent re-stamp of
 missing scaffold files). State: "Installing the status line needs an explicit yes from you, so it
 is not available in a non-interactive session. Run the built-in `/statusline` command instead, or
-run `/nonfiction-studio:doctor install-statusline` again from an interactive session." Write
+run `/nonfiction-studio:nfs-doctor install-statusline` again from an interactive session." Write
 nothing.
 
 ### Step D - On an explicit yes: write; on anything else: write nothing
@@ -129,7 +129,7 @@ Code session, or immediately if you run `/statusline` afterward."
 condition in Steps A-C above): write nothing. State: "No changes were made to
 `~/.claude/settings.json`. You can install the status line yourself at any time by running the
 built-in `/statusline` command and describing what to show, or by running
-`/nonfiction-studio:doctor install-statusline` again."
+`/nonfiction-studio:nfs-doctor install-statusline` again."
 
 ---
 
@@ -154,7 +154,7 @@ If all three lookups fail: halt immediately. Report the settings.json path attem
 
 Carry the resolved path forward as `<plugin-root>` for Step 3.
 
-**Shared plugin-root convention.** This three-tier resolution (settings.json lookup, plugins-cache search, dev-mode fallback) is the same routine as `skills/init-project/SKILL.md` Step 4; a future wave extracts it to a shared reference.
+**Shared plugin-root convention.** This three-tier resolution (settings.json lookup, plugins-cache search, dev-mode fallback) is the same routine as `skills/nfs-new-book/SKILL.md` Step 4; a future wave extracts it to a shared reference.
 
 ---
 
@@ -208,15 +208,15 @@ Parse stdout as JSON. Group findings by the prefix of the `type` field (the segm
 
 | Group prefix(es) | Display name | Routing hint |
 |---|---|---|
-| `structure` | Bible structure | One or more scaffold-mandated paths are absent. Suggested next step: re-run `/nonfiction-studio:init-project` to re-stamp missing paths (idempotent for existing content), or create the named path manually. |
+| `structure` | Bible structure | One or more scaffold-mandated paths are absent. Suggested next step: re-run `/nonfiction-studio:nfs-new-book` to re-stamp missing paths (idempotent for existing content), or create the named path manually. |
 | `schema`, `shape` | Schema and shape | A file does not match its required shape. Inspect the named file and field; correct the type, add the missing required field, or fix the invalid JSON. |
 | `ev-grammar` | Evidence log grammar | An evidence entry is malformed. Edit `research/evidence-log.md` to correct the named entry (required fields, enum values for confidence and status, SRC ID format). |
 | `src-grammar` | Sources grammar | A source entry is malformed. Edit `research/sources.md` to correct the named entry (type enum, retrieval-status enum). |
-| `claim-marker` | Orphan claim markers | A chapter references a `[claim: EV-nnnn]` marker whose EV ID is absent from the evidence ledger. Suggested next step: run `/nonfiction-studio:fact-check-pass <slug>` to reconcile chapter markers and ledger entries. |
-| `src-ref` | Orphan SRC references | SRC IDs referenced in EV entries are absent from sources.md, OR SRC IDs defined in sources.md are referenced by no EV entry. Suggested next step: run `/nonfiction-studio:research-pass` or `/nonfiction-studio:fact-check-pass` to reconcile the cross-references. |
+| `claim-marker` | Orphan claim markers | A chapter references a `[claim: EV-nnnn]` marker whose EV ID is absent from the evidence ledger. Suggested next step: run `/nonfiction-studio:nfs-fact-check <slug>` to reconcile chapter markers and ledger entries. |
+| `src-ref` | Orphan SRC references | SRC IDs referenced in EV entries are absent from sources.md, OR SRC IDs defined in sources.md are referenced by no EV entry. Suggested next step: run `/nonfiction-studio:nfs-research` or `/nonfiction-studio:nfs-fact-check` to reconcile the cross-references. |
 | `coherence` | Word-count coherence | A chapter's word count in progress.json does not match the file on disk. This typically self-resolves when the PostToolBatch hook runs on the next chapter write. If the mismatch persists, check whether a manual edit bypassed the hook. |
 | `snapshot` | Snapshot naming | A file in `.studio/snapshots/` does not match the naming convention `<slug>.<YYYYMMDDTHHMMSSZ>.md`. Rename the file to conform. |
-| `style-profile` | Style profile structure | `context/style-profile.md` is missing a required section, has sections out of order, is missing a `Baseline reference` field, disagrees with `config.json`'s stylometry baseline, has a broken `Exemplars` path, or is a stub alongside an already-captured baseline. Edit the named section, field, or path directly, or re-run `/nonfiction-studio:capture-voice` to resynchronize both files. |
+| `style-profile` | Style profile structure | `context/style-profile.md` is missing a required section, has sections out of order, is missing a `Baseline reference` field, disagrees with `config.json`'s stylometry baseline, has a broken `Exemplars` path, or is a stub alongside an already-captured baseline. Edit the named section, field, or path directly, or re-run `/nonfiction-studio:nfs-capture-voice` to resynchronize both files. |
 
 Present the grouped findings in this order (any group with zero findings is omitted):
 
@@ -229,7 +229,7 @@ Present the grouped findings in this order (any group with zero findings is omit
 
 Close with the summary and re-run invitation:
 
-> Doctor verdict: N total finding(s). Address the items above, then re-run `/nonfiction-studio:doctor` to confirm the bible is clean.
+> Doctor verdict: N total finding(s). Address the items above, then re-run `/nonfiction-studio:nfs-doctor` to confirm the bible is clean.
 
 If `notices` is also non-empty, present them after the findings under the label "Notices (informational, do not affect this verdict)".
 
@@ -240,7 +240,7 @@ Surface the stderr content and halt. This exit is never treated as a pass.
 > Doctor error (exit 2): [first non-empty line of stderr, or "engine exited with code 2 with no message on stderr" if stderr is empty]. The doctor run did not complete. Check that this is a valid project bible (`.studio/meta.json` and a `context/` directory must exist at the project root). If stdout also contains output, include it verbatim for diagnostic purposes.
 
 If the stderr message contains "requires migration", also suggest:
-> Run `/nonfiction-studio:doctor migrate` to get the explicit migration diagnosis before taking action.
+> Run `/nonfiction-studio:nfs-doctor migrate` to get the explicit migration diagnosis before taking action.
 
 ### Migrate mode
 
@@ -268,7 +268,7 @@ If the stderr message contains "requires migration", also suggest:
 
 **Unrecognized mode argument.** Step 1 halts with the unrecognized-mode message. No tool calls, no file reads.
 
-**Exit 2 from `--report`.** Step 4 surfaces the stderr and halts. Never treated as a pass. If the error message mentions schema version mismatch, suggest running `/nonfiction-studio:doctor migrate` for the explicit migration diagnosis.
+**Exit 2 from `--report`.** Step 4 surfaces the stderr and halts. Never treated as a pass. If the error message mentions schema version mismatch, suggest running `/nonfiction-studio:nfs-doctor migrate` for the explicit migration diagnosis.
 
 **Exit 2 from `--migrate`.** Expected output from the CLI when migration is genuinely required (an incompatible schema version); an already-current schema now exits 0 instead. Step 4 distinguishes the two cases and presents the appropriate message. It is not an unexpected error.
 
@@ -280,4 +280,4 @@ If the stderr message contains "requires migration", also suggest:
 
 **`install-statusline`: existing `~/.claude/settings.json` is not valid JSON.** Step B halts before writing anything; the author is told to fix or back up the file first, or to use the built-in `/statusline` command instead.
 
-**`install-statusline`: any answer other than an explicit yes (a "no", silence, an unrelated answer, or a non-interactive context with nobody to ask).** Step C or D writes nothing and states that `/statusline` and re-running `/nonfiction-studio:doctor install-statusline` both remain available.
+**`install-statusline`: any answer other than an explicit yes (a "no", silence, an unrelated answer, or a non-interactive context with nobody to ask).** Step C or D writes nothing and states that `/statusline` and re-running `/nonfiction-studio:nfs-doctor install-statusline` both remain available.

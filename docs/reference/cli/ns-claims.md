@@ -164,4 +164,4 @@ markers that need adversarial verification.
 
 - [ns-gate CLI reference](./ns-gate.md) - orchestrator that aggregates ns-claims output
 - [ns-doctor CLI reference](./ns-doctor.md) - checks word-count coherence against progress.json
-- [fact-check-pass skill reference](../skills/fact-check-pass.md) - skill that invokes the fact-checker agent
+- [fact-check-pass skill reference](../skills/nfs-fact-check.md) - skill that invokes the fact-checker agent

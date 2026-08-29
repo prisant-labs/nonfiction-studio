@@ -34,7 +34,7 @@ Each entry begins with the heading, followed by a blank line, then a fixed set o
 | `open` | Logged; not yet resolved by evidence | `structure-architect` or `research-librarian` on creation |
 | `resolved` | The question is addressed by one or more EV entries (and, when relevant, the SRC record backing them), cited in `Resolved-by` | `research-librarian` |
 
-The literal `Status: resolved` is the resolved marker: `research-pass` Step 5 counts every entry in scope whose `Status` line is not exactly `Status: resolved` as still open.
+The literal `Status: resolved` is the resolved marker: `nfs-research` Step 5 counts every entry in scope whose `Status` line is not exactly `Status: resolved` as still open.
 
 ## Ordering and placement rules
 
@@ -79,5 +79,5 @@ Date: 2026-07-17
 
 - `structure-architect`: writer; seeds one entry per evidence-needed item (and per `[GAP]` marker) atomically with the outline write.
 - `research-librarian`: reader and writer; reads the agenda at session start, marks entries resolved, and appends new entries surfaced during research.
-- `research-pass` skill: reads the unresolved agenda for the scope at Step 3 to present it for author approval, and re-reads at Step 5 to count items whose `Status` is not `resolved` for the session summary.
-- `outline-book` skill: triggers the atomic `structure-architect` append described above; the skill itself writes no ledger files.
+- `nfs-research` skill: reads the unresolved agenda for the scope at Step 3 to present it for author approval, and re-reads at Step 5 to count items whose `Status` is not `resolved` for the session summary.
+- `nfs-outline` skill: triggers the atomic `structure-architect` append described above; the skill itself writes no ledger files.

@@ -3,7 +3,7 @@ name: nfs-new-book
 user-invocable: true
 argument-hint: "[book title] [guided|blank]"
 description: "Scaffolds the flat bible tree (context/, structure/, chapters/, research/, production/) and creates .studio/ state files for a new nonfiction book project. Use when an author starts a new book or follows the studio Path 1 prompt."
-when_to_use: "Use when the author explicitly wants to initialize, start, or set up a new book project, says 'create a new book', types the /book-init verb alias, or is routed here from the studio dispatcher Path 1 prompt. Do not invoke for authors with an existing book project layout (.studio/ or context/brief.md) unless they explicitly ask to re-initialize only the missing pieces."
+when_to_use: "Use when the author explicitly wants to initialize, start, or set up a new book project, says 'create a new book', or is routed here from the studio dispatcher Path 1 prompt. Do not invoke for authors with an existing book project layout (.studio/ or context/brief.md) unless they explicitly ask to re-initialize only the missing pieces."
 ---
 
 This skill scaffolds a new nonfiction book project. It is surface-independent: no hooks or subagents are needed.
@@ -48,7 +48,7 @@ printf "SCAN_DONE\n"
 
 **If the output is only `SCAN_DONE` (no MISSING lines):** Output this verbatim and STOP. Do not write any files or continue to any further step:
 
-> Warning: This directory already contains a book project. All 24 expected scaffold files are present. No files were written. Run /nonfiction-studio:intake-interview to continue setting up your project.
+> Warning: This directory already contains a book project. All 24 expected scaffold files are present. No files were written. Run /nonfiction-studio:nfs-interview to continue setting up your project.
 
 **If the output contains one or more `MISSING:` lines:** The lines name the paths not yet on disk. Report the exact delta:
 
@@ -204,7 +204,7 @@ List all files created. Output:
 
 > Book project '{title}' has been initialized. The bible tree and .studio/ state files are ready.
 
-Then: "The next step is intake-interview. Invoke it with `/nonfiction-studio:intake-interview` to conduct the structured intake interview and build your project brief. The interview typically takes 45-90 minutes and produces a confirmed context/brief.md."
+Then: "The next step is intake-interview. Invoke it with `/nonfiction-studio:nfs-interview` to conduct the structured intake interview and build your project brief. The interview typically takes 45-90 minutes and produces a confirmed context/brief.md."
 
 ---
 

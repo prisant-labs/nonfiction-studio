@@ -8,7 +8,7 @@ tags: ["skill", "doctor", "integrity", "schema", "orphan", "example"]
 
 # nfs-doctor - worked example
 
-This is a condensed transcript of a `doctor report` session over the committed two-chapter sample book "The Quiet Network" (see `examples/sample-book/`). The example follows the flow specified in S-06 3.11 (skills and invocation surface) and the adjudications recorded in TSK-054 (doctor skill).
+This is a condensed transcript of a `nfs-doctor report` session over the committed two-chapter sample book "The Quiet Network" (see `examples/sample-book/`). The example follows the flow specified in S-06 3.11 (skills and invocation surface) and the adjudications recorded in TSK-054 (doctor skill).
 
 **Session provenance note.** This example is grounded in a live `report` run executed 2026-08-28 against the committed `examples/sample-book/` baseline (re-run to add the style-profile structure check, F-CI-08 (voice quality unchecked, deterministic half); the JSON output is unchanged byte-for-byte from the prior 2026-07-19 run: `examples/sample-book/context/style-profile.md` carried a stale `captured` timestamp against its own `config.json` before this branch, and was reconciled to agree with it as part of the same change that added the style-profile structure check, so the fixture was already clean by the time this check could run against it). The command, run after resolving the plugin root per Step 2 below, was `node "<plugin-root>/bin/ns-doctor" --project=examples/sample-book --report --json`; it exited 0 with `status: valid` and no findings. The JSON output is quoted verbatim. In a real book project the skill would run as `node "<plugin-root>/bin/ns-doctor" --project=. --report --json` from the book root; this is equivalent. The committed sample-book fixture is never modified by a doctor run; the engine is read-only per its READ-ONLY COVENANT.
 
@@ -26,7 +26,7 @@ The EV and SRC entries in the research files are well-formed; all chapter claim 
 
 ## Session: full report run, clean bible
 
-**Author:** `/nonfiction-studio:doctor`
+**Author:** `/nonfiction-studio:nfs-doctor`
 
 **Studio (Step 1 - Argument parsing):**
 
@@ -77,7 +77,7 @@ Doctor exit code: 0. Parse stdout as JSON report. `status: valid`, zero findings
 
 - **Exit 0 maps to a presented verdict, never silent.** The skill parsed stdout as JSON, confirmed `status: valid` and zero findings, and presented the full clean-pass message naming all eleven checks. A pass verdict is never silently swallowed.
 
-- **The skill writes nothing in `report` mode, shown throughout this transcript.** No file was created, modified, or appended at any step. `bin/ns-doctor` and its engine are read-only without exception, in every mode. The skill itself has exactly one write path anywhere in the plugin: the `install-statusline` mode (not shown in this transcript), which writes `~/.claude/settings.json` and only that file, and only after the author answers an explicit yes to a stated consent prompt. See the [doctor skill reference](./doctor.md#install-statusline-mode) for that mode.
+- **The skill writes nothing in `report` mode, shown throughout this transcript.** No file was created, modified, or appended at any step. `bin/ns-doctor` and its engine are read-only without exception, in every mode. The skill itself has exactly one write path anywhere in the plugin: the `install-statusline` mode (not shown in this transcript), which writes `~/.claude/settings.json` and only that file, and only after the author answers an explicit yes to a stated consent prompt. See the [doctor skill reference](./nfs-doctor.md#install-statusline-mode) for that mode.
 
 - **Notices would appear here if present.** The `notices` array is empty in this run. If `config.json` had `gate.checks.thesis_alignment.mode: "block"`, the engine would emit a `config-coercion.thesis-alignment` notice (informational, does not affect the exit code or verdict) and the skill would present it after the pass verdict.
 
@@ -120,7 +120,7 @@ The following is explicitly a synthetic illustration. It does NOT reflect the co
 
 > **Bible structure: 1 finding**
 > `structure/outline.md` [`structure.missing-path`]: required bible path is absent: structure/outline.md
-> Missing scaffold paths. Suggested next step: re-run `/nonfiction-studio:init-project` to re-stamp missing paths (idempotent for existing content), or create the named path manually.
+> Missing scaffold paths. Suggested next step: re-run `/nonfiction-studio:nfs-new-book` to re-stamp missing paths (idempotent for existing content), or create the named path manually.
 >
 > **Evidence log grammar: 1 finding**
 > `research/evidence-log.md#EV-0003` [`ev-grammar.malformed-entry`]: EV-0003: missing required field "confidence"
@@ -128,9 +128,9 @@ The following is explicitly a synthetic illustration. It does NOT reflect the co
 >
 > **Orphan claim markers: 1 finding**
 > `chapters/02-finding-your-network.md:14` [`claim-marker.orphan-ev`]: chapter 02-finding-your-network.md line 14: [claim: EV-0099] references EV-0099 which is absent from research/evidence-log.md
-> Run `/nonfiction-studio:fact-check-pass 02-finding-your-network` to reconcile chapter markers and the evidence ledger.
+> Run `/nonfiction-studio:nfs-fact-check 02-finding-your-network` to reconcile chapter markers and the evidence ledger.
 >
-> Doctor verdict: 3 total finding(s). Address the items above, then re-run `/nonfiction-studio:doctor` to confirm the bible is clean.
+> Doctor verdict: 3 total finding(s). Address the items above, then re-run `/nonfiction-studio:nfs-doctor` to confirm the bible is clean.
 
 This synthetic illustration uses the real finding-type strings (`structure.missing-path`, `ev-grammar.malformed-entry`, `claim-marker.orphan-ev`) from the doctor engine. No findings of any kind exist in the committed `examples/sample-book/` fixture.
 
@@ -154,10 +154,10 @@ The `--migrate` flag exits 0 for the current-schema case and 2 for the migration
 
 ## Synthetic illustration: fix mode decline
 
-**Author:** `/nonfiction-studio:doctor fix`
+**Author:** `/nonfiction-studio:nfs-doctor fix`
 
 **Studio (Step 1 - fix decline):**
 
-> The `fix` mode is Phase 2+ scope and is not available in v1. No changes have been made to any file. When `fix` arrives in Phase 2 its contract will be: dry-run default, explicit `apply` argument required to commit changes, fixable-issue list includes duplicate EV IDs, malformed JSONL log lines, and broken internal cross-references, and each change is logged to `.studio/logs/doctor-<ts>.json`. To diagnose issues without repairing them, run `/nonfiction-studio:doctor` (no argument) to run the full check inventory in report mode.
+> The `fix` mode is Phase 2+ scope and is not available in v1. No changes have been made to any file. When `fix` arrives in Phase 2 its contract will be: dry-run default, explicit `apply` argument required to commit changes, fixable-issue list includes duplicate EV IDs, malformed JSONL log lines, and broken internal cross-references, and each change is logged to `.studio/logs/doctor-<ts>.json`. To diagnose issues without repairing them, run `/nonfiction-studio:nfs-doctor` (no argument) to run the full check inventory in report mode.
 
 No tool call is made. The skill halts at Step 1 without invoking the engine or reading any file.

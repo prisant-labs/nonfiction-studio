@@ -8,13 +8,13 @@ tags: ["skill", "outline", "structure", "example"]
 
 # nfs-outline - worked example
 
-This is a condensed transcript of an `outline-book` run for the sample book "The Quiet Network" (see `examples/sample-book/`). The author invokes with the default `full` scope. The confirmed-brief probe returns `CONFIRMED`. `structure/thesis.md` already exists from a prior `thesis-architect` run, so `thesis-architect` is not re-invoked. `structure-architect` is invoked and produces a six-chapter architecture. The author accepts the plan. The skill confirms both output files via Read checks and closes with next-step suggestions. The committed `structure/outline.md` and `structure/chapter-list.md` in `examples/sample-book/structure/` cover the same six chapters but predate the structure-architect format contracts (their normalization to the contracted formats is queued); this transcript illustrates the contracted formats a fresh run produces. The example follows the flow specified in S-06 3.4 (skills and invocation surface) and the adjudications recorded in TSK-047 (outline-book skill).
+This is a condensed transcript of an `nfs-outline` run for the sample book "The Quiet Network" (see `examples/sample-book/`). The author invokes with the default `full` scope. The confirmed-brief probe returns `CONFIRMED`. `structure/thesis.md` already exists from a prior `thesis-architect` run, so `thesis-architect` is not re-invoked. `structure-architect` is invoked and produces a six-chapter architecture. The author accepts the plan. The skill confirms both output files via Read checks and closes with next-step suggestions. The committed `structure/outline.md` and `structure/chapter-list.md` in `examples/sample-book/structure/` cover the same six chapters but predate the structure-architect format contracts (their normalization to the contracted formats is queued); this transcript illustrates the contracted formats a fresh run produces. The example follows the flow specified in S-06 3.4 (skills and invocation surface) and the adjudications recorded in TSK-047 (outline-book skill).
 
 ---
 
 ## Session: existing thesis, full-scope run, six-chapter outline accepted
 
-**Author:** `/nonfiction-studio:outline-book`
+**Author:** `/nonfiction-studio:nfs-outline`
 
 **Studio (Step 1 - Confirmed-brief probe):**
 
@@ -44,7 +44,7 @@ The file is present and non-empty. The skill presents the controlling idea to th
 
 The skill uses the Read tool on `research/evidence-log.md`. The file is present and contains evidence entries (EV-0001 through EV-0009).
 
-The `structure-architect` agent is spawned via the `outline-book -> structure-architect` chain edge with:
+The `structure-architect` agent is spawned via the `nfs-outline -> structure-architect` chain edge with:
 - The content of `context/brief.md` (genre: practical non-fiction; six-chapter scope; 30,000 word target)
 - The content of `structure/thesis.md`
 - The nine evidence entries from `research/evidence-log.md`
@@ -64,7 +64,7 @@ Using the `how-to` craft model shape and the thesis argument as the dual skeleto
 06-the-compounding-effect     - The Compounding Effect
 ```
 
-Each chapter block includes a promise, payoff, thesis link, key beats (four per chapter), evidence-needed items, and dependency links. The agent identifies no scope-creep gaps. The evidence entries for chapters 1 and 2 (EV-0001 through EV-0009) are mapped to their anchor chapters; chapters 3 through 6 carry EV-NEEDED items for evidence to be gathered in a future `research-pass`.
+Each chapter block includes a promise, payoff, thesis link, key beats (four per chapter), evidence-needed items, and dependency links. The agent identifies no scope-creep gaps. The evidence entries for chapters 1 and 2 (EV-0001 through EV-0009) are mapped to their anchor chapters; chapters 3 through 6 carry EV-NEEDED items for evidence to be gathered in a future `nfs-research`.
 
 The agent presents the full proposed plan with all six chapter blocks, the chapter-list preview, and the evidence-needed summary to the author for review.
 
@@ -105,9 +105,9 @@ Both checks pass.
 >
 > `context/style-profile.md` is not yet present. Optional next steps:
 >
-> 1. Run `capture-voice` to build the voice baseline before drafting: `/nonfiction-studio:capture-voice`
-> 2. Run `research-pass` to gather evidence for the chapters with open EV-NEEDED items: `/nonfiction-studio:research-pass`
-> 3. Start drafting with `draft-chapter`: `/nonfiction-studio:draft-chapter 01-listening-before-speaking`
+> 1. Run `nfs-capture-voice` to build the voice baseline before drafting: `/nonfiction-studio:nfs-capture-voice`
+> 2. Run `nfs-research` to gather evidence for the chapters with open EV-NEEDED items: `/nonfiction-studio:nfs-research`
+> 3. Start drafting with `nfs-draft`: `/nonfiction-studio:nfs-draft 01-listening-before-speaking`
 >
 > None of these is required before the others.
 

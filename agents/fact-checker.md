@@ -59,11 +59,11 @@ scope; D-13 (security posture) is not machine-enforced for this agent.
 - **Pre-completion gate pass.** Any chapter must pass through `fact-checker` before
   it is marked done. The Stop hook calls `bin/ns-claims` (D-05, five shipped CLIs)
   first; if claim coverage is not 100 percent, the hook surfaces unresolved markers
-  and the author re-invokes `fact-check-pass` before the gate can clear.
+  and the author re-invokes `nfs-fact-check` before the gate can clear.
 - **On-demand chapter or entry check.** The author requests a verification pass on a
   specific chapter or a specific EV entry without running the full gate sequence. The
-  `fact-check-pass` skill routes here with the chapter or entry ID as the target.
-- **fact-check-pass skill.** The `fact-check-pass` skill is the primary invocation
+  `nfs-fact-check` skill routes here with the chapter or entry ID as the target.
+- **fact-check-pass skill.** The `nfs-fact-check` skill is the primary invocation
   surface; it invokes this agent directly and manages the coverage-gate hand-off.
 
 ## Tools

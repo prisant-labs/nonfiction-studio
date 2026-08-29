@@ -40,7 +40,7 @@ The author's sample is saved at `context/samples/voice-sample-01.md`.
 
 ## Session: capture and commit
 
-**Author:** `/nonfiction-studio:capture-voice`
+**Author:** `/nonfiction-studio:nfs-capture-voice`
 
 **voice-capture:**
 

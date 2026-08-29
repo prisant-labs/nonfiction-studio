@@ -42,9 +42,9 @@ to `drafting-partner`.
 ## When to invoke
 
 - **Post-thesis outline build.** `thesis-architect` has written and the author
-  has confirmed `structure/thesis.md`. The `outline-book` skill triggers
+  has confirmed `structure/thesis.md`. The `nfs-outline` skill triggers
   `structure-architect` to translate the argument spine into a chapter plan.
-- **Missing outline with confirmed thesis.** The `outline-book` skill checks for
+- **Missing outline with confirmed thesis.** The `nfs-outline` skill checks for
   a non-empty `structure/thesis.md` before invoking this agent. When the thesis
   is confirmed but `structure/outline.md` does not yet exist, the skill routes
   here directly.

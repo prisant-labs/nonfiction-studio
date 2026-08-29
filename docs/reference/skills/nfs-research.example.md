@@ -8,7 +8,7 @@ tags: ["skill", "research", "evidence", "sources", "ledger", "example"]
 
 # nfs-research - worked example
 
-This is a condensed transcript of a chapter-scoped `research-pass` session for the sample book "The Quiet Network" (see `examples/sample-book/`). The session scopes to Chapter 3 (Your Curation Practice, slug `03-your-curation-practice`). The outline probe returns `HAS_OUTLINE`. The chapter argument resolves cleanly against `structure/chapter-list.md`. The web gate is closed. The author provides source text for analysis; the `research-librarian` agent registers one new SRC record and logs two new EV entries. The session closes with the three-count summary. The example follows the flow specified in S-06 3.5 (skills and invocation surface) and the adjudications recorded in TSK-048 (research-pass skill).
+This is a condensed transcript of a chapter-scoped `nfs-research` session for the sample book "The Quiet Network" (see `examples/sample-book/`). The session scopes to Chapter 3 (Your Curation Practice, slug `03-your-curation-practice`). The outline probe returns `HAS_OUTLINE`. The chapter argument resolves cleanly against `structure/chapter-list.md`. The web gate is closed. The author provides source text for analysis; the `research-librarian` agent registers one new SRC record and logs two new EV entries. The session closes with the three-count summary. The example follows the flow specified in S-06 3.5 (skills and invocation surface) and the adjudications recorded in TSK-048 (research-pass skill).
 
 **Session provenance note.** This example is an alternative illustration session that branches from the same committed ledger baseline as the `research-librarian` worked example (see `docs/reference/agents/research-librarian.example.md`). Both examples start from the committed state: EV-0010 is the highest EV entry (pacing recommendation) and SRC-0006 (Lave and Wenger 1991) is the highest SRC record. In practice only one session runs before the other, so the IDs EV-0011, EV-0012, and SRC-0007 do not conflict between the two examples - they represent independent hypothetical paths from the same baseline. The committed `research/evidence-log.md` and `research/sources.md` in `examples/sample-book/research/` carry the baseline state (10 EV entries, 6 SRC records); the new entries shown here are the hypothetical outcome of this session only.
 
@@ -50,7 +50,7 @@ The author has located a relevant book: Clay Johnson, "The Information Diet: A C
 
 ## Session: chapter-scoped research pass, gate closed, pasted source text
 
-**Author:** `/nonfiction-studio:research-pass 03-your-curation-practice`
+**Author:** `/nonfiction-studio:nfs-research 03-your-curation-practice`
 
 **Studio (Step 1 - Outline probe):**
 
@@ -100,7 +100,7 @@ The skill reads `.studio/config.json`. The field `research.web_enabled` is absen
 
 **Studio (Step 4 - Delegate to research-librarian):**
 
-The skill spawns `research-librarian` via the `research-pass -> research-librarian` chain edge, passing:
+The skill spawns `research-librarian` via the `nfs-research -> research-librarian` chain edge, passing:
 - Chapter scope: 03-your-curation-practice (Chapter 3, Your Curation Practice)
 - Open questions: OQ-003 and OQ-004 from `research/open-questions.md`
 - Current ledger highs: EV-0010, SRC-0006 (informational; the agent reads the files again for allocation)
@@ -233,13 +233,13 @@ The skill reads `research/open-questions.md`. OQ-003 and OQ-004 are now resolved
 > - 2 new evidence entries: EV-0011 (information-volume-overload), EV-0012 (intentional-selection-sustainability)
 > - 0 claims still unsourced: all open questions for Chapter 3 are resolved
 >
-> Both entries land at `status: pending`. `fact-check-pass` advances them through the verification cycle.
+> Both entries land at `status: pending`. `nfs-fact-check` advances them through the verification cycle.
 >
 > Optional next steps:
 >
-> 1. Run `fact-check-pass` to verify EV-0011 (information-volume-overload) and EV-0012 (intentional-selection-sustainability): `/nonfiction-studio:fact-check-pass 03-your-curation-practice`
-> 2. Run `draft-chapter` now that Chapter 3 has sourced entries: `/nonfiction-studio:draft-chapter 03-your-curation-practice`
-> 3. Run `research-pass` for another chapter with open questions: `/nonfiction-studio:research-pass 04-making-connections`
+> 1. Run `nfs-fact-check` to verify EV-0011 (information-volume-overload) and EV-0012 (intentional-selection-sustainability): `/nonfiction-studio:nfs-fact-check 03-your-curation-practice`
+> 2. Run `nfs-draft` now that Chapter 3 has sourced entries: `/nonfiction-studio:nfs-draft 03-your-curation-practice`
+> 3. Run `nfs-research` for another chapter with open questions: `/nonfiction-studio:nfs-research 04-making-connections`
 
 ---
 

@@ -171,4 +171,4 @@ reach it only through that CLI boundary.
 - [ns-scrub CLI reference](./ns-scrub.md) - injection and continuity engine called by ns-gate
 - [ns-stylometry CLI reference](./ns-stylometry.md) - drift engine called by ns-gate
 - [ns-doctor CLI reference](./ns-doctor.md) - coherence check shared with ns-gate
-- [run-quality-gate skill reference](../skills/run-quality-gate.md) - skill that invokes ns-gate
+- [run-quality-gate skill reference](../skills/nfs-check-chapter.md) - skill that invokes ns-gate

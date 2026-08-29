@@ -8,7 +8,7 @@ tags: ["skill", "status", "dashboard", "progress", "overview", "gate", "example"
 
 # nfs-status-dashboard - worked example
 
-This is a condensed transcript of a `status-dashboard` run over the committed two-chapter sample book "The Quiet Network" (see `examples/sample-book/`). The example follows the flow specified in S-06 3.9 (skills and invocation surface) and the adjudications recorded in TSK-052 (status-dashboard skill).
+This is a condensed transcript of a `nfs-status-dashboard` run over the committed two-chapter sample book "The Quiet Network" (see `examples/sample-book/`). The example follows the flow specified in S-06 3.9 (skills and invocation surface) and the adjudications recorded in TSK-052 (status-dashboard skill).
 
 **Session provenance note.** This example is grounded in a live `--json` run executed 2026-08-15 against a scratch copy of the committed `examples/sample-book/` baseline, made outside the repository (this wave's discipline never runs a CLI against `examples/` in place, since the fixture suite asserts that tree stays byte-clean). The command, run after resolving the plugin root per Step 1 below, was `node "<plugin-root>/bin/ns-status" --project=. --json` from the book root; the scratch invocation used to produce the output below is equivalent. The JSON output is quoted verbatim, byte for byte, from that run. `bin/ns-status` is read-only; nothing under `.studio/` was written by generating this example, and the committed `examples/sample-book/` fixture itself was never touched.
 
@@ -30,7 +30,7 @@ Note: `progress.json`'s per-chapter `drift_score` field (`10.86` for chapter 01,
 
 ## Session: full status dashboard run
 
-**Author:** `/nonfiction-studio:status-dashboard`
+**Author:** `/nonfiction-studio:nfs-status-dashboard`
 
 **Studio (Step 1 - Resolve the plugin root):**
 
@@ -116,7 +116,7 @@ Totals row from the JSON's `totals` object: Words = `1055`, Open Claims = `0`, C
 >
 > **Next actions:**
 >
-> - Chapter 02 (`02-finding-your-network`) has no gate report on record (`gate: null`). Run `/nonfiction-studio:run-quality-gate 02-finding-your-network` to gate this chapter.
+> - Chapter 02 (`02-finding-your-network`) has no gate report on record (`gate: null`). Run `/nonfiction-studio:nfs-check-chapter 02-finding-your-network` to gate this chapter.
 > - No chapter has `openClaimCount` greater than 0.
 > - No chapter has `highlighted: true`.
 
@@ -175,8 +175,8 @@ The following is explicitly synthetic. It shows what the JSON and the rendered t
 >
 > **Next actions:**
 >
-> - Chapter 02 (`02-finding-your-network`) has `openClaimCount: 3`. Run `/nonfiction-studio:fact-check-pass 02-finding-your-network` to resolve them.
-> - Chapter 02 is highlighted (`gate` is `warn`, not `block`): `bin/ns-status` has already flagged its drift score as above the configured threshold. Run `/nonfiction-studio:draft-chapter 02-finding-your-network` to revise the chapter directly, then re-run `/nonfiction-studio:run-quality-gate 02-finding-your-network` to confirm the drift score has improved.
+> - Chapter 02 (`02-finding-your-network`) has `openClaimCount: 3`. Run `/nonfiction-studio:nfs-fact-check 02-finding-your-network` to resolve them.
+> - Chapter 02 is highlighted (`gate` is `warn`, not `block`): `bin/ns-status` has already flagged its drift score as above the configured threshold. Run `/nonfiction-studio:nfs-draft 02-finding-your-network` to revise the chapter directly, then re-run `/nonfiction-studio:nfs-check-chapter 02-finding-your-network` to confirm the drift score has improved.
 
 The `!` prefix comes directly from the synthetic entry's `"highlighted": true`; the skill never re-derives it from comparing `41` against `25` itself. This synthetic illustration does not reflect the committed fixture. The drift score of `41`, the `warn` verdict, the `3` open claims, and the `highlighted: true` flag are invented for illustration purposes only.
 
@@ -194,6 +194,6 @@ ns-status: Cannot read progress.json at /path/to/project/.studio/progress.json: 
 
 **Studio:**
 
-> `.studio/progress.json` was not found. Run `/nonfiction-studio:init-project` to scaffold the project and create the progress file.
+> `.studio/progress.json` was not found. Run `/nonfiction-studio:nfs-new-book` to scaffold the project and create the progress file.
 
 No table is rendered; the exit-2 case is never treated as a pass.

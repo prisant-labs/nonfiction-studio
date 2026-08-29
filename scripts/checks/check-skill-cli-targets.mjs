@@ -4,7 +4,7 @@
 //               templates/, plus root-level .md files, for the literal invocation form a
 //               CLI-wrapper skill (or any other shipped document) uses to name a routing
 //               target - "bin/ns-<name>", the same shape node "<plugin-root>/bin/ns-<name>"
-//               resolves to once the plugin root is substituted in (see skills/init-project/
+//               resolves to once the plugin root is substituted in (see skills/nfs-new-book/
 //               SKILL.md Step 4 for that resolution) - and asserts each named CLI is genuinely
 //               shipped: the extensionless file exists directly under bin/. A bare "ns-<name>"
 //               mention with no "bin/" prefix (for example a sentence naming a sibling CLI in

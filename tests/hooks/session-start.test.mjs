@@ -159,9 +159,9 @@ test('(b) empty scratch dir: exit 0, exactly two-sentence empty-state, no sessio
   assert.equal(parts.length, 2, 'empty-state contains exactly two sentences (split on ". ")');
   assert.ok(ctx.endsWith('.'), 'empty-state ends with a period');
 
-  // Content: first sentence mentions no book project; second names init-project
+  // Content: first sentence mentions no book project; second names nfs-new-book
   assert.ok(ctx.includes('No book project'), 'first sentence mentions no book project');
-  assert.ok(ctx.includes('init-project'), 'second sentence names the init-project flow');
+  assert.ok(ctx.includes('nfs-new-book'), 'second sentence names the nfs-new-book flow');
 
   // No sessionTitle on empty-state path
   assert.equal(hso.sessionTitle, undefined, 'sessionTitle is absent on empty-state path');

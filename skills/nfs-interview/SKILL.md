@@ -3,7 +3,7 @@ name: nfs-interview
 user-invocable: true
 argument-hint: ""
 description: "Conducts the adaptive intake interview to produce a confirmed context/brief.md. The first-session success criterion is a confirmed brief, not a drafted chapter. The interview typically takes 45-90 minutes per D-16 (honest, resumable interview). Use when the author says 'interview me about my book,' wants to 'start my author interview,' or says 'continue my interview' after an earlier session."
-when_to_use: "Use when the author types the /interview verb alias, says 'set up my book' or 'continue my interview', or follows init-project's closing prompt. Do not invoke for authors who already have a confirmed context/brief.md and are not resuming an interrupted intake, or for unrelated queries."
+when_to_use: "Use when the author says 'set up my book' or 'continue my interview', or follows init-project's closing prompt. Do not invoke for authors who already have a confirmed context/brief.md and are not resuming an interrupted intake, or for unrelated queries."
 chain:
   - interviewer
 ---
@@ -25,7 +25,7 @@ Use the Read tool on `context/brief.md`.
 
 ## Step 2 - Delegate to the interviewer agent
 
-Spawn the `interviewer` agent, passing the current brief state as context. The chain edge for this delegation is `intake-interview -> interviewer` per `agents/_chain-permitted.yaml` (TSK-044 (chain contract, Phase 1)).
+Spawn the `interviewer` agent, passing the current brief state as context. The chain edge for this delegation is `nfs-interview -> interviewer` per `agents/_chain-permitted.yaml` (TSK-044 (chain contract, Phase 1)).
 
 **On chat:** before spawning, load the content of `context/brief.md` inline into the spawn context. This surface-compensation step per S-06 3.2 (intake-interview, surface notes) ensures the agent has the DRAFT-block state available even when its own Read call may not succeed on the chat surface.
 
@@ -51,10 +51,10 @@ test -f context/style-profile.md && echo HAS_PROFILE || echo NO_PROFILE
 ```
 
 Branch on the output:
-- `NO_PROFILE`: suggest running `capture-voice` to build the author's stylometric voice baseline. Note that any writing samples shared during the interview have been flagged for `voice-capture`.
+- `NO_PROFILE`: suggest running `nfs-capture-voice` to build the author's stylometric voice baseline. Note that any writing samples shared during the interview have been flagged for `voice-capture`.
 - `HAS_PROFILE`: skip the voice suggestion; a style profile is already in place.
 
-After the style-profile check, if `context/brief.md` is confirmed: suggest running `outline-book` to produce the chapter-by-chapter structure.
+After the style-profile check, if `context/brief.md` is confirmed: suggest running `nfs-outline` to produce the chapter-by-chapter structure.
 
 Both suggestions are optional next steps; do not present them as mandatory or sequential.
 

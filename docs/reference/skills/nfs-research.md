@@ -8,11 +8,11 @@ tags: ["skill", "research", "evidence", "sources", "ledger"]
 
 # nfs-research
 
-The `research-pass` skill is the studio's research front door. It confirms the chapter outline is present via a deterministic Bash guard, resolves any chapter scope argument against the slug registry, presents the research agenda to the author for approval, delegates all ledger writes to the `research-librarian` agent, and reports the three counts from the agent's session output. It is a Phase 1 skill specified in S-06 3.5 (skills and invocation surface) and governed by D-07 (claim ledger) and D-13 (security posture).
+The `nfs-research` skill is the studio's research front door. It confirms the chapter outline is present via a deterministic Bash guard, resolves any chapter scope argument against the slug registry, presents the research agenda to the author for approval, delegates all ledger writes to the `research-librarian` agent, and reports the three counts from the agent's session output. It is a Phase 1 skill specified in S-06 3.5 (skills and invocation surface) and governed by D-07 (claim ledger) and D-13 (security posture).
 
 ## Purpose
 
-`research-pass` bridges the structured chapter outline and the evidence ledger. The `research-librarian` agent it invokes is the sole allocator of EV and SRC identifiers: it registers every source the book will cite in `research/sources.md` (assigning a `SRC-NNNN` record) and logs every claim in `research/evidence-log.md` (assigning an `EV-NNNN` entry with `status: pending`). Those identifiers give `fact-checker` traceable references to verify and give `bin/ns-claims` the data it needs to compute claim coverage for the quality gate.
+`nfs-research` bridges the structured chapter outline and the evidence ledger. The `research-librarian` agent it invokes is the sole allocator of EV and SRC identifiers: it registers every source the book will cite in `research/sources.md` (assigning a `SRC-NNNN` record) and logs every claim in `research/evidence-log.md` (assigning an `EV-NNNN` entry with `status: pending`). Those identifiers give `fact-checker` traceable references to verify and give `bin/ns-claims` the data it needs to compute claim coverage for the quality gate.
 
 The skill orchestrates, presents, and reports. It writes no ledger files and no `.studio/` state. The `research-librarian` agent is the sole writer of both ledger files.
 
@@ -21,15 +21,14 @@ The skill orchestrates, presents, and reports. It writes no ledger files and no 
 ## Invocation
 
 ```
-/nonfiction-studio:research-pass [chapter]
+/nonfiction-studio:nfs-research [chapter]
 ```
 
 The optional `chapter` argument scopes the session to one chapter. Supply the chapter slug (for example `03-your-curation-practice`) or the chapter number (for example `3`). Omit it for general research not tied to a specific chapter. Slugs are found in `structure/chapter-list.md`.
 
 Alternate entry points:
-- Via the `studio` dispatcher: routes here from Path 3 (Research and verify) when the author says they want to gather new sources
-- Verb alias: `/research` (introduced in v2; the namespaced `/nonfiction-studio:research-pass` form also works)
-- Via the `outline-book` closing prompt: that skill suggests `research-pass` as a natural next step when open EV-NEEDED items remain
+- Via the `nfs-start` dispatcher: routes here from Path 3 (Research and verify) when the author says they want to gather new sources
+- Via the `nfs-outline` closing prompt: that skill suggests `nfs-research` as a natural next step when open EV-NEEDED items remain
 
 ## Inputs and Outputs
 
@@ -61,13 +60,13 @@ Ledger writes are append-only. A partial session is safe: entries written before
 
 The skill runs five steps. Step 2 executes only when a chapter argument is supplied.
 
-1. **Outline probe (mandatory first tool call).** Uses a Bash tool call to test whether `structure/outline.md` is present. The output is a binary token: `NO_OUTLINE` halts chapter-scoped sessions immediately and routes to `outline-book`; for un-scoped sessions it warns and permits proceeding on explicit author confirmation; `HAS_OUTLINE` continues. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
+1. **Outline probe (mandatory first tool call).** Uses a Bash tool call to test whether `structure/outline.md` is present. The output is a binary token: `NO_OUTLINE` halts chapter-scoped sessions immediately and routes to `nfs-outline`; for un-scoped sessions it warns and permits proceeding on explicit author confirmation; `HAS_OUTLINE` continues. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
 
 2. **Chapter argument resolution (when chapter argument is supplied).** Reads `structure/chapter-list.md` to resolve the supplied slug or number. If no match is found, halts with the supplied value, the registry file name, and the list of valid slugs. Carries the slug, chapter number, and working title forward to Step 3.
 
 3. **Load inputs, check web gate, and present agenda.** Reads `structure/outline.md` for the scoped chapter's evidence-needed items, reads `research/open-questions.md` for the unresolved research queue, reads `research/evidence-log.md` and `research/sources.md` to note the current highest IDs, and reads `.studio/config.json` to check the web gate. States the gate status explicitly: gate open announces web-enabled mode; gate closed (the default) explains that source material arrives as pasted text or author-provided files analyzed with the same quote-and-attribute discipline. Waits for author approval before delegating.
 
-4. **Delegate to research-librarian.** Spawns the `research-librarian` agent via the `research-pass -> research-librarian` chain edge with the chapter scope, evidence-needed items, open-question items, current highest IDs, and web gate status. The agent reads both ledger files to establish the true highest IDs before any allocation, registers SRC records before any EV entries (source-first contract), appends new EV entries with `status: pending`, and marks resolved open-question items. The skill writes no ledger files.
+4. **Delegate to research-librarian.** Spawns the `research-librarian` agent via the `nfs-research -> research-librarian` chain edge with the chapter scope, evidence-needed items, open-question items, current highest IDs, and web gate status. The agent reads both ledger files to establish the true highest IDs before any allocation, registers SRC records before any EV entries (source-first contract), appends new EV entries with `status: pending`, and marks resolved open-question items. The skill writes no ledger files.
 
 5. **Report from the agent's session output.** Reads `research/open-questions.md` to count remaining open items for the scope. Formats and presents the three counts from the agent's session report: new sources (new SRC records appended), new evidence entries (new EV entries appended), and claims still unsourced (open items in `research/open-questions.md` for the scope not yet marked resolved). Suggests next steps based on the open count.
 
@@ -91,7 +90,7 @@ Note that on the chat surface, WebSearch and WebFetch may not be available even 
 
 ## Failure Behavior
 
-**No outline, chapter-scoped research.** The Step 1 Bash probe halts on `NO_OUTLINE` when a chapter argument is supplied. The outline is required to identify the chapter's claim list and evidence needs. The halt message names the command to produce it: `/nonfiction-studio:outline-book`. No prose inference substitutes for the tool result.
+**No outline, chapter-scoped research.** The Step 1 Bash probe halts on `NO_OUTLINE` when a chapter argument is supplied. The outline is required to identify the chapter's claim list and evidence needs. The halt message names the command to produce it: `/nonfiction-studio:nfs-outline`. No prose inference substitutes for the tool result.
 
 **No outline, un-scoped research.** The Step 1 probe warns on `NO_OUTLINE` for un-scoped sessions. The author may confirm they want to proceed with general research; the agent works from pasted sources and any existing open-question items directly. Proceeding requires explicit author confirmation.
 
@@ -103,4 +102,4 @@ Note that on the chat surface, WebSearch and WebFetch may not be available even 
 
 ## Worked Example
 
-See [nfs-research.example.md](./nfs-research.example.md) for a condensed transcript of a chapter-scoped `research-pass` session for the sample book "The Quiet Network". The example shows the outline probe returning `HAS_OUTLINE`, the chapter argument `03-your-curation-practice` resolving against `structure/chapter-list.md`, the agenda presentation with the web gate closed, the `research-librarian` agent ingesting author-provided source text with the quote-and-attribute discipline, and the three-count summary at close.
+See [nfs-research.example.md](./nfs-research.example.md) for a condensed transcript of a chapter-scoped `nfs-research` session for the sample book "The Quiet Network". The example shows the outline probe returning `HAS_OUTLINE`, the chapter argument `03-your-curation-practice` resolving against `structure/chapter-list.md`, the agenda presentation with the web gate closed, the `research-librarian` agent ingesting author-provided source text with the quote-and-attribute discipline, and the three-count summary at close.

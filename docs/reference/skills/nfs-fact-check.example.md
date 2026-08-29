@@ -8,7 +8,7 @@ tags: ["skill", "fact-check", "verification", "claims", "fact-checker", "evidenc
 
 # nfs-fact-check - worked example
 
-This is a condensed transcript of a `fact-check-pass` session over Chapter 2 (Finding Your Network, slug `02-finding-your-network`) of the sample book "The Quiet Network" (see `examples/sample-book/`). The example follows the flow specified in S-06 3.7 (skills and invocation surface) and the adjudications recorded in TSK-050 (fact-check-pass skill).
+This is a condensed transcript of a `nfs-fact-check` session over Chapter 2 (Finding Your Network, slug `02-finding-your-network`) of the sample book "The Quiet Network" (see `examples/sample-book/`). The example follows the flow specified in S-06 3.7 (skills and invocation surface) and the adjudications recorded in TSK-050 (fact-check-pass skill).
 
 **Session provenance note.** This example runs over the committed `examples/sample-book/` baseline: `chapters/02-finding-your-network.md` is a committed fixture carrying 5 `[claim: EV-nnnn]` markers (EV-0006 through EV-0010), and all 5 corresponding EV entries in `research/evidence-log.md` are at `status: verified`. The web gate is closed. Because all EV entries are already `verified`, the fact-checker confirms them via cache hits and makes no chapter or ledger writes; the session is a clean-verification run demonstrating the cache protocol and idempotency guarantee. Any scenario showing `[UNVERIFIED]` insertions or status advances from `pending` is explicitly synthetic and does not reflect the committed fixture.
 
@@ -30,7 +30,7 @@ All 5 EV entries in `research/evidence-log.md` are at `status: verified`. A prio
 
 ## Session: Chapter 2 clean verification, web gate closed, all entries previously verified
 
-**Author:** `/nonfiction-studio:fact-check-pass 02-finding-your-network`
+**Author:** `/nonfiction-studio:nfs-fact-check 02-finding-your-network`
 
 **Studio (Step 1 - Chapter argument resolution and file probe):**
 
@@ -103,7 +103,7 @@ The skill uses the Read tool on `.studio/config.json`. The field `research.web_e
 >
 > Spawning fact-checker for Chapter 2.
 
-The skill spawns `fact-checker` via the `fact-check-pass -> fact-checker` chain edge, passing:
+The skill spawns `fact-checker` via the `nfs-fact-check -> fact-checker` chain edge, passing:
 - Chapter slug: `02-finding-your-network`, file: `chapters/02-finding-your-network.md`
 - ns-claims pre-count: 5 markers, 5 resolved, 100% coverage
 - Web gate status: closed
@@ -184,7 +184,7 @@ Skipped - `research.web_enabled` is not `true` in `.studio/config.json`.
 ## Recommended actions
 
 Coverage is 100%. All 5 claim markers are resolved. This chapter is ready for the quality gate:
-`/nonfiction-studio:run-quality-gate 02-finding-your-network`
+`/nonfiction-studio:nfs-check-chapter 02-finding-your-network`
 ```
 
 ---
@@ -211,7 +211,7 @@ The skill uses the Read tool on `.studio/fact-check-reports/02-report.md`. The f
 > Fact-check report: `.studio/fact-check-reports/02-report.md`
 >
 > Coverage is 100% and no open claims remain. Run the quality gate:
-> `/nonfiction-studio:run-quality-gate 02-finding-your-network`
+> `/nonfiction-studio:nfs-check-chapter 02-finding-your-network`
 
 ---
 
@@ -251,7 +251,7 @@ The following is explicitly a synthetic illustration and does NOT reflect the co
 > Fact-check report: `.studio/fact-check-reports/03-report.md`
 >
 > 1 open claim remains. To resolve it:
-> - Paste the relevant source text and re-run: `/nonfiction-studio:fact-check-pass 03-your-curation-practice`
-> - Or gather additional evidence first: `/nonfiction-studio:research-pass 03-your-curation-practice`
+> - Paste the relevant source text and re-run: `/nonfiction-studio:nfs-fact-check 03-your-curation-practice`
+> - Or gather additional evidence first: `/nonfiction-studio:nfs-research 03-your-curation-practice`
 
 This synthetic illustration shows the three-count format and the suggested next steps when the pass is not clean. The committed Chapter 2 example above is the primary provenance-honest transcript.

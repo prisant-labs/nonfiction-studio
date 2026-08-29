@@ -48,7 +48,7 @@ import { join, relative } from 'node:path';
 import { DEFAULT_DRIFT_SCORE_MAX } from './stylometry-engine.mjs';
 
 // This engine's own built-in default, applied when .studio/config.json or its
-// thresholds.drift_score_max field is absent. skills/status-dashboard/SKILL.md deliberately
+// thresholds.drift_score_max field is absent. skills/nfs-status-dashboard/SKILL.md deliberately
 // documents no threshold number of its own; it narrates whichever value and isDefault flag this
 // module reports. Re-exported under this module's own name (rather than importing
 // DEFAULT_DRIFT_SCORE_MAX directly at call sites) so this module keeps its own stable public
@@ -97,7 +97,7 @@ export function parseGateFilename(filename) {
  * comparison), so a single global sort is sufficient - the last filename encountered per slug,
  * in sorted order, is the newest. Lexicographic order over the compact YYYYMMDDTHHMMSSZ shape
  * equals chronological order by construction, the same equivalence
- * hooks/lib/gate-engine.mjs's own pruneGateReports also relies on. skills/status-dashboard/
+ * hooks/lib/gate-engine.mjs's own pruneGateReports also relies on. skills/nfs-status-dashboard/
  * SKILL.md no longer restates this rule itself; it narrates whatever this module already
  * selected.
  *
@@ -172,7 +172,7 @@ const DRIFT_SCORE_PATTERN = /drift[ _]score\s+(-?\d+(?:\.\d+)?)/i;
  * Extracts the numeric drift score from a parsed gate report's `stylometry` check entry.
  * Returns null when: the report is null/malformed, no `checks[]` entry has `check ===
  * "stylometry"`, that entry's own verdict is "skip" (the same "Drift cell is -" rule
- * bin/ns-status's JSON reports and skills/status-dashboard/SKILL.md narrates verbatim, rather
+ * bin/ns-status's JSON reports and skills/nfs-status-dashboard/SKILL.md narrates verbatim, rather
  * than re-deriving), or its `detail` string carries no recognizable "drift score N" phrase.
  * Never throws: an
  * unparseable detail string degrades to null (an honest "no drift score available" cell)
@@ -194,7 +194,7 @@ export function extractDriftScore(report) {
 
 /**
  * Reads config.json's `thresholds.drift_score_max`. Returns the configured value when it is a
- * finite number; otherwise DEFAULT_DRIFT_THRESHOLD with isDefault: true. skills/status-dashboard/
+ * finite number; otherwise DEFAULT_DRIFT_THRESHOLD with isDefault: true. skills/nfs-status-dashboard/
  * SKILL.md documents no default of its own; it narrates whichever value and isDefault flag this
  * function returns. A present-but-malformed value (wrong type,
  * non-finite) is treated the same as an absent one for this purpose. An unreadable
@@ -234,7 +234,7 @@ export function deriveChapterNumber(slug) {
  * The Title cell: the chapter's own `title` field when present and non-empty, else derived
  * from the slug by dropping the two-digit numeric prefix and replacing hyphens with spaces
  * (for example "listening before speaking" from "01-listening-before-speaking").
- * skills/status-dashboard/SKILL.md documents no derivation of its own; it reads whatever this
+ * skills/nfs-status-dashboard/SKILL.md documents no derivation of its own; it reads whatever this
  * function already produced in bin/ns-status's JSON `title` field.
  *
  * @param {object} chapter - a progress.json chapters[] entry
@@ -249,7 +249,7 @@ export function deriveChapterTitle(chapter) {
 /**
  * A chapter row is highlighted when its drift score exceeds the effective threshold, or its
  * gate verdict is "block" - the same two conditions this engine alone applies.
- * skills/status-dashboard/SKILL.md reads the resulting `highlighted` field verbatim rather than
+ * skills/nfs-status-dashboard/SKILL.md reads the resulting `highlighted` field verbatim rather than
  * re-deriving them. A chapter with no drift score (null) can never be highlighted on the drift
  * condition alone.
  *
@@ -269,7 +269,7 @@ export function isHighlighted(row, thresholdValue) {
  * report exists, and the effective drift threshold. The sole fs access here beyond what the
  * caller already performed to obtain `progress` and `config` is listing and reading
  * .studio/gate/; a missing or empty gate directory is not an error
- * (skills/status-dashboard/SKILL.md: "not a halt condition") - it simply leaves every
+ * (skills/nfs-status-dashboard/SKILL.md: "not a halt condition") - it simply leaves every
  * chapter's drift and gate null.
  *
  * @param {string} root - absolute book root (used only to locate .studio/gate/)
@@ -349,10 +349,10 @@ export function computeStatusBoard(root, progress, config) {
 
 /**
  * Renders a computeStatusBoard() result as a Markdown table (columns: #, Title, Status,
- * Words, Drift, Open Claims, Gate - the same column set skills/status-dashboard/SKILL.md's
+ * Words, Drift, Open Claims, Gate - the same column set skills/nfs-status-dashboard/SKILL.md's
  * JSON-driven render also uses) plus a short footer: the drift threshold and its source, and the
  * chapters-remaining-to-final count when progress.json's totals carry a chapters_total. A
- * highlighted row (see isHighlighted) carries a leading "!" in its # cell; skills/status-dashboard/
+ * highlighted row (see isHighlighted) carries a leading "!" in its # cell; skills/nfs-status-dashboard/
  * SKILL.md's own render applies that same leading "!" by reading the `highlighted` field
  * directly, not by re-deriving it. Deterministic: no timestamp, no
  * locale-formatted number (plain string concatenation only - JavaScript's default

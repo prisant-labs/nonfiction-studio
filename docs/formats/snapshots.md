@@ -24,7 +24,7 @@ A snapshot is a verbatim full copy of the chapter file at the moment the `PreToo
 - Snapshots are written by the `PreToolUse` hook only, before any tool write to a file under `chapters/`. No agent writes snapshots directly.
 - The prune rule runs at creation time: after writing a new snapshot, the hook lists all snapshots for the same chapter slug sorted by the timestamp in the filename and deletes all but the newest 10.
 - Pruning is per chapter slug: a rarely touched chapter keeps its full history while an active chapter rolls forward.
-- The author restores a chapter by copying the desired snapshot back over the chapter file. The `doctor` skill surfaces the available snapshots per chapter.
+- The author restores a chapter by copying the desired snapshot back over the chapter file. The `nfs-doctor` skill surfaces the available snapshots per chapter.
 - Snapshots are never edited after creation. The old snapshot is never overwritten; an old file is only removed during the prune step.
 
 ## Example
@@ -44,5 +44,5 @@ After this write, if 10 previous snapshots for `03-the-signal` already exist, th
 ## Consumed by
 
 - `PreToolUse` hook (TSK-032 (pre-tool-use hook)): writes one snapshot per tool call that would write to a file under `chapters/`; prunes to the last 10 per slug immediately after writing.
-- `doctor` skill (`bin/ns-doctor`): reads the snapshot directory to surface available snapshots per chapter and to verify retention compliance.
+- `nfs-doctor` skill (`bin/ns-doctor`): reads the snapshot directory to surface available snapshots per chapter and to verify retention compliance.
 - Author: copies a snapshot over the live chapter file to restore a prior state.

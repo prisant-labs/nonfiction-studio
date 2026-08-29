@@ -8,7 +8,7 @@ tags: ["skill", "gate", "quality", "deterministic", "claims", "scrub", "example"
 
 # nfs-check-chapter - worked example
 
-This is a condensed transcript of a `run-quality-gate` session over Chapter 2 (Finding Your Network, slug `02-finding-your-network`) of the sample book "The Quiet Network" (see `examples/sample-book/`). The example follows the flow specified in S-06 3.8 (skills and invocation surface) and the adjudications recorded in TSK-051 (run-quality-gate skill).
+This is a condensed transcript of a `nfs-check-chapter` session over Chapter 2 (Finding Your Network, slug `02-finding-your-network`) of the sample book "The Quiet Network" (see `examples/sample-book/`). The example follows the flow specified in S-06 3.8 (skills and invocation surface) and the adjudications recorded in TSK-051 (run-quality-gate skill).
 
 **Session provenance note.** This example is grounded in a live gate run executed 2026-07-19 over a temp clone of the committed `examples/sample-book/` baseline at `<temp-dir>`. The run was performed by removing `context/style-profile.md` from the temp clone before invoking the gate, so the skill's baseline pre-check triggers the degraded four-check subset (`claims,scrub,continuity-quick,coherence`). The gate was invoked, after resolving the plugin root per Step 4 below, as `node "<plugin-root>/bin/ns-gate" --chapter=02-finding-your-network --check=claims,scrub,continuity-quick,coherence --json`; it exited 0 with verdict `pass`. The JSON output is quoted verbatim. The committed sample-book fixture is never modified by a gate run; the report was written to the temp-clone's `.studio/gate/` directory (not to the committed fixture).
 
@@ -26,7 +26,7 @@ Any scenario showing a `block` verdict or exit 1 is explicitly synthetic and doe
 
 ## Session: Chapter 2 gate run, baseline absent, four-check subset
 
-**Author:** `/nonfiction-studio:run-quality-gate 02-finding-your-network`
+**Author:** `/nonfiction-studio:nfs-check-chapter 02-finding-your-network`
 
 **Studio (Step 1 - Argument parsing and deep argument check):**
 
@@ -72,7 +72,7 @@ Output: `NO_PROFILE`
 
 **Studio:**
 
-> Voice drift check skipped: `context/style-profile.md` was not found. The gate will run claim coverage, prompt scrub, continuity, and state coherence checks only. Capture your voice baseline with `/nonfiction-studio:capture-voice` to enable voice drift detection.
+> Voice drift check skipped: `context/style-profile.md` was not found. The gate will run claim coverage, prompt scrub, continuity, and state coherence checks only. Capture your voice baseline with `/nonfiction-studio:nfs-capture-voice` to enable voice drift detection.
 
 Check subset set to `claims,scrub,continuity-quick,coherence`. Continue to Step 4.
 
@@ -150,15 +150,15 @@ Gate exit code: 0. Parse stdout as JSON report. Top-level `verdict: pass`.
 > | state_coherence | pass | word-count coherence pass; no mismatch between chapters and progress.json |
 > | session_write_flag | skip | no chapter writes detected in this session |
 >
-> Note: voice drift (stylometry) was skipped because `context/style-profile.md` was not found. Run `/nonfiction-studio:capture-voice` to establish a baseline and enable drift detection.
+> Note: voice drift (stylometry) was skipped because `context/style-profile.md` was not found. Run `/nonfiction-studio:nfs-capture-voice` to establish a baseline and enable drift detection.
 >
 > This verdict is the deterministic layer only. On CLI and Cowork the Stop hook additionally runs a thesis-alignment judgment prompt (warn-only); that layer is not part of this skill invocation and does not exist in v1 on chat.
 >
 > Gate report written to `.studio/gate/02-finding-your-network.<ts>.json` by ns-gate.
 >
 > Chapter 2 is clear on the four checked dimensions. Suggested next steps:
-> - Run `/nonfiction-studio:capture-voice` to establish a voice baseline, then re-run the full gate.
-> - Continue to the next chapter: `/nonfiction-studio:draft-chapter 03-your-curation-practice` (or the next slug from `structure/chapter-list.md`).
+> - Run `/nonfiction-studio:nfs-capture-voice` to establish a voice baseline, then re-run the full gate.
+> - Continue to the next chapter: `/nonfiction-studio:nfs-draft 03-your-curation-practice` (or the next slug from `structure/chapter-list.md`).
 
 ---
 
@@ -199,7 +199,7 @@ The following is explicitly a synthetic illustration and does NOT reflect the co
 > | state_coherence | pass | word-count coherence pass | - |
 > | session_write_flag | skip | no chapter writes detected in this session | - |
 >
-> To address the stylometry warn: revise the chapter with `/nonfiction-studio:draft-chapter 02-finding-your-network`, which produces diff proposals against the existing chapter, then re-run the quality gate. A dedicated revision pass is Phase 2 scope and is not available in v1. To opt stylometry into blocking mode once the baseline is calibrated, set `gate.checks.stylometry.mode` to `block` in `.studio/config.json`.
+> To address the stylometry warn: revise the chapter with `/nonfiction-studio:nfs-draft 02-finding-your-network`, which produces diff proposals against the existing chapter, then re-run the quality gate. A dedicated revision pass is Phase 2 scope and is not available in v1. To opt stylometry into blocking mode once the baseline is calibrated, set `gate.checks.stylometry.mode` to `block` in `.studio/config.json`.
 
 The drift score in this synthetic illustration is invented for the example, not drawn from any real `bin/ns-gate` run: running `node "<plugin-root>/bin/ns-gate" --project=. --chapter=02-finding-your-network --json` against a clean clone of the committed sample book does not reproduce it. Unlike the primary transcript above (baseline absent, four-check pass, run against a real temp clone), this warn scenario exists only to show the report shape and the wording a warn verdict uses when stylometry is included and enabled, matching the same synthetic-only pattern the block-verdict illustration below uses. The primary provenance-honest example above is the only grounded transcript in this document; treat every number in this warn section as illustrative.
 
@@ -217,6 +217,6 @@ The following is explicitly synthetic. It shows what Step 5 would report on exit
 > |---|---|---|---|
 > | claim_coverage | 2 open claim(s); claim_coverage.unresolved | chapters/03-your-curation-practice.md#L44, chapters/03-your-curation-practice.md#L61 | Add a `[claim: EV-nnnn]` marker or tag the sentence `[UNVERIFIED]` to resolve each open claim. |
 >
-> Run `/nonfiction-studio:fact-check-pass 03-your-curation-practice` to resolve open claims, then re-run the quality gate.
+> Run `/nonfiction-studio:nfs-fact-check 03-your-curation-practice` to resolve open claims, then re-run the quality gate.
 
 This synthetic block transcript shows the exit-1 path and the per-check `evidence` and `next` fields from the S-08 section 11 report shape. No claim-coverage block exists in the committed sample-book fixture.

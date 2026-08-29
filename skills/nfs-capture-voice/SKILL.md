@@ -14,7 +14,7 @@ Skill inputs read:
 - `context/style-profile.md` (checked at Step 1 to detect an existing profile; flat path)
 - `context/brief.md` (genre and tone context; read at Step 3 and passed to the agent)
 
-Skill chain edge: `capture-voice -> voice-capture` per `agents/_chain-permitted.yaml`.
+Skill chain edge: `nfs-capture-voice -> voice-capture` per `agents/_chain-permitted.yaml`.
 
 ## Step 1 - Existing-profile check and profile orientation (mandatory first tool call)
 
@@ -48,7 +48,7 @@ After the author responds, branch immediately:
 
 Use the Read tool on `context/brief.md` to load genre and tone context. If the file is missing, proceed without it and note to the agent that no brief is present.
 
-Spawn the `voice-capture` agent via the `capture-voice -> voice-capture` chain edge, passing:
+Spawn the `voice-capture` agent via the `nfs-capture-voice -> voice-capture` chain edge, passing:
 - All submitted samples (pasted text or the paths if already on disk), or the Path B instruction if no samples were provided
 - The content of `context/brief.md` (or a note that it is absent)
 - The word-count band from Step 2, or the Path B signal
@@ -83,12 +83,12 @@ Choose the markers that best represent this author's measured style. The goal is
 ## Step 6 - Close with suggestions
 
 State that the voice baseline is in place. Offer optional next steps based on project state:
-- If `context/brief.md` exists and is confirmed: suggest `outline-book` to build the chapter-by-chapter structure.
-- If no brief exists: suggest `intake-interview` to complete the project brief first.
+- If `context/brief.md` exists and is confirmed: suggest `nfs-outline` to build the chapter-by-chapter structure.
+- If no brief exists: suggest `nfs-interview` to complete the project brief first.
 
 Name the invocation paths:
-- `/nonfiction-studio:outline-book`
-- `/nonfiction-studio:intake-interview`
+- `/nonfiction-studio:nfs-outline`
+- `/nonfiction-studio:nfs-interview`
 
 Neither suggestion is mandatory or sequential.
 

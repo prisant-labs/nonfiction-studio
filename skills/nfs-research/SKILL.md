@@ -3,7 +3,7 @@ name: nfs-research
 user-invocable: true
 argument-hint: "[chapter: slug or number]"
 description: "Runs a structured research session that populates the evidence ledger with EV entries and SRC references per D-07 (claim ledger). Confirms the outline is present via a deterministic guard, presents the research agenda for author approval, delegates all ledger writes to research-librarian, and reports new sources, new evidence entries, and remaining open claims for the scope. Use when the author wants to 'find me sources,' says 'help me research this chapter,' or needs evidence gathered before drafting begins."
-when_to_use: "Use when the author wants to gather sources before drafting, types the /research verb alias, or studio routes here from Path 3 (Research and verify). Do not invoke to verify existing claims (use fact-check-pass for that), or for unrelated queries."
+when_to_use: "Use when the author wants to gather sources before drafting, or studio routes here from Path 3 (Research and verify). Do not invoke to verify existing claims (use fact-check-pass for that), or for unrelated queries."
 chain:
   - research-librarian
 ---
@@ -21,7 +21,7 @@ Skill inputs read:
 - `.studio/config.json` (web gate check at Step 3)
 - `context/brief.md` (project context passed to the agent at Step 4)
 
-Skill chain edge: `research-pass -> research-librarian` per `agents/_chain-permitted.yaml`.
+Skill chain edge: `nfs-research -> research-librarian` per `agents/_chain-permitted.yaml`.
 
 ## Step 1 - Outline probe (mandatory first tool call)
 
@@ -33,8 +33,8 @@ test -f structure/outline.md && echo HAS_OUTLINE || echo NO_OUTLINE
 The output is a binary token:
 - `HAS_OUTLINE`: continue to Step 2.
 - `NO_OUTLINE`: the outline is absent.
-  - **Chapter-scoped (chapter argument supplied):** halt immediately. State: "Chapter-scoped research requires `structure/outline.md` to resolve the chapter's evidence needs. Run `/nonfiction-studio:outline-book` first." Do not proceed.
-  - **Un-scoped (no chapter argument):** warn that the research agenda is normally grounded in the chapter outline. Offer `/nonfiction-studio:outline-book` as the recommended next step. State that un-scoped research can proceed without an outline - the agent will work from pasted sources and any items in `research/open-questions.md` directly. Proceed only on explicit author confirmation.
+  - **Chapter-scoped (chapter argument supplied):** halt immediately. State: "Chapter-scoped research requires `structure/outline.md` to resolve the chapter's evidence needs. Run `/nonfiction-studio:nfs-outline` first." Do not proceed.
+  - **Un-scoped (no chapter argument):** warn that the research agenda is normally grounded in the chapter outline. Offer `/nonfiction-studio:nfs-outline` as the recommended next step. State that un-scoped research can proceed without an outline - the agent will work from pasted sources and any items in `research/open-questions.md` directly. Proceed only on explicit author confirmation.
 
 Do not proceed past Step 1 in chapter-scoped mode on `NO_OUTLINE`. Do not infer evidence requirements from conversation context.
 
@@ -65,7 +65,7 @@ Present the research agenda to the author: the chapter scope (or general scope l
 
 ## Step 4 - Delegate to research-librarian
 
-Spawn `research-librarian` via the `research-pass -> research-librarian` chain edge, passing:
+Spawn `research-librarian` via the `nfs-research -> research-librarian` chain edge, passing:
 - The chapter scope and its evidence-needed items and claim list from `structure/outline.md` (or the label "general research, no chapter scope" if omitted)
 - The open-question items from `research/open-questions.md` for the scope
 - The current highest EV ID and SRC ID from Step 3 (informational; the agent re-reads for allocation)
@@ -93,13 +93,13 @@ Present the three counts, taking the source and evidence totals from the agent's
 The three counts come from the agent's report. The skill formats them; it does not independently recount the ledger files.
 
 Suggest next steps:
-- If open claims remain: run `research-pass` again with additional source material, or run `fact-check-pass` to advance what is already logged.
-- If the chapter scope is now fully evidenced: run `draft-chapter` for that chapter.
+- If open claims remain: run `nfs-research` again with additional source material, or run `nfs-fact-check` to advance what is already logged.
+- If the chapter scope is now fully evidenced: run `nfs-draft` for that chapter.
 
 Name the invocation paths:
-- `/nonfiction-studio:research-pass [chapter]`
-- `/nonfiction-studio:fact-check-pass <chapter>`
-- `/nonfiction-studio:draft-chapter <chapter-slug>`
+- `/nonfiction-studio:nfs-research [chapter]`
+- `/nonfiction-studio:nfs-fact-check <chapter>`
+- `/nonfiction-studio:nfs-draft <chapter-slug>`
 
 The skill writes no `.studio/` state.
 

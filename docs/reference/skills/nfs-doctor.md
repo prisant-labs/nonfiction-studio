@@ -8,11 +8,11 @@ tags: ["skill", "doctor", "integrity", "schema", "validation", "orphan", "migrat
 
 # nfs-doctor
 
-The `doctor` skill is the bible integrity front door per D-12 (versioned bible with a doctor) and S-06 3.11 (skills and invocation surface). It fronts `bin/ns-doctor` with a single Bash call per invocation, maps the exit code to a presented result, and groups findings by check type with routing hints. `bin/ns-doctor` and its engine (`hooks/lib/doctor-engine.mjs`) are read-only without exception, in every mode. The skill's `report`, `migrate`, and `packs` modes write nothing either. A fourth mode, `install-statusline` (OPP-P03, studio HUD; ADR-0008, status HUD and CANON 3.5), writes exactly one file, `~/.claude/settings.json`, and only after the author answers an explicit yes; see "Install-statusline Mode" below. It is governed by D-05 (five shipped CLIs), D-06 (single-writer state discipline), and D-12 (versioned bible with a doctor).
+The `nfs-doctor` skill is the bible integrity front door per D-12 (versioned bible with a doctor) and S-06 3.11 (skills and invocation surface). It fronts `bin/ns-doctor` with a single Bash call per invocation, maps the exit code to a presented result, and groups findings by check type with routing hints. `bin/ns-doctor` and its engine (`hooks/lib/doctor-engine.mjs`) are read-only without exception, in every mode. The skill's `report`, `migrate`, and `packs` modes write nothing either. A fourth mode, `install-statusline` (OPP-P03, studio HUD; ADR-0008, status HUD and CANON 3.5), writes exactly one file, `~/.claude/settings.json`, and only after the author answers an explicit yes; see "Install-statusline Mode" below. It is governed by D-05 (five shipped CLIs), D-06 (single-writer state discipline), and D-12 (versioned bible with a doctor).
 
 ## Purpose
 
-`doctor` bridges the deterministic bible integrity engine and the author conversation. The `bin/ns-doctor` engine it invokes runs up to eleven checks (bible structure, progress.json schema, meta.json and config.json shape, EV grammar, SRC grammar, orphan claim markers, orphan SRC references, word-count coherence, config-coercion notice, snapshot naming, style-profile structure and baseline consistency) composed into a single pass. The skill's role is to select the right mode flag, invoke the engine, and present the verdict honestly with per-group counts and routing hints.
+`nfs-doctor` bridges the deterministic bible integrity engine and the author conversation. The `bin/ns-doctor` engine it invokes runs up to eleven checks (bible structure, progress.json schema, meta.json and config.json shape, EV grammar, SRC grammar, orphan claim markers, orphan SRC references, word-count coherence, config-coercion notice, snapshot naming, style-profile structure and baseline consistency) composed into a single pass. The skill's role is to select the right mode flag, invoke the engine, and present the verdict honestly with per-group counts and routing hints.
 
 **`bin/ns-doctor` is read-only without exception.** Proven by the grep in the engine's own header (`hooks/lib/doctor-engine.mjs:13-14`; TSK-028, ns-doctor engine). The skill's `report`, `migrate`, and `packs` modes add no log file and write nothing. The `.studio/logs/doctor-<ts>.json` write and bible mutations that appear in the S-06 3.11 specification predate the built engine and describe the Phase 2 `fix` mode contract, unrelated to `install-statusline`.
 
@@ -25,7 +25,7 @@ The `doctor` skill is the bible integrity front door per D-12 (versioned bible w
 ## Invocation
 
 ```
-/nonfiction-studio:doctor [mode]
+/nonfiction-studio:nfs-doctor [mode]
 ```
 
 The mode argument is optional; the default is `report`.
@@ -40,9 +40,9 @@ The mode argument is optional; the default is `report`.
 | `validate` | Alias for `report`; subsumed in v1 (the check inventory covers all schema validation) |
 
 Alternate entry points:
-- Via the `studio` dispatcher: routes here from Path 5 (Troubleshoot or get help) for structural problems
-- Via `status-dashboard`: routes here when `progress.json` is malformed or unreadable
-- Via `run-quality-gate`: routes here when the gate exits 2 with an engine error
+- Via the `nfs-start` dispatcher: routes here from Path 5 (Troubleshoot or get help) for structural problems
+- Via `nfs-status-dashboard`: routes here when `progress.json` is malformed or unreadable
+- Via `nfs-check-chapter`: routes here when the gate exits 2 with an engine error
 
 ## Inputs and Outputs
 
@@ -79,7 +79,7 @@ flow (Steps A-D) that never invokes `bin/ns-doctor` at all; see "Install-statusl
 
 1. **Argument parsing (no tool call).** Extracts the mode from the supplied argument. Default is `report`. Recognizes `report`, `migrate`, `packs`, `install-statusline`, and `validate` (treated as `report`). Declines `fix` as Phase 2+ scope and halts without any tool calls. Declines unknown tokens and halts. An `install-statusline` mode skips straight to its own flow, below.
 
-2. **Resolve the plugin root.** Before the engine is invoked, the skill resolves the plugin's installed path: a primary lookup against `extraKnownMarketplaces['nonfiction-studio'].source.path` in `~/.claude/settings.json`, a `~/.claude/plugins/cache` search fallback, and a dev-mode fallback that checks for `bin/ns-doctor` in the current directory. This is the same three-tier convention `init-project` uses to locate its scaffold templates; it exists because a literal relative `bin/ns-doctor` path resolves against the invoking shell's working directory, not the installed plugin, and would silently fail for a marketplace-installed author. If all three lookups fail, the skill halts and names the settings.json and cache paths it attempted. (`install-statusline` reuses this same resolution as its own Step A, but for a different purpose: composing the command string it proposes to install, not for locating `bin/ns-doctor`.)
+2. **Resolve the plugin root.** Before the engine is invoked, the skill resolves the plugin's installed path: a primary lookup against `extraKnownMarketplaces['nonfiction-studio'].source.path` in `~/.claude/settings.json`, a `~/.claude/plugins/cache` search fallback, and a dev-mode fallback that checks for `bin/ns-doctor` in the current directory. This is the same three-tier convention `nfs-new-book` uses to locate its scaffold templates; it exists because a literal relative `bin/ns-doctor` path resolves against the invoking shell's working directory, not the installed plugin, and would silently fail for a marketplace-installed author. If all three lookups fail, the skill halts and names the settings.json and cache paths it attempted. (`install-statusline` reuses this same resolution as its own Step A, but for a different purpose: composing the command string it proposes to install, not for locating `bin/ns-doctor`.)
 
 3. **Single Bash invocation (one call per mode).** Runs one Bash call: `node "<plugin-root>/bin/ns-doctor" --project=. [--report|--migrate|--validate-packs] --json`. Captures exit code, stdout (JSON), and stderr. No individual sub-CLI calls are made; the engine composes its checks internally.
 
@@ -96,7 +96,7 @@ flow (Steps A-D) that never invokes `bin/ns-doctor` at all; see "Install-statusl
 |---|---|---|---|
 | `report` | 0 | All checks passed; no findings | Present clean pass; name the eleven checks; note any notices |
 | `report` | 1 | One or more findings | Present grouped findings with counts and routing hints; invite re-run |
-| `report` | 2 | Operational error (e.g. BibleError, bad args) or schema-version prelude | Surface stderr; NEVER treat as a pass; route to `doctor migrate` if version mismatch indicated |
+| `report` | 2 | Operational error (e.g. BibleError, bad args) or schema-version prelude | Surface stderr; NEVER treat as a pass; route to `nfs-doctor migrate` if version mismatch indicated |
 | `migrate` | 0 | Schema is already current; nothing to migrate | Present the current-schema message; note writes are never performed in v1 |
 | `migrate` | 2 | Migration required (genuinely incompatible version) | Present the migration-required message; note writes are never performed in v1 |
 | `packs` | 0 | Always in v1: no packs directory or no validator yet | Present the stdout message field |
@@ -126,15 +126,15 @@ When exit 1 is returned, findings are grouped by the prefix of their `type` fiel
 
 | Group prefix(es) | Display name | Routing hint |
 |---|---|---|
-| `structure` | Bible structure | Re-run `/nonfiction-studio:init-project` to re-stamp missing scaffold paths (idempotent for existing content), or create the named path manually. |
+| `structure` | Bible structure | Re-run `/nonfiction-studio:nfs-new-book` to re-stamp missing scaffold paths (idempotent for existing content), or create the named path manually. |
 | `schema`, `shape` | Schema and shape | Inspect the named file and field; correct the type, add the missing required field, or fix the invalid JSON. |
 | `ev-grammar` | Evidence log grammar | Edit `research/evidence-log.md` to correct the named entry: add missing required fields, fix confidence or status enum values, or correct the SRC ID format. |
 | `src-grammar` | Sources grammar | Edit `research/sources.md` to correct the named entry: fix the type or retrieval-status enum value. |
-| `claim-marker` | Orphan claim markers | Run `/nonfiction-studio:fact-check-pass <slug>` to reconcile chapter markers and the evidence ledger. |
-| `src-ref` | Orphan SRC references | Run `/nonfiction-studio:research-pass` to add the missing SRC entry, or `/nonfiction-studio:fact-check-pass` to reconcile cross-references. |
+| `claim-marker` | Orphan claim markers | Run `/nonfiction-studio:nfs-fact-check <slug>` to reconcile chapter markers and the evidence ledger. |
+| `src-ref` | Orphan SRC references | Run `/nonfiction-studio:nfs-research` to add the missing SRC entry, or `/nonfiction-studio:nfs-fact-check` to reconcile cross-references. |
 | `coherence` | Word-count coherence | This typically self-resolves when the PostToolBatch hook runs on the next chapter write. If the mismatch persists, check whether a manual edit bypassed the hook. |
 | `snapshot` | Snapshot naming | Rename the file in `.studio/snapshots/` to match the pattern `<slug>.<YYYYMMDDTHHMMSSZ>.md`. |
-| `style-profile` | Style profile structure | Edit `context/style-profile.md` to add the named missing section, reorder sections, fill in the named `Baseline reference` field, or fix the named `Exemplars` path. A `captured` or `sample_count` disagreement, or a stub sitting alongside an existing `config.json` baseline, typically means re-running `/nonfiction-studio:capture-voice` to resynchronize both files. |
+| `style-profile` | Style profile structure | Edit `context/style-profile.md` to add the named missing section, reorder sections, fill in the named `Baseline reference` field, or fix the named `Exemplars` path. A `captured` or `sample_count` disagreement, or a stub sitting alongside an existing `config.json` baseline, typically means re-running `/nonfiction-studio:nfs-capture-voice` to resynchronize both files. |
 
 ## Migrate Mode
 
@@ -155,7 +155,7 @@ No files are written.
 
 ## Install-statusline Mode
 
-OPP-P03 (studio HUD): "the main statusline installs via a one-time consented `doctor` write,
+OPP-P03 (studio HUD): "the main statusline installs via a one-time consented `nfs-doctor` write,
 never silently." This mode is that write, and the only place in this entire plugin any file
 under the author's own Claude Code configuration is ever touched. See
 [ADR-0008 (status HUD)](../../adr/ADR-0008-status-hud.md) for why no other path exists: a plugin
@@ -181,7 +181,7 @@ Four steps, none of which invoke `bin/ns-doctor`:
   yes/no question. **This step requires an interactive author.** In a non-interactive (headless)
   context there is nobody to answer, so the skill states that this mode requires an interactive
   session, offers `/statusline` as the alternative, and writes nothing - unlike some other
-  skills' low-risk defaults (for example `init-project`'s idempotent re-stamp of missing scaffold
+  skills' low-risk defaults (for example `nfs-new-book`'s idempotent re-stamp of missing scaffold
   files), a top-level settings write is exactly the kind of action OPP-P03 requires an explicit
   yes for, so no non-interactive default exists here.
 - **Step D - write only on an explicit yes.** A shallow merge of `{"statusLine": {"type":
@@ -204,7 +204,7 @@ The doctor skill works identically on all three surfaces per D-14 (three-surface
 
 **Unrecognized mode argument.** Step 1 declines and halts without any tool calls. No engine invocation.
 
-**Exit 2 from `--report`.** Step 4 surfaces the stderr and halts. Never treated as a pass. If the error message indicates a schema version mismatch, suggests running `doctor migrate` for the explicit diagnosis.
+**Exit 2 from `--report`.** Step 4 surfaces the stderr and halts. Never treated as a pass. If the error message indicates a schema version mismatch, suggests running `nfs-doctor migrate` for the explicit diagnosis.
 
 **Exit 2 from `--migrate`.** Expected behavior when migration is genuinely required (an incompatible schema version); an already-current schema now exits 0 instead. Not an unexpected error. Step 4 distinguishes the two cases and presents the appropriate message.
 
@@ -220,4 +220,4 @@ The doctor skill works identically on all three surfaces per D-14 (three-surface
 
 ## Worked Example
 
-See [nfs-doctor.example.md](./nfs-doctor.example.md) for a condensed transcript of a `doctor report` session over the committed two-chapter sample book "The Quiet Network" (see `examples/sample-book/`). The example is grounded in a live `--report --json` run against the committed fixture that exited 0 with verdict `valid` and no findings, followed by a synthetic findings illustration using the engine's real finding-type strings.
+See [nfs-doctor.example.md](./nfs-doctor.example.md) for a condensed transcript of a `nfs-doctor report` session over the committed two-chapter sample book "The Quiet Network" (see `examples/sample-book/`). The example is grounded in a live `--report --json` run against the committed fixture that exited 0 with verdict `valid` and no findings, followed by a synthetic findings illustration using the engine's real finding-type strings.

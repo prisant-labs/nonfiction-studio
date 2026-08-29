@@ -28,7 +28,7 @@ test -f .studio/progress.json && echo HAS_PROGRESS || echo NO_PROGRESS
 
 **NO_PROGRESS:** A project does not exist here. Paths 2 through 5 all assume an existing project and do not apply yet; only Path 1 (start a new book) and Path 6 (quick preview) work without one. Present both, leading with the lower-commitment option since a first-time arrival is most likely to be standing at exactly this prompt, then skip straight to Step 4 for whichever the author picks (skip Step 3's full six-path greeting; it does not apply here):
 
-> It looks like you have no active project in this directory. If you'd like a fast, no-commitment preview first, paste some writing for `quick-scan` (a voice and claims read) or take a guided `tour` of the sample book - neither needs a project. If you're ready to start a new book, the next step is `init-project` (Path 1). Which would you like?
+> It looks like you have no active project in this directory. If you'd like a fast, no-commitment preview first, paste some writing for `nfs-quick-scan` (a voice and claims read) or take a guided `nfs-tour` of the sample book - neither needs a project. If you're ready to start a new book, the next step is `nfs-new-book` (Path 1). Which would you like?
 
 **HAS_PROGRESS:** Continue to Step 2.
 
@@ -36,9 +36,9 @@ test -f .studio/progress.json && echo HAS_PROGRESS || echo NO_PROGRESS
 
 ## Step 2 - Parse progress.json and read book title
 
-Use the Read tool on `.studio/progress.json`. If the file is present but unreadable or the JSON is malformed, route directly to Path 5 without loading further context. Name `doctor` as the recommended tool:
+Use the Read tool on `.studio/progress.json`. If the file is present but unreadable or the JSON is malformed, route directly to Path 5 without loading further context. Name `nfs-doctor` as the recommended tool:
 
-> The project state file (`.studio/progress.json`) could not be read or parsed. This is a structural problem. The `doctor` skill can diagnose and repair it (Path 5).
+> The project state file (`.studio/progress.json`) could not be read or parsed. This is a structural problem. The `nfs-doctor` skill can diagnose and repair it (Path 5).
 
 Then confirm and proceed with Path 5.
 
@@ -69,9 +69,9 @@ Wait for the author to choose a number or describe their intent. Map the describ
 
 ### Path 1 - Start a new book
 
-Confirm with the author: "Starting a new book will scaffold the bible tree and begin the intake interview. Ready to proceed with `init-project`?"
+Confirm with the author: "Starting a new book will scaffold the bible tree and begin the intake interview. Ready to proceed with `nfs-new-book`?"
 
-On confirmation, proceed with `init-project`. When `init-project` completes, chain directly to `intake-interview` as the natural next step (as the `init-project` closing prompt indicates). The Path 1 chain is: `init-project` then `intake-interview`.
+On confirmation, proceed with `nfs-new-book`. When `nfs-new-book` completes, chain directly to `nfs-interview` as the natural next step (as the `nfs-new-book` closing prompt indicates). The Path 1 chain is: `nfs-new-book` then `nfs-interview`.
 
 ### Path 2 - Continue writing
 
@@ -85,9 +85,9 @@ test -f structure/chapter-list.md && echo HAS_REGISTRY || echo NO_REGISTRY
 
 **NO_REGISTRY:** No chapter list has been produced yet. The outline step has not been completed.
 
-> No chapter-list registry was found (`structure/chapter-list.md`). The next step is `outline-book` to produce the chapter registry and outline. Ready to proceed?
+> No chapter-list registry was found (`structure/chapter-list.md`). The next step is `nfs-outline` to produce the chapter registry and outline. Ready to proceed?
 
-On confirmation, proceed with `outline-book`.
+On confirmation, proceed with `nfs-outline`.
 
 **HAS_REGISTRY:** Continue to Step 4.2b.
 
@@ -95,23 +95,23 @@ On confirmation, proceed with `outline-book`.
 
 Inspect the `chapters` array already read from `.studio/progress.json` (the alive progress layer) and the chapter-list registry at `structure/chapter-list.md`:
 
-1. Scan the `progress.json` chapters array for any entry with status `drafting`. If found, that chapter is in progress. Offer to continue it with `draft-chapter <slug>`.
-2. If no chapter is `drafting`, use the Read tool on `structure/chapter-list.md` to find the first chapter with status `empty` or `outlined` (not yet drafted). Offer to start it with `draft-chapter <slug>`.
-3. If all chapters in the registry are at status `drafted`, `revised`, `gated`, or `final`, the book is fully drafted. Offer `run-quality-gate` for any chapter without a recent gate report. Note: revision passes (`revise-pass`) are a Phase 2 skill and are not available in v1.
+1. Scan the `progress.json` chapters array for any entry with status `drafting`. If found, that chapter is in progress. Offer to continue it with `nfs-draft <slug>`.
+2. If no chapter is `drafting`, use the Read tool on `structure/chapter-list.md` to find the first chapter with status `empty` or `outlined` (not yet drafted). Offer to start it with `nfs-draft <slug>`.
+3. If all chapters in the registry are at status `drafted`, `revised`, `gated`, or `final`, the book is fully drafted. Offer `nfs-check-chapter` for any chapter without a recent gate report. Note: revision passes (`revise-pass`) are a Phase 2 skill and are not available in v1.
 
 The committed status enum values (from S-08 section 3) are: `empty`, `outlined`, `drafting`, `drafted`, `revised`, `gated`, `final`. Use these values verbatim when reading and describing chapter states.
 
-**Confirm-before-handoff:** State the chapter and skill you are about to invoke: "Ready to proceed with `draft-chapter <slug>` for chapter N ([title]). Confirm?"
+**Confirm-before-handoff:** State the chapter and skill you are about to invoke: "Ready to proceed with `nfs-draft <slug>` for chapter N ([title]). Confirm?"
 
-On confirmation, proceed with `draft-chapter <slug>`.
+On confirmation, proceed with `nfs-draft <slug>`.
 
 ### Path 3 - Research and verify
 
 Ask the author to clarify:
 
-> Would you like to gather new research (`research-pass`) or verify existing claims in a chapter (`fact-check-pass`)?
+> Would you like to gather new research (`nfs-research`) or verify existing claims in a chapter (`nfs-fact-check`)?
 
-For `fact-check-pass`, also ask for the chapter slug or number if the author has not provided one.
+For `nfs-fact-check`, also ask for the chapter slug or number if the author has not provided one.
 
 **Confirm-before-handoff:** State the skill and any argument: "Ready to proceed with `[skill] [argument]`. Confirm?"
 
@@ -119,11 +119,11 @@ On confirmation, proceed with the named skill.
 
 ### Path 4 - Review quality and status
 
-Confirm: "Proceeding with `status-dashboard` to show the current project state."
+Confirm: "Proceeding with `nfs-status-dashboard` to show the current project state."
 
-Proceed with `status-dashboard`. After the dashboard is presented, inspect the output for chapters with no gate report (Gate cell is "-") or a `block` verdict. For each such chapter, offer:
+Proceed with `nfs-status-dashboard`. After the dashboard is presented, inspect the output for chapters with no gate report (Gate cell is "-") or a `block` verdict. For each such chapter, offer:
 
-> Would you like to run `run-quality-gate [slug]` for chapter N ([title])?
+> Would you like to run `nfs-check-chapter [slug]` for chapter N ([title])?
 
 **Confirm-before-handoff** before each gate run.
 
@@ -131,11 +131,11 @@ Proceed with `status-dashboard`. After the dashboard is presented, inspect the o
 
 Ask the author to clarify:
 
-> Is this a structural or schema problem with the project files (the `doctor` skill can diagnose and repair these), or do you have a general question about the studio?
+> Is this a structural or schema problem with the project files (the `nfs-doctor` skill can diagnose and repair these), or do you have a general question about the studio?
 
-**Structural problem:** Confirm: "Ready to proceed with `doctor`. Confirm?"
+**Structural problem:** Confirm: "Ready to proceed with `nfs-doctor`. Confirm?"
 
-On confirmation, proceed with `doctor`. Note: `doctor` is a Phase 1 skill that arrives with TSK-054 (doctor skill). Its invocation form is `/nonfiction-studio:doctor`.
+On confirmation, proceed with `nfs-doctor`. Note: `nfs-doctor` is a Phase 1 skill that arrives with TSK-054 (doctor skill). Its invocation form is `/nonfiction-studio:nfs-doctor`.
 
 **General question:** Use the Read tool to load the relevant bible files inline (`context/brief.md`, `context/style-profile.md`, `structure/thesis.md`, `structure/outline.md` as applicable). Answer directly from that context. Do not invoke any skill or agent.
 
@@ -143,7 +143,7 @@ On confirmation, proceed with `doctor`. Note: `doctor` is a Phase 1 skill that a
 
 Ask the author to clarify:
 
-> Would you like to paste some writing for a quick voice-and-claims read (`quick-scan`), or see a guided tour of the quality gate using the bundled sample book (`tour`)?
+> Would you like to paste some writing for a quick voice-and-claims read (`nfs-quick-scan`), or see a guided tour of the quality gate using the bundled sample book (`nfs-tour`)?
 
 **Confirm-before-handoff:** State the skill: "Ready to proceed with `[quick-scan|tour]`. Confirm?"
 
@@ -159,18 +159,18 @@ This step applies to all paths where a target skill is about to be invoked. Befo
 
 On confirmation, proceed. On cancellation, return to Step 3.
 
-**Surface note.** This confirm step is appropriate for chat and Cowork sessions where authors navigate through the dispatcher. On CLI, experienced authors skip `studio` entirely and invoke skills directly by name; they do not see this prompt.
+**Surface note.** This confirm step is appropriate for chat and Cowork sessions where authors navigate through the dispatcher. On CLI, experienced authors skip `nfs-start` entirely and invoke skills directly by name; they do not see this prompt.
 
 ---
 
 ## Failure behavior
 
-**Corrupted or unreadable `progress.json`.** Step 2 detects this condition and routes directly to Path 5 naming `doctor`. Never proceed silently with stale or missing context.
+**Corrupted or unreadable `progress.json`.** Step 2 detects this condition and routes directly to Path 5 naming `nfs-doctor`. Never proceed silently with stale or missing context.
 
 **Missing `meta.json` or absent `book_title`.** Use "your book" as the fallback greeting label and continue normally.
 
-**No chapter-list registry (Path 2).** If `structure/chapter-list.md` is absent, route to `outline-book` with an explanation. Do not infer chapters from any other source.
+**No chapter-list registry (Path 2).** If `structure/chapter-list.md` is absent, route to `nfs-outline` with an explanation. Do not infer chapters from any other source.
 
-**All chapters fully drafted with no Phase 2 (Path 2).** Offer `run-quality-gate` for ungated chapters. State that `revise-pass` is a Phase 2 skill and is not available in v1.
+**All chapters fully drafted with no Phase 2 (Path 2).** Offer `nfs-check-chapter` for ungated chapters. State that `revise-pass` is a Phase 2 skill and is not available in v1.
 
 **Path 5 general questions with missing bible files.** If the relevant bible files are absent, state which files are missing and answer from whatever context is available. Name the skill that produces each missing file.

@@ -91,10 +91,10 @@ if (!bookRoot) {
   // D-17 (guided front door): exactly two sentences.
   // Sentence 1: states no book project exists here.
   // Sentence 2: names the studio front door by invocation form (D-17), which
-  // runs the init-project flow; the test pins two sentences and 'init-project'.
+  // runs the nfs-new-book flow; the test pins two sentences and 'nfs-new-book'.
   const emptyMsg =
     'No book project was found in this directory. ' +
-    'To start one, invoke the studio front door with /nonfiction-studio:studio, which runs the init-project flow for you.';
+    'To start one, invoke the studio front door with /nonfiction-studio:nfs-start, which runs the nfs-new-book flow for you.';
   process.stdout.write(
     JSON.stringify({
       hookSpecificOutput: {

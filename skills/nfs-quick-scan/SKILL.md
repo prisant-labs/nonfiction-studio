@@ -89,7 +89,7 @@ Read `totalWords` from Step 3's JSON output and branch:
 
 ## Step 5 - Present the voice profile (measured)
 
-Present all eight markers from Step 3's `markers` object by name, in plain language, the same way `capture-voice` previews a baseline. Label this section as measured, for example:
+Present all eight markers from Step 3's `markers` object by name, in plain language, the same way `nfs-capture-voice` previews a baseline. Label this section as measured, for example:
 
 > **Voice profile (measured by `ns-stylometry`).** These eight numbers came from the same deterministic engine this plugin uses for voice-drift scoring elsewhere; they are a count, not an impression.
 > - Function-word rate: `<value>` - ...
@@ -101,7 +101,7 @@ Present all eight markers from Step 3's `markers` object by name, in plain langu
 > - Average sentence length: `<value>` - ...
 > - Punctuation rate: `<value>` - ...
 
-Choose plain-language framing for each value (short vs. long sentences, formal vs. contraction-heavy, first-person-anchored vs. distant) the way Step 5 of `capture-voice` does. Do not round away precision that changes the reading; state the numbers as measured.
+Choose plain-language framing for each value (short vs. long sentences, formal vs. contraction-heavy, first-person-anchored vs. distant) the way Step 5 of `nfs-capture-voice` does. Do not round away precision that changes the reading; state the numbers as measured.
 
 If Step 3 failed (exit 2), skip this section and state instead: "The voice measurement could not run: `<first line of stderr>`. The claim scan and editorial read below do not depend on it and are unaffected."
 
@@ -127,8 +127,8 @@ Never present this list with the same numeric-confidence framing as Step 5. If t
 
 Write one short paragraph giving an editorial read on what the excerpt seems to be about: the apparent subject, angle, and audience. End the paragraph by pointing at a concrete next step, choosing between:
 
-- **`/nonfiction-studio:tour`** - a guided walkthrough of a complete sample book: watch the quality gate pass, catch a planted problem, and pass again.
-- **Starting a real project** - `/nonfiction-studio:studio` (or `/nonfiction-studio:init-project` directly) to scaffold a book, followed by `/nonfiction-studio:intake-interview` when ready. State honestly that the intake interview is a real 45 to 90 minute session per D-16 (honest, resumable interview); do not understate it. This quick scan is a preview, not a substitute for it.
+- **`/nonfiction-studio:nfs-tour`** - a guided walkthrough of a complete sample book: watch the quality gate pass, catch a planted problem, and pass again.
+- **Starting a real project** - `/nonfiction-studio:nfs-start` (or `/nonfiction-studio:nfs-new-book` directly) to scaffold a book, followed by `/nonfiction-studio:nfs-interview` when ready. State honestly that the intake interview is a real 45 to 90 minute session per D-16 (honest, resumable interview); do not understate it. This quick scan is a preview, not a substitute for it.
 
 Do not present both as mandatory; either is a reasonable next step depending on whether the author wants to see more or is ready to commit.
 

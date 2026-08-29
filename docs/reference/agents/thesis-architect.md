@@ -37,7 +37,7 @@ Invoke the `thesis-architect` when any of the following holds.
 - `interviewer` has confirmed the project brief and seeded a draft
   `structure/thesis.md`; invoke to sharpen the controlling idea before the outline
   is drawn.
-- The `outline-book` skill routes here because `structure/thesis.md` is missing or
+- The `nfs-outline` skill routes here because `structure/thesis.md` is missing or
   contains only the interviewer's unreviewed stub; the skill checks for a non-empty,
   confirmed thesis before invoking `structure-architect`.
 - The thesis shifts after chapter drafting has begun and the author needs to

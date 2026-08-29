@@ -8,7 +8,7 @@ tags: ["skill", "studio", "dispatcher", "front-door", "routing", "example"]
 
 # nfs-start - worked example
 
-This is a condensed transcript of a `studio` session over the committed two-chapter sample book "The Quiet Network" (see `examples/sample-book/`). The primary scenario is Path 2 (Continue writing), which demonstrates the full five-path presentation, the chapter-list registry probe, the chapter state inspection, and the confirm-before-handoff step. The example follows the flow specified in S-06 3.10 (skills and invocation surface) and the controller resolutions recorded in TSK-053 (studio skill).
+This is a condensed transcript of a `nfs-start` session over the committed two-chapter sample book "The Quiet Network" (see `examples/sample-book/`). The primary scenario is Path 2 (Continue writing), which demonstrates the full five-path presentation, the chapter-list registry probe, the chapter state inspection, and the confirm-before-handoff step. The example follows the flow specified in S-06 3.10 (skills and invocation surface) and the controller resolutions recorded in TSK-053 (studio skill).
 
 **Session provenance note.** All values are read directly from the committed fixtures:
 
@@ -87,7 +87,7 @@ No files are written during this session. Any scenario leaving the committed sta
 
 ## Session: Path 2 - Continue writing
 
-**Author:** `/nonfiction-studio:studio`
+**Author:** `/nonfiction-studio:nfs-start`
 
 **Studio (Step 1 - Progress file probe):**
 
@@ -150,21 +150,21 @@ The skill uses the Read tool on `structure/chapter-list.md`. Scan for the first 
 - Chapter 02 (`02-finding-your-network`): status `drafted` - skip
 - Chapter 03 (`03-your-curation-practice`): status `outlined` - this is the next unstarted chapter
 
-Offer: chapter 03, "Your Curation Practice", slug `03-your-curation-practice`, via `draft-chapter`.
+Offer: chapter 03, "Your Curation Practice", slug `03-your-curation-practice`, via `nfs-draft`.
 
 **Studio:**
 
 > The next unstarted chapter is **Chapter 3: Your Curation Practice** (`03-your-curation-practice`). Both drafted chapters (01 and 02) are at status `drafted`; no chapter is currently in progress.
 >
-> Ready to proceed with `draft-chapter 03-your-curation-practice`? Confirm?
+> Ready to proceed with `nfs-draft 03-your-curation-practice`? Confirm?
 
 **Author:** `yes`
 
 **Studio (Step 5 - Confirm before handoff):**
 
-Confirmed. Proceeding with `draft-chapter 03-your-curation-practice`.
+Confirmed. Proceeding with `nfs-draft 03-your-curation-practice`.
 
-At this point the `draft-chapter` skill takes over. The `studio` dispatcher has completed its role.
+At this point the `nfs-draft` skill takes over. The `nfs-start` dispatcher has completed its role.
 
 ---
 
@@ -182,7 +182,7 @@ At this point the `draft-chapter` skill takes over. The `studio` dispatcher has 
 
 - **The skill wrote nothing.** No file was created, modified, or appended at any step.
 
-- **`revise-pass` was not offered.** Although the S-06 3.10 flowchart shows `revise-pass` as a Path 2 option for a chapter with status `drafted`, that path is a Phase 2 arrival and is not available in v1. The v1 action for drafted-but-ungated chapters is `run-quality-gate`.
+- **`revise-pass` was not offered.** Although the S-06 3.10 flowchart shows `revise-pass` as a Path 2 option for a chapter with status `drafted`, that path is a Phase 2 arrival and is not available in v1. The v1 action for drafted-but-ungated chapters is `nfs-check-chapter`.
 
 ---
 
@@ -194,39 +194,39 @@ These sketches are explicitly synthetic. None reflects the committed fixture sta
 
 If Step 1 returns `NO_PROGRESS`:
 
-> It looks like you have no active project in this directory. Would you like to start a new book? If so, the next step is `init-project` (Path 1).
+> It looks like you have no active project in this directory. Would you like to start a new book? If so, the next step is `nfs-new-book` (Path 1).
 
-On confirmation the skill proceeds with `init-project`. When `init-project` completes, it chains to `intake-interview` as the natural next step.
+On confirmation the skill proceeds with `nfs-new-book`. When `nfs-new-book` completes, it chains to `nfs-interview` as the natural next step.
 
 ### Path 3 - Verify claims in Chapter 2 (synthetic)
 
 If the author chooses Path 3, the skill asks:
 
-> Would you like to gather new research (`research-pass`) or verify existing claims in a chapter (`fact-check-pass`)?
+> Would you like to gather new research (`nfs-research`) or verify existing claims in a chapter (`nfs-fact-check`)?
 
 Author answers "verify chapter 2." The skill confirms:
 
-> Ready to proceed with `fact-check-pass 02-finding-your-network`. Confirm?
+> Ready to proceed with `nfs-fact-check 02-finding-your-network`. Confirm?
 
-On confirmation the `fact-check-pass` skill takes over.
+On confirmation the `nfs-fact-check` skill takes over.
 
 ### Path 4 - Review quality and status (synthetic)
 
 If the author chooses Path 4:
 
-> Proceeding with `status-dashboard` to show the current project state.
+> Proceeding with `nfs-status-dashboard` to show the current project state.
 
-After `status-dashboard` renders the table, the skill inspects for chapters with no gate report. Chapter 02 has no gate report in the committed fixture. The skill offers:
+After `nfs-status-dashboard` renders the table, the skill inspects for chapters with no gate report. Chapter 02 has no gate report in the committed fixture. The skill offers:
 
-> Would you like to run `run-quality-gate 02-finding-your-network` for Chapter 2 (Finding Your Network)?
+> Would you like to run `nfs-check-chapter 02-finding-your-network` for Chapter 2 (Finding Your Network)?
 
 ### Path 5 - Structural problem (synthetic)
 
 If `progress.json` were malformed, Step 2 would route to Path 5 before presenting the five-path menu:
 
-> The project state file (`.studio/progress.json`) could not be read or parsed. This is a structural problem. The `doctor` skill can diagnose and repair it (Path 5).
+> The project state file (`.studio/progress.json`) could not be read or parsed. This is a structural problem. The `nfs-doctor` skill can diagnose and repair it (Path 5).
 
-The author confirms, and the skill proceeds with `doctor`.
+The author confirms, and the skill proceeds with `nfs-doctor`.
 
 ### Path 5 - General question (synthetic)
 

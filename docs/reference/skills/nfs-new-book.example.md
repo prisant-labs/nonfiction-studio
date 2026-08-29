@@ -8,13 +8,13 @@ tags: ["skill", "init", "example"]
 
 # nfs-new-book - worked example
 
-This is a condensed transcript of a complete `init-project` run. It shows the blank-scaffold path including the non-interactive mode default, the project-init.md copy, the placeholder fills in the state files, and a second run that triggers the re-init delta check.
+This is a condensed transcript of a complete `nfs-new-book` run. It shows the blank-scaffold path including the non-interactive mode default, the project-init.md copy, the placeholder fills in the state files, and a second run that triggers the re-init delta check.
 
 ---
 
 ## First run (blank scaffold, title provided as argument)
 
-**Author:** `/nonfiction-studio:init-project The Quiet Ledger`
+**Author:** `/nonfiction-studio:nfs-new-book The Quiet Ledger`
 
 **Studio:**
 
@@ -60,7 +60,7 @@ production/back-matter.md     created
 
 > Book project "The Quiet Ledger" has been initialized. The bible tree and .studio/ state files are ready.
 >
-> The next step is intake-interview. Invoke it with `/nonfiction-studio:intake-interview` to conduct the structured intake interview and build your project brief. The interview typically takes 45-90 minutes and produces a confirmed context/brief.md.
+> The next step is intake-interview. Invoke it with `/nonfiction-studio:nfs-interview` to conduct the structured intake interview and build your project brief. The interview typically takes 45-90 minutes and produces a confirmed context/brief.md.
 
 ---
 
@@ -99,7 +99,7 @@ Note: `created` is an RFC 3339 UTC timestamp (`{{DATETIME}}`), not a calendar da
 
 ## Second run on the same directory (re-init delta check)
 
-**Author:** `/nonfiction-studio:init-project The Quiet Ledger`
+**Author:** `/nonfiction-studio:nfs-new-book The Quiet Ledger`
 
 **Studio:**
 
@@ -107,7 +107,7 @@ Note: `created` is an RFC 3339 UTC timestamp (`{{DATETIME}}`), not a calendar da
 >
 > All 24 expected scaffold files are present. No files were written.
 >
-> Run /nonfiction-studio:intake-interview to continue setting up your project.
+> Run /nonfiction-studio:nfs-interview to continue setting up your project.
 
 ---
 

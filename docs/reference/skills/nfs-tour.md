@@ -8,11 +8,11 @@ tags: ["skill", "tour", "gate", "demo", "onboarding", "getting-started"]
 
 # nfs-tour
 
-The `tour` skill is the guided-demonstration half of the five-minute first win per OPP-D17 (five-minute first win). It walks the author through `examples/sample-book` in a disposable copy, showing the quality gate pass, then block on a planted realistic defect with a named reason, then pass again once the defect is fixed.
+The `nfs-tour` skill is the guided-demonstration half of the five-minute first win per OPP-D17 (five-minute first win). It walks the author through `examples/sample-book` in a disposable copy, showing the quality gate pass, then block on a planted realistic defect with a named reason, then pass again once the defect is fixed.
 
 ## Purpose
 
-An author who has never seen the quality gate fire has no reason to trust it. `tour` builds that trust directly: it plants a real, realistic defect into a private copy of the bundled sample book and lets the author watch the gate catch it, name the exact reason, and stop. Then it fixes the defect and shows the gate pass again, ending with a plain-language recap of what each check covers.
+An author who has never seen the quality gate fire has no reason to trust it. `nfs-tour` builds that trust directly: it plants a real, realistic defect into a private copy of the bundled sample book and lets the author watch the gate catch it, name the exact reason, and stop. Then it fixes the defect and shows the gate pass again, ending with a plain-language recap of what each check covers.
 
 **It never requires an initialized book project and never modifies the shipped example.** Every write in this skill happens inside a fresh copy created in its own Step 2; `<plugin-root>/examples/sample-book` is only ever read (as the source `fs.cpSync` copies from), never opened for writing.
 
@@ -21,14 +21,14 @@ An author who has never seen the quality gate fire has no reason to trust it. `t
 ## Invocation
 
 ```
-/nonfiction-studio:tour [destination folder]
+/nonfiction-studio:nfs-tour [destination folder]
 ```
 
 The destination folder argument is optional. If omitted, the copy is created under the operating system's own temp directory. If supplied, the copy is created there instead, for an author who wants to keep exploring it afterward.
 
 Alternate entry points:
-- The `studio` dispatcher, Path 6 (Quick preview), including directly from the `NO_PROGRESS` branch before any project exists
-- The README quickstart and `docs/quickstart.md`, typically after `quick-scan`
+- The `nfs-start` dispatcher, Path 6 (Quick preview), including directly from the `NO_PROGRESS` branch before any project exists
+- The README quickstart and `docs/quickstart.md`, typically after `nfs-quick-scan`
 
 ## Inputs and Outputs
 
@@ -63,7 +63,7 @@ The skill runs nine steps:
 
 ## Why Block Mode
 
-The shipped `examples/sample-book/.studio/config.json` sets the top-level `gate.mode` to `warn`. Under that setting, `ns-gate`'s own D-03 (layered Stop gate) Invariant 2 caps every check's verdict at `warn`, even a check individually configured to `mode: "block"`, so the CLI always exits 0. This is intentional default behavior, not a defect: it means the gate never silently stops an author who has not opted in. To make Step 6's block genuine rather than a capped warning, `tour` opts the disposable copy into `gate.mode: "block"` in Step 3, exactly the setting an author can choose for their own project's `.studio/config.json` at any time. See the [ns-gate CLI reference](../cli/ns-gate.md) for the full mode-capping contract.
+The shipped `examples/sample-book/.studio/config.json` sets the top-level `gate.mode` to `warn`. Under that setting, `ns-gate`'s own D-03 (layered Stop gate) Invariant 2 caps every check's verdict at `warn`, even a check individually configured to `mode: "block"`, so the CLI always exits 0. This is intentional default behavior, not a defect: it means the gate never silently stops an author who has not opted in. To make Step 6's block genuine rather than a capped warning, `nfs-tour` opts the disposable copy into `gate.mode: "block"` in Step 3, exactly the setting an author can choose for their own project's `.studio/config.json` at any time. See the [ns-gate CLI reference](../cli/ns-gate.md) for the full mode-capping contract.
 
 ## The Planted Defect
 
@@ -79,11 +79,11 @@ The line `Here is a draft of this paragraph for the author to revise.` is append
 
 ## Relationship to Other Skills
 
-`tour` pairs with [`quick-scan`](./quick-scan.md): together they are the try-before-you-commit path per OPP-D17 (five-minute first win), reachable from `studio`'s Path 6 (Quick preview). `tour` invokes [`bin/ns-gate`](../cli/ns-gate.md) exactly as [`run-quality-gate`](./run-quality-gate.md) does against a real project, so what an author sees here is representative of what the gate does everywhere else in the plugin, not a simplified simulation.
+`nfs-tour` pairs with [`nfs-quick-scan`](./nfs-quick-scan.md): together they are the try-before-you-commit path per OPP-D17 (five-minute first win), reachable from `nfs-start`'s Path 6 (Quick preview). `nfs-tour` invokes [`bin/ns-gate`](../cli/ns-gate.md) exactly as [`nfs-check-chapter`](./nfs-check-chapter.md) does against a real project, so what an author sees here is representative of what the gate does everywhere else in the plugin, not a simplified simulation.
 
 ## See also
 
-- [quick-scan skill reference](./quick-scan.md) - the paired five-minute measurement path
+- [quick-scan skill reference](./nfs-quick-scan.md) - the paired five-minute measurement path
 - [ns-gate CLI reference](../cli/ns-gate.md) - the orchestrator this skill demonstrates
-- [run-quality-gate skill reference](./run-quality-gate.md) - the same gate, invoked against a real project
-- [studio skill reference](./studio.md) - the dispatcher's Path 6 routes here
+- [run-quality-gate skill reference](./nfs-check-chapter.md) - the same gate, invoked against a real project
+- [studio skill reference](./nfs-start.md) - the dispatcher's Path 6 routes here

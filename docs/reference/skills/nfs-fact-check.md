@@ -8,11 +8,11 @@ tags: ["skill", "fact-check", "verification", "claims", "fact-checker", "evidenc
 
 # nfs-fact-check
 
-The `fact-check-pass` skill is the studio's verification front door. It resolves the chapter argument, runs a deterministic marker inventory via `bin/ns-claims`, states the web gate status, delegates the authoritative adversarial verification pass to the `fact-checker` agent, confirms agent writes via Read checks, and formats the three counts from the agent's per-chapter report at `.studio/fact-check-reports/<NN>-report.md`. It is a Phase 1 skill specified in S-06 3.7 (skills and invocation surface) and governed by D-05 (five shipped CLIs), D-06 (single-writer state discipline), D-07 (claim ledger), D-09 (learning checker agents), and D-13 (security posture).
+The `nfs-fact-check` skill is the studio's verification front door. It resolves the chapter argument, runs a deterministic marker inventory via `bin/ns-claims`, states the web gate status, delegates the authoritative adversarial verification pass to the `fact-checker` agent, confirms agent writes via Read checks, and formats the three counts from the agent's per-chapter report at `.studio/fact-check-reports/<NN>-report.md`. It is a Phase 1 skill specified in S-06 3.7 (skills and invocation surface) and governed by D-05 (five shipped CLIs), D-06 (single-writer state discipline), D-07 (claim ledger), D-09 (learning checker agents), and D-13 (security posture).
 
 ## Purpose
 
-`fact-check-pass` bridges a drafted chapter and the verified evidence ledger. The `fact-checker` agent it invokes is the sole component that advances EV entry statuses beyond `pending`: it resolves `verified`, `unverified`, `interpretation`, or `source-unverifiable` for each entry tied to a chapter's claim markers. Chapter markers (`[UNVERIFIED]`, `[SOURCE-UNVERIFIABLE]`) are written and removed exclusively by the agent; the skill never touches marker text directly.
+`nfs-fact-check` bridges a drafted chapter and the verified evidence ledger. The `fact-checker` agent it invokes is the sole component that advances EV entry statuses beyond `pending`: it resolves `verified`, `unverified`, `interpretation`, or `source-unverifiable` for each entry tied to a chapter's claim markers. Chapter markers (`[UNVERIFIED]`, `[SOURCE-UNVERIFIABLE]`) are written and removed exclusively by the agent; the skill never touches marker text directly.
 
 The skill's role is to present an engine-backed pre-count before delegation, confirm agent writes afterward, and format the three counts the agent's report contains. It writes no chapter files, no ledger files, and no `.studio/progress.json`. The PostToolBatch hook maintains the per-chapter `open_claim_count` in `progress.json` when the agent writes chapter files; see [Progress.json and the open-claims total](#progressjson-and-the-open-claims-total) below.
 
@@ -23,16 +23,15 @@ The skill's role is to present an engine-backed pre-count before delegation, con
 ## Invocation
 
 ```
-/nonfiction-studio:fact-check-pass <chapter>
+/nonfiction-studio:nfs-fact-check <chapter>
 ```
 
 The `<chapter>` argument is required. Supply the chapter slug (for example `02-finding-your-network`) or the chapter number (for example `2`). Valid slugs are in `structure/chapter-list.md`.
 
 Alternate entry points:
-- Via the `studio` dispatcher: routes here from Path 3 (Research and verify) when the author says they want to verify existing claims
-- Via `draft-chapter` Step 6: that skill closes with an explicit prompt to run `fact-check-pass` or `run-quality-gate`
-- Via `run-quality-gate`: when the gate reports unresolved claims it suggests re-invoking `fact-check-pass`
-- Verb alias: `/factcheck <ch>` (the namespaced `/nonfiction-studio:fact-check-pass` form also works)
+- Via the `nfs-start` dispatcher: routes here from Path 3 (Research and verify) when the author says they want to verify existing claims
+- Via `nfs-draft` Step 6: that skill closes with an explicit prompt to run `nfs-fact-check` or `nfs-check-chapter`
+- Via `nfs-check-chapter`: when the gate reports unresolved claims it suggests re-invoking `nfs-fact-check`
 
 ## Inputs and Outputs
 
@@ -64,17 +63,17 @@ The skill writes no `.studio/progress.json` and no other `.studio/` machine stat
 
 The skill runs six steps.
 
-1. **Chapter argument resolution and file probe (mandatory first tool call).** Uses a Bash tool call to test whether `structure/chapter-list.md` is present (`HAS_REGISTRY`/`NO_REGISTRY`). If the registry is present, reads it and resolves the slug or number argument. Uses a second Bash tool call to test whether `chapters/<slug>.md` exists (`HAS_CHAPTER`/`NO_CHAPTER`). `NO_CHAPTER` halts immediately, routing to `draft-chapter`. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
+1. **Chapter argument resolution and file probe (mandatory first tool call).** Uses a Bash tool call to test whether `structure/chapter-list.md` is present (`HAS_REGISTRY`/`NO_REGISTRY`). If the registry is present, reads it and resolves the slug or number argument. Uses a second Bash tool call to test whether `chapters/<slug>.md` exists (`HAS_CHAPTER`/`NO_CHAPTER`). `NO_CHAPTER` halts immediately, routing to `nfs-draft`. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
 
-2. **Resolve the plugin root.** Before ns-claims is invoked, the skill resolves the plugin's installed path: a primary lookup against `extraKnownMarketplaces['nonfiction-studio'].source.path` in `~/.claude/settings.json`, a `~/.claude/plugins/cache` search fallback, and a dev-mode fallback that checks for `bin/ns-claims` in the current directory. This is the same three-tier convention `init-project` uses to locate its scaffold templates; it exists because a literal relative `bin/ns-claims` path resolves against the invoking shell's working directory, not the installed plugin, and would silently fail for a marketplace-installed author. If all three lookups fail, the skill halts and names the settings.json and cache paths it attempted.
+2. **Resolve the plugin root.** Before ns-claims is invoked, the skill resolves the plugin's installed path: a primary lookup against `extraKnownMarketplaces['nonfiction-studio'].source.path` in `~/.claude/settings.json`, a `~/.claude/plugins/cache` search fallback, and a dev-mode fallback that checks for `bin/ns-claims` in the current directory. This is the same three-tier convention `nfs-new-book` uses to locate its scaffold templates; it exists because a literal relative `bin/ns-claims` path resolves against the invoking shell's working directory, not the installed plugin, and would silently fail for a marketplace-installed author. If all three lookups fail, the skill halts and names the settings.json and cache paths it attempted.
 
 3. **Engine-backed marker inventory.** Uses the Bash tool to run `node "<plugin-root>/bin/ns-claims" --chapter=<slug> --json`. Parses the JSON output for `totalMarkers`, `resolvedCount`, and `coveragePct`, and presents this pre-count to the author before delegation. If ns-claims exits non-zero, reports the exact stderr message and halts. The skill never eyeballs markers itself: ns-claims is the deterministic inventory source.
 
-4. **Web gate check and delegate to fact-checker.** Reads `.studio/config.json` to check `research.web_enabled`. States the gate status explicitly before spawning the agent: gate open announces DOI/URL resolution; gate closed (the default) explains that pasted source content is analyzed with the same quote-and-attribute discipline per D-13 (security posture); on chat notes that WebSearch and WebFetch may not be available. Spawns `fact-checker` via the `fact-check-pass -> fact-checker` chain edge with the chapter slug, ns-claims pre-count, and web gate status. The agent runs its five-step pass: cache protocol, marker resolution, status updates, marker writes (insert and the re-check removal rule), and the optional online pass.
+4. **Web gate check and delegate to fact-checker.** Reads `.studio/config.json` to check `research.web_enabled`. States the gate status explicitly before spawning the agent: gate open announces DOI/URL resolution; gate closed (the default) explains that pasted source content is analyzed with the same quote-and-attribute discipline per D-13 (security posture); on chat notes that WebSearch and WebFetch may not be available. Spawns `fact-checker` via the `nfs-fact-check -> fact-checker` chain edge with the chapter slug, ns-claims pre-count, and web gate status. The agent runs its five-step pass: cache protocol, marker resolution, status updates, marker writes (insert and the re-check removal rule), and the optional online pass.
 
 5. **Confirm agent writes via Read checks.** Reads `chapters/<slug>.md`, `research/evidence-log.md`, and `.studio/fact-check-reports/<NN>-report.md` to confirm each is present after the agent completes. A missing file surfaces as a gap report with an offer to re-run from Step 4.
 
-6. **Report three counts from the agent's per-chapter report.** Formats and presents the three counts from `.studio/fact-check-reports/<NN>-report.md`: verified (including cache hits), unresolved (open claims), and source-unverifiable. Names the report path explicitly. Suggests next steps based on the counts. On the chat surface, adds an explicit prompt to run `run-quality-gate` because the Stop hook gate does not fire automatically on chat per S-06 1.3 (gate closure compensation).
+6. **Report three counts from the agent's per-chapter report.** Formats and presents the three counts from `.studio/fact-check-reports/<NN>-report.md`: verified (including cache hits), unresolved (open claims), and source-unverifiable. Names the report path explicitly. Suggests next steps based on the counts. On the chat surface, adds an explicit prompt to run `nfs-check-chapter` because the Stop hook gate does not fire automatically on chat per S-06 1.3 (gate closure compensation).
 
 ## Progress.json and the Open-Claims Total
 
@@ -110,11 +109,11 @@ This cache behavior is the mechanism behind re-run idempotency: a second pass on
 
 ## Failure Behavior
 
-**Chapter file missing.** The Step 1 Bash probe halts on `NO_CHAPTER`. The halt message names the chapter file path and routes to `draft-chapter`. No state is written by a halted Step 1.
+**Chapter file missing.** The Step 1 Bash probe halts on `NO_CHAPTER`. The halt message names the chapter file path and routes to `nfs-draft`. No state is written by a halted Step 1.
 
 **Chapter argument not matched.** Step 1 halts with the supplied value, the registry file name (`structure/chapter-list.md`), and the list of valid slugs when the registry is present but the argument matches no row. No state is written.
 
-**ns-claims failure.** If `bin/ns-claims` exits non-zero (evidence log absent, chapter unreadable, BibleError), the exact stderr message is reported and the skill halts at Step 3. The most common cause is a missing `research/evidence-log.md`; run `/nonfiction-studio:research-pass` to create it, then re-invoke.
+**ns-claims failure.** If `bin/ns-claims` exits non-zero (evidence log absent, chapter unreadable, BibleError), the exact stderr message is reported and the skill halts at Step 3. The most common cause is a missing `research/evidence-log.md`; run `/nonfiction-studio:nfs-research` to create it, then re-invoke.
 
 **Agent incomplete or report missing.** If the Step 5 Read checks find a file absent after the agent ran, the skill reports the gap and offers to re-run from Step 4. Re-runs are safe: the agent's cache marks known-good entries and skips their re-verification; status-field writes and marker operations are idempotent against current state.
 
@@ -122,4 +121,4 @@ This cache behavior is the mechanism behind re-run idempotency: a second pass on
 
 ## Worked Example
 
-See [nfs-fact-check.example.md](./nfs-fact-check.example.md) for a condensed transcript of a `fact-check-pass` session over the committed Chapter 2 of the sample book "The Quiet Network" (see `examples/sample-book/`). The example shows a clean verification run: the ns-claims pre-count reports 5 markers at 100% coverage (all entries already `verified` in the committed ledger), the agent runs its session-start cache protocol, all 5 entries are confirmed via cache hits, no marker writes are needed, the agent writes the fact-check report, and the skill presents the three counts with the report path.
+See [nfs-fact-check.example.md](./nfs-fact-check.example.md) for a condensed transcript of a `nfs-fact-check` session over the committed Chapter 2 of the sample book "The Quiet Network" (see `examples/sample-book/`). The example shows a clean verification run: the ns-claims pre-count reports 5 markers at 100% coverage (all entries already `verified` in the committed ledger), the agent runs its session-start cache protocol, all 5 entries are confirmed via cache hits, no marker writes are needed, the agent writes the fact-check report, and the skill presents the three counts with the report path.

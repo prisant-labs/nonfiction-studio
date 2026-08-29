@@ -44,7 +44,7 @@ If all three lookups fail: halt immediately. Report the settings.json path attem
 
 Carry the resolved path forward as `<plugin-root>` for Step 2.
 
-**Shared plugin-root convention.** This three-tier resolution (settings.json lookup, plugins-cache search, dev-mode fallback) is the same routine as `skills/init-project/SKILL.md` Step 4; a future wave extracts it to a shared reference.
+**Shared plugin-root convention.** This three-tier resolution (settings.json lookup, plugins-cache search, dev-mode fallback) is the same routine as `skills/nfs-new-book/SKILL.md` Step 4; a future wave extracts it to a shared reference.
 
 ---
 
@@ -72,13 +72,13 @@ Parse stdout as JSON. Present the clean pass:
 
 Parse stdout as JSON. Group the `findings` array by the `file` field (the chapter each finding belongs to). For each group, state the chapter, the count, and list each finding's `excerpt` (the EV or SRC ID) with its `detail` (what is missing). Close with:
 
-> Apparatus verdict: [stdout JSON `findings.length`] item(s) need attention before the back matter is complete. `production/endnotes.md`, `production/bibliography.md`, and `production/index-candidates.md` were still regenerated; each affected citation is simply omitted from them until its ledger entry is fixed. See `production/apparatus-attention.md` for the full list. Fix the named gap in `research/evidence-log.md` or `research/sources.md`, then run `/nonfiction-studio:build-apparatus` again.
+> Apparatus verdict: [stdout JSON `findings.length`] item(s) need attention before the back matter is complete. `production/endnotes.md`, `production/bibliography.md`, and `production/index-candidates.md` were still regenerated; each affected citation is simply omitted from them until its ledger entry is fixed. See `production/apparatus-attention.md` for the full list. Fix the named gap in `research/evidence-log.md` or `research/sources.md`, then run `/nonfiction-studio:nfs-build-apparatus` again.
 
 **Exit 2 - operational error:**
 
 Surface the stderr content and halt. This exit is never treated as a pass.
 
-> Apparatus error (exit 2): [first non-empty line of stderr, or "ns-notes exited with code 2 with no message on stderr" if stderr is empty]. The apparatus run did not complete; no `production/` files were written or updated by this invocation. Check that this is a valid project bible (`.studio/meta.json`, `research/evidence-log.md`, `research/sources.md`, and a `chapters/` directory must all be present). Run `/nonfiction-studio:doctor` to diagnose a broader structural problem.
+> Apparatus error (exit 2): [first non-empty line of stderr, or "ns-notes exited with code 2 with no message on stderr" if stderr is empty]. The apparatus run did not complete; no `production/` files were written or updated by this invocation. Check that this is a valid project bible (`.studio/meta.json`, `research/evidence-log.md`, `research/sources.md`, and a `chapters/` directory must all be present). Run `/nonfiction-studio:nfs-doctor` to diagnose a broader structural problem.
 
 ---
 

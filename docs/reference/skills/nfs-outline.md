@@ -8,11 +8,11 @@ tags: ["skill", "outline", "thesis", "structure", "chapter-list"]
 
 # nfs-outline
 
-The `outline-book` skill is the studio's outline front door. It confirms the project brief via a deterministic Bash probe, optionally invokes `thesis-architect` to produce or sharpen the controlling idea, delegates chapter architecture to `structure-architect`, presents the draft outline for author review, and confirms the written structure files via Read checks. It is a Phase 1 skill specified in S-06 3.4 (skills and invocation surface) and governed by D-06 (single-writer state discipline), D-13 (security posture), and D-21 (craft models as data).
+The `nfs-outline` skill is the studio's outline front door. It confirms the project brief via a deterministic Bash probe, optionally invokes `thesis-architect` to produce or sharpen the controlling idea, delegates chapter architecture to `structure-architect`, presents the draft outline for author review, and confirms the written structure files via Read checks. It is a Phase 1 skill specified in S-06 3.4 (skills and invocation surface) and governed by D-06 (single-writer state discipline), D-13 (security posture), and D-21 (craft models as data).
 
 ## Purpose
 
-`outline-book` bridges the confirmed project brief and the chapter-by-chapter architecture. It produces three structure files that every downstream skill and agent depends on:
+`nfs-outline` bridges the confirmed project brief and the chapter-by-chapter architecture. It produces three structure files that every downstream skill and agent depends on:
 
 - `structure/thesis.md` - the controlling idea, argument spine, promise to the reader, exclusions, and scope flags (written by `thesis-architect` when absent)
 - `structure/outline.md` - the chapter-by-chapter architecture: promise, payoff, thesis link, key beats, evidence needs, and dependencies per chapter (written by `structure-architect`)
@@ -23,7 +23,7 @@ The skill writes no `.studio/` state. Chapter progress entries come into existen
 ## Invocation
 
 ```
-/nonfiction-studio:outline-book [scope]
+/nonfiction-studio:nfs-outline [scope]
 ```
 
 The scope argument controls which phases run:
@@ -35,10 +35,9 @@ The scope argument controls which phases run:
 | `chapters` | Brief probe, thesis guard, structure-architect, review, acceptance | Building the outline when a confirmed thesis already exists |
 
 Alternate entry points:
-- Via `intake-interview` Step 6: that skill suggests `outline-book` after the brief is confirmed
-- Via `capture-voice` Step 6: that skill suggests `outline-book` when a confirmed brief exists
-- Via the `studio` dispatcher: routes here from Path 2 when no chapter list exists
-- Verb alias: `/outline` (the namespaced `/nonfiction-studio:outline-book` form also works)
+- Via `nfs-interview` Step 6: that skill suggests `nfs-outline` after the brief is confirmed
+- Via `nfs-capture-voice` Step 6: that skill suggests `nfs-outline` when a confirmed brief exists
+- Via the `nfs-start` dispatcher: routes here from Path 2 when no chapter list exists
 
 ## Inputs and Outputs
 
@@ -67,19 +66,19 @@ The skill writes no `.studio/` state. Craft-model selection belongs to `structur
 
 The skill runs five steps. The scope argument determines which steps execute.
 
-1. **Confirmed-brief probe.** Uses a Bash tool call to test whether `context/brief.md` exists and contains no DRAFT-block markers. The output is a binary token: `UNCONFIRMED` halts immediately and routes to `intake-interview`; `CONFIRMED` continues. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
+1. **Confirmed-brief probe.** Uses a Bash tool call to test whether `context/brief.md` exists and contains no DRAFT-block markers. The output is a binary token: `UNCONFIRMED` halts immediately and routes to `nfs-interview`; `CONFIRMED` continues. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
 
 2. **Thesis check (full and thesis scopes) / Thesis guard (chapters scope).** For `full` and `thesis` scopes: reads `structure/thesis.md`. If absent or empty, invokes `thesis-architect`. If present, presents it to the author with an option to revise. Applies the two-revision-pass cap: after two author rejections, halts and directs the author to edit `structure/thesis.md` manually. For `thesis` scope, closes after the thesis is confirmed with the outline suggested as next step. For `chapters` scope: reads `structure/thesis.md` and halts with a clear message if absent.
 
-3. **Invoke structure-architect (full and chapters scopes).** Reads `research/evidence-log.md` if present. Spawns `structure-architect` (the `outline-book -> structure-architect` chain edge) with the brief, thesis, and evidence context. The agent writes `structure/outline.md`, `structure/chapter-list.md`, and appends to `research/open-questions.md` in one invocation. Craft-model questions belong to the agent.
+3. **Invoke structure-architect (full and chapters scopes).** Reads `research/evidence-log.md` if present. Spawns `structure-architect` (the `nfs-outline -> structure-architect` chain edge) with the brief, thesis, and evidence context. The agent writes `structure/outline.md`, `structure/chapter-list.md`, and appends to `research/open-questions.md` in one invocation. Craft-model questions belong to the agent.
 
 4. **Review and amendments (full and chapters scopes).** Presents the outline to the author. If the author requests amendments, re-invokes `structure-architect` with the change notes and the existing outline as context; the agent's revision-diff-and-summarize guardrail governs the re-invocation. The skill never edits structure files directly.
 
-5. **Confirm outputs and close (full and chapters scopes).** Uses the Read tool on `structure/outline.md` and `structure/chapter-list.md` to confirm both files are present and non-empty. States that `structure/chapter-list.md` is the locked chapter registry. Suggests `research-pass` or `draft-chapter` as next steps; suggests `capture-voice` if no voice baseline exists yet.
+5. **Confirm outputs and close (full and chapters scopes).** Uses the Read tool on `structure/outline.md` and `structure/chapter-list.md` to confirm both files are present and non-empty. States that `structure/chapter-list.md` is the locked chapter registry. Suggests `nfs-research` or `nfs-draft` as next steps; suggests `nfs-capture-voice` if no voice baseline exists yet.
 
 ## Failure Behavior
 
-The brief probe at Step 1 is deterministic. On `UNCONFIRMED`, the skill halts regardless of scope and routes to `intake-interview`. No context inference substitutes for the tool call.
+The brief probe at Step 1 is deterministic. On `UNCONFIRMED`, the skill halts regardless of scope and routes to `nfs-interview`. No context inference substitutes for the tool call.
 
 The two-revision-pass cap at Step 2 prevents an unproductive thesis loop. After two rejected revisions, the author edits `structure/thesis.md` directly and re-invokes. The last thesis-architect output remains in the file as a starting point.
 
@@ -91,4 +90,4 @@ All amendment routing goes back to `structure-architect`. The skill never writes
 
 ## Worked Example
 
-See [nfs-outline.example.md](./nfs-outline.example.md) for a condensed transcript of an `outline-book` run for the sample book "The Quiet Network" (see `examples/sample-book/`). The example shows a `full`-scope run where the thesis already exists: the confirmed-brief probe returns `CONFIRMED`, the thesis check finds `structure/thesis.md`, the author accepts the existing thesis, `structure-architect` is invoked to build the six-chapter architecture, the author accepts the plan, and the skill confirms both output files via Read checks. The committed `structure/outline.md` and `structure/chapter-list.md` in `examples/sample-book/` are the live outcome of this run.
+See [nfs-outline.example.md](./nfs-outline.example.md) for a condensed transcript of an `nfs-outline` run for the sample book "The Quiet Network" (see `examples/sample-book/`). The example shows a `full`-scope run where the thesis already exists: the confirmed-brief probe returns `CONFIRMED`, the thesis check finds `structure/thesis.md`, the author accepts the existing thesis, `structure-architect` is invoked to build the six-chapter architecture, the author accepts the plan, and the skill confirms both output files via Read checks. The committed `structure/outline.md` and `structure/chapter-list.md` in `examples/sample-book/` are the live outcome of this run.

@@ -3,7 +3,7 @@ name: nfs-draft
 user-invocable: true
 argument-hint: "<chapter: slug or number>"
 description: "Produces a voice-matched, evidence-grounded chapter draft using drafting-partner and line-editor. Resolves the chapter argument against structure/chapter-list.md, checks EV entries and alerts on an empty ledger, delegates new-chapter writing or diff proposals to drafting-partner, passes the accepted output to line-editor for proposal-only polish, confirms the chapter file via a Read check, and on chat appends compliance records that the PostToolBatch hook writes automatically on CLI and Cowork. Use when the author says 'write chapter 3,' 'draft this chapter,' or wants to keep going on a chapter already in progress."
-when_to_use: "Use when the author types the /draft <ch> verb alias, says 'write chapter N,' or studio routes here from Path 2. Do not invoke when the chapter argument is missing (the skill halts if the chapter is not found in structure/chapter-list.md), or for unrelated queries."
+when_to_use: "Use when the author says 'write chapter N,' or studio routes here from Path 2. Do not invoke when the chapter argument is missing (the skill halts if the chapter is not found in structure/chapter-list.md), or for unrelated queries."
 chain:
   - drafting-partner
   - line-editor
@@ -23,8 +23,8 @@ Skill inputs read:
 - `chapters/<slug>.md` (checked at Step 2 to determine whether the chapter already exists)
 
 Skill chain edges:
-- `draft-chapter -> drafting-partner` (new draft or diff-proposal, per `agents/_chain-permitted.yaml`)
-- `draft-chapter -> line-editor` (proposal-only polish, per `agents/_chain-permitted.yaml`)
+- `nfs-draft -> drafting-partner` (new draft or diff-proposal, per `agents/_chain-permitted.yaml`)
+- `nfs-draft -> line-editor` (proposal-only polish, per `agents/_chain-permitted.yaml`)
 
 ---
 
@@ -36,7 +36,7 @@ test -f structure/chapter-list.md && echo HAS_REGISTRY || echo NO_REGISTRY
 ```
 
 The output is a binary token:
-- `NO_REGISTRY`: halt immediately. State: "The chapter registry `structure/chapter-list.md` does not exist. Run `/nonfiction-studio:outline-book` to produce the chapter list before drafting."
+- `NO_REGISTRY`: halt immediately. State: "The chapter registry `structure/chapter-list.md` does not exist. Run `/nonfiction-studio:nfs-outline` to produce the chapter list before drafting."
 - `HAS_REGISTRY`: continue.
 
 Use the Read tool on `structure/chapter-list.md` to load the slug registry. Resolve the supplied argument:
@@ -68,7 +68,7 @@ Count the EV entries relevant to the chapter from the `research/evidence-log.md`
 
 **If no relevant EV entries exist:** alert the author. State:
 
-> No evidence ledger entries were found for this chapter. `drafting-partner` will mark every factual assertion `[UNVERIFIED]` throughout the draft. Run `/nonfiction-studio:research-pass <slug>` first to populate the ledger, or confirm you want to proceed now and resolve claims after drafting.
+> No evidence ledger entries were found for this chapter. `drafting-partner` will mark every factual assertion `[UNVERIFIED]` throughout the draft. Run `/nonfiction-studio:nfs-research <slug>` first to populate the ledger, or confirm you want to proceed now and resolve claims after drafting.
 
 Wait for explicit author confirmation before proceeding. If the author confirms, log the decision to `.studio/logs/` as a JSONL line before continuing:
 
@@ -82,7 +82,7 @@ Create `.studio/logs/` if it does not exist. Then continue to Step 4. If the aut
 
 ## Step 4 - Delegate to drafting-partner
 
-Spawn `drafting-partner` via the `draft-chapter -> drafting-partner` chain edge, passing:
+Spawn `drafting-partner` via the `nfs-draft -> drafting-partner` chain edge, passing:
 - The chapter outline section from `structure/outline.md` (promise, beats, evidence-needed list)
 - The relevant EV entries from `research/evidence-log.md` (or a note that the ledger is empty if the author confirmed an empty-ledger proceed in Step 3)
 - The content of `context/style-profile.md`
@@ -102,7 +102,7 @@ If `drafting-partner` halts on check 1 (voice profile absent) or check 2 (outlin
 
 ## Step 5 - Delegate to line-editor
 
-Spawn `line-editor` via the `draft-chapter -> line-editor` chain edge, passing:
+Spawn `line-editor` via the `nfs-draft -> line-editor` chain edge, passing:
 - The chapter slug and the current content of `chapters/<slug>.md` confirmed at the end of Step 4
 - The content of `context/style-profile.md`
 
@@ -141,10 +141,10 @@ Do not append these records on CLI or Cowork. The PostToolBatch hook owns the lo
 **Quality gate prompt (all surfaces).** On all surfaces, close with an explicit prompt:
 
 > The draft of `chapters/<slug>.md` is complete. Run the quality gate to check claim coverage, voice drift, and prompt scrub:
-> `/nonfiction-studio:run-quality-gate <slug>`
+> `/nonfiction-studio:nfs-check-chapter <slug>`
 >
 > Or advance the EV entries from `status: pending` to verified first:
-> `/nonfiction-studio:fact-check-pass <slug>`
+> `/nonfiction-studio:nfs-fact-check <slug>`
 
 On CLI and Cowork the Stop hook gate fires automatically at session end. On chat the explicit prompt above is the substitute per S-06 1.3 (gate closure compensation).
 
@@ -156,7 +156,7 @@ The skill writes no `.studio/progress.json` and no other `.studio/` machine stat
 
 **Registry absent or chapter not found.** The Step 1 Bash probe halts on `NO_REGISTRY`. If the registry exists but the supplied argument does not match any slug or number, Step 1 halts with the supplied value, the registry file name (`structure/chapter-list.md`), and the list of valid slugs. No state is written by a halted Step 1.
 
-**Empty evidence ledger, no author confirmation.** If the author does not confirm they want to proceed with an empty ledger, the skill halts cleanly at Step 3. No state is written. The author may run `/nonfiction-studio:research-pass <slug>` to populate the ledger and then re-invoke.
+**Empty evidence ledger, no author confirmation.** If the author does not confirm they want to proceed with an empty ledger, the skill halts cleanly at Step 3. No state is written. The author may run `/nonfiction-studio:nfs-research <slug>` to populate the ledger and then re-invoke.
 
 **Empty evidence ledger, author confirms.** The entire draft carries `[UNVERIFIED]` on every factual assertion per the `drafting-partner` check-3 alert asymmetry. The skill logs the author's decision as a JSONL line in `.studio/logs/`. This write to the logs path is distinct from the progress path and is permitted per S-06 3.6.
 

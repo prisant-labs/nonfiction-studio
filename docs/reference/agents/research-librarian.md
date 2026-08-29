@@ -42,7 +42,7 @@ Invoke `research-librarian` when any of the following holds.
 - The author provides new sources - PDFs, transcripts, links, or notes - and
   wants them registered and their claims logged.
 - A chapter draft surfaces `[UNVERIFIED]` tags that need a sourcing pass.
-- The `research-pass` skill is invoked; it routes here directly.
+- The `nfs-research` skill is invoked; it routes here directly.
 - `drafting-partner` requires evidence before a drafting run and dispatches this
   agent to fill the gap.
 
@@ -229,7 +229,7 @@ those fields. Every guardrail above is enforced in the agent's system prompt.
 After a research session, the natural next steps are: run `fact-checker` to
 advance newly logged `pending` entries through the verification cycle, or begin
 drafting with `drafting-partner` on any chapter whose open-question items are now
-resolved. The `research-pass` skill names these options after the session.
+resolved. The `nfs-research` skill names these options after the session.
 
 ## Worked example
 

@@ -8,13 +8,13 @@ tags: ["skill", "intake", "interview", "example"]
 
 # nfs-interview - worked example
 
-This is a condensed two-session transcript of an `intake-interview` run for the sample book "The Quiet Network" (see `examples/sample-book/`). Session 1 ends mid-interview after two confirmed sections are flushed to disk. Session 2 detects the flushed DRAFT blocks, resumes at the next uncompleted section, completes the intake, and closes with conditional next-step suggestions. The example follows the flow specified in S-06 3.2 (intake-interview) and honors D-16 (honest, resumable interview).
+This is a condensed two-session transcript of an `nfs-interview` run for the sample book "The Quiet Network" (see `examples/sample-book/`). Session 1 ends mid-interview after two confirmed sections are flushed to disk. Session 2 detects the flushed DRAFT blocks, resumes at the next uncompleted section, completes the intake, and closes with conditional next-step suggestions. The example follows the flow specified in S-06 3.2 (intake-interview) and honors D-16 (honest, resumable interview).
 
 ---
 
 ## Session 1: new intake, two sections confirmed, session ends mid-interview
 
-**Author:** `/nonfiction-studio:intake-interview`
+**Author:** `/nonfiction-studio:nfs-interview`
 
 **Studio (Step 1 - Resumption check):**
 
@@ -72,7 +72,7 @@ The session ends here. Sections 1 and 2 are flushed to `context/brief.md` on dis
 
 ## Session 2: resumed intake, remaining sections, confirmed brief, conditional close
 
-**Author:** `/nonfiction-studio:intake-interview`
+**Author:** `/nonfiction-studio:nfs-interview`
 
 **Studio (Step 1 - Resumption check):**
 
@@ -134,12 +134,12 @@ Output: `NO_PROFILE`
 
 > The brief is confirmed. Two optional next steps:
 >
-> 1. Run `capture-voice` to build the stylometric voice baseline. The writing sample from the voice section is flagged and ready for analysis.
-> 2. Run `outline-book` to produce the chapter-by-chapter structure.
+> 1. Run `nfs-capture-voice` to build the stylometric voice baseline. The writing sample from the voice section is flagged and ready for analysis.
+> 2. Run `nfs-outline` to produce the chapter-by-chapter structure.
 >
 > Neither is required before the other; both can be deferred.
 >
-> Invoke with `/nonfiction-studio:capture-voice` or `/nonfiction-studio:outline-book`.
+> Invoke with `/nonfiction-studio:nfs-capture-voice` or `/nonfiction-studio:nfs-outline`.
 
 ---
 
@@ -152,4 +152,4 @@ Output: `NO_PROFILE`
 - **Writing sample flagged, not analyzed.** The sample from the voice section is noted in the DRAFT block and flagged for `voice-capture`; the interviewer does not analyze it inline.
 - **Confirm before commit.** No committed bible file is written until the author explicitly confirms the written brief.
 - **Conditional close is a tool call.** The Bash call on `context/style-profile.md` determines whether the voice suggestion appears; it does not rely on a prose inference.
-- **Suggestions are optional.** The closing message names `capture-voice` and `outline-book` as choices, not a required next step.
+- **Suggestions are optional.** The closing message names `nfs-capture-voice` and `nfs-outline` as choices, not a required next step.
