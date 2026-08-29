@@ -130,3 +130,7 @@ jobs:
       # Live step 16: bidirectional fixture matrix with temp-clone discipline.
       - name: Fixture tests
         run: node scripts/test-fixtures.mjs
+
+      # Live step 17: sample book integrity - verifies resolution through marker-to-ledger-to-SRC chains.
+      - name: Sample book integrity
+        run: node scripts/verify-sample-book.mjs
