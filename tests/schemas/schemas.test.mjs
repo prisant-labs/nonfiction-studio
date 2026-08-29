@@ -6,11 +6,17 @@
 //               assert unknown-field preservation where S-08 Rule 2 applies.
 // why:          Q-01 section 4 specifies round-trip coverage for every structured format;
 //               one test per format, sized honestly.
-// known gap:    ai-use-log.jsonl and style-profile.md have a positive case only. Their
-//               former negative cases were deleted because they asserted on literals the
-//               test body itself built and drove no repo code, so they could not fail.
-//               Neither format has an owning validator to drive, which is the real gap;
-//               a test that cannot fail was hiding it rather than covering it.
+// known gap:    ai-use-log.jsonl has a positive case only. Its former negative case was
+//               deleted because it asserted on a literal the test body itself built and
+//               drove no repo code, so it could not fail; no owning validator exists yet
+//               to redirect it to, which is the real gap. style-profile.md's positive case
+//               was removed outright (not merely redirected): doctor-engine.mjs now owns a
+//               real style-profile validator (F-CI-08, voice quality unchecked,
+//               deterministic half), so the redundant string-content check here was
+//               superseded by tests/engines/doctor.test.mjs's dedicated style-profile
+//               structure and baseline-consistency tests, which drive that validator
+//               directly instead of re-checking section-header strings with no validator
+//               behind them.
 // runner:       node --test tests/schemas/schemas.test.mjs
 
 import { test } from 'node:test';
@@ -244,32 +250,30 @@ test('ai-use-log.jsonl: every line in the golden fixture is valid JSON with requ
 // A test that cannot fail is worse than no test, so it is deleted rather than dressed up.
 
 // ---------------------------------------------------------------------------
-// 6. context/style-profile.md - valid instance section check
+// 6. context/style-profile.md - superseded (see "known gap" note at top of file)
 // ---------------------------------------------------------------------------
 
-test('style-profile.md: golden fixture has the required section markers', () => {
-  const text = readFileSync(join(GOLDEN, 'context', 'style-profile.md'), 'utf8');
-  // Required sections per S-08: ## Voice, ## Diction, ## Rhythm
-  // (The style-profile schema requires these headings as mandatory markers.)
-  const requiredSections = ['## Voice', '## Diction', '## Rhythm'];
-  for (const section of requiredSections) {
-    assert.ok(text.includes(section), 'style-profile.md must contain section "' + section + '"');
-  }
-});
-
+// SUPERSEDED, not merely deleted (F-CI-08, voice quality unchecked, deterministic half):
+// 'style-profile.md: golden fixture has the required section markers' checked only 3 of
+// the format's 7 required sections (## Voice, ## Diction, ## Rhythm) against the golden
+// fixture and asserted nothing when a section was absent, out of order, or malformed - a
+// weaker proof than the sibling negative-case deletions above already flagged as the real
+// gap: no owning validator existed to redirect a real negative case to. doctor-engine.mjs
+// now owns a real style-profile validator: its "style profile structure and baseline
+// consistency" check in runChecks enforces all seven sections present and in order, the
+// three required Baseline reference fields, agreement with config.json's stylometry
+// baseline, and Exemplars path resolution, each as a named finding, plus the pre-capture
+// stub exception as a notice. That coverage now lives in tests/engines/doctor.test.mjs
+// (the "style profile structure and baseline consistency" test block), which drives the
+// owning validator directly instead of re-checking section-header strings here with no
+// validator behind them. Removed rather than kept as a redundant, weaker duplicate.
+//
 // DELETED (test-quality pass, queued at TSK-055 (Tier A check scripts)):
 // 'style-profile.md: absence of required section is detectable via content check' was
 // tautological -- it built a template-literal string in the test body, then asserted a
 // property of that same string (string.includes('## Voice') === false). No repo code
-// was invoked. Verified there is no owning validator to redirect it to: doctor-engine.mjs
-// REQUIRED_PATHS only checks that context/style-profile.md exists (structure.missing-path);
-// it never inspects section headings or emits a finding about a missing "## Voice" section.
-// hooks/lib/orientation.mjs reads style-profile.md but scans for "## Do" / "## Do not"
-// bullet rules for the session-start orientation block, fails open (silently omits the
-// line) when absent, and does not check for "## Voice", "## Diction", or "## Rhythm" at
-// all. The three-section requirement is documented convention (docs/formats/style-profile.md)
-// with no runtime enforcement anywhere in the repo. A test that cannot fail is worse than
-// no test, so it is deleted rather than dressed up.
+// was invoked. At the time this was deleted there was no owning validator to redirect it
+// to; that gap is what the doctor-engine check named above closes.
 
 // ---------------------------------------------------------------------------
 // 7. Gate report (.studio/gate/*.json) - valid instance shape

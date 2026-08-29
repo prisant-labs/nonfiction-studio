@@ -24,9 +24,20 @@
 //                    beyond secrets.GITHUB_TOKEN - ERROR. Parsed textually, line-based, no YAML
 //                    dependency (a workflow this permissive would demand a credential from every
 //                    contributor, not just a maintainer running workflow_dispatch by hand).
-//                 5. doc-misleading phrases ("requires an api key", "you must set your api key",
-//                    "sign up for a paid", "purchase a license", "subscription is required"),
-//                    scoped to docs/**, README.md, agents/**, skills/** - ERROR.
+//                 5. doc-misleading phrases: pattern classes, not the five literal phrases this
+//                    class started as (PF-22 (checker coverage shapes) widening 3, closing the gap
+//                    where any paraphrase of the five caught nothing) - requirement-of-credential
+//                    claims (verb-first: "requires/needs/will need/must set-provide-supply-have
+//                    ... an API key / access token / credential"; object-first: "an API key /
+//                    access token / credential ... is required/needed") and paid-service claims
+//                    ("sign up for a paid ...", "requires a paid subscription/plan", "purchase a
+//                    license", "subscription is required/needed"). Case-insensitive, with bounded
+//                    windows between the verb and the object (no unbounded `.*` scan across a
+//                    line). A negation guard (a no/not/never/without/zero/none word within a short
+//                    window of the matched clause) suppresses a genuinely negated guarantee, so
+//                    this repo's own README.md sentences ("requires no API key", "none require a
+//                    separate API key, account, or paid service") are not flagged as the thing
+//                    they deny. Scoped to docs/**, README.md, agents/**, skills/** - ERROR.
 //               Every applied exception is echoed (ALLOWED), never silently consumed, mirroring
 //               scripts/lib/suppressions.mjs's never-silent philosophy. An exceptions-file entry
 //               that matches zero real hits is a STALE EXCEPTION; one with an empty reason is
@@ -213,14 +224,78 @@ const NON_ANTHROPIC_KEY_PATTERNS = [
 // run-evals.mjs:173) are section 3.1 row (b)'s "hard reference" sites this class exists to gate.
 const ANTHROPIC_KEY_PATTERN = /(?:process\.env\.|process\.env\[['"`]|secrets\.)ANTHROPIC_API_KEY/;
 
-// Class 5: doc-misleading phrases (case-insensitive substring match).
-const MISLEADING_PHRASES = [
-  'requires an api key',
-  'you must set your api key',
-  'sign up for a paid',
-  'purchase a license',
-  'subscription is required',
+// Class 5: doc-misleading phrases, as pattern classes rather than the five
+// original literals (PF-22 (checker coverage shapes) widening 3). Each
+// pattern's window between its verb and its object is bounded ([^.\n]{0,N}),
+// never an unbounded .*, and excludes the sentence terminator so a clause on
+// one side of a period can never bridge into an unrelated clause on the
+// other (see MISLEADING_NEGATION_LOOKBEHIND_CHARS below for why the sentence
+// boundary matters for the negation guard too).
+const CREDENTIAL_NOUN = '(?:your\\s+|an?\\s+)?(?:api[\\s-]?key|access\\s+token|credential)s?';
+const MISLEADING_PATTERNS = [
+  // requirement-of-credential, verb before object: "requires an API key",
+  // "you need an API key", "you will need an access token", "you must
+  // set/provide/supply/have your API key".
+  new RegExp(
+    '\\b(?:requires?|needs?|will\\s+need|must\\s+(?:set|provide|supply|have))\\b[^.\\n]{0,25}\\b' + CREDENTIAL_NOUN + '\\b',
+    'i'
+  ),
+  // requirement-of-credential, object before verb (passive): "an API key is
+  // required", "an access token is needed", "zero API keys needed". Window
+  // is 15 chars, shorter than the active pattern's 25: the passive verb
+  // ("is/are required"/"needed") sits immediately after the object in every
+  // real and test shape, so a tighter bound here also narrows the negation
+  // guard's own false-suppression surface for this branch (finding 2 below).
+  new RegExp('\\b' + CREDENTIAL_NOUN + '\\b[^.\\n]{0,15}\\b(?:is\\s+|are\\s+)?(?:required|needed)\\b', 'i'),
+  // paid-service: "sign up for a paid ...".
+  /\bsign\s+up\s+for\s+a\s+paid\b/i,
+  // paid-service: "requires a paid subscription/plan".
+  /\brequires?\s+a\s+paid\s+(?:subscription|plan)\b/i,
+  // paid-service: "purchase a license" / "must purchase a license".
+  /\b(?:must\s+)?purchase\s+a\s+license\b/i,
+  // paid-service: "subscription is required/needed".
+  /\bsubscriptions?\s+(?:is|are)\s+(?:required|needed)\b/i,
 ];
+
+// Negation guard: a match is suppressed when the same clause negates it (e.g.
+// this repo's own "requires no API key", "you never need an API key", "none
+// require a separate API key, account, or paid service" guarantees in
+// README.md). Checked over a bounded window immediately before the match
+// plus the match text itself, so it catches a negation word sitting between
+// the verb and the object ("requires no API key" - "no" is inside the
+// match), immediately before the verb ("never requires a credential"), or
+// immediately before the object in the passive form ("no API key is
+// required"). "none" is included alongside the brief's own suggested
+// no/not/without/never/zero list because the real README.md:332 guarantee
+// ("none require a separate API key...") uses it, not "no"; a tighter list
+// would false-positive on the plugin's own shipped self-sufficiency claim.
+// Contraction-aware: JS's \b splits "don't" into "don" + "t", so a bare
+// \bnot\b never matches inside a contraction. don't/doesn't/isn't/aren't are
+// matched as their own alternatives, each accepting a straight (') or
+// typographic (U+2019) apostrophe, so "You don't need an API key" and "This
+// tool doesn't require an API key" negate correctly either way it was typed.
+// Known, accepted limitation of this proximity-window approach (not fixed
+// here; the brief explicitly authorizes a window mechanism over real clause
+// parsing): a negation word merely co-occurring within the window, without
+// actually negating the matched clause, still suppresses - e.g. "Not sure
+// why, but this requires an API key to work." is wrongly treated as
+// negated, because "Not" sits inside the lookbehind window even though it
+// negates nothing about the requirement. Pinned by its own regression test
+// (see tests/checks/check-self-sufficiency.test.mjs) so a future change to
+// this mechanism trips a named assertion instead of silently changing
+// behavior.
+const APOSTROPHE = "['\\u2019]";
+const MISLEADING_NEGATION_WORDS = new RegExp(
+  '\\b(?:no|not|never|without|zero|none|don' + APOSTROPHE + 't|doesn' + APOSTROPHE + 't|isn' + APOSTROPHE + 't|aren' + APOSTROPHE + 't)\\b',
+  'i'
+);
+const MISLEADING_NEGATION_LOOKBEHIND_CHARS = 25;
+
+function isNegatedMatch(line, matchIndex, matchText) {
+  const start = Math.max(0, matchIndex - MISLEADING_NEGATION_LOOKBEHIND_CHARS);
+  const context = line.slice(start, matchIndex + matchText.length);
+  return MISLEADING_NEGATION_WORDS.test(context);
+}
 
 function patternDisplay(re) {
   return '/' + re.source + '/';
@@ -383,11 +458,11 @@ for (const rel of scannedFiles) {
     }
 
     if (docScope) {
-      const lower = line.toLowerCase();
-      for (const phrase of MISLEADING_PHRASES) {
-        if (lower.includes(phrase)) {
+      for (const re of MISLEADING_PATTERNS) {
+        const m = re.exec(line);
+        if (m && !isNegatedMatch(line, m.index, m[0])) {
           forbiddenCount++;
-          errorLines.push(PREFIX + ' FORBIDDEN: ' + rel + ':' + lineNo + ': doc-misleading phrase matches "' + phrase + '"');
+          errorLines.push(PREFIX + ' FORBIDDEN: ' + rel + ':' + lineNo + ': doc-misleading phrase matches "' + m[0].trim() + '" (' + patternDisplay(re) + ')');
         }
       }
     }

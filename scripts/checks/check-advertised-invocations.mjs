@@ -1,47 +1,42 @@
-// scripts/checks/check-skill-cli-targets.mjs
-// what-it-is:   shipped-Markdown CLI routing-target resolution checker
+// scripts/checks/check-advertised-invocations.mjs
+// what-it-is:   advertised skill-invocation resolution checker
 // what-it-does: scans every git-tracked .md file under agents/, docs/, examples/, skills/,
-//               templates/, plus root-level .md files, for the literal invocation form a
-//               CLI-wrapper skill (or any other shipped document) uses to name a routing
-//               target - "bin/ns-<name>", the same shape node "<plugin-root>/bin/ns-<name>"
-//               resolves to once the plugin root is substituted in (see skills/init-project/
-//               SKILL.md Step 4 for that resolution) - and asserts each named CLI is genuinely
-//               shipped: the extensionless file exists directly under bin/. A bare "ns-<name>"
-//               mention with no "bin/" prefix (for example a sentence naming a sibling CLI in
-//               passing) is deliberately out of scope: this checker verifies that a document's
-//               own ROUTING target resolves to a real file, not that every CLI name mentioned
-//               anywhere in shipped prose is spelled correctly. Checking for the ".cmd" Windows
-//               shim is scripts/checks/check-inventory.mjs's job (component inventory
-//               equality); this checker only ever asserts the extensionless bin/ns-<name>
-//               target a document actually invokes.
+//               templates/, plus root-level .md files, for the literal advertised invocation
+//               form "/nonfiction-studio:<name>" - the namespaced slash-invocation shape this
+//               plugin's own docs teach an author to type - and asserts each named <name>
+//               resolves to a shipped skill: a directory at skills/<name>/. A document that
+//               advertises an invocation with no shipped skill behind it is a phantom: it reads
+//               as a real, working command to an author and fails only at the moment they try
+//               it, never before.
 //               EXCLUDED: files under docs/adr/ and docs/gates/ are skipped entirely - dated,
 //               point-in-time historical records (an ADR's own Date: field fixes what it
 //               describes to that date; a gate doc records what was true at a named past gate),
-//               not living documents that track the current tree, so a routing target named in
-//               one that has since been renamed or removed is not a live defect. Same rationale
-//               and the same path-prefix-skip mechanism as scripts/checks/
+//               not living documents that track the current tree, so an invocation named in one
+//               that has since been renamed or removed is not a live defect. This repo's own
+//               SPK-03 (skill invocation spike) stub names, "spike-echo" and "spike-status",
+//               are exactly this shape: probe skills that never shipped and never will, named
+//               only inside dated ADR evidence sections. Same rationale and the same
+//               path-prefix-skip mechanism as scripts/checks/check-skill-cli-targets.mjs and
 //               check-component-counts.mjs's HISTORICAL_RECORD_PREFIXES.
-// why:          F-CI-07 (dispatcher and CLI-wrapper skills uncovered) - nothing previously
-//               asserted that a CLI-wrapper skill's named routing target is a real, shipped
-//               file, so a typo'd or renamed CLI reference would ship silently and surface only
-//               as a runtime failure for an author. This is the generic, reusable form of that
-//               finding's fix; it was written to close the gap for status-dashboard's
-//               bin/ns-status reference, and it applies to every other skill in the same scan
-//               scope for free, at no extra cost, because the mechanism does not special-case
-//               any one skill. The scan scope was widened from skills/**/SKILL.md only to every
-//               shipped Markdown location - PF-22 (checker coverage shapes) widening 1 - because
-//               the original scope missed a broken bin/ns-<name> reference anywhere else in the
-//               tree: an agent's own prose, a reference doc, a fixture note, a scaffold
-//               template, or a root-level doc could name a stale routing target with nothing to
-//               catch it, the exact same defect class this checker already catches inside a
-//               SKILL.md file.
-// exit taxonomy: 0 = every referenced CLI target resolves; 1 = named finding(s) (a document
-//               names a bin/ns-<name> target that does not exist under bin/); 2 = operational
-//               error (zero files matched the scan scope, which means a broken checkout or a
-//               resolution bug, not a clean pass).
-// used-by:      .github/workflows/tier-a.yml, the "Skill CLI routing targets" step.
+// why:          PF-09 (revise-pass phantom): a shipped example document told a reader to run
+//               `/nonfiction-studio:revise-pass`, an invocation that had never existed as a
+//               skill; nothing machine-checked that a document's own advertised invocation
+//               actually resolves to something shipped. PF-23 (stale version literal) drew the
+//               general lesson this checker applies here: shipped prose that restates a fact a
+//               machine could verify instead - here, "does skills/<name>/ exist" - needs actual
+//               machinery behind it, not human vigilance re-applied at the next audit. This
+//               closes F-CI-07 (dispatcher and CLI-wrapper skills uncovered)'s remaining half:
+//               check-skill-cli-targets.mjs already covers a CLI-wrapper skill's own
+//               bin/ns-<name> routing target; this checker covers the other named-invocation
+//               shape shipped prose uses, the "/nonfiction-studio:<name>" form an author actually
+//               types.
+// exit taxonomy: 0 = every advertised invocation resolves; 1 = named finding(s) (a document
+//               advertises "/nonfiction-studio:<name>" for a <name> with no skills/<name>/
+//               directory shipped); 2 = operational error (zero files matched the scan scope,
+//               which means a broken checkout or a resolution bug, not a clean pass).
+// used-by:      .github/workflows/tier-a.yml, the "Advertised invocations" step.
 
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -50,13 +45,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, '..', '..');
 
-const PREFIX = '[check-skill-cli-targets]';
-const BIN_DIR = join(REPO_ROOT, 'bin');
+const PREFIX = '[check-advertised-invocations]';
+const SKILLS_DIR = join(REPO_ROOT, 'skills');
 
 // ---------------------------------------------------------------------------
 // Scan scope: every .md file under agents/, docs/, examples/, skills/,
 // templates/, plus root-level .md files, except docs/adr/ and docs/gates/
-// (dated historical records - see header comment).
+// (dated historical records - see header comment). Identical shape to
+// scripts/checks/check-skill-cli-targets.mjs's own scan scope.
 // ---------------------------------------------------------------------------
 
 const SCAN_DIR_PREFIXES = ['agents/', 'docs/', 'examples/', 'skills/', 'templates/'];
@@ -76,12 +72,12 @@ function inScope(rel) {
 // ---------------------------------------------------------------------------
 // Tracked-file discovery (git ls-files), with a plain filesystem-walk
 // fallback when git is unavailable or REPO_ROOT is not a git repository -
-// mirrors scripts/checks/check-plugin-root.mjs and check-workspace-refs.mjs,
-// so a temp clone with no .git present (the standard fixture shape the
-// companion test file uses) still scans correctly in degraded mode. The
-// fallback walk mirrors check-component-counts.mjs's own two-part shape: a
-// recursive walk of each scan-prefix directory, plus a separate, non-
-// recursive pass over root-level files only.
+// mirrors scripts/checks/check-skill-cli-targets.mjs, so a temp clone with
+// no .git present (the standard fixture shape the companion test file uses)
+// still scans correctly in degraded mode. The fallback walk mirrors
+// check-component-counts.mjs's own two-part shape: a recursive walk of each
+// scan-prefix directory, plus a separate, non-recursive pass over
+// root-level files only.
 // ---------------------------------------------------------------------------
 
 function getGitTrackedFiles(repoRoot) {
@@ -163,14 +159,25 @@ if (filesToScan.length === 0) {
 }
 
 // ---------------------------------------------------------------------------
-// Bin-target reference detection: "bin/ns-<name>", the same prefix
-// check-plugin-root.mjs's RELATIVE_BIN_RE anchors on. The character class
-// stops at the first character that cannot appear in a CLI basename (a
-// closing quote, backtick, or ".cmd" suffix all fall outside it), so a
-// trailing ".cmd" is never folded into the captured name.
+// Advertised-invocation detection: the literal namespaced slash-invocation
+// form "/nonfiction-studio:<name>" this plugin's own docs teach an author to
+// type. A resolvable <name> must exist as a directory under skills/; a bare
+// "nonfiction-studio:<name>" mention with no leading slash, or any other
+// spelling, is out of scope by construction, since the regex anchors on the
+// literal leading "/".
 // ---------------------------------------------------------------------------
 
-const BIN_TARGET_RE = /bin\/(ns-[a-z0-9][a-z0-9-]*)/g;
+const ADVERTISED_INVOCATION_RE = /\/nonfiction-studio:([a-z0-9][a-z0-9-]*)/g;
+
+function skillDirExists(name) {
+  const dir = join(SKILLS_DIR, name);
+  if (!existsSync(dir)) return false;
+  try {
+    return statSync(dir).isDirectory();
+  } catch {
+    return false;
+  }
+}
 
 const findings = [];
 
@@ -187,18 +194,17 @@ for (const rel of filesToScan) {
   const lines = text.split('\n');
   for (let li = 0; li < lines.length; li++) {
     const line = lines[li];
-    BIN_TARGET_RE.lastIndex = 0;
+    ADVERTISED_INVOCATION_RE.lastIndex = 0;
     let m;
-    while ((m = BIN_TARGET_RE.exec(line)) !== null) {
-      const cliName = m[1];
-      const targetPath = join(BIN_DIR, cliName);
-      if (!existsSync(targetPath)) {
+    while ((m = ADVERTISED_INVOCATION_RE.exec(line)) !== null) {
+      const name = m[1];
+      if (!skillDirExists(name)) {
         findings.push(
-          rel + ':' + (li + 1) + ': routing target "bin/' + cliName + '" does not exist - ' +
-          'this document names a CLI that is not shipped under bin/'
+          rel + ':' + (li + 1) + ': advertised invocation "/nonfiction-studio:' + name + '" does ' +
+          'not resolve - no skills/' + name + '/ directory is shipped'
         );
       }
-      if (m.index === BIN_TARGET_RE.lastIndex) BIN_TARGET_RE.lastIndex++;
+      if (m.index === ADVERTISED_INVOCATION_RE.lastIndex) ADVERTISED_INVOCATION_RE.lastIndex++;
     }
   }
 }
@@ -214,7 +220,7 @@ if (degradedReason) {
 }
 
 if (findings.length === 0) {
-  process.stdout.write(PREFIX + ' pass: ' + filesToScan.length + ' file(s) checked, every bin/ns-<name> routing target resolves to a shipped CLI\n');
+  process.stdout.write(PREFIX + ' pass: ' + filesToScan.length + ' file(s) checked, every advertised /nonfiction-studio:<name> invocation resolves to a shipped skill\n');
   process.exit(0);
 } else {
   for (const f of findings) {

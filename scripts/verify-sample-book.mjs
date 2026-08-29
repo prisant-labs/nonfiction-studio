@@ -5,6 +5,7 @@
 //   2. Marker-to-ledger resolution (every [claim: EV-nnnn] in chapters has a ledger entry)
 //   3. Ledger-to-SRC resolution (every source: field resolves; zero orphaned SRC records)
 // Exits 0 on all-pass, 1 on any failure.
+// used-by:      runs as a Tier A step (wired into .github/workflows/tier-a.yml, step "Sample book integrity")
 
 import { readFileSync, existsSync, readdirSync } from "fs";
 import { join } from "path";

@@ -6,12 +6,18 @@
 //               ANTHROPIC_API_KEY class (waivable only via scripts/self-sufficiency-exceptions.json)
 //               and the non-Anthropic provider-key class (never waivable) both in the
 //               pre-existing scan scope and in examples/, which F7 (scan-set blind spots) added
-//               to the scanned set; and proves the narrowed carve-out still exempts raw network
+//               to the scanned set; proves the narrowed carve-out still exempts raw network
 //               calls under examples/ (the carve-out that was, and remains, actually justified by
-//               "a sample book legitimately contains prose about sources and URLs").
+//               "a sample book legitimately contains prose about sources and URLs"); and proves
+//               the doc-misleading-phrase class (class 5) survives paraphrase without
+//               false-positiving on this repo's own negated self-sufficiency guarantees -
+//               PF-22 (checker coverage shapes) widening 3.
 // why:          F6 (checker negative tests) - "a checker that cannot fail is not a checker";
 //               F7 (scan-set blind spots) - examples/ needs a test proving it is genuinely
-//               scanned for provider-key patterns now, not just declared scanned.
+//               scanned for provider-key patterns now, not just declared scanned; PF-22 (checker
+//               coverage shapes) widening 3 - five literal phrases catch nothing once an author
+//               paraphrases them, and a naive widening would flag this repo's own README.md
+//               guarantees that it needs none of what class 5 forbids.
 // runner:       node --test "tests/checks/*.test.mjs"
 
 import { test, after } from 'node:test';
@@ -54,6 +60,9 @@ const WATCHED_LIVE_PATHS = [
   'scripts/_f6-planted-network-call.mjs',
   'examples/_f6-planted-openai-key.md',
   'examples/_f6-planted-network-mention.md',
+  'docs/_f6-planted-misleading-flag.md',
+  'docs/_f6-planted-misleading-pass.md',
+  'docs/_f6-planted-misleading-known-limitation.md',
 ];
 
 const beforeWatchedSnapshot = snapshotPaths(WATCHED_LIVE_PATHS);
@@ -171,6 +180,143 @@ test('widened scope: a raw network call planted under examples/ remains exempt (
     const result = runClonedChecker(root, SCRIPT);
 
     assert.equal(result.status, 0, 'network patterns must remain exempt under examples/; got: ' + result.combined);
+  } finally {
+    cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Class 5 (doc-misleading phrases): paraphrase survival and negation guard,
+// PF-22 (checker coverage shapes) widening 3. The five literal phrases were
+// replaced by pattern classes (requirement-of-credential, paid-service) plus
+// a negation guard, so this table proves three things at once: the five
+// original phrases still catch (regression), new paraphrases of them catch
+// too, and a negated clause, including this repo's own real README.md:332
+// guarantee, is not flagged as the thing it denies. Two clones, not a
+// mixed one: a shared clone would let a should-pass line hide inside a file
+// that also contains should-flag lines, so a per-file exit-code assertion
+// would pass even if the passing lines were never actually reachable by the
+// checker's docs/** scope. Two dedicated files, one all-should-flag and one
+// all-should-pass, make the exit code itself the assertion.
+// ---------------------------------------------------------------------------
+
+const MISLEADING_FLAG_CASES = [
+  { label: 'original: requires an api key', text: 'This tool requires an API key to function.' },
+  { label: 'original: you must set your api key', text: 'You must set your API key before running this.' },
+  { label: 'original: sign up for a paid', text: 'Sign up for a paid plan to unlock this feature.' },
+  { label: 'original: purchase a license', text: 'You must purchase a license to continue.' },
+  { label: 'original: subscription is required', text: 'A subscription is required for full access.' },
+  { label: 'paraphrase: an API key is required', text: 'An API key is required to use this tool.' },
+  { label: 'paraphrase: you need an API key', text: 'You need an API key to proceed.' },
+  { label: 'paraphrase: you will need an access token', text: 'You will need an access token to authenticate.' },
+  { label: 'paraphrase: requires a paid subscription', text: 'This feature requires a paid subscription.' },
+  { label: 'paraphrase: must purchase a license', text: 'You must purchase a license for commercial use.' },
+  { label: 'paraphrase: sign up for a paid plan', text: 'Sign up for a paid plan to continue.' },
+];
+
+// Built via fromCharCode, not typed literally, so this file's own tracked
+// source stays plain ASCII (house style; see the contraction cases below).
+const RIGHT_SINGLE_QUOTE = String.fromCharCode(0x2019);
+
+const MISLEADING_PASS_CASES = [
+  { label: 'negation: requires no API key', text: 'This tool requires no API key.' },
+  { label: 'negation: no API key is required', text: 'No API key is required to use this tool.' },
+  { label: 'negation: without an API key', text: 'You can run this without an API key.' },
+  { label: 'negation: never requires a credential', text: 'This plugin never requires a credential.' },
+  { label: 'negation: zero API keys needed', text: 'Zero API keys needed to get started.' },
+  { label: 'negation: does not require an API key (standalone "not")', text: 'This tool does not require an API key.' },
+  {
+    label: 'negation: none require a separate API key (real README.md:332 clause)',
+    text: 'None of them call a model API directly, and none require a separate API key, account, or paid service.',
+  },
+  // Contraction-aware negation (fix wave 1, finding 1): JS's \b splits "don't"
+  // into "don" + "t", so a bare \bnot\b never matches inside a contraction.
+  // Both a straight apostrophe (U+0027) and the typographic apostrophe
+  // (built via String.fromCharCode(0x2019) rather than typed literally, so
+  // this file's own tracked source stays plain ASCII - the same U+2019 a
+  // pasted-from-Word or smart-quoted README sentence would actually carry)
+  // must negate correctly.
+  { label: 'negation: contraction "don\'t" (straight apostrophe)', text: "You don't need an API key for this." },
+  {
+    label: 'negation: contraction "doesn" + U+2019 + "t" (typographic apostrophe)',
+    text: 'This tool doesn' + RIGHT_SINGLE_QUOTE + 't require an API key.',
+  },
+];
+
+// Known, accepted limitation of the proximity-window negation guard (fix wave
+// 1, finding 2): the guard checks whether a negation word merely CO-OCCURS
+// within a bounded window before a match, not whether it actually negates
+// the matched clause. "Not sure why, but this requires an API key to work."
+// asserts the requirement is true; "Not" negates nothing about it, yet it
+// sits only 23 characters before the match, inside the 25-character
+// lookbehind window, so the finding is wrongly suppressed. The brief
+// explicitly authorizes a proximity-window mechanism over real clause
+// parsing, so this is not fixed; it is pinned here so a future change to the
+// window size or the negation-word set trips this named assertion instead of
+// silently changing behavior in either direction.
+const MISLEADING_KNOWN_LIMITATION_CASES = [
+  {
+    label: 'known limitation: unrelated "Not" inside the lookbehind window over-suppresses',
+    text: 'Not sure why, but this requires an API key to work.',
+  },
+];
+
+test('doc-misleading phrase (class 5): every original phrase and paraphrase case is caught', () => {
+  const { root, cleanup } = cloneRepoToTemp('selfsuff-misleading-flag');
+  try {
+    const target = join(root, 'docs', '_f6-planted-misleading-flag.md');
+    writeFileSync(target, MISLEADING_FLAG_CASES.map((c) => c.text).join('\n') + '\n');
+
+    const result = runClonedChecker(root, SCRIPT);
+
+    assert.equal(result.status, 1, 'must exit 1; got: ' + result.combined);
+    MISLEADING_FLAG_CASES.forEach((c, i) => {
+      const lineNo = i + 1;
+      const re = new RegExp('docs/_f6-planted-misleading-flag\\.md:' + lineNo + ':.*doc-misleading phrase');
+      assert.match(result.combined, re, c.label + ' (line ' + lineNo + ') must be caught; got: ' + result.combined);
+    });
+  } finally {
+    cleanup();
+  }
+});
+
+test('doc-misleading phrase (class 5): negation guard passes every negated case, including the real README.md:332 clause', () => {
+  const { root, cleanup } = cloneRepoToTemp('selfsuff-misleading-pass');
+  try {
+    const target = join(root, 'docs', '_f6-planted-misleading-pass.md');
+    writeFileSync(target, MISLEADING_PASS_CASES.map((c) => c.text).join('\n') + '\n');
+
+    const result = runClonedChecker(root, SCRIPT);
+
+    assert.equal(result.status, 0, 'negated guarantees must not be flagged; got: ' + result.combined);
+    assert.doesNotMatch(
+      result.combined,
+      /_f6-planted-misleading-pass\.md/,
+      'no line in the negation file should be named as a finding; got: ' + result.combined
+    );
+  } finally {
+    cleanup();
+  }
+});
+
+test('doc-misleading phrase (class 5): known limitation - an unrelated negation word inside the lookbehind window over-suppresses (pinned, not fixed)', () => {
+  const { root, cleanup } = cloneRepoToTemp('selfsuff-misleading-known-limitation');
+  try {
+    const target = join(root, 'docs', '_f6-planted-misleading-known-limitation.md');
+    writeFileSync(target, MISLEADING_KNOWN_LIMITATION_CASES.map((c) => c.text).join('\n') + '\n');
+
+    const result = runClonedChecker(root, SCRIPT);
+
+    // This IS the accepted limitation, not a desired outcome: exit 0 here
+    // means the sentence was (wrongly) suppressed. If a future change to the
+    // lookbehind window or the negation-word set makes this start exiting 1,
+    // that is a real behavior change to notice and re-decide, not a bug to
+    // silently fix by adjusting this assertion.
+    assert.equal(
+      result.status,
+      0,
+      'known limitation: "Not" merely co-occurring in the window still over-suppresses; got: ' + result.combined
+    );
   } finally {
     cleanup();
   }

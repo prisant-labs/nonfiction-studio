@@ -93,28 +93,44 @@ jobs:
       - name: Workspace reference guard
         run: node scripts/checks/check-workspace-refs.mjs
 
-      # Live step 12: skill-to-CLI routing-target resolution check (F-CI-07) - asserts every
-      # bin/ns-<name> a skill names as its routing target is actually shipped under bin/. This
-      # step is this checker's only proof of its git-tracked code path: the Checkout action
-      # above leaves .git present, exactly like the plugin-root, self-sufficiency, inventory,
-      # and workspace-reference steps above it; the test suite exercises only the degraded
-      # filesystem-walk fallback, by design, since its fixtures never carry .git.
+      # Live step 12: shipped-Markdown CLI routing-target resolution check (F-CI-07) - asserts
+      # every bin/ns-<name> a shipped document names as a routing target is actually shipped
+      # under bin/, across agents/, docs/, examples/, skills/, templates/, and root-level .md
+      # files (excluding docs/adr/ and docs/gates/, dated historical records - see the
+      # checker's own header for the exemption). This step is this checker's only proof of its
+      # git-tracked code path: the Checkout action above leaves .git present, exactly like the
+      # plugin-root, self-sufficiency, inventory, and workspace-reference steps above it; the
+      # test suite exercises only the degraded filesystem-walk fallback, by design, since its
+      # fixtures never carry .git.
       - name: Skill CLI routing targets
         run: node scripts/checks/check-skill-cli-targets.mjs
 
-      # Live step 13: component-count claim checker - derives the true CLI and skill counts from
+      # Live step 13: advertised-invocation resolution check (PF-09 remedy, F-CI-07's remaining
+      # half) - asserts every "/nonfiction-studio:<name>" a shipped document advertises actually
+      # resolves to a shipped skill directory, across agents/, docs/, examples/, skills/,
+      # templates/, and root-level .md files (excluding docs/adr/ and docs/gates/, dated
+      # historical records - see the checker's own header for the exemption). Same git-tracked
+      # coverage rationale as the "Skill CLI routing targets" step above it.
+      - name: Advertised invocations
+        run: node scripts/checks/check-advertised-invocations.mjs
+
+      # Live step 14: component-count claim checker - derives the true CLI and skill counts from
       # the tree at run time and fails on a stale prose claim about either total. This step is
-      # this checker's only proof of its git-tracked code path, the same reason step 12 above
-      # exists on its own: the Checkout action leaves .git present, exactly like every standalone
-      # checker step above it; the test suite exercises the degraded filesystem-walk fallback
-      # separately, by design, since its from-scratch fixtures never carry .git.
+      # this checker's only proof of its git-tracked code path, the same reason steps 12 and 13
+      # above exist on their own: the Checkout action leaves .git present, exactly like every
+      # standalone checker step above it; the test suite exercises the degraded filesystem-walk
+      # fallback separately, by design, since its from-scratch fixtures never carry .git.
       - name: Component count claims
         run: node scripts/checks/check-component-counts.mjs
 
-      # Live step 14: engine, lib, hook, and schema unit test suites (no API key required).
+      # Live step 15: engine, lib, hook, and schema unit test suites (no API key required).
       - name: Engine unit tests
         run: node scripts/test-engines.mjs
 
-      # Live step 15: bidirectional fixture matrix with temp-clone discipline.
+      # Live step 16: bidirectional fixture matrix with temp-clone discipline.
       - name: Fixture tests
         run: node scripts/test-fixtures.mjs
+
+      # Live step 17: sample book integrity - verifies resolution through marker-to-ledger-to-SRC chains.
+      - name: Sample book integrity
+        run: node scripts/verify-sample-book.mjs

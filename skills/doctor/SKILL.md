@@ -2,7 +2,7 @@
 name: doctor
 user-invocable: true
 argument-hint: "[mode: report | migrate | packs | install-statusline]"
-description: "Fronts the read-only bin/ns-doctor engine in one Bash call per invocation: report (default) runs the full bible integrity check inventory (structure, schemas, EV/SRC grammar, orphan markers, cross-references, word-count coherence, config coercion, snapshot naming) and maps exit 0 to a clean pass, exit 1 to findings grouped by check type with counts and routing hints, exit 2 to a surfaced error never treated as a pass; migrate diagnoses schema-version status without writing; packs confirms craft-pack validity; install-statusline (OPP-P03, studio HUD) offers a one-time consented write of the main Claude Code status line into the author's own settings, never running without an explicit yes; the fix mode is Phase 2+ scope and is not available in v1. Use when the author says 'something is broken in my project,' 'my project structure looks wrong,' wants to run a diagnostic check separate from a status overview or a quality-gate run, or asks to see book status continuously in their status bar."
+description: "Fronts the read-only bin/ns-doctor engine in one Bash call per invocation: report (default) runs the full bible integrity check inventory (structure, schemas, EV/SRC grammar, orphan markers, cross-references, word-count coherence, config coercion, snapshot naming, style-profile structure) and maps exit 0 to a clean pass, exit 1 to findings grouped by check type with counts and routing hints, exit 2 to a surfaced error never treated as a pass; migrate diagnoses schema-version status without writing; packs confirms craft-pack validity; install-statusline (OPP-P03, studio HUD) writes the status line once, only after the author gives explicit consent; the fix mode is Phase 2+ scope, not available in v1. Use when the author says 'something is broken in my project,' 'my project structure looks wrong,' wants to run a diagnostic check separate from a status overview or a quality-gate run, or asks to see book status continuously in their status bar."
 when_to_use: "Use when the author types /doctor, reports unexpected structural or schema errors from other skills, studio routes here from Path 5 (Troubleshoot or get help), status-dashboard routes here on a malformed progress.json, or run-quality-gate exits 2 with an engine error. Do not invoke for normal project status overviews (use status-dashboard), quality-gate runs (use run-quality-gate), or new project setup (use init-project)."
 ---
 
@@ -20,6 +20,7 @@ Skill inputs read (by the engine via `--project=.`, in the `report`, `migrate`, 
 - `research/evidence-log.md` (EV grammar check and orphan-marker cross-reference)
 - `research/sources.md` (SRC grammar check and SRC cross-reference check)
 - `chapters/*.md` (scanned for `[claim: EV-nnnn]` markers in the orphan-marker check)
+- `context/style-profile.md` (style-profile structure and baseline-consistency check: seven required sections present and in order once populated, `Baseline reference` field completeness, agreement with `config.json`'s stylometry baseline, Exemplars path resolution; a pre-capture stub is a notice unless `config.json` already carries a baseline)
 
 In `install-statusline` mode only, the skill itself (not the engine, and not via `--project=.`)
 also reads, and conditionally writes, `~/.claude/settings.json` - a user-scope file outside any
@@ -42,7 +43,7 @@ Parse the mode argument from the supplied tokens. The default mode when no argum
   section, immediately after this Step 1).
 - **`validate`:** The `validate` argument is subsumed into `report` in v1. The full check inventory already includes all schema validation. State the following and continue with mode `report`:
 
-  > The `validate` argument is an alias for `report` in v1: the full check inventory (structure, schemas, EV/SRC grammar, orphan markers, cross-references, word-count coherence, config coercion, snapshot naming) covers all schema validation. Running `report` now.
+  > The `validate` argument is an alias for `report` in v1: the full check inventory (structure, schemas, EV/SRC grammar, orphan markers, cross-references, word-count coherence, config coercion, snapshot naming, style-profile structure) covers all schema validation. Running `report` now.
 
 - **`fix`:** State the following and halt without making any tool calls:
 
@@ -193,7 +194,7 @@ Parse stdout as JSON. Present the clean pass:
 
 > Doctor verdict: PASS. Bible integrity check complete; no issues found.
 >
-> Schema version: 2. Checks run: bible structure, progress.json schema, meta.json and config.json shape, EV grammar, SRC grammar, orphan claim markers, orphan SRC references, word-count coherence, config-coercion notice, snapshot naming.
+> Schema version: 2. Checks run: bible structure, progress.json schema, meta.json and config.json shape, EV grammar, SRC grammar, orphan claim markers, orphan SRC references, word-count coherence, config-coercion notice, snapshot naming, style-profile structure.
 >
 > The doctor wrote no files. All reads were against the committed bible tree.
 
@@ -215,6 +216,7 @@ Parse stdout as JSON. Group findings by the prefix of the `type` field (the segm
 | `src-ref` | Orphan SRC references | SRC IDs referenced in EV entries are absent from sources.md, OR SRC IDs defined in sources.md are referenced by no EV entry. Suggested next step: run `/nonfiction-studio:research-pass` or `/nonfiction-studio:fact-check-pass` to reconcile the cross-references. |
 | `coherence` | Word-count coherence | A chapter's word count in progress.json does not match the file on disk. This typically self-resolves when the PostToolBatch hook runs on the next chapter write. If the mismatch persists, check whether a manual edit bypassed the hook. |
 | `snapshot` | Snapshot naming | A file in `.studio/snapshots/` does not match the naming convention `<slug>.<YYYYMMDDTHHMMSSZ>.md`. Rename the file to conform. |
+| `style-profile` | Style profile structure | `context/style-profile.md` is missing a required section, has sections out of order, is missing a `Baseline reference` field, disagrees with `config.json`'s stylometry baseline, has a broken `Exemplars` path, or is a stub alongside an already-captured baseline. Edit the named section, field, or path directly, or re-run `/nonfiction-studio:capture-voice` to resynchronize both files. |
 
 Present the grouped findings in this order (any group with zero findings is omitted):
 

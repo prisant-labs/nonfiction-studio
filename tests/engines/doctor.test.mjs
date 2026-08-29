@@ -6,15 +6,22 @@
 //               runs (golden exit 0; unsourced-claim exit 1; config-coercion notice exit 0);
 //               additionalProperties-tolerant (banked adjudication 1: extra field passes);
 //               read-only proof; single-tokenizer proof; older-major exit 2;
-//               --migrate exit 0 when schema is current, exit 2 when incompatible (F-HK-09)
+//               --migrate exit 0 when schema is current, exit 2 when incompatible (F-HK-09);
+//               style profile structure and baseline consistency (F-CI-08, voice quality
+//               unchecked, deterministic half): stub-with-no-baseline is a notice, stub-with-
+//               baseline is a finding, all seven sections present/in-order/agreeing/resolvable
+//               produces zero findings, and each of missing-section, out-of-order,
+//               baseline-field-missing, captured/sample_count disagreement, and a broken
+//               Exemplars path is its own named finding
 // runner:       node --test tests/engines/doctor.test.mjs
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, cpSync, rmSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 
 import { runChecks, checkSchemaVersion, SUPPORTED_MAJOR } from '../../hooks/lib/doctor-engine.mjs';
 import { countWords } from '../../hooks/lib/stylometry-engine.mjs';
@@ -404,5 +411,385 @@ test('doctor-engine.mjs contains no write calls (read-only covenant)', () => {
       source.includes(pat), false,
       'doctor-engine.mjs must not contain "' + pat + '" (read-only covenant)'
     );
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Style profile structure and baseline consistency (F-CI-08, voice quality
+// unchecked, deterministic half): docs/formats/style-profile.md's seven-
+// section grammar, the pre-capture stub rule, and the two promised behaviors
+// (config.json agreement on the Baseline reference block, Exemplars path
+// resolution). Uses a temp clone of the golden fixture, mutated per scenario,
+// driving runChecks directly (the doctor engine exists "so tests can drive
+// the engine directly without CLI overhead" per bin/ns-doctor's own header).
+// ---------------------------------------------------------------------------
+
+// Read (not retype) the real pre-capture stub so this constant can never drift
+// from the shipped template's exact wording (voice-capture is the agent that
+// performs the write; capture-voice is the skill the author runs).
+const STUB_STYLE_PROFILE = readFileSync(
+  join(__dirname, '..', '..', 'templates', 'book-scaffold', 'context', 'style-profile.md'),
+  'utf8'
+);
+
+function makeTempSampleBookClone() {
+  const tempDir = mkdtempSync(join(tmpdir(), 'ns-doctor-style-profile-'));
+  cpSync(join(EXAMPLES, 'sample-book'), tempDir, { recursive: true });
+  return tempDir;
+}
+
+function readBookConfig(dir) {
+  return JSON.parse(readFileSync(join(dir, '.studio', 'config.json'), 'utf8'));
+}
+
+function writeBookConfig(dir, config) {
+  writeFileSync(join(dir, '.studio', 'config.json'), JSON.stringify(config, null, 2), 'utf8');
+}
+
+function writeBookStyleProfile(dir, content) {
+  writeFileSync(join(dir, 'context', 'style-profile.md'), content, 'utf8');
+}
+
+function removeTempClone(dir) {
+  rmSync(dir, { recursive: true, force: true });
+}
+
+// Builds a fully valid, all-seven-sections-in-order profile whose Baseline
+// reference agrees with the given config baseline. Values are read from the
+// clone's own config.json (never hardcoded), so a future re-capture of
+// sample-book cannot make these tests stale.
+function buildValidStyleProfile(baseline) {
+  return [
+    '# Style profile',
+    '',
+    '## Voice',
+    '- tone: plainspoken.',
+    '- point-of-view: second person.',
+    '- tense: present.',
+    '- register: trade non-fiction.',
+    '',
+    '## Diction',
+    '- prefer: concrete words.',
+    '- avoid: jargon.',
+    '',
+    '## Rhythm',
+    '- sentence length: short.',
+    '- paragraph length: short.',
+    '',
+    '## Do',
+    '- be direct.',
+    '',
+    '## Do not',
+    '- ramble.',
+    '',
+    '## Exemplars',
+    '- context/samples/voice-sample-01.md',
+    '',
+    '## Baseline reference',
+    '- vector: .studio/config.json -> stylometry.baseline.markers',
+    '- captured: ' + baseline.captured,
+    '- sample_count: ' + baseline.sample_count,
+    ''
+  ].join('\n');
+}
+
+function findHeadingRange(lines, heading) {
+  const startIdx = lines.findIndex(l => l.trim() === heading);
+  if (startIdx === -1) throw new Error('heading not found in test fixture content: ' + heading);
+  let endIdx = lines.length;
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    if (lines[i].trim().startsWith('## ')) { endIdx = i; break; }
+  }
+  return [startIdx, endIdx];
+}
+
+function removeSectionFromProfile(content, heading) {
+  const lines = content.split('\n');
+  const [startIdx, endIdx] = findHeadingRange(lines, heading);
+  lines.splice(startIdx, endIdx - startIdx);
+  return lines.join('\n');
+}
+
+// Swaps two section blocks (heading line through body). headingA must appear
+// before headingB in the source content.
+function swapProfileSections(content, headingA, headingB) {
+  const lines = content.split('\n');
+  const [aStart, aEnd] = findHeadingRange(lines, headingA);
+  const [bStart, bEnd] = findHeadingRange(lines, headingB);
+  if (aStart > bStart) throw new Error('expected ' + headingA + ' before ' + headingB + ' in test fixture content');
+  const blockA = lines.slice(aStart, aEnd);
+  const blockB = lines.slice(bStart, bEnd);
+  const before = lines.slice(0, aStart);
+  const between = lines.slice(aEnd, bStart);
+  const after = lines.slice(bEnd);
+  return [...before, ...blockB, ...between, ...blockA, ...after].join('\n');
+}
+
+function setBaselineField(content, field, value) {
+  const re = new RegExp('^(-\\s*' + field + ':\\s*).*$', 'm');
+  return content.replace(re, '$1' + value);
+}
+
+function removeBaselineField(content, field) {
+  const lines = content.split('\n');
+  const idx = lines.findIndex(l => new RegExp('^-\\s*' + field + ':').test(l.trim()));
+  if (idx === -1) throw new Error('field not found in test fixture content: ' + field);
+  lines.splice(idx, 1);
+  return lines.join('\n');
+}
+
+function setExemplarPath(content, newPath) {
+  return content.replace(/^-\s*context\/samples\/voice-sample-01\.md\s*$/m, '- ' + newPath);
+}
+
+test('style profile: stub with no config baseline is a notice, not a finding; CLI exit stays 0', () => {
+  const dir = makeTempSampleBookClone();
+  try {
+    writeBookStyleProfile(dir, STUB_STYLE_PROFILE);
+    const config = readBookConfig(dir);
+    config.stylometry.baseline = null;
+    writeBookConfig(dir, config);
+
+    const { findings, notices } = runChecks(dir);
+    const styleFindings = findings.filter(f => f.type.startsWith('style-profile.'));
+    assert.equal(styleFindings.length, 0,
+      'stub with no config baseline must not produce a finding; got: ' + JSON.stringify(styleFindings));
+    const notCaptured = notices.filter(n => n.type === 'style-profile.not-captured');
+    assert.equal(notCaptured.length, 1, 'expected exactly one style-profile.not-captured notice');
+    assert.equal(notCaptured[0].message, 'style profile not yet captured; run capture-voice');
+
+    const r = spawnDoctor(['--report', '--project=' + dir]);
+    assert.equal(r.status, 0,
+      'exit stays 0 on an otherwise-clean pre-capture book; stdout: ' + r.stdout + ' stderr: ' + r.stderr);
+  } finally {
+    removeTempClone(dir);
+  }
+});
+
+test('style profile: stub with a config baseline already present is a finding (inconsistent state)', () => {
+  const dir = makeTempSampleBookClone();
+  try {
+    writeBookStyleProfile(dir, STUB_STYLE_PROFILE);
+    // config.json is left as the golden fixture's own: it already carries a real
+    // stylometry baseline, so a stub profile alongside it is inconsistent state.
+
+    const { findings } = runChecks(dir);
+    const stubFindings = findings.filter(f => f.type === 'style-profile.stub-with-baseline');
+    assert.equal(stubFindings.length, 1,
+      'stub alongside a config baseline must be a finding; got: ' + JSON.stringify(findings));
+
+    const r = spawnDoctor(['--report', '--project=' + dir]);
+    assert.equal(r.status, 1, 'exit should be 1: baseline without a captured profile is inconsistent state');
+  } finally {
+    removeTempClone(dir);
+  }
+});
+
+test('style profile: all seven sections in order, agreeing config, resolvable exemplar => no findings', () => {
+  const dir = makeTempSampleBookClone();
+  try {
+    const config = readBookConfig(dir);
+    writeBookStyleProfile(dir, buildValidStyleProfile(config.stylometry.baseline));
+
+    const { findings } = runChecks(dir);
+    const styleFindings = findings.filter(f => f.type.startsWith('style-profile.'));
+    assert.equal(styleFindings.length, 0,
+      'valid profile must produce no style-profile findings; got: ' + JSON.stringify(styleFindings));
+  } finally {
+    removeTempClone(dir);
+  }
+});
+
+// Three representative missing-section cases: the first section, a
+// negative-directive section whose heading is a substring of another
+// ("## Do" vs "## Do not"), and the last section (which also carries fields).
+for (const heading of ['## Voice', '## Do not', '## Baseline reference']) {
+  test('style profile: missing section "' + heading + '" is a finding', () => {
+    const dir = makeTempSampleBookClone();
+    try {
+      const config = readBookConfig(dir);
+      const content = removeSectionFromProfile(buildValidStyleProfile(config.stylometry.baseline), heading);
+      writeBookStyleProfile(dir, content);
+
+      const { findings } = runChecks(dir);
+      const missing = findings.filter(
+        f => f.type === 'style-profile.missing-section' && f.message.includes('"' + heading + '"')
+      );
+      assert.equal(missing.length, 1,
+        'expected a missing-section finding naming ' + heading + '; got: ' + JSON.stringify(findings));
+    } finally {
+      removeTempClone(dir);
+    }
+  });
+}
+
+test('style profile: sections present but out of order is a finding', () => {
+  const dir = makeTempSampleBookClone();
+  try {
+    const config = readBookConfig(dir);
+    const content = swapProfileSections(
+      buildValidStyleProfile(config.stylometry.baseline), '## Voice', '## Diction'
+    );
+    writeBookStyleProfile(dir, content);
+
+    const { findings } = runChecks(dir);
+    const orderFindings = findings.filter(f => f.type === 'style-profile.section-order');
+    assert.equal(orderFindings.length, 1,
+      'expected a section-order finding; got: ' + JSON.stringify(findings));
+    const missingFindings = findings.filter(f => f.type === 'style-profile.missing-section');
+    assert.equal(missingFindings.length, 0, 'reordering must not also report a missing section');
+  } finally {
+    removeTempClone(dir);
+  }
+});
+
+test('style profile: Baseline reference missing the "captured" field is a finding', () => {
+  const dir = makeTempSampleBookClone();
+  try {
+    const config = readBookConfig(dir);
+    const content = removeBaselineField(buildValidStyleProfile(config.stylometry.baseline), 'captured');
+    writeBookStyleProfile(dir, content);
+
+    const { findings } = runChecks(dir);
+    const fieldFindings = findings.filter(
+      f => f.type === 'style-profile.baseline-field-missing' && f.message.includes('"captured"')
+    );
+    assert.equal(fieldFindings.length, 1,
+      'expected a baseline-field-missing finding for captured; got: ' + JSON.stringify(findings));
+  } finally {
+    removeTempClone(dir);
+  }
+});
+
+test('style profile: captured disagreeing with config.json is a finding', () => {
+  const dir = makeTempSampleBookClone();
+  try {
+    const config = readBookConfig(dir);
+    const content = setBaselineField(
+      buildValidStyleProfile(config.stylometry.baseline), 'captured', '2099-01-01T00:00:00Z'
+    );
+    writeBookStyleProfile(dir, content);
+
+    const { findings } = runChecks(dir);
+    const disagreeFindings = findings.filter(f => f.type === 'style-profile.captured-disagreement');
+    assert.equal(disagreeFindings.length, 1,
+      'expected a captured-disagreement finding; got: ' + JSON.stringify(findings));
+    assert.ok(disagreeFindings[0].message.includes('2099-01-01T00:00:00Z'));
+    assert.ok(disagreeFindings[0].message.includes(config.stylometry.baseline.captured));
+  } finally {
+    removeTempClone(dir);
+  }
+});
+
+test('style profile: sample_count disagreeing with config.json is a finding', () => {
+  const dir = makeTempSampleBookClone();
+  try {
+    const config = readBookConfig(dir);
+    const wrongCount = config.stylometry.baseline.sample_count + 997;
+    const content = setBaselineField(
+      buildValidStyleProfile(config.stylometry.baseline), 'sample_count', String(wrongCount)
+    );
+    writeBookStyleProfile(dir, content);
+
+    const { findings } = runChecks(dir);
+    const disagreeFindings = findings.filter(f => f.type === 'style-profile.sample-count-disagreement');
+    assert.equal(disagreeFindings.length, 1,
+      'expected a sample-count-disagreement finding; got: ' + JSON.stringify(findings));
+    assert.ok(disagreeFindings[0].message.includes(String(wrongCount)));
+  } finally {
+    removeTempClone(dir);
+  }
+});
+
+test('style profile: broken Exemplars path is a finding', () => {
+  const dir = makeTempSampleBookClone();
+  try {
+    const config = readBookConfig(dir);
+    const content = setExemplarPath(
+      buildValidStyleProfile(config.stylometry.baseline), 'context/samples/does-not-exist.md'
+    );
+    writeBookStyleProfile(dir, content);
+
+    const { findings } = runChecks(dir);
+    const brokenFindings = findings.filter(f => f.type === 'style-profile.broken-exemplar-path');
+    assert.equal(brokenFindings.length, 1,
+      'expected a broken-exemplar-path finding; got: ' + JSON.stringify(findings));
+    assert.ok(brokenFindings[0].message.includes('does-not-exist.md'));
+  } finally {
+    removeTempClone(dir);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Fix round 2 (whole-branch review, Critical): a config baseline present but
+// missing captured/sample_count (voice-capture's current write contract sets
+// only markers/marker_set_version, per agents/voice-capture.md) must not
+// false-positive a "disagrees with ... undefined" finding, and an empty
+// baseline object ({}) must not count as a captured baseline for the stub
+// rule either.
+// ---------------------------------------------------------------------------
+
+test('style profile: config baseline missing captured/sample_count does not false-positive a disagreement', () => {
+  const dir = makeTempSampleBookClone();
+  try {
+    const config = readBookConfig(dir);
+    // Simulate the real, current write contract: only markers/marker_set_version,
+    // no captured/sample_count.
+    config.stylometry.baseline = {
+      marker_set_version: config.stylometry.baseline.marker_set_version,
+      markers: config.stylometry.baseline.markers
+    };
+    writeBookConfig(dir, config);
+
+    // The profile still declares its own captured/sample_count (conforming to the
+    // format's required fields); there is nothing in config to disagree with.
+    const content = buildValidStyleProfile({ captured: '2026-08-10T09:00:00Z', sample_count: 2 });
+    writeBookStyleProfile(dir, content);
+
+    const { findings } = runChecks(dir);
+    const disagreeFindings = findings.filter(
+      f => f.type === 'style-profile.captured-disagreement' ||
+           f.type === 'style-profile.sample-count-disagreement'
+    );
+    assert.equal(disagreeFindings.length, 0,
+      'no disagreement finding when config baseline lacks captured/sample_count; got: ' +
+      JSON.stringify(disagreeFindings));
+    // The exact bug the review reproduced: a finding message literally containing "undefined".
+    for (const f of findings) {
+      assert.ok(!f.message.includes('undefined'),
+        'no finding message may ever contain the literal "undefined": ' + f.message);
+    }
+
+    const r = spawnDoctor(['--report', '--project=' + dir]);
+    assert.equal(r.status, 0,
+      'exit stays 0: a config baseline missing the temporal fields is not itself a defect; ' +
+      'stdout: ' + r.stdout + ' stderr: ' + r.stderr);
+  } finally {
+    removeTempClone(dir);
+  }
+});
+
+test('style profile: an empty config baseline object ({}) counts as no baseline; stub is a notice', () => {
+  const dir = makeTempSampleBookClone();
+  try {
+    writeBookStyleProfile(dir, STUB_STYLE_PROFILE);
+    const config = readBookConfig(dir);
+    config.stylometry.baseline = {};
+    writeBookConfig(dir, config);
+
+    const { findings, notices } = runChecks(dir);
+    const stubFindings = findings.filter(f => f.type === 'style-profile.stub-with-baseline');
+    assert.equal(stubFindings.length, 0,
+      'an empty baseline object must not trigger stub-with-baseline; got: ' + JSON.stringify(stubFindings));
+    const notCaptured = notices.filter(n => n.type === 'style-profile.not-captured');
+    assert.equal(notCaptured.length, 1,
+      'expected the not-captured notice instead; notices: ' + JSON.stringify(notices));
+
+    const r = spawnDoctor(['--report', '--project=' + dir]);
+    assert.equal(r.status, 0,
+      'exit stays 0 on a pre-capture stub with an empty (field-less) baseline object; ' +
+      'stdout: ' + r.stdout + ' stderr: ' + r.stderr);
+  } finally {
+    removeTempClone(dir);
   }
 });

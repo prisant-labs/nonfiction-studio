@@ -2,7 +2,10 @@
 // what-it-does: runs every check in the TSK-028 check inventory:
 //               structure, progress.json schema, meta/config shapes, EV/SRC grammar,
 //               orphan claim markers, orphan SRC refs, word-count coherence, config
-//               coercion notice, snapshot naming conformance, and schema-version check
+//               coercion notice, snapshot naming conformance, schema-version check, and
+//               style-profile structure and baseline-consistency (F-CI-08, voice quality
+//               unchecked, deterministic half: closes docs/formats/style-profile.md's two
+//               previously-unbuilt promises, config agreement and Exemplars path resolution)
 // why:          one engine module isolates all logic for testing without CLI overhead;
 //               integrates ledger.mjs parsers, claims-engine.mjs marker scan, and
 //               stylometry-engine.mjs word counter as the single word-counting authority
@@ -263,6 +266,263 @@ export function checkWordCountCoherence(root) {
   return findings;
 }
 
+// ---------------------------------------------------------------------------
+// Style profile structure and baseline-consistency check (F-CI-08, voice
+// quality unchecked, deterministic half). Validates context/style-profile.md
+// against the seven-section grammar in docs/formats/style-profile.md, honors
+// the pre-capture stub state, and closes the format doc's two previously
+// unbuilt promises: config.json agreement on the Baseline reference block,
+// and Exemplars path resolution. Parsing is tolerant on purpose: a heading
+// scan plus a small field-block parse, not a full Markdown parser.
+// ---------------------------------------------------------------------------
+
+const STYLE_PROFILE_SECTIONS = [
+  '## Voice',
+  '## Diction',
+  '## Rhythm',
+  '## Do',
+  '## Do not',
+  '## Exemplars',
+  '## Baseline reference',
+];
+
+const STYLE_PROFILE_BASELINE_FIELDS = ['vector', 'captured', 'sample_count'];
+
+const STYLE_PROFILE_REL_PATH = 'context/style-profile.md';
+
+// Matches the top-level heading only when it is the sole content on its own
+// line (a real H1, not a substring inside other text).
+const STYLE_PROFILE_H1_RE = /^# Style profile\s*$/m;
+
+function styleProfileExtractH2Headings(text) {
+  return text
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line.startsWith('## '));
+}
+
+// Returns the body lines of the named H2 section (everything after the
+// heading line up to, but not including, the next '## ' heading or EOF), or
+// null when the heading itself is absent (callers skip field/path checks in
+// that case; the missing-section finding above already covers it).
+function styleProfileSectionBody(text, heading) {
+  const lines = text.split(/\r?\n/);
+  const startIdx = lines.findIndex(line => line.trim() === heading);
+  if (startIdx === -1) return null;
+  const body = [];
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    if (lines[i].trim().startsWith('## ')) break;
+    body.push(lines[i]);
+  }
+  return body;
+}
+
+// Parses "- field: value" bullet lines into a { field: value } map. Tolerant:
+// non-matching lines (blank lines, prose) are simply ignored.
+function styleProfileParseFieldBlock(bodyLines) {
+  const fields = {};
+  const re = /^-\s*([A-Za-z_]+):\s*(.*)$/;
+  for (const raw of bodyLines) {
+    const m = re.exec(raw.trim());
+    if (m) fields[m[1]] = m[2].trim();
+  }
+  return fields;
+}
+
+// A stylometry.baseline object counts as an actual captured baseline only if
+// it carries at least one of the fields a real capture run would set. Without
+// this, `stylometry.baseline: {}` (present but empty) would read as "config
+// carries a baseline" for the stub rule below, when nothing has actually been
+// captured. captured/sample_count are the fields this check itself compares;
+// markers/marker_set_version are included too because voice-capture's current
+// write contract (agents/voice-capture.md) sets only those two, not
+// captured/sample_count - a real, current baseline that has never carried the
+// two temporal fields must still count as substantive.
+function styleProfileConfigBaselineHasSubstance(baseline) {
+  return baseline.captured !== undefined ||
+    baseline.sample_count !== undefined ||
+    baseline.markers !== undefined ||
+    baseline.marker_set_version !== undefined;
+}
+
+// Parses "- <path>" bullet lines into a plain array of trimmed path strings.
+function styleProfileParseBulletPaths(bodyLines) {
+  const paths = [];
+  for (const raw of bodyLines) {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('- ')) {
+      paths.push(trimmed.slice(2).trim());
+    }
+  }
+  return paths;
+}
+
+function checkStyleProfile(root, config, findings, notices) {
+  const absPath = join(root, 'context', 'style-profile.md');
+  // Absence is already a structure.missing-path finding (REQUIRED_PATHS); this
+  // check only validates CONTENT, so it has nothing to do when the file is gone.
+  if (!existsSync(absPath)) return;
+
+  let text;
+  try {
+    text = readFileSync(absPath, 'utf8');
+  } catch {
+    return;
+  }
+
+  const rawConfigBaseline =
+    config && config.stylometry && config.stylometry.baseline &&
+    typeof config.stylometry.baseline === 'object' && config.stylometry.baseline !== null
+      ? config.stylometry.baseline
+      : null;
+  // An empty (or field-less) baseline object is treated as no baseline at
+  // all: nothing has actually been captured yet, so it must not trip the
+  // stub-with-baseline finding below (see styleProfileConfigBaselineHasSubstance).
+  const configBaseline =
+    rawConfigBaseline && styleProfileConfigBaselineHasSubstance(rawConfigBaseline)
+      ? rawConfigBaseline
+      : null;
+
+  const hasH1 = STYLE_PROFILE_H1_RE.test(text);
+
+  if (!hasH1) {
+    // Pre-capture stub state (e.g. templates/book-scaffold's HTML-comment
+    // stub): legitimate on its own, but only when config.json has not already
+    // captured a baseline. capture-voice writes the profile and the baseline
+    // together, so a baseline with no captured profile is inconsistent state.
+    if (configBaseline) {
+      findings.push({
+        type: 'style-profile.stub-with-baseline',
+        path: STYLE_PROFILE_REL_PATH,
+        message:
+          STYLE_PROFILE_REL_PATH + ' has no "# Style profile" heading (an uncaptured stub) but ' +
+          '.studio/config.json already carries a stylometry baseline; capture-voice writes both ' +
+          'together, so a baseline with no captured profile is inconsistent state. Run capture-voice ' +
+          'to write the profile, or clear the baseline.'
+      });
+    } else {
+      notices.push({
+        type: 'style-profile.not-captured',
+        path: STYLE_PROFILE_REL_PATH,
+        message: 'style profile not yet captured; run capture-voice'
+      });
+    }
+    return;
+  }
+
+  // ---- Populated state: seven required sections, present and in order -----
+  const headings = styleProfileExtractH2Headings(text);
+  const presentSet = new Set(headings);
+
+  for (const section of STYLE_PROFILE_SECTIONS) {
+    if (!presentSet.has(section)) {
+      findings.push({
+        type: 'style-profile.missing-section',
+        path: STYLE_PROFILE_REL_PATH,
+        message: STYLE_PROFILE_REL_PATH + ' is missing required section "' + section + '"'
+      });
+    }
+  }
+
+  // Order check, restricted to whichever expected sections are actually
+  // present (a missing section is already reported above; this only catches
+  // sections that exist but are sequenced wrong relative to each other).
+  const seen = new Set();
+  const actualOrder = [];
+  for (const h of headings) {
+    if (STYLE_PROFILE_SECTIONS.includes(h) && !seen.has(h)) {
+      seen.add(h);
+      actualOrder.push(h);
+    }
+  }
+  const expectedOrder = STYLE_PROFILE_SECTIONS.filter(s => seen.has(s));
+  if (actualOrder.join('|') !== expectedOrder.join('|')) {
+    findings.push({
+      type: 'style-profile.section-order',
+      path: STYLE_PROFILE_REL_PATH,
+      message:
+        STYLE_PROFILE_REL_PATH + ' sections are out of order: expected order ' +
+        expectedOrder.join(', ') + ' but found ' + actualOrder.join(', ')
+    });
+  }
+
+  // ---- Baseline reference: required fields, then config agreement ---------
+  const baselineBody = styleProfileSectionBody(text, '## Baseline reference');
+  if (baselineBody !== null) {
+    const baselineFields = styleProfileParseFieldBlock(baselineBody);
+
+    for (const field of STYLE_PROFILE_BASELINE_FIELDS) {
+      if (baselineFields[field] === undefined || baselineFields[field] === '') {
+        findings.push({
+          type: 'style-profile.baseline-field-missing',
+          path: STYLE_PROFILE_REL_PATH,
+          message:
+            STYLE_PROFILE_REL_PATH + ' Baseline reference section is missing required field "' +
+            field + '"'
+        });
+      }
+    }
+
+    // Config agreement (the format doc's first promised behavior): only
+    // checked when config.json actually carries a baseline to compare against,
+    // AND only per-field when config's own baseline actually carries that
+    // field. voice-capture's current write contract (agents/voice-capture.md)
+    // sets only markers/marker_set_version, not captured/sample_count, so a
+    // real, current baseline commonly has neither; comparing against an
+    // absent config field would otherwise report a false "disagrees with ...
+    // undefined" finding on an otherwise-correct profile.
+    if (configBaseline) {
+      if (configBaseline.captured !== undefined &&
+          baselineFields.captured !== undefined &&
+          String(baselineFields.captured) !== String(configBaseline.captured)) {
+        findings.push({
+          type: 'style-profile.captured-disagreement',
+          path: STYLE_PROFILE_REL_PATH,
+          message:
+            STYLE_PROFILE_REL_PATH + ' Baseline reference captured "' + baselineFields.captured +
+            '" disagrees with .studio/config.json stylometry.baseline.captured "' +
+            configBaseline.captured + '"'
+        });
+      }
+      if (configBaseline.sample_count !== undefined && baselineFields.sample_count !== undefined) {
+        const profileCount = Number(baselineFields.sample_count);
+        if (profileCount !== configBaseline.sample_count) {
+          findings.push({
+            type: 'style-profile.sample-count-disagreement',
+            path: STYLE_PROFILE_REL_PATH,
+            message:
+              STYLE_PROFILE_REL_PATH + ' Baseline reference sample_count "' +
+              baselineFields.sample_count + '" disagrees with .studio/config.json ' +
+              'stylometry.baseline.sample_count "' + configBaseline.sample_count + '"'
+          });
+        }
+      }
+    }
+  }
+
+  // ---- Exemplars: every listed path must resolve (the format doc's second
+  //      promised behavior) ------------------------------------------------
+  const exemplarsBody = styleProfileSectionBody(text, '## Exemplars');
+  if (exemplarsBody !== null) {
+    const exemplarPaths = styleProfileParseBulletPaths(exemplarsBody);
+    for (const p of exemplarPaths) {
+      const normalized = p.split('\\').join('/');
+      const segments = normalized.split('/').filter(Boolean);
+      if (segments.length === 0) continue;
+      const absExemplar = join(root, ...segments);
+      if (!existsSync(absExemplar)) {
+        findings.push({
+          type: 'style-profile.broken-exemplar-path',
+          path: STYLE_PROFILE_REL_PATH,
+          message:
+            STYLE_PROFILE_REL_PATH + ' Exemplars section lists "' + normalized +
+            '" but that path does not exist relative to the book root'
+        });
+      }
+    }
+  }
+}
+
 /**
  * Runs all checks in the TSK-028 check inventory against the given bible root.
  *
@@ -282,6 +542,12 @@ export function checkWordCountCoherence(root) {
  *   8. Word-count coherence (via checkWordCountCoherence; one implementation shared with gate)
  *   9. Config coercion notice (thesis_alignment mode block; REPORT only, not a finding)
  *  10. Snapshot naming conformance
+ *  11. Style profile structure and baseline consistency (context/style-profile.md; F-CI-08,
+ *      voice quality unchecked, deterministic half): seven required sections present and in
+ *      order once the profile is populated; a pre-capture stub is a NOTICE, not a finding,
+ *      unless config.json already carries a stylometry baseline (then it is a finding); the
+ *      Baseline reference block's three required fields; captured/sample_count agreement with
+ *      config.json's stylometry baseline when one exists; and Exemplars path resolution.
  *
  * @param {string} root - absolute path to the bible root
  * @returns {{ findings: object[], notices: object[] }}
@@ -615,6 +881,9 @@ export function runChecks(root) {
       }
     }
   }
+
+  // ---- 11. Style profile structure and baseline consistency ---------------
+  checkStyleProfile(root, config, findings, notices);
 
   return { findings, notices };
 }

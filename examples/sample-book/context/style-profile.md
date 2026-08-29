@@ -29,5 +29,5 @@
 
 ## Baseline reference
 - vector: .studio/config.json -> stylometry.baseline.markers
-- captured: 2026-07-18T09:00:00Z
+- captured: 2026-08-10T09:00:00Z
 - sample_count: 2

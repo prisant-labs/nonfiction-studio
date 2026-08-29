@@ -189,6 +189,115 @@ test('real-repo scope: a deliberately corrupted bin/ns-status reference in statu
 });
 
 // ---------------------------------------------------------------------------
+// Forward-growth simulation: PF-22 (checker coverage shapes) widening 1 -
+// the scan scope grew from skills/**/SKILL.md only to every git-tracked .md
+// file under agents/, docs/, examples/, skills/, templates/, plus
+// root-level .md files, except docs/adr/ and docs/gates/ (dated historical
+// records, same rationale and mechanism as check-component-counts.mjs's
+// HISTORICAL_RECORD_PREFIXES). One planted bin/ns-nonexistent reference per
+// newly scanned directory class proves each class is actually reached, and
+// one planted reference under docs/adr/ proves the exemption holds.
+// ---------------------------------------------------------------------------
+
+test('widened scope: a broken bin/ns-<name> reference under agents/ is caught', () => {
+  const { root, cleanup } = buildSyntheticRoot('widened-agents', {
+    'agents/some-agent.md': 'This agent routes through `bin/ns-nonexistent`.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 1, 'must exit 1 on a broken routing target under agents/; got: ' + result.combined);
+    assert.match(result.combined, /agents\/some-agent\.md:1:/, 'message must name the planted file and line');
+    assert.match(result.combined, /ns-nonexistent/, 'message must name the bogus CLI name verbatim');
+  } finally {
+    cleanup();
+  }
+});
+
+test('widened scope: a broken bin/ns-<name> reference under docs/ (outside docs/adr/ and docs/gates/) is caught', () => {
+  const { root, cleanup } = buildSyntheticRoot('widened-docs', {
+    'docs/reference/some-doc.md': 'This doc routes through `bin/ns-nonexistent`.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 1, 'must exit 1 on a broken routing target under docs/; got: ' + result.combined);
+    assert.match(result.combined, /docs\/reference\/some-doc\.md:1:/, 'message must name the planted file and line');
+    assert.match(result.combined, /ns-nonexistent/, 'message must name the bogus CLI name verbatim');
+  } finally {
+    cleanup();
+  }
+});
+
+test('widened scope: a broken bin/ns-<name> reference under examples/ is caught', () => {
+  const { root, cleanup } = buildSyntheticRoot('widened-examples', {
+    'examples/some-example/NOTES.md': 'This example routes through `bin/ns-nonexistent`.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 1, 'must exit 1 on a broken routing target under examples/; got: ' + result.combined);
+    assert.match(result.combined, /examples\/some-example\/NOTES\.md:1:/, 'message must name the planted file and line');
+    assert.match(result.combined, /ns-nonexistent/, 'message must name the bogus CLI name verbatim');
+  } finally {
+    cleanup();
+  }
+});
+
+test('widened scope: a broken bin/ns-<name> reference in a non-SKILL.md file under skills/ is caught', () => {
+  const { root, cleanup } = buildSyntheticRoot('widened-skills-nonskill', {
+    'skills/widget-tool/NOTES.md': 'This note routes through `bin/ns-nonexistent`.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 1, 'must exit 1 on a broken routing target in a non-SKILL.md file under skills/; got: ' + result.combined);
+    assert.match(result.combined, /skills\/widget-tool\/NOTES\.md:1:/, 'message must name the planted file and line');
+    assert.match(result.combined, /ns-nonexistent/, 'message must name the bogus CLI name verbatim');
+  } finally {
+    cleanup();
+  }
+});
+
+test('widened scope: a broken bin/ns-<name> reference under templates/ is caught', () => {
+  const { root, cleanup } = buildSyntheticRoot('widened-templates', {
+    'templates/some-template/README.md': 'This template routes through `bin/ns-nonexistent`.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 1, 'must exit 1 on a broken routing target under templates/; got: ' + result.combined);
+    assert.match(result.combined, /templates\/some-template\/README\.md:1:/, 'message must name the planted file and line');
+    assert.match(result.combined, /ns-nonexistent/, 'message must name the bogus CLI name verbatim');
+  } finally {
+    cleanup();
+  }
+});
+
+test('widened scope: a broken bin/ns-<name> reference in a root-level .md file is caught', () => {
+  const { root, cleanup } = buildSyntheticRoot('widened-root', {
+    'SOME-ROOT-DOC.md': 'This root doc routes through `bin/ns-nonexistent`.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 1, 'must exit 1 on a broken routing target in a root-level .md file; got: ' + result.combined);
+    assert.match(result.combined, /SOME-ROOT-DOC\.md:1:/, 'message must name the planted file and line');
+    assert.match(result.combined, /ns-nonexistent/, 'message must name the bogus CLI name verbatim');
+  } finally {
+    cleanup();
+  }
+});
+
+test('dated-record exemption: a broken bin/ns-<name> reference under docs/adr/ is NOT flagged', () => {
+  const { root, cleanup } = buildSyntheticRoot('adr-exempt', {
+    'docs/adr/ADR-9999-fake-decision.md': 'This ADR routes through `bin/ns-nonexistent`.\n',
+    'skills/other-tool/SKILL.md': 'Nothing interesting here.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 0, 'a reference under docs/adr/ must not be flagged (dated historical record exemption); got: ' + result.combined);
+    assert.doesNotMatch(result.combined, /ns-nonexistent/, 'the exempt ADR file\'s bogus reference must never appear as a finding');
+  } finally {
+    cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Git-tracked mode: every test above runs through clone-helper.mjs (either
 // cloneRepoToTemp or a from-scratch synthetic root), and clone-helper.mjs
 // deliberately strips .git from every fixture it builds - that is the

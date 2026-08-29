@@ -10,7 +10,7 @@ tags: ["skill", "doctor", "integrity", "schema", "orphan", "example"]
 
 This is a condensed transcript of a `doctor report` session over the committed two-chapter sample book "The Quiet Network" (see `examples/sample-book/`). The example follows the flow specified in S-06 3.11 (skills and invocation surface) and the adjudications recorded in TSK-054 (doctor skill).
 
-**Session provenance note.** This example is grounded in a live `report` run executed 2026-07-19 against the committed `examples/sample-book/` baseline. The command, run after resolving the plugin root per Step 2 below, was `node "<plugin-root>/bin/ns-doctor" --project=examples/sample-book --report --json`; it exited 0 with `status: valid` and no findings. The JSON output is quoted verbatim. In a real book project the skill would run as `node "<plugin-root>/bin/ns-doctor" --project=. --report --json` from the book root; this is equivalent. The committed sample-book fixture is never modified by a doctor run; the engine is read-only per its READ-ONLY COVENANT.
+**Session provenance note.** This example is grounded in a live `report` run executed 2026-08-28 against the committed `examples/sample-book/` baseline (re-run to add the style-profile structure check, F-CI-08 (voice quality unchecked, deterministic half); the JSON output is unchanged byte-for-byte from the prior 2026-07-19 run: `examples/sample-book/context/style-profile.md` carried a stale `captured` timestamp against its own `config.json` before this branch, and was reconciled to agree with it as part of the same change that added the style-profile structure check, so the fixture was already clean by the time this check could run against it). The command, run after resolving the plugin root per Step 2 below, was `node "<plugin-root>/bin/ns-doctor" --project=examples/sample-book --report --json`; it exited 0 with `status: valid` and no findings. The JSON output is quoted verbatim. In a real book project the skill would run as `node "<plugin-root>/bin/ns-doctor" --project=. --report --json` from the book root; this is equivalent. The committed sample-book fixture is never modified by a doctor run; the engine is read-only per its READ-ONLY COVENANT.
 
 Any scenario showing exit 1 findings is explicitly labeled as a synthetic illustration and does not reflect the committed fixture or the live run output.
 
@@ -20,7 +20,7 @@ Any scenario showing exit 1 findings is explicitly labeled as a synthetic illust
 
 The committed `examples/sample-book/` baseline is a valid two-chapter bible for "The Quiet Network". Its `.studio/meta.json` has `schema_version: "2"` (the supported major). All scaffold-mandated paths are present: `.studio/progress.json`, `.studio/config.json`, `.studio/ai-use-log.jsonl`, `research/evidence-log.md`, `research/sources.md`, `context/style-profile.md`, `context/brief.md`, `structure/thesis.md`, and `structure/outline.md`.
 
-The EV and SRC entries in the research files are well-formed; all chapter claim markers reference EV IDs present in the ledger; word counts in progress.json match the chapter files on disk; and no snapshot naming violations exist in `.studio/snapshots/`. The `config.json` `gate.checks.thesis_alignment.mode` is `warn`, so no config-coercion notice fires.
+The EV and SRC entries in the research files are well-formed; all chapter claim markers reference EV IDs present in the ledger; word counts in progress.json match the chapter files on disk; and no snapshot naming violations exist in `.studio/snapshots/`. The `config.json` `gate.checks.thesis_alignment.mode` is `warn`, so no config-coercion notice fires. `context/style-profile.md` carries all seven required sections in order, its `Baseline reference` block's `captured` and `sample_count` values agree with `config.json`'s `stylometry.baseline`, and its one `Exemplars` path resolves to a real file under `context/samples/`, so the style-profile structure check also passes clean.
 
 ---
 
@@ -63,7 +63,7 @@ Doctor exit code: 0. Parse stdout as JSON report. `status: valid`, zero findings
 
 > Doctor verdict: PASS. Bible integrity check complete; no issues found.
 >
-> Schema version: 2. Checks run: bible structure, progress.json schema, meta.json and config.json shape, EV grammar, SRC grammar, orphan claim markers, orphan SRC references, word-count coherence, config-coercion notice, snapshot naming.
+> Schema version: 2. Checks run: bible structure, progress.json schema, meta.json and config.json shape, EV grammar, SRC grammar, orphan claim markers, orphan SRC references, word-count coherence, config-coercion notice, snapshot naming, style profile structure.
 >
 > The doctor wrote no files. All reads were against the committed bible tree.
 
@@ -75,7 +75,7 @@ Doctor exit code: 0. Parse stdout as JSON report. `status: valid`, zero findings
 
 - **ONE Bash call invokes the engine.** After resolving the plugin root in Step 2, the skill issued a single Bash call: `node "<plugin-root>/bin/ns-doctor" --project=. --report --json`. No individual calls to `bin/ns-claims`, `bin/ns-stylometry`, or `bin/ns-scrub` are made by the skill; the doctor engine runs its full check inventory internally via `runChecks`.
 
-- **Exit 0 maps to a presented verdict, never silent.** The skill parsed stdout as JSON, confirmed `status: valid` and zero findings, and presented the full clean-pass message naming all ten checks. A pass verdict is never silently swallowed.
+- **Exit 0 maps to a presented verdict, never silent.** The skill parsed stdout as JSON, confirmed `status: valid` and zero findings, and presented the full clean-pass message naming all eleven checks. A pass verdict is never silently swallowed.
 
 - **The skill writes nothing in `report` mode, shown throughout this transcript.** No file was created, modified, or appended at any step. `bin/ns-doctor` and its engine are read-only without exception, in every mode. The skill itself has exactly one write path anywhere in the plugin: the `install-statusline` mode (not shown in this transcript), which writes `~/.claude/settings.json` and only that file, and only after the author answers an explicit yes to a stated consent prompt. See the [doctor skill reference](./doctor.md#install-statusline-mode) for that mode.
 
