@@ -21,8 +21,9 @@
 # S-01 (agents: intake and context), Process step 2 (scaffold-first rule):
 # "Before asking any interview question, check whether the book tree exists.
 # If not, invoke the init-project skill so the directory structure appears
-# before the interview begins." (init-project is nfs-new-book's pre-rename name;
-# the spec sentence is quoted verbatim from S-01 and is not itself rewritten.)
+# before the interview begins." (the spec sentence is quoted from S-01, lightly
+# paraphrased in this comment, and is deliberately not rewritten; init-project
+# is the pre-rename name of nfs-new-book.)
 interviewer:
   - nfs-new-book
 

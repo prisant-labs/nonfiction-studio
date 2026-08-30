@@ -1,6 +1,6 @@
 <!-- structure/thesis.md
      The controlling idea in one sentence. Every chapter must serve it.
-     Written by intake-interview (section 2) and refined by /outline-book.
+     Written by nfs-interview (section 2) and refined by /nfs-outline.
 -->
 
 # Thesis
