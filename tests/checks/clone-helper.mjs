@@ -25,7 +25,7 @@
 //                 (2) content-hash comparison against a snapshot taken at test-file load time, not
 //                     `git status` against HEAD/the index, because a path this file plants into can
 //                     legitimately already carry an uncommitted modification from earlier, unrelated
-//                     work in the same session (confirmed in practice: skills/draft-chapter/SKILL.md carries
+//                     work in the same session (confirmed in practice: skills/nfs-draft/SKILL.md carries
 //                     this task's own F4 edit, so `git status` on it is never clean to begin with;
 //                     only "did it change again DURING this file's tests" is the real question).
 //               Mirrors scripts/test-fixtures.mjs's temp-clone discipline in spirit (a real, checked

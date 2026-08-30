@@ -36,7 +36,7 @@ after(() => {
 // the whole tree (a concurrent task's unrelated commit elsewhere must not
 // fail this file), and compared against a same-session snapshot, not `git
 // status` against HEAD (a watched path can already legitimately carry an
-// uncommitted edit from earlier, unrelated work -- skills/draft-chapter/
+// uncommitted edit from earlier, unrelated work -- skills/nfs-draft/
 // SKILL.md carries this task's own F4 (verb vocabulary) edit). Registered as
 // `after()` so it runs regardless of which tests passed or failed, and
 // regardless of node:test's concurrency scheduling above.
