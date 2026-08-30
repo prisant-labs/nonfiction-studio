@@ -2,7 +2,7 @@
 // what-it-does: computes a per-chapter board and whole-book totals from progress.json's chapters
 //               and totals, config.json's drift threshold, and the newest gate report per chapter
 //               slug under .studio/gate/; renders the result as JSON-ready data or a Markdown board
-// why:          this module is the deterministic computation status-dashboard's skill body
+// why:          this module is the deterministic computation nfs-status-dashboard's skill body
 //               narrates rather than computes: the skill no longer asks the language model to
 //               list a directory, parse filenames, open reports, and read numbers out of prose
 //               by eye (nothing asserted correctness the same way twice under that approach); it

@@ -505,7 +505,7 @@ export function countWords(rawText) {
  * Callers catch StaleBaselineError (or check err.name) and treat it like any other
  * operational error (hooks/lib/gate-engine.mjs's existing per-check try/catch already
  * turns this into a skip verdict and exit code 2 with no changes needed there). The
- * remedy is always the same: re-run capture-voice to recapture the baseline with the
+ * remedy is always the same: re-run nfs-capture-voice to recapture the baseline with the
  * corrected engine.
  */
 export class StaleBaselineError extends Error {
@@ -589,7 +589,7 @@ export function computeDrift(measured, baseline, thresholds) {
     throw new StaleBaselineError(
       'stylometry baseline marker_set_version ' + storedVersion + ' does not match the ' +
       'engine\'s current marker set version ' + CURRENT_MARKER_SET_VERSION + '; run ' +
-      'capture-voice to re-capture the baseline with the corrected engine'
+      'nfs-capture-voice to re-capture the baseline with the corrected engine'
     );
   }
 

@@ -1,5 +1,5 @@
 <!-- context/audience.md
-     Primary reader persona. Filled by intake-interview from section 3 answers.
+     Primary reader persona. Filled by nfs-interview from section 3 answers.
      Do not delete or reorder the labeled fields; downstream agents read them.
 -->
 

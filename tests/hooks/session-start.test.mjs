@@ -203,7 +203,7 @@ test('(c) stale last-gate: gate-debt line is present', () => {
 
   const ctx = out.hookSpecificOutput.additionalContext;
   assert.ok(ctx.includes('Gate debt'), 'orientation block contains a gate-debt line');
-  assert.ok(ctx.includes('run-quality-gate'), 'gate-debt line points at run-quality-gate');
+  assert.ok(ctx.includes('nfs-check-chapter'), 'gate-debt line points at nfs-check-chapter');
 });
 
 // ---------------------------------------------------------------------------

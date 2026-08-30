@@ -16,7 +16,7 @@ Exports are written to production/exports/ as `<title>.<format>`.
 
 ## Production steps
 
-1. Complete all chapters and run /run-quality-gate on each.
+1. Complete all chapters and run /nfs-check-chapter on each.
 2. Run /disclosure-report to generate the AI-use disclosure.
 3. Run /publish-readiness for the pre-publication compliance checklist.
 4. Run /export-manuscript [format] to assemble and export the final manuscript.

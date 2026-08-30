@@ -103,7 +103,7 @@ export function buildOrientation(root, meta, hookName) {
     if (maxChapterMtimeMs > 0 && gateTsMs < maxChapterMtimeMs) {
       lines.push(
         'Gate debt: last-gate.json is missing or predates a chapter write; ' +
-        'run run-quality-gate to clear the debt.'
+        'run nfs-check-chapter to clear the debt.'
       );
     }
   } catch (err) {

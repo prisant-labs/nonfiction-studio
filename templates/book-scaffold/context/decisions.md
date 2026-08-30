@@ -8,6 +8,6 @@
 
 ### {{DATE}} - project created
 - actor: author
-- decision: Project bible initialized by init-project.
+- decision: Project bible initialized by nfs-new-book.
 - rationale: Starting a new book project with the Nonfiction Studio.
 - links:

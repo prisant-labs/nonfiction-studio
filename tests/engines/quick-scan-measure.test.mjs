@@ -92,7 +92,7 @@ test('nfs-quick-scan mechanism: pasted prose written to an os.tmpdir() file meas
 
 test('nfs-quick-scan mechanism: markers key set matches the golden config baseline vocabulary', () => {
   // nfs-quick-scan presents marker names the author may later see again in
-  // capture-voice's baseline (context/style-profile.md / config.json). The
+  // nfs-capture-voice's baseline (context/style-profile.md / config.json). The
   // vocabulary must be the same set both places.
   const pastedText = readFileSync(FIXTURE, 'utf8');
   const dir = mkdtempSync(join(tmpdir(), 'ns-quick-scan-test-'));
@@ -109,7 +109,7 @@ test('nfs-quick-scan mechanism: markers key set matches the golden config baseli
     ));
     const goldenKeys = Object.keys(config.stylometry.baseline.markers).sort();
     assert.deepStrictEqual(Object.keys(out.markers).sort(), goldenKeys,
-      'nfs-quick-scan marker names must equal the same vocabulary capture-voice uses');
+      'nfs-quick-scan marker names must equal the same vocabulary nfs-capture-voice uses');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

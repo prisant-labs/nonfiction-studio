@@ -1,6 +1,6 @@
 <!-- context/brief.md
      Project brief. Status: EMPTY
-     Run /intake-interview to build this file section by section.
+     Run /nfs-interview to build this file section by section.
      Each DRAFT block is flushed with your confirmed answers as the interview progresses.
 -->
 
