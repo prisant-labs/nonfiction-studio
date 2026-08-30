@@ -1,6 +1,6 @@
 ---
 title: "nfs-doctor skill reference"
-description: "Reference for the doctor skill - the bible integrity front door that wraps bin/ns-doctor in one Bash call per invocation, maps exit codes to grouped findings with routing hints, and (in its report, migrate, and packs modes) writes nothing; a fourth mode, install-statusline, performs one consented write to the author's own Claude Code settings"
+description: "Reference for the nfs-doctor skill - the bible integrity front door that wraps bin/ns-doctor in one Bash call per invocation, maps exit codes to grouped findings with routing hints, and (in its report, migrate, and packs modes) writes nothing; a fourth mode, install-statusline, performs one consented write to the author's own Claude Code settings"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "doctor", "integrity", "schema", "validation", "orphan", "migrate"]

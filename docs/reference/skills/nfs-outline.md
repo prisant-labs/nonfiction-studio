@@ -1,6 +1,6 @@
 ---
 title: "nfs-outline skill reference"
-description: "Reference for the outline-book skill - the outline front door that confirms the brief, invokes thesis-architect and structure-architect, and locks the chapter registry"
+description: "Reference for the nfs-outline skill - the outline front door that confirms the brief, invokes thesis-architect and structure-architect, and locks the chapter registry"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "outline", "thesis", "structure", "chapter-list"]

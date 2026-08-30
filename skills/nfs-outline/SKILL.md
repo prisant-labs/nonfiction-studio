@@ -3,7 +3,7 @@ name: nfs-outline
 user-invocable: true
 argument-hint: "[scope: full | chapters | thesis]"
 description: "Produces a structured chapter-by-chapter outline grounded in the confirmed thesis and project brief. Confirms the brief, optionally invokes thesis-architect to produce or sharpen the controlling idea, delegates chapter architecture to structure-architect, presents the outline for author review, and confirms the written structure files via Read checks. Scope argument controls which phases run: full (default), thesis (thesis flow only), or chapters (structure-architect only, requires existing thesis). Use when the author says 'help me outline,' wants to 'structure my book,' or needs to 'sharpen my thesis' before chapters are drafted."
-when_to_use: "Use when the author completes intake-interview and wants to structure the book, or studio routes here from Path 2. Do not invoke when context/brief.md is missing or unconfirmed (the skill halts and routes to intake-interview in that case), or for unrelated queries."
+when_to_use: "Use when the author completes nfs-interview and wants to structure the book, or nfs-start routes here from Path 2. Do not invoke when context/brief.md is missing or unconfirmed (the skill halts and routes to nfs-interview in that case), or for unrelated queries."
 chain:
   - thesis-architect
   - structure-architect

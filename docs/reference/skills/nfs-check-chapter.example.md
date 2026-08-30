@@ -1,6 +1,6 @@
 ---
 title: "nfs-check-chapter worked example"
-description: "Condensed transcript of a run-quality-gate session over a temp clone of the committed Chapter 2 of The Quiet Network - shows the baseline pre-check, the degraded four-check pass, the single ns-gate Bash call, exit-code mapping, and the presented warn-free pass verdict"
+description: "Condensed transcript of a nfs-check-chapter session over a temp clone of the committed Chapter 2 of The Quiet Network - shows the baseline pre-check, the degraded four-check pass, the single ns-gate Bash call, exit-code mapping, and the presented warn-free pass verdict"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "gate", "quality", "deterministic", "claims", "scrub", "example"]

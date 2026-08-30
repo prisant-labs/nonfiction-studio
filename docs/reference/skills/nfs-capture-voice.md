@@ -1,6 +1,6 @@
 ---
 title: "nfs-capture-voice skill reference"
-description: "Reference for the capture-voice skill - the voice-capture front door that builds the author's stylometric baseline and previews marker values"
+description: "Reference for the nfs-capture-voice skill - the voice-capture front door that builds the author's stylometric baseline and previews marker values"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "voice", "stylometry", "profile"]

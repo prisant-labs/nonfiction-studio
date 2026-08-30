@@ -399,4 +399,4 @@ engine as the `stylometry` gate check. The `voice-capture` agent calls `ns-stylo
 ## See also
 
 - [ns-gate CLI reference](./ns-gate.md) - orchestrator that calls ns-stylometry internally
-- [capture-voice skill reference](../skills/nfs-capture-voice.md) - skill that builds the voice baseline
+- [nfs-capture-voice skill reference](../skills/nfs-capture-voice.md) - skill that builds the voice baseline

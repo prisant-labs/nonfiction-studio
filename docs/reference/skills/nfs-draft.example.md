@@ -1,6 +1,6 @@
 ---
 title: "nfs-draft worked example"
-description: "Condensed transcript of a draft-chapter session on the chat surface for The Quiet Network - shows the registry probe, evidence check, drafting-partner new-chapter write, line-editor proposal, and chat compliance append"
+description: "Condensed transcript of a nfs-draft session on the chat surface for The Quiet Network - shows the registry probe, evidence check, drafting-partner new-chapter write, line-editor proposal, and chat compliance append"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "draft", "chapter", "drafting-partner", "line-editor", "compliance", "example"]

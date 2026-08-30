@@ -1,6 +1,6 @@
 ---
 title: "nfs-capture-voice worked example"
-description: "Single-session transcript of a capture-voice run for The Quiet Network - shows sample submission, word-count assessment, delegation to the voice-capture agent, Read-check confirmations, and the marker-value preview"
+description: "Single-session transcript of a nfs-capture-voice run for The Quiet Network - shows sample submission, word-count assessment, delegation to the voice-capture agent, Read-check confirmations, and the marker-value preview"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "voice", "stylometry", "example"]

@@ -1,6 +1,6 @@
 ---
 title: "nfs-fact-check worked example"
-description: "Condensed transcript of a fact-check-pass session over the committed Chapter 2 of The Quiet Network - shows the file probe, ns-claims pre-count, cache-based clean verification, agent report write, and three-count summary"
+description: "Condensed transcript of a nfs-fact-check session over the committed Chapter 2 of The Quiet Network - shows the file probe, ns-claims pre-count, cache-based clean verification, agent report write, and three-count summary"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "fact-check", "verification", "claims", "fact-checker", "evidence", "example"]

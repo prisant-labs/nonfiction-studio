@@ -1,6 +1,6 @@
 ---
 title: "nfs-new-book worked example"
-description: "Condensed transcript of an init-project run - shows mode default, placeholder fills, and the re-run delta check"
+description: "Condensed transcript of a nfs-new-book run - shows mode default, placeholder fills, and the re-run delta check"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "init", "example"]
@@ -60,7 +60,7 @@ production/back-matter.md     created
 
 > Book project "The Quiet Ledger" has been initialized. The bible tree and .studio/ state files are ready.
 >
-> The next step is intake-interview. Invoke it with `/nonfiction-studio:nfs-interview` to conduct the structured intake interview and build your project brief. The interview typically takes 45-90 minutes and produces a confirmed context/brief.md.
+> The next step is nfs-interview. Invoke it with `/nonfiction-studio:nfs-interview` to conduct the structured intake interview and build your project brief. The interview typically takes 45-90 minutes and produces a confirmed context/brief.md.
 
 ---
 

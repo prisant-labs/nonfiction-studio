@@ -29,7 +29,7 @@ command prints nothing and exits 0. It never prints a stack trace or an error st
 **This CLI is not, by itself, the HUD the author sees.** A plugin cannot ship a main status line
 (see ADR-0008); `ns-statusline` becomes the visible HUD only after it is installed as the user's
 own `statusLine` command, which happens through a one-time, explicitly consented write performed
-by the `nfs-doctor` skill (see [doctor skill reference](../skills/nfs-doctor.md)), or by the author running
+by the `nfs-doctor` skill (see [nfs-doctor skill reference](../skills/nfs-doctor.md)), or by the author running
 the built-in `/statusline` command themselves. The `--subagent` mode is different: it is wired up
 automatically for every author, via this plugin's own `settings.json` at the plugin root.
 
@@ -160,7 +160,7 @@ reason it exists.
 
 ## See also
 
-- [doctor skill reference](../skills/nfs-doctor.md) - the consented install path that puts
+- [nfs-doctor skill reference](../skills/nfs-doctor.md) - the consented install path that puts
   `ns-statusline` in front of the author as their actual `statusLine`
 - [ADR-0008: status HUD](../../adr/ADR-0008-status-hud.md) - the platform constraints and design
   decisions behind this CLI

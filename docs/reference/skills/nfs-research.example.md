@@ -1,6 +1,6 @@
 ---
 title: "nfs-research worked example"
-description: "Condensed transcript of a chapter-scoped research-pass session for The Quiet Network - shows the outline probe, chapter argument resolution, web gate disclosure, research-librarian delegation, and three-count summary"
+description: "Condensed transcript of a chapter-scoped nfs-research session for The Quiet Network - shows the outline probe, chapter argument resolution, web gate disclosure, research-librarian delegation, and three-count summary"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "research", "evidence", "sources", "ledger", "example"]

@@ -1,6 +1,6 @@
 ---
 title: "nfs-status-dashboard worked example"
-description: "Condensed transcript of a status-dashboard run over the committed two-chapter sample book The Quiet Network - shows the single bin/ns-status Bash call, JSON parse, table render, and next-actions list, grounded in a real CLI run"
+description: "Condensed transcript of a nfs-status-dashboard run over the committed two-chapter sample book The Quiet Network - shows the single bin/ns-status Bash call, JSON parse, table render, and next-actions list, grounded in a real CLI run"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "status", "dashboard", "progress", "overview", "gate", "example"]

@@ -145,7 +145,7 @@ Ask the author to clarify:
 
 > Would you like to paste some writing for a quick voice-and-claims read (`nfs-quick-scan`), or see a guided tour of the quality gate using the bundled sample book (`nfs-tour`)?
 
-**Confirm-before-handoff:** State the skill: "Ready to proceed with `[quick-scan|tour]`. Confirm?"
+**Confirm-before-handoff:** State the skill: "Ready to proceed with `[nfs-quick-scan|nfs-tour]`. Confirm?"
 
 On confirmation, proceed with the named skill. Neither skill reads or requires `.studio/progress.json`, `.studio/meta.json`, or any other project file; both work identically whether or not a project exists in this directory, which is why this path is also offered directly from Step 1's `NO_PROGRESS` branch before any project exists.
 

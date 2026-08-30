@@ -1,6 +1,6 @@
 ---
 title: "nfs-interview worked example"
-description: "Two-session transcript of an intake-interview run for The Quiet Network - shows resumption detection, delegation to the interviewer agent, DRAFT flushing, and the conditional close"
+description: "Two-session transcript of a nfs-interview run for The Quiet Network - shows resumption detection, delegation to the interviewer agent, DRAFT flushing, and the conditional close"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "intake", "interview", "example"]

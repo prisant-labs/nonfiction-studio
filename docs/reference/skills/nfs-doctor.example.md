@@ -1,6 +1,6 @@
 ---
 title: "nfs-doctor worked example"
-description: "Condensed transcript of a doctor report session over the committed two-chapter sample book The Quiet Network - shows the single Bash call, exit-code mapping, clean-pass presentation, and a synthetic findings illustration using real engine finding-type strings"
+description: "Condensed transcript of a nfs-doctor report session over the committed two-chapter sample book The Quiet Network - shows the single Bash call, exit-code mapping, clean-pass presentation, and a synthetic findings illustration using real engine finding-type strings"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "doctor", "integrity", "schema", "orphan", "example"]
@@ -77,7 +77,7 @@ Doctor exit code: 0. Parse stdout as JSON report. `status: valid`, zero findings
 
 - **Exit 0 maps to a presented verdict, never silent.** The skill parsed stdout as JSON, confirmed `status: valid` and zero findings, and presented the full clean-pass message naming all eleven checks. A pass verdict is never silently swallowed.
 
-- **The skill writes nothing in `report` mode, shown throughout this transcript.** No file was created, modified, or appended at any step. `bin/ns-doctor` and its engine are read-only without exception, in every mode. The skill itself has exactly one write path anywhere in the plugin: the `install-statusline` mode (not shown in this transcript), which writes `~/.claude/settings.json` and only that file, and only after the author answers an explicit yes to a stated consent prompt. See the [doctor skill reference](./nfs-doctor.md#install-statusline-mode) for that mode.
+- **The skill writes nothing in `report` mode, shown throughout this transcript.** No file was created, modified, or appended at any step. `bin/ns-doctor` and its engine are read-only without exception, in every mode. The skill itself has exactly one write path anywhere in the plugin: the `install-statusline` mode (not shown in this transcript), which writes `~/.claude/settings.json` and only that file, and only after the author answers an explicit yes to a stated consent prompt. See the [nfs-doctor skill reference](./nfs-doctor.md#install-statusline-mode) for that mode.
 
 - **Notices would appear here if present.** The `notices` array is empty in this run. If `config.json` had `gate.checks.thesis_alignment.mode: "block"`, the engine would emit a `config-coercion.thesis-alignment` notice (informational, does not affect the exit code or verdict) and the skill would present it after the pass verdict.
 

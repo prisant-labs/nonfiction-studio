@@ -1,6 +1,6 @@
 ---
 title: "nfs-draft skill reference"
-description: "Reference for the draft-chapter skill - the drafting front door that resolves the chapter argument, delegates to drafting-partner and line-editor, and confirms the chapter file via Read checks"
+description: "Reference for the nfs-draft skill - the drafting front door that resolves the chapter argument, delegates to drafting-partner and line-editor, and confirms the chapter file via Read checks"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "draft", "chapter", "drafting-partner", "line-editor", "compliance"]

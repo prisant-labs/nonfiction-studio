@@ -1,6 +1,6 @@
 ---
 title: "nfs-start worked example"
-description: "Condensed transcript of a studio Path 2 session over the committed two-chapter sample book The Quiet Network - shows the progress probe, five-path menu, chapter-list registry probe, chapter inspection, and route offer; other paths sketched briefly"
+description: "Condensed transcript of a nfs-start Path 2 session over the committed two-chapter sample book The Quiet Network - shows the progress probe, five-path menu, chapter-list registry probe, chapter inspection, and route offer; other paths sketched briefly"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "studio", "dispatcher", "front-door", "routing", "example"]

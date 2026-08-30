@@ -1,6 +1,6 @@
 ---
 title: "nfs-start skill reference"
-description: "Reference for the studio skill - the guided front door dispatcher that presents six numbered paths and routes to the matching skill without requiring the author to know skill names"
+description: "Reference for the nfs-start skill - the guided front door dispatcher that presents six numbered paths and routes to the matching skill without requiring the author to know skill names"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "studio", "dispatcher", "front-door", "routing", "getting-started"]
@@ -114,7 +114,7 @@ Path 6 (OPP-D17, five-minute first win) is the try-before-you-commit path. It as
 - Through the normal Step 3 six-path menu, for an author who already has a project but wants a quick read on a new excerpt or wants to show someone else how the gate works.
 - Directly from Step 1's `NO_PROGRESS` branch, alongside Path 1, before any project exists at all. This is deliberate: paths 2 through 5 all assume an existing project and do not apply to a brand-new arrival, so the moment a stranger has nothing yet is exactly the moment this path matters most.
 
-See [quick-scan](./nfs-quick-scan.md) and [tour](./nfs-tour.md) for the full contract of each target skill.
+See [nfs-quick-scan](./nfs-quick-scan.md) and [nfs-tour](./nfs-tour.md) for the full contract of each target skill.
 
 ## Confirm-Before-Handoff
 

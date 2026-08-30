@@ -1,6 +1,6 @@
 ---
 title: "nfs-status-dashboard skill reference"
-description: "Reference for the status-dashboard skill - the read-only project overview that fronts bin/ns-status in a single Bash call and renders the per-chapter status, word count, drift score, open claims, and gate verdict directly from its JSON output; writes nothing"
+description: "Reference for the nfs-status-dashboard skill - the read-only project overview that fronts bin/ns-status in a single Bash call and renders the per-chapter status, word count, drift score, open claims, and gate verdict directly from its JSON output; writes nothing"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "status", "dashboard", "progress", "overview", "gate"]

@@ -3,7 +3,7 @@ name: nfs-interview
 user-invocable: true
 argument-hint: ""
 description: "Conducts the adaptive intake interview to produce a confirmed context/brief.md. The first-session success criterion is a confirmed brief, not a drafted chapter. The interview typically takes 45-90 minutes per D-16 (honest, resumable interview). Use when the author says 'interview me about my book,' wants to 'start my author interview,' or says 'continue my interview' after an earlier session."
-when_to_use: "Use when the author says 'set up my book' or 'continue my interview', or follows init-project's closing prompt. Do not invoke for authors who already have a confirmed context/brief.md and are not resuming an interrupted intake, or for unrelated queries."
+when_to_use: "Use when the author says 'set up my book' or 'continue my interview', or follows nfs-new-book's closing prompt. Do not invoke for authors who already have a confirmed context/brief.md and are not resuming an interrupted intake, or for unrelated queries."
 chain:
   - interviewer
 ---

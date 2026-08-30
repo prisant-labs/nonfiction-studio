@@ -1,6 +1,6 @@
 ---
 title: "nfs-interview skill reference"
-description: "Reference for the intake-interview skill - the interview front door that produces a confirmed project brief"
+description: "Reference for the nfs-interview skill - the interview front door that produces a confirmed project brief"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "intake", "interview", "brief"]

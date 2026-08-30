@@ -1,6 +1,6 @@
 ---
 title: "nfs-quick-scan skill reference"
-description: "Reference for the quick-scan skill - measures pasted prose with the deterministic ns-stylometry engine, reads it for sentences that need a source, and gives a one-paragraph editorial read, with no project required"
+description: "Reference for the nfs-quick-scan skill - measures pasted prose with the deterministic ns-stylometry engine, reads it for sentences that need a source, and gives a one-paragraph editorial read, with no project required"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "quick-scan", "stylometry", "voice", "claims", "onboarding", "getting-started"]
@@ -84,7 +84,7 @@ The skill runs seven steps:
 
 ## See also
 
-- [tour skill reference](./nfs-tour.md) - the paired guided walkthrough of the bundled sample book
+- [nfs-tour skill reference](./nfs-tour.md) - the paired guided walkthrough of the bundled sample book
 - [ns-stylometry CLI reference](../cli/ns-stylometry.md) - the engine this skill measures with
-- [capture-voice skill reference](./nfs-capture-voice.md) - builds a project's permanent voice baseline using the same engine mode
-- [studio skill reference](./nfs-start.md) - the dispatcher's Path 6 routes here
+- [nfs-capture-voice skill reference](./nfs-capture-voice.md) - builds a project's permanent voice baseline using the same engine mode
+- [nfs-start skill reference](./nfs-start.md) - the dispatcher's Path 6 routes here

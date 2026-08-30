@@ -2,8 +2,8 @@
 name: nfs-fact-check
 user-invocable: true
 argument-hint: "<chapter: slug or number>"
-description: "Runs the adversarial verification pass on a drafted chapter: an engine-backed marker inventory via bin/ns-claims, then the fact-checker agent's authoritative five-step pass that advances EV entry statuses, updates chapter markers, and writes the per-chapter fact-check report. Reports three counts (verified, unresolved, source-unverifiable) from the agent's report and names the report path. Writes no progress.json - the PostToolBatch hook owns the open-claims total. Use when the author says 'check my facts' or 'verify my claims,' wanting claim-level verification rather than the full pass-or-block verdict that run-quality-gate produces."
-when_to_use: "Use when the author finishes drafting and wants claims verified, run-quality-gate reports unresolved claims, or studio routes here from Path 3 (Research and verify). Do not invoke when no chapter argument is supplied (the skill halts if the chapter file is absent), or for unrelated queries."
+description: "Runs the adversarial verification pass on a drafted chapter: an engine-backed marker inventory via bin/ns-claims, then the fact-checker agent's authoritative five-step pass that advances EV entry statuses, updates chapter markers, and writes the per-chapter fact-check report. Reports three counts (verified, unresolved, source-unverifiable) from the agent's report and names the report path. Writes no progress.json - the PostToolBatch hook owns the open-claims total. Use when the author says 'check my facts' or 'verify my claims,' wanting claim-level verification rather than the full pass-or-block verdict that nfs-check-chapter produces."
+when_to_use: "Use when the author finishes drafting and wants claims verified, nfs-check-chapter reports unresolved claims, or nfs-start routes here from Path 3 (Research and verify). Do not invoke when no chapter argument is supplied (the skill halts if the chapter file is absent), or for unrelated queries."
 chain:
   - fact-checker
 ---

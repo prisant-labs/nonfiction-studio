@@ -205,7 +205,7 @@ List all files created. Output:
 
 > Book project '{title}' has been initialized. The bible tree and .studio/ state files are ready.
 
-Then: "The next step is intake-interview. Invoke it with `/nonfiction-studio:nfs-interview` to conduct the structured intake interview and build your project brief. The interview typically takes 45-90 minutes and produces a confirmed context/brief.md."
+Then: "The next step is nfs-interview. Invoke it with `/nonfiction-studio:nfs-interview` to conduct the structured intake interview and build your project brief. The interview typically takes 45-90 minutes and produces a confirmed context/brief.md."
 
 ---
 

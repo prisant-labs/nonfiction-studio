@@ -3,7 +3,7 @@ name: nfs-research
 user-invocable: true
 argument-hint: "[chapter: slug or number]"
 description: "Runs a structured research session that populates the evidence ledger with EV entries and SRC references per D-07 (claim ledger). Confirms the outline is present via a deterministic guard, presents the research agenda for author approval, delegates all ledger writes to research-librarian, and reports new sources, new evidence entries, and remaining open claims for the scope. Use when the author wants to 'find me sources,' says 'help me research this chapter,' or needs evidence gathered before drafting begins."
-when_to_use: "Use when the author wants to gather sources before drafting, or studio routes here from Path 3 (Research and verify). Do not invoke to verify existing claims (use fact-check-pass for that), or for unrelated queries."
+when_to_use: "Use when the author wants to gather sources before drafting, or nfs-start routes here from Path 3 (Research and verify). Do not invoke to verify existing claims (use nfs-fact-check for that), or for unrelated queries."
 chain:
   - research-librarian
 ---

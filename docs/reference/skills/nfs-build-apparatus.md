@@ -1,6 +1,6 @@
 ---
 title: "nfs-build-apparatus skill reference"
-description: "Reference for the build-apparatus skill - generates Chicago-style endnotes, a deduplicated bibliography, index-term candidates, and an attention list from the evidence ledger by wrapping bin/ns-notes in a single Bash call"
+description: "Reference for the nfs-build-apparatus skill - generates Chicago-style endnotes, a deduplicated bibliography, index-term candidates, and an attention list from the evidence ledger by wrapping bin/ns-notes in a single Bash call"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "apparatus", "endnotes", "bibliography", "index", "chicago", "citations"]
@@ -98,5 +98,5 @@ The Chicago style itself lives in `hooks/lib/citation-styles/chicago.json`, not 
 
 - [ns-notes CLI reference](../cli/ns-notes.md) - the engine this skill fronts
 - [ADR-0009: apparatus CLI](../../adr/ADR-0009-apparatus-cli.md) - why an engine CLI, the growth policy for the sixth CLI onward, and the citation-style-as-data design
-- [run-quality-gate skill reference](./nfs-check-chapter.md) - the deterministic quality gate this skill does not replace
-- [fact-check-pass skill reference](./nfs-fact-check.md) - claim-coverage and quote-fidelity verification, a separate concern from apparatus generation
+- [nfs-check-chapter skill reference](./nfs-check-chapter.md) - the deterministic quality gate this skill does not replace
+- [nfs-fact-check skill reference](./nfs-fact-check.md) - claim-coverage and quote-fidelity verification, a separate concern from apparatus generation

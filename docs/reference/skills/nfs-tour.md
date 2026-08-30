@@ -1,6 +1,6 @@
 ---
 title: "nfs-tour skill reference"
-description: "Reference for the tour skill - a guided walkthrough of the bundled sample book in a disposable copy, ending with the quality gate visibly blocking on a planted defect and then passing again, with the shipped example untouched"
+description: "Reference for the nfs-tour skill - a guided walkthrough of the bundled sample book in a disposable copy, ending with the quality gate visibly blocking on a planted defect and then passing again, with the shipped example untouched"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "tour", "gate", "demo", "onboarding", "getting-started"]
@@ -83,7 +83,7 @@ The line `Here is a draft of this paragraph for the author to revise.` is append
 
 ## See also
 
-- [quick-scan skill reference](./nfs-quick-scan.md) - the paired five-minute measurement path
+- [nfs-quick-scan skill reference](./nfs-quick-scan.md) - the paired five-minute measurement path
 - [ns-gate CLI reference](../cli/ns-gate.md) - the orchestrator this skill demonstrates
-- [run-quality-gate skill reference](./nfs-check-chapter.md) - the same gate, invoked against a real project
-- [studio skill reference](./nfs-start.md) - the dispatcher's Path 6 routes here
+- [nfs-check-chapter skill reference](./nfs-check-chapter.md) - the same gate, invoked against a real project
+- [nfs-start skill reference](./nfs-start.md) - the dispatcher's Path 6 routes here

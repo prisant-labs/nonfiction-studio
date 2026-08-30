@@ -1,6 +1,6 @@
 ---
 title: "nfs-research skill reference"
-description: "Reference for the research-pass skill - the research front door that confirms the outline, delegates to research-librarian, and reports evidence session counts"
+description: "Reference for the nfs-research skill - the research front door that confirms the outline, delegates to research-librarian, and reports evidence session counts"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "research", "evidence", "sources", "ledger"]

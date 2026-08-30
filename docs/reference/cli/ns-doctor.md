@@ -125,4 +125,4 @@ invokes `ns-doctor` interactively and formats its output for author consumption.
 ## See also
 
 - [ns-gate CLI reference](./ns-gate.md) - orchestrator that includes the doctor's coherence check
-- [doctor skill reference](../skills/nfs-doctor.md) - user-facing skill that invokes ns-doctor
+- [nfs-doctor skill reference](../skills/nfs-doctor.md) - user-facing skill that invokes ns-doctor

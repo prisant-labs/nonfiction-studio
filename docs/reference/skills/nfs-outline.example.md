@@ -1,6 +1,6 @@
 ---
 title: "nfs-outline worked example"
-description: "Single-session transcript of a full-scope outline-book run for The Quiet Network - shows the confirmed-brief probe, thesis check, structure-architect invocation, author review, and Read-check confirmations"
+description: "Single-session transcript of a full-scope nfs-outline run for The Quiet Network - shows the confirmed-brief probe, thesis check, structure-architect invocation, author review, and Read-check confirmations"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "outline", "structure", "example"]

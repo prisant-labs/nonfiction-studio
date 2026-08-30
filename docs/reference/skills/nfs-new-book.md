@@ -1,6 +1,6 @@
 ---
 title: "nfs-new-book skill reference"
-description: "Reference for the init-project skill - scaffold command for a new nonfiction book project"
+description: "Reference for the nfs-new-book skill - scaffold command for a new nonfiction book project"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "init", "scaffold", "setup"]
@@ -110,7 +110,7 @@ No `{{` placeholder tokens remain in any written file after init completes.
 
 ## Natural next step
 
-After init-project completes, invoke `nfs-interview` (`/nonfiction-studio:nfs-interview`) to conduct the structured intake interview and build `context/brief.md`. The interview takes 45-90 minutes and produces a confirmed project brief.
+After nfs-new-book completes, invoke `nfs-interview` (`/nonfiction-studio:nfs-interview`) to conduct the structured intake interview and build `context/brief.md`. The interview takes 45-90 minutes and produces a confirmed project brief.
 
 ## Worked example
 

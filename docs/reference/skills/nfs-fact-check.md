@@ -1,6 +1,6 @@
 ---
 title: "nfs-fact-check skill reference"
-description: "Reference for the fact-check-pass skill - the verification front door that runs an engine-backed marker inventory, delegates to fact-checker, confirms writes, and reports three counts from the agent's per-chapter report"
+description: "Reference for the nfs-fact-check skill - the verification front door that runs an engine-backed marker inventory, delegates to fact-checker, confirms writes, and reports three counts from the agent's per-chapter report"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "fact-check", "verification", "claims", "fact-checker", "evidence"]

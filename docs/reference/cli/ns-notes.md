@@ -169,6 +169,6 @@ CLI writes to the other's output, and `ns-notes` never writes to the ledger itse
 
 ## See also
 
-- [build-apparatus skill reference](../skills/nfs-build-apparatus.md) - the skill that fronts this CLI
+- [nfs-build-apparatus skill reference](../skills/nfs-build-apparatus.md) - the skill that fronts this CLI
 - [ns-claims CLI reference](./ns-claims.md) - the claim-coverage engine that reads the same ledger
 - [ADR-0009: apparatus CLI](../../adr/ADR-0009-apparatus-cli.md) - why an engine CLI, and the standing growth-policy test for any future CLI

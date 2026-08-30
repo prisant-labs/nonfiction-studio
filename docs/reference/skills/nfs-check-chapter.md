@@ -1,6 +1,6 @@
 ---
 title: "nfs-check-chapter skill reference"
-description: "Reference for the run-quality-gate skill - the surface-independent deterministic quality gate that wraps bin/ns-gate, maps exit codes to presented verdicts, pre-checks the voice baseline, and resolves the chapter argument from progress.json when none is supplied"
+description: "Reference for the nfs-check-chapter skill - the surface-independent deterministic quality gate that wraps bin/ns-gate, maps exit codes to presented verdicts, pre-checks the voice baseline, and resolves the chapter argument from progress.json when none is supplied"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "gate", "quality", "deterministic", "claims", "stylometry", "scrub"]
