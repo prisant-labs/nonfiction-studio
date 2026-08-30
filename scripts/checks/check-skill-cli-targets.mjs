@@ -25,7 +25,7 @@
 //               asserted that a CLI-wrapper skill's named routing target is a real, shipped
 //               file, so a typo'd or renamed CLI reference would ship silently and surface only
 //               as a runtime failure for an author. This is the generic, reusable form of that
-//               finding's fix; it was written to close the gap for status-dashboard's
+//               finding's fix; it was written to close the gap for nfs-status-dashboard's
 //               bin/ns-status reference, and it applies to every other skill in the same scan
 //               scope for free, at no extra cost, because the mechanism does not special-case
 //               any one skill. The scan scope was widened from skills/**/SKILL.md only to every
