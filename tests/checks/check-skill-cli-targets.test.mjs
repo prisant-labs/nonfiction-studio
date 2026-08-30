@@ -12,7 +12,7 @@
 //                     real shipped skills at all;
 //                 (2) real-repo clones (clone-helper.mjs's cloneRepoToTemp), which exercise the
 //                     checker against the actual skills/**/SKILL.md scan scope, proving the
-//                     mechanism also confirms status-dashboard's real bin/ns-status routing
+//                     mechanism also confirms nfs-status-dashboard's real bin/ns-status routing
 //                     target resolves, and that a deliberate corruption of that same real
 //                     reference is caught.
 //               Every fixture gets a fresh copy of THIS REPO'S CURRENT on-disk checker script
@@ -20,7 +20,7 @@
 //               being staged in git's index, so this suite is never coupled to staging order
 //               during iteration - the same discipline check-workspace-refs.test.mjs uses.
 // why:          F-CI-07 (dispatcher and CLI-wrapper skills uncovered) - closed for
-//               status-dashboard's bin/ns-status reference specifically; these tests are the
+//               nfs-status-dashboard's bin/ns-status reference specifically; these tests are the
 //               durable, permanent proof that the checker has real teeth - F6 (checker negative
 //               tests): "a checker that cannot fail is not a checker" - not only a one-time
 //               manual run.
@@ -134,7 +134,7 @@ test('false-positive guard: a bare "ns-<name>" mention with no "bin/" prefix is 
 
 // ---------------------------------------------------------------------------
 // Real-repo integration: proves the mechanism against the actual scan scope,
-// including status-dashboard's real bin/ns-status routing target.
+// including nfs-status-dashboard's real bin/ns-status routing target.
 // ---------------------------------------------------------------------------
 
 test('real-repo scope: every shipped skill\'s bin/ns-<name> routing target resolves', () => {
@@ -147,14 +147,14 @@ test('real-repo scope: every shipped skill\'s bin/ns-<name> routing target resol
   }
 });
 
-test('real-repo scope: status-dashboard names bin/ns-status as its routing target, and the checker confirms it resolves', () => {
+test('real-repo scope: nfs-status-dashboard names bin/ns-status as its routing target, and the checker confirms it resolves', () => {
   const { root, cleanup } = cloneRealRepo('real-status-dashboard-positive');
   try {
-    const skillPath = join(root, 'skills', 'status-dashboard', 'SKILL.md');
+    const skillPath = join(root, 'skills', 'nfs-status-dashboard', 'SKILL.md');
     const text = readFileSync(skillPath, 'utf8');
     assert.match(
       text, /bin\/ns-status\b/,
-      'skills/status-dashboard/SKILL.md must name bin/ns-status as its routing target for this test to be meaningful'
+      'skills/nfs-status-dashboard/SKILL.md must name bin/ns-status as its routing target for this test to be meaningful'
     );
 
     const result = runClonedChecker(root, SCRIPT);
@@ -165,23 +165,23 @@ test('real-repo scope: status-dashboard names bin/ns-status as its routing targe
   }
 });
 
-test('real-repo scope: a deliberately corrupted bin/ns-status reference in status-dashboard/SKILL.md is caught', () => {
+test('real-repo scope: a deliberately corrupted bin/ns-status reference in nfs-status-dashboard/SKILL.md is caught', () => {
   const { root, cleanup } = cloneRealRepo('real-status-dashboard-corrupted');
   try {
-    const skillPath = join(root, 'skills', 'status-dashboard', 'SKILL.md');
+    const skillPath = join(root, 'skills', 'nfs-status-dashboard', 'SKILL.md');
     const before = readFileSync(skillPath, 'utf8');
     const bogusName = 'ns-statu' + 'z'; // assembled so this file's own source never reads as a real CLI name
     const after = before.split('bin/ns-status').join('bin/' + bogusName);
     assert.notEqual(
       after, before,
-      'skills/status-dashboard/SKILL.md must contain at least one "bin/ns-status" occurrence to corrupt for this test to be meaningful'
+      'skills/nfs-status-dashboard/SKILL.md must contain at least one "bin/ns-status" occurrence to corrupt for this test to be meaningful'
     );
     writeFileSync(skillPath, after);
 
     const result = runClonedChecker(root, SCRIPT);
 
     assert.equal(result.status, 1, 'must exit 1 once the routing target is corrupted; got: ' + result.combined);
-    assert.match(result.combined, /skills\/status-dashboard\/SKILL\.md:\d+:/, 'message must name the corrupted file and line');
+    assert.match(result.combined, /skills\/nfs-status-dashboard\/SKILL\.md:\d+:/, 'message must name the corrupted file and line');
     assert.match(result.combined, new RegExp(bogusName), 'message must name the corrupted CLI name verbatim');
   } finally {
     cleanup();

@@ -377,7 +377,7 @@ for (const s of sets) {
 
     // Build prompt: the construction code here injects nothing that names the callee it is
     // being graded against. Deliberately excludes coversDesc (used above and below for the
-    // runner's own logging only): describeCovers() renders "chain: draft-chapter ->
+    // runner's own logging only): describeCovers() renders "chain: nfs-draft ->
     // drafting-partner" or "hook: PostToolUse", which names the expected callee just as
     // directly as the deleted "Expected callee: " line did, so it must never reach the prompt.
     // This is a claim about what this code adds, not about the prompt as sent: c.given is

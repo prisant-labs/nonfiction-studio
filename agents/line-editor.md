@@ -41,7 +41,7 @@ to `voice-guardian`.
 
 - **Phase 1 polish after author acceptance.** The author accepts a chapter
   drafted by `drafting-partner` as structurally ready and wants sentence-level
-  polish before the quality gate. The `draft-chapter` skill routes here at the
+  polish before the quality gate. The `nfs-draft` skill routes here at the
   polish stage. In Phase 1, `developmental-editor` is not yet in the pipeline, so
   the author's acceptance is the structural clearance.
 - **Phase 2 polish after developmental critique.** In Phase 2, `developmental-editor`

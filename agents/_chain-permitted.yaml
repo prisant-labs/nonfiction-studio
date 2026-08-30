@@ -4,8 +4,8 @@
 # Schema: caller-component-name to yaml-sequence of callee-component-names.
 # The vendored check (S4, chain-contract.mjs) validates this file when chaining is
 # in use. Under --profile plain-plugin, S4 is provenance "house" and is turned off
-# (HOUSE_REQIDS). Phantom errors for skill callers not yet on disk (intake-interview,
-# capture-voice, outline-book, research-pass, draft-chapter, fact-check-pass) are
+# (HOUSE_REQIDS). Phantom errors for skill callers not yet on disk (nfs-interview,
+# nfs-capture-voice, nfs-outline, nfs-research, nfs-draft, nfs-fact-check) are
 # suppressed in that profile. Enforcement of those edges is pending TSK-055 (Tier A
 # check scripts). See X-02 (task catalog) TSK-044 acceptance note, dated 2026-07-19.
 #
@@ -21,9 +21,11 @@
 # S-01 (agents: intake and context), Process step 2 (scaffold-first rule):
 # "Before asking any interview question, check whether the book tree exists.
 # If not, invoke the init-project skill so the directory structure appears
-# before the interview begins."
+# before the interview begins." (the spec sentence is quoted from S-01, lightly
+# paraphrased in this comment, and is deliberately not rewritten; init-project
+# is the pre-rename name of nfs-new-book.)
 interviewer:
-  - init-project
+  - nfs-new-book
 
 # =============================================================================
 # Agent-to-agent edge
@@ -39,35 +41,35 @@ drafting-partner:
 # Skill-to-agent edges, Phase 1 only (S-06, sections 3.2 through 3.7)
 # =============================================================================
 
-# S-06 (skills and invocation surface), section 3.2 (intake-interview):
+# S-06 (skills and invocation surface), section 3.2 (nfs-interview, formerly intake-interview):
 # "Agents invoked: interviewer"
-intake-interview:
+nfs-interview:
   - interviewer
 
-# S-06 (skills and invocation surface), section 3.3 (capture-voice):
+# S-06 (skills and invocation surface), section 3.3 (nfs-capture-voice, formerly capture-voice):
 # "Agents invoked: voice-capture"
-capture-voice:
+nfs-capture-voice:
   - voice-capture
 
-# S-06 (skills and invocation surface), section 3.4 (outline-book):
+# S-06 (skills and invocation surface), section 3.4 (nfs-outline, formerly outline-book):
 # "Agents invoked: thesis-architect (conditional on missing thesis);
 # structure-architect"
-outline-book:
+nfs-outline:
   - thesis-architect
   - structure-architect
 
-# S-06 (skills and invocation surface), section 3.5 (research-pass):
+# S-06 (skills and invocation surface), section 3.5 (nfs-research, formerly research-pass):
 # "Agents invoked: research-librarian"
-research-pass:
+nfs-research:
   - research-librarian
 
-# S-06 (skills and invocation surface), section 3.6 (draft-chapter):
+# S-06 (skills and invocation surface), section 3.6 (nfs-draft, formerly draft-chapter):
 # "Agents invoked: drafting-partner; line-editor"
-draft-chapter:
+nfs-draft:
   - drafting-partner
   - line-editor
 
-# S-06 (skills and invocation surface), section 3.7 (fact-check-pass):
+# S-06 (skills and invocation surface), section 3.7 (nfs-fact-check, formerly fact-check-pass):
 # "Agents invoked: fact-checker"
-fact-check-pass:
+nfs-fact-check:
   - fact-checker

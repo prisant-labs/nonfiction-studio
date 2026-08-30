@@ -426,7 +426,7 @@ test('doctor-engine.mjs contains no write calls (read-only covenant)', () => {
 
 // Read (not retype) the real pre-capture stub so this constant can never drift
 // from the shipped template's exact wording (voice-capture is the agent that
-// performs the write; capture-voice is the skill the author runs).
+// performs the write; nfs-capture-voice is the skill the author runs).
 const STUB_STYLE_PROFILE = readFileSync(
   join(__dirname, '..', '..', 'templates', 'book-scaffold', 'context', 'style-profile.md'),
   'utf8'
@@ -556,7 +556,7 @@ test('style profile: stub with no config baseline is a notice, not a finding; CL
       'stub with no config baseline must not produce a finding; got: ' + JSON.stringify(styleFindings));
     const notCaptured = notices.filter(n => n.type === 'style-profile.not-captured');
     assert.equal(notCaptured.length, 1, 'expected exactly one style-profile.not-captured notice');
-    assert.equal(notCaptured[0].message, 'style profile not yet captured; run capture-voice');
+    assert.equal(notCaptured[0].message, 'style profile not yet captured; run nfs-capture-voice');
 
     const r = spawnDoctor(['--report', '--project=' + dir]);
     assert.equal(r.status, 0,

@@ -159,7 +159,7 @@ function assertAiUseLogHasAgent(logPath, label) {
   return { ok: true, message: 'pass [' + label + ']: ai-use-log has entry with agent field' };
 }
 
-// Ground-truth check for flow step 4 (fact-check-pass): scans the real files
+// Ground-truth check for flow step 4 (nfs-fact-check): scans the real files
 // in the given directories for a marker string, independent of anything a
 // model claimed about them. This is the artifact step 4's prompt is actually
 // about ("does [UNVERIFIED] appear in context/ or chapters/"), so it is the
@@ -424,8 +424,8 @@ function runLiveMode(model) {
   const failures = [];
 
   try {
-    // Flow step 1: init-project scaffold - verify scaffold directories present
-    log('\n[run-integration] -- flow step 1: init-project scaffold --');
+    // Flow step 1: nfs-new-book scaffold - verify scaffold directories present
+    log('\n[run-integration] -- flow step 1: nfs-new-book scaffold --');
     checkBudget();
 
     const scaffoldPrompt =
@@ -436,15 +436,15 @@ function runLiveMode(model) {
     const scaffoldResult = callClaude(scaffoldPrompt, model, tempDir);
     log('  cost: $' + scaffoldResult.costUsd.toFixed(6) + ' (total: $' + totalSpendUsd.toFixed(6) + ')');
     if (!scaffoldResult.ok) {
-      const msg = 'FAIL [init-project]: claude call failed: ' + scaffoldResult.error;
+      const msg = 'FAIL [nfs-new-book]: claude call failed: ' + scaffoldResult.error;
       log('  ' + msg);
       failures.push(msg);
     } else {
       log('  result snippet: ' + scaffoldResult.text.slice(0, 120).replace(/\n/g, ' '));
       const scaffoldOk = scaffoldResult.text.toUpperCase().includes('SCAFFOLD_OK');
       const msg = scaffoldOk
-        ? 'pass [init-project]: model reported SCAFFOLD_OK'
-        : 'FAIL [init-project]: model did not report SCAFFOLD_OK';
+        ? 'pass [nfs-new-book]: model reported SCAFFOLD_OK'
+        : 'FAIL [nfs-new-book]: model did not report SCAFFOLD_OK';
       log('  scaffold check: ' + msg);
       if (!scaffoldOk) failures.push(msg);
     }
@@ -464,8 +464,8 @@ function runLiveMode(model) {
 
     checkBudget();
 
-    // Flow step 2: intake-interview brief check - verify brief.md is populated
-    log('\n[run-integration] -- flow step 2: intake-interview brief check --');
+    // Flow step 2: nfs-interview brief check - verify brief.md is populated
+    log('\n[run-integration] -- flow step 2: nfs-interview brief check --');
     checkBudget();
 
     const briefPrompt =
@@ -476,15 +476,15 @@ function runLiveMode(model) {
     const briefResult = callClaude(briefPrompt, model, tempDir);
     log('  cost: $' + briefResult.costUsd.toFixed(6) + ' (total: $' + totalSpendUsd.toFixed(6) + ')');
     if (!briefResult.ok) {
-      const msg = 'FAIL [intake-interview]: claude call failed: ' + briefResult.error;
+      const msg = 'FAIL [nfs-interview]: claude call failed: ' + briefResult.error;
       log('  ' + msg);
       failures.push(msg);
     } else {
       log('  result snippet: ' + briefResult.text.slice(0, 120).replace(/\n/g, ' '));
       const briefOk = briefResult.text.toUpperCase().includes('BRIEF_OK');
       const msg = briefOk
-        ? 'pass [intake-interview]: model reported BRIEF_OK'
-        : 'FAIL [intake-interview]: model did not report BRIEF_OK';
+        ? 'pass [nfs-interview]: model reported BRIEF_OK'
+        : 'FAIL [nfs-interview]: model did not report BRIEF_OK';
       log('  brief check: ' + msg);
       if (!briefOk) failures.push(msg);
     }
@@ -497,8 +497,8 @@ function runLiveMode(model) {
 
     checkBudget();
 
-    // Flow step 3: draft-chapter chapter check - verify chapters/ has content
-    log('\n[run-integration] -- flow step 3: draft-chapter chapter check --');
+    // Flow step 3: nfs-draft chapter check - verify chapters/ has content
+    log('\n[run-integration] -- flow step 3: nfs-draft chapter check --');
     checkBudget();
 
     const chapterPrompt =
@@ -509,15 +509,15 @@ function runLiveMode(model) {
     const chapterResult = callClaude(chapterPrompt, model, tempDir);
     log('  cost: $' + chapterResult.costUsd.toFixed(6) + ' (total: $' + totalSpendUsd.toFixed(6) + ')');
     if (!chapterResult.ok) {
-      const msg = 'FAIL [draft-chapter]: claude call failed: ' + chapterResult.error;
+      const msg = 'FAIL [nfs-draft]: claude call failed: ' + chapterResult.error;
       log('  ' + msg);
       failures.push(msg);
     } else {
       log('  result snippet: ' + chapterResult.text.slice(0, 120).replace(/\n/g, ' '));
       const chapterOk = chapterResult.text.toUpperCase().includes('CHAPTER_OK');
       const msg = chapterOk
-        ? 'pass [draft-chapter]: model reported CHAPTER_OK'
-        : 'FAIL [draft-chapter]: model did not report CHAPTER_OK';
+        ? 'pass [nfs-draft]: model reported CHAPTER_OK'
+        : 'FAIL [nfs-draft]: model did not report CHAPTER_OK';
       log('  chapter check: ' + msg);
       if (!chapterOk) failures.push(msg);
     }
@@ -530,8 +530,8 @@ function runLiveMode(model) {
 
     checkBudget();
 
-    // Flow step 4: fact-check-pass with planted [UNVERIFIED] marker
-    log('\n[run-integration] -- flow step 4: fact-check-pass with planted [UNVERIFIED] --');
+    // Flow step 4: nfs-fact-check with planted [UNVERIFIED] marker
+    log('\n[run-integration] -- flow step 4: nfs-fact-check with planted [UNVERIFIED] --');
     checkBudget();
 
     const factCheckPrompt =
@@ -543,7 +543,7 @@ function runLiveMode(model) {
     const factResult = callClaude(factCheckPrompt, model, tempDir);
     log('  cost: $' + factResult.costUsd.toFixed(6) + ' (total: $' + totalSpendUsd.toFixed(6) + ')');
     if (!factResult.ok) {
-      const msg = 'FAIL [fact-check-pass]: claude call failed: ' + factResult.error;
+      const msg = 'FAIL [nfs-fact-check]: claude call failed: ' + factResult.error;
       log('  ' + msg);
       failures.push(msg);
     } else {
@@ -557,8 +557,8 @@ function runLiveMode(model) {
       // fail-open for that whole class of garbage responses, unlike steps 1-3.)
       const factCheckOk = factResult.text.toUpperCase().includes('MARKER_ABSENT');
       const msg = factCheckOk
-        ? 'pass [fact-check-pass]: model reported MARKER_ABSENT'
-        : 'FAIL [fact-check-pass]: model did not report MARKER_ABSENT';
+        ? 'pass [nfs-fact-check]: model reported MARKER_ABSENT'
+        : 'FAIL [nfs-fact-check]: model did not report MARKER_ABSENT';
       log('  [UNVERIFIED] check: ' + msg);
       if (!factCheckOk) failures.push(msg);
     }
@@ -574,8 +574,8 @@ function runLiveMode(model) {
 
     checkBudget();
 
-    // Flow step 5: run-quality-gate deterministic assertions (no model call)
-    log('\n[run-integration] -- flow step 5: run-quality-gate (deterministic) --');
+    // Flow step 5: nfs-check-chapter deterministic assertions (no model call)
+    log('\n[run-integration] -- flow step 5: nfs-check-chapter (deterministic) --');
 
     log('\n[run-integration] -- structural assertions --');
     const structAssertions = runStructuralAssertions(tempDir, 'live');

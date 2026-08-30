@@ -15,7 +15,7 @@ Running it twice against unchanged state produces byte-identical output.
 
 ## Purpose
 
-Before this CLI existed, the `status-dashboard` skill computed the same numbers by asking the
+Before this CLI existed, the `nfs-status-dashboard` skill computed the same numbers by asking the
 language model to list the `.studio/gate/` directory, parse filenames, open reports, and read
 numbers out of prose by eye - with nothing asserting it parsed correctly the same way twice.
 `ns-status` is the deterministic replacement computation: a later task points that skill at this
@@ -47,7 +47,7 @@ is a separate, hook-maintained convenience field this board never treats as auth
 newest report per slug is selected by lexicographic sort of the compact `YYYYMMDDTHHMMSSZ`
 timestamp suffix in its filename (`<slug>.<timestamp>.json`), which equals chronological order by
 construction - the same rule `hooks/lib/gate-engine.mjs`'s own report retention and
-`skills/status-dashboard/SKILL.md` both already use. A whole-book `all.<timestamp>.json` report, if
+`skills/nfs-status-dashboard/SKILL.md` both already use. A whole-book `all.<timestamp>.json` report, if
 present, annotates the totals only (`wholeBookGate`), not any per-chapter cell.
 
 ## Invocation
@@ -140,7 +140,7 @@ Drift threshold: thresholds.drift_score_max = 25 (from .studio/config.json).
 `reportPath` is always book-root-relative (for example `.studio/gate/<slug>.<timestamp>.json`),
 never an absolute filesystem path, and is `null` when the chapter has no gate report on record.
 `chaptersTotal` and `chaptersRemaining` are both `null` when `progress.json`'s totals carry no
-`chapters_total` field. This JSON shape is the source a later task points the `status-dashboard`
+`chapters_total` field. This JSON shape is the source a later task points the `nfs-status-dashboard`
 skill's narration at.
 
 ## Determinism

@@ -36,9 +36,9 @@ longer sentence per paragraph for variation.
 
 ## Session: line-edit pass over Chapter 1
 
-**Author:** `/nonfiction-studio:draft-chapter chapter=01` (polish stage)
+**Author:** `/nonfiction-studio:nfs-draft chapter=01` (polish stage)
 
-The `draft-chapter` skill routes to `line-editor` at the polish stage.
+The `nfs-draft` skill routes to `line-editor` at the polish stage.
 
 **line-editor:**
 

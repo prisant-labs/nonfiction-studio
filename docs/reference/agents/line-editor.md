@@ -41,7 +41,7 @@ Invoke `line-editor` when any of the following holds.
 
 - A chapter is structurally accepted by the author and ready for sentence-level
   polish. In Phase 1, the author's acceptance is the clearance; the
-  `draft-chapter` skill routes here at the polish stage.
+  `nfs-draft` skill routes here at the polish stage.
 - In Phase 2, `developmental-editor` has completed its critique and any
   structural revisions are settled. The `revise-pass` skill enforces this
   ordering: `developmental-editor` critique before line editing, because line
@@ -226,7 +226,7 @@ After a `line-editor` session, the natural next step is `voice-guardian` (Phase 
 which interprets the deterministic output of `bin/ns-stylometry` and provides
 qualitative notes on any drift markers the run raised. In Phase 1, where
 `voice-guardian` is not yet in the pipeline, the quality gate is the next stop:
-invoke `run-quality-gate` or `fact-check-pass` to confirm claim coverage and
+invoke `nfs-check-chapter` or `nfs-fact-check` to confirm claim coverage and
 gate clearance. If the author accepts meaning-change proposals and wants to
 confirm that claim markers remain intact after the edits land, running
 `bin/ns-claims` on the revised chapter is a fast verification.

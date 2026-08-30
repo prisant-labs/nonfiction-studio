@@ -1,0 +1,10 @@
+{
+  "covers": { "chain": ["nfs-draft", "drafting-partner"] },
+  "description": "The nfs-draft skill dispatches drafting-partner to write the chapter draft using the confirmed thesis, outline, and evidence as inputs.",
+  "cases": [
+    {
+      "given": "nfs-draft is invoked for chapter 02-finding-your-network",
+      "expect": "drafting-partner agent is dispatched to produce the chapter draft and write chapters/02-finding-your-network.md"
+    }
+  ]
+}

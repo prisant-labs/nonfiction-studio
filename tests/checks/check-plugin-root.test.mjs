@@ -36,14 +36,14 @@ after(() => {
 // the whole tree (a concurrent task's unrelated commit elsewhere must not
 // fail this file), and compared against a same-session snapshot, not `git
 // status` against HEAD (a watched path can already legitimately carry an
-// uncommitted edit from earlier, unrelated work -- skills/draft-chapter/
+// uncommitted edit from earlier, unrelated work -- skills/nfs-draft/
 // SKILL.md carries this task's own F4 (verb vocabulary) edit). Registered as
 // `after()` so it runs regardless of which tests passed or failed, and
 // regardless of node:test's concurrency scheduling above.
 // ---------------------------------------------------------------------------
 
 const WATCHED_LIVE_PATHS = [
-  'skills/draft-chapter/SKILL.md',
+  'skills/nfs-draft/SKILL.md',
   'agents/voice-capture.md',
   'README.md',
   'docs/formats/decisions.md',
@@ -70,13 +70,13 @@ after(() => {
 test('pre-existing scope: a relative "node bin/ns-*" invocation planted in a SKILL.md is caught', () => {
   const { root, cleanup } = cloneRepoToTemp('plugin-root-skill');
   try {
-    const target = join(root, 'skills', 'draft-chapter', 'SKILL.md');
+    const target = join(root, 'skills', 'nfs-draft', 'SKILL.md');
     appendFileSync(target, '\nPlanted for F6: run `node bin/ns-claims --project=.` directly.\n');
 
     const result = runClonedChecker(root, SCRIPT);
 
     assert.equal(result.status, 1, 'must exit 1; got: ' + result.combined);
-    assert.match(result.combined, /skills\/draft-chapter\/SKILL\.md/, 'message must name the planted file');
+    assert.match(result.combined, /skills\/nfs-draft\/SKILL\.md/, 'message must name the planted file');
     assert.match(result.combined, /relative bin invocation/, 'message must name the violation type');
   } finally {
     cleanup();

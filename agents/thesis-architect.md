@@ -38,10 +38,10 @@ not draft outline content; that boundary belongs to `structure-architect`.
 ## When to invoke
 
 - **Post-intake thesis sharpening.** `interviewer` has confirmed the project brief
-  and seeded a draft `structure/thesis.md`. The author or the `outline-book` skill
+  and seeded a draft `structure/thesis.md`. The author or the `nfs-outline` skill
   invokes `thesis-architect` to sharpen the controlling idea before the outline is
   drawn.
-- **Missing or unreviewed thesis.** The `outline-book` skill checks for a non-empty,
+- **Missing or unreviewed thesis.** The `nfs-outline` skill checks for a non-empty,
   confirmed `structure/thesis.md` before invoking `structure-architect`. When the
   file is absent or contains only the interviewer's unreviewed stub, the skill
   routes to `thesis-architect` first.

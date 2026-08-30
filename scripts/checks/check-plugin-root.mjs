@@ -22,7 +22,7 @@
 //               relative bin invocation would be equally broken inside a hooks.json
 //               command string.
 // why:          F-SK-01 (broken bin invocation) and F-ST-01 (unbraced env form) -
-//               the house plugin-root convention (skills/init-project/SKILL.md
+//               the house plugin-root convention (skills/nfs-new-book/SKILL.md
 //               Step 4: settings.json lookup, plugins-cache search, dev-mode
 //               fallback) is the only form that resolves for an installed user;
 //               this check guards the fix against regression. Widened to README.md,
@@ -193,7 +193,7 @@ for (const rel of filesToScan) {
         rel + ':' + (li + 1) + ': relative bin invocation "' + relMatch[0] + '" ' +
         "resolves against the caller's cwd, not the installed plugin - invoke as " +
         'node "<plugin-root>/bin/ns-<name>" after resolving the plugin root ' +
-        '(see skills/init-project/SKILL.md Step 4)'
+        '(see skills/nfs-new-book/SKILL.md Step 4)'
       );
     }
 

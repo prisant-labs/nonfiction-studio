@@ -41,9 +41,9 @@ four beats, one of which is "compounding returns from a deliberate list."
 
 ## Session: extending Chapter 2
 
-**Author:** `/nonfiction-studio:draft-chapter chapter=02`
+**Author:** `/nonfiction-studio:nfs-draft chapter=02`
 
-The `draft-chapter` skill routes to `drafting-partner`.
+The `nfs-draft` skill routes to `drafting-partner`.
 
 **drafting-partner:**
 
@@ -174,7 +174,7 @@ to the bibliography?
 The existing `chapters/02-finding-your-network.md` is unchanged. The agent
 produced a diff proposal; it did not write to the existing file. The author
 accepts or rejects the PROPOSED ADDITION block and applies it manually or via the
-`draft-chapter` skill's apply mode.
+`nfs-draft` skill's apply mode.
 
 ---
 

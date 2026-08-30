@@ -70,5 +70,5 @@ An editorial outcome that will be written by the `SubagentStop` hook (Phase 2, n
 - `SubagentStop` hook (Phase 2, not yet shipped): will append editorial outcome entries when a named agent completes a drafting or editorial turn, once built.
 - `publish-readiness` skill (Phase 2, not yet shipped): appends the human-final-pass attestation entry required by D-10 (compliance layer) before clearing the publish gate; part of the TSK-045 era compliance flow.
 - `disclosure-report` skill (Phase 2, not yet shipped): reads the decision log to include editorial decisions and attestations in the AI disclosure report; part of the TSK-045 era compliance flow.
-- `intake-interview` flow: the structured author interview that seeds the initial voice profile; any decision entries from this flow are the earliest entries in the log.
+- `nfs-interview` flow: the structured author interview that seeds the initial voice profile; any decision entries from this flow are the earliest entries in the log.
 - Export path: reads the log to include the attestation trail in the exported manuscript package.

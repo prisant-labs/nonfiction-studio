@@ -119,10 +119,10 @@ ns-doctor --migrate
 
 `ns-doctor`'s word-count coherence check (`checkWordCountCoherence`) is exported and
 also called by `bin/ns-gate` as the `state_coherence` check, ensuring one implementation
-and two callers per TSK-029b (state-coherence gate check). The `doctor` skill (user-facing)
+and two callers per TSK-029b (state-coherence gate check). The `nfs-doctor` skill (user-facing)
 invokes `ns-doctor` interactively and formats its output for author consumption.
 
 ## See also
 
 - [ns-gate CLI reference](./ns-gate.md) - orchestrator that includes the doctor's coherence check
-- [doctor skill reference](../skills/doctor.md) - user-facing skill that invokes ns-doctor
+- [nfs-doctor skill reference](../skills/nfs-doctor.md) - user-facing skill that invokes ns-doctor

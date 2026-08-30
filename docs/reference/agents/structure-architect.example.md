@@ -54,9 +54,9 @@ The craft model selected at intake was `big-idea`. The file
 
 ## Session: building the outline
 
-**Author:** `/nonfiction-studio:outline-book`
+**Author:** `/nonfiction-studio:nfs-outline`
 
-The `outline-book` skill confirms `structure/thesis.md` is present and reviewed.
+The `nfs-outline` skill confirms `structure/thesis.md` is present and reviewed.
 It routes to `structure-architect`.
 
 **structure-architect:**

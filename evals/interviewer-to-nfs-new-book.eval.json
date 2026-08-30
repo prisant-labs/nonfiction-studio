@@ -1,0 +1,14 @@
+{
+  "covers": { "chain": ["interviewer", "nfs-new-book"] },
+  "description": "The interviewer agent invokes the nfs-new-book skill before asking any intake question when the book tree does not yet exist.",
+  "cases": [
+    {
+      "given": "intake interview starts and no project directory structure is present",
+      "expect": "nfs-new-book skill is invoked to scaffold the directory structure before the interview begins"
+    },
+    {
+      "given": "interviewer is dispatched for a new book and context/ does not exist",
+      "expect": "interviewer calls nfs-new-book so the scaffold appears before the first intake question"
+    }
+  ]
+}

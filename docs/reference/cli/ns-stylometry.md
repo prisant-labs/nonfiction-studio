@@ -87,7 +87,7 @@ or use the same `node` plus full-path form.
 |---|---|
 | 0 | Pass - drift score is below the `thresholds.drift_score_max` value in config.json (default 25) |
 | 1 | Drift score at or above threshold; per-marker flags identify which markers drove the score |
-| 2 | Missing baseline, stale baseline (`marker_set_version` does not match the engine's current version -- run `capture-voice` to recapture it), missing chapters directory, invalid `--measure` argument, or operational error |
+| 2 | Missing baseline, stale baseline (`marker_set_version` does not match the engine's current version -- run `nfs-capture-voice` to recapture it), missing chapters directory, invalid `--measure` argument, or operational error |
 
 `--explain` never changes this taxonomy: it only adds detail to whichever exit code the run
 already produces. A run with `--explain` and the same run without it always exit with the
@@ -399,4 +399,4 @@ engine as the `stylometry` gate check. The `voice-capture` agent calls `ns-stylo
 ## See also
 
 - [ns-gate CLI reference](./ns-gate.md) - orchestrator that calls ns-stylometry internally
-- [capture-voice skill reference](../skills/capture-voice.md) - skill that builds the voice baseline
+- [nfs-capture-voice skill reference](../skills/nfs-capture-voice.md) - skill that builds the voice baseline

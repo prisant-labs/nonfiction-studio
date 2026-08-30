@@ -1,14 +1,14 @@
 // tests/engines/quick-scan-measure.test.mjs
-// what-it-is:   dependency-proof test for the quick-scan skill's load-bearing mechanism
+// what-it-is:   dependency-proof test for the nfs-quick-scan skill's load-bearing mechanism
 // what-it-does: proves that `ns-stylometry --measure=<path>` works end to end on a temp
 //               file containing realistic PASTED PROSE (not a committed book chapter),
 //               written to a path outside the repo and outside examples/, exactly the
-//               shape of invocation OPP-D17 (five-minute first win)'s quick-scan skill
+//               shape of invocation OPP-D17 (five-minute first win)'s nfs-quick-scan skill
 //               depends on: write pasted text to a temp file, measure it, present the
-//               named markers. Also proves the boundary data (totalWords) quick-scan
+//               named markers. Also proves the boundary data (totalWords) nfs-quick-scan
 //               reads to decide which word-count band applies is accurate at three
 //               sizes: under 500, the 500-1000 target band, and well over 1000.
-// why:          OPP-D17 (five-minute first win): quick-scan's voice profile must be a real
+// why:          OPP-D17 (five-minute first win): nfs-quick-scan's voice profile must be a real
 //               measurement, not a model impression, so the --measure invocation path it
 //               depends on needs verification rather than assumption. bin/ns-stylometry and
 //               hooks/lib/stylometry-engine.mjs are unmodified here; this suite is therefore
@@ -46,11 +46,11 @@ function runMeasure(paths) {
 }
 
 // ---------------------------------------------------------------------------
-// The exact mechanism quick-scan's SKILL.md instructs: write pasted prose to
+// The exact mechanism nfs-quick-scan's SKILL.md instructs: write pasted prose to
 // a temp file OUTSIDE the repo and outside examples/, then --measure it.
 // ---------------------------------------------------------------------------
 
-test('quick-scan mechanism: pasted prose written to an os.tmpdir() file measures cleanly', () => {
+test('nfs-quick-scan mechanism: pasted prose written to an os.tmpdir() file measures cleanly', () => {
   const pastedText = readFileSync(FIXTURE, 'utf8');
   const dir = mkdtempSync(join(tmpdir(), 'ns-quick-scan-test-'));
   const tmpFile = join(dir, 'nonfiction-studio-quick-scan.md');
@@ -58,7 +58,7 @@ test('quick-scan mechanism: pasted prose written to an os.tmpdir() file measures
 
   try {
     // The temp file must resolve outside the repo checkout and outside
-    // examples/ specifically: quick-scan's pasted text must never be
+    // examples/ specifically: nfs-quick-scan's pasted text must never be
     // written inside either location.
     assert.ok(
       !resolve(tmpFile).startsWith(REPO_ROOT + sep),
@@ -71,13 +71,13 @@ test('quick-scan mechanism: pasted prose written to an os.tmpdir() file measures
     const out = JSON.parse(result.stdout);
     assert.deepStrictEqual(
       Object.keys(out.markers).sort(), [...EIGHT_MARKERS].sort(),
-      'measure output carries exactly the eight named markers quick-scan presents by name'
+      'measure output carries exactly the eight named markers nfs-quick-scan presents by name'
     );
     for (const key of EIGHT_MARKERS) {
       assert.ok(typeof out.markers[key] === 'number' && isFinite(out.markers[key]), key + ' is a finite number');
     }
 
-    // totalWords is the exact figure quick-scan uses to decide which
+    // totalWords is the exact figure nfs-quick-scan uses to decide which
     // word-count band (under 500 / 500-1000 / well over 1000) applies.
     const expectedWords = countWords(pastedText);
     assert.strictEqual(out.totalWords, expectedWords, 'totalWords matches the engine tokenizer exactly');
@@ -90,9 +90,9 @@ test('quick-scan mechanism: pasted prose written to an os.tmpdir() file measures
   }
 });
 
-test('quick-scan mechanism: markers key set matches the golden config baseline vocabulary', () => {
-  // Quick-scan presents marker names the author may later see again in
-  // capture-voice's baseline (context/style-profile.md / config.json). The
+test('nfs-quick-scan mechanism: markers key set matches the golden config baseline vocabulary', () => {
+  // nfs-quick-scan presents marker names the author may later see again in
+  // nfs-capture-voice's baseline (context/style-profile.md / config.json). The
   // vocabulary must be the same set both places.
   const pastedText = readFileSync(FIXTURE, 'utf8');
   const dir = mkdtempSync(join(tmpdir(), 'ns-quick-scan-test-'));
@@ -109,14 +109,14 @@ test('quick-scan mechanism: markers key set matches the golden config baseline v
     ));
     const goldenKeys = Object.keys(config.stylometry.baseline.markers).sort();
     assert.deepStrictEqual(Object.keys(out.markers).sort(), goldenKeys,
-      'quick-scan marker names must equal the same vocabulary capture-voice uses');
+      'nfs-quick-scan marker names must equal the same vocabulary nfs-capture-voice uses');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('quick-scan mechanism: two runs of the same pasted text are deterministic', () => {
-  // Reinforces quick-scan's engine-versus-model distinction: this is a
+test('nfs-quick-scan mechanism: two runs of the same pasted text are deterministic', () => {
+  // Reinforces nfs-quick-scan's engine-versus-model distinction: this is a
   // measurement, not a model improvisation, so it must be perfectly reproducible.
   const pastedText = readFileSync(FIXTURE, 'utf8');
   const dir = mkdtempSync(join(tmpdir(), 'ns-quick-scan-test-'));
@@ -137,7 +137,7 @@ test('quick-scan mechanism: two runs of the same pasted text are deterministic',
 
 // ---------------------------------------------------------------------------
 // Word-count boundary data: under 500 / well over 1000 -- the two edge bands
-// quick-scan's SKILL.md must handle honestly (noisy-at-short, say-what-was-
+// nfs-quick-scan's SKILL.md must handle honestly (noisy-at-short, say-what-was-
 // measured-at-long).
 // ---------------------------------------------------------------------------
 

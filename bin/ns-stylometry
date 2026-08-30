@@ -240,7 +240,7 @@ try {
     computeDrift(measured, baseline, thresholds));
 } catch (err) {
   // Covers both a malformed baseline (missing .markers) and a stale
-  // marker_set_version (StaleBaselineError names capture-voice as the remedy).
+  // marker_set_version (StaleBaselineError names nfs-capture-voice as the remedy).
   process.stderr.write('ns-stylometry: ' + err.message + '\n');
   process.exit(2);
 }

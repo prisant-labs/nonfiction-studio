@@ -811,8 +811,8 @@ test('computeDrift: scoring against a baseline whose marker_set_version does not
     (err) => {
       assert.strictEqual(err.name, 'StaleBaselineError',
         'error must be a named StaleBaselineError; got ' + err.name);
-      assert.ok(err.message.includes('capture-voice'),
-        'error message must name capture-voice as the remedy; got: ' + err.message);
+      assert.ok(err.message.includes('nfs-capture-voice'),
+        'error message must name nfs-capture-voice as the remedy; got: ' + err.message);
       return true;
     }
   );
@@ -824,7 +824,7 @@ test('computeDrift: a baseline with no marker_set_version field at all is treate
 
   assert.throws(
     () => computeDrift(measured, noVersionBaseline, { drift_score_max: 30, stylometry_marker_tolerance: 2.0 }),
-    /capture-voice/,
+    /nfs-capture-voice/,
     'an absent marker_set_version field must be treated as version 1 and rejected as stale'
   );
 });
@@ -928,7 +928,7 @@ test('typography: the fold carries a marker-set version bump, so a pre-fold base
   const preFold = { markers: measureChapter(ASCII_PROSE), marker_set_version: 2 };
   assert.throws(
     () => computeDrift(measureChapter(ASCII_PROSE), preFold, { drift_score_max: 25 }),
-    /capture-voice/,
+    /nfs-capture-voice/,
     'a version-2 baseline must be rejected as stale, not scored against'
   );
 });

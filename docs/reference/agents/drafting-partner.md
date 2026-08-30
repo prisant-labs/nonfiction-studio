@@ -40,12 +40,12 @@ session progress are the PostToolBatch hook's responsibility per D-06
 
 Invoke `drafting-partner` when any of the following holds.
 
-- The author or the `draft-chapter` skill is ready to produce the first draft of
+- The author or the `nfs-draft` skill is ready to produce the first draft of
   a chapter whose outline entry exists in `structure/outline.md`.
 - An existing chapter needs to be extended or revised; the agent enters diff
   proposal mode and produces PROPOSED ADDITION or PROPOSED REPLACEMENT blocks
   rather than overwriting the file.
-- `draft-chapter` is invoked; it routes here directly and manages the pre-flight
+- `nfs-draft` is invoked; it routes here directly and manages the pre-flight
   sequence.
 
 ## At a glance
@@ -231,7 +231,7 @@ those fields. Every guardrail above is enforced in the agent's system prompt.
 After a `drafting-partner` session, the natural next steps depend on what the
 output contains. If the chapter carries `[UNVERIFIED]` tags: invoke
 `research-librarian` to supply the missing sources and log the underlying claims,
-then re-run `draft-chapter` or `fact-check-pass` to resolve the tags. Once all
+then re-run `nfs-draft` or `nfs-fact-check` to resolve the tags. Once all
 tags resolve, the chapter is ready for `line-editor` for sentence-level polish and
 `fact-checker` for adversarial verification before the quality gate clears. The
 claim anchors written here survive that polish pass: the cross-agent contract in
@@ -244,7 +244,7 @@ revision.
 ## Worked example
 
 See [drafting-partner.example.md](./drafting-partner.example.md) for a condensed
-transcript of a `draft-chapter` session extending Chapter 2 of the sample book
+transcript of a `nfs-draft` session extending Chapter 2 of the sample book
 "The Quiet Network," showing the three pre-flight checks, diff proposal mode
 triggered by an existing chapter, PROPOSED ADDITION blocks with anchors resolving
 to committed EV entries, and an `[UNVERIFIED]` tag for an assertion absent from

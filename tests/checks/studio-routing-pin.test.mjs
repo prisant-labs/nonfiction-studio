@@ -1,6 +1,6 @@
 // tests/checks/studio-routing-pin.test.mjs
-// what-it-is:   a pin test for skills/studio/SKILL.md's dispatcher routing table
-// what-it-does: reads the real, current skills/studio/SKILL.md at HEAD (not a fixture or a
+// what-it-is:   a pin test for skills/nfs-start/SKILL.md's dispatcher routing table
+// what-it-does: reads the real, current skills/nfs-start/SKILL.md at HEAD (not a fixture or a
 //               clone - the actual dispatcher an author's session loads) and extracts every
 //               skill name named on its "Skills routed to (by path)." summary line (the intro's
 //               own canonical, single-line manifest of every route the dispatcher offers, stated
@@ -15,14 +15,14 @@
 //               assertion, independent of the pin, confirms every extracted name resolves to a
 //               real shipped skill (skills/<name>/SKILL.md exists) - so a routing-table typo
 //               that happens to also get hand-copied into the pin would still be caught.
-//               This checker file deliberately never edits skills/studio/SKILL.md to make it
+//               This checker file deliberately never edits skills/nfs-start/SKILL.md to make it
 //               match a pre-decided list; the pin is derived from reading the dispatcher as it
 //               actually is, not the reverse.
 // why:          F-CI-07 (dispatcher and CLI-wrapper skills uncovered)'s remaining half. The
 //               CLI-wrapper half (a skill's own bin/ns-<name> routing target) closed in tranche
 //               2 via scripts/checks/check-skill-cli-targets.mjs; nothing previously pinned the
 //               dispatcher's OWN routing table itself, so a route silently dropped, renamed, or
-//               retargeted during an edit to skills/studio/SKILL.md would ship with no test
+//               retargeted during an edit to skills/nfs-start/SKILL.md would ship with no test
 //               ever noticing. Kept in its own file rather than folded into
 //               check-advertised-invocations.test.mjs because it tests dispatcher CONTENT
 //               directly (what routes exist), not the general advertised-invocation-resolution
@@ -38,32 +38,32 @@ import { join } from 'node:path';
 import { REPO_ROOT } from './clone-helper.mjs';
 
 // ---------------------------------------------------------------------------
-// The pin. Derived by reading skills/studio/SKILL.md's "Skills routed to (by
-// path)." summary line at HEAD: Path 1 init-project, then intake-interview;
-// Path 2 outline-book or draft-chapter; Path 3 research-pass or
-// fact-check-pass; Path 4 status-dashboard, then run-quality-gate; Path 5
-// doctor (general questions get a direct answer, no skill); Path 6
-// quick-scan or tour. Eleven names, matching order of first mention on that
+// The pin. Derived by reading skills/nfs-start/SKILL.md's "Skills routed to (by
+// path)." summary line at HEAD: Path 1 nfs-new-book, then nfs-interview;
+// Path 2 nfs-outline or nfs-draft; Path 3 nfs-research or
+// nfs-fact-check; Path 4 nfs-status-dashboard, then nfs-check-chapter; Path 5
+// nfs-doctor (general questions get a direct answer, no skill); Path 6
+// nfs-quick-scan or nfs-tour. Eleven names, matching order of first mention on that
 // line. "revise-pass" is deliberately absent: Step 4.2b and the Failure
 // behavior section both state it is a Phase 2 skill "not available in v1"
 // and it is never named on the routing summary line itself.
 // ---------------------------------------------------------------------------
 
 const EXPECTED_ROUTING_TARGETS = [
-  'init-project',
-  'intake-interview',
-  'outline-book',
-  'draft-chapter',
-  'research-pass',
-  'fact-check-pass',
-  'status-dashboard',
-  'run-quality-gate',
-  'doctor',
-  'quick-scan',
-  'tour',
+  'nfs-new-book',
+  'nfs-interview',
+  'nfs-outline',
+  'nfs-draft',
+  'nfs-research',
+  'nfs-fact-check',
+  'nfs-status-dashboard',
+  'nfs-check-chapter',
+  'nfs-doctor',
+  'nfs-quick-scan',
+  'nfs-tour',
 ];
 
-const SKILL_MD_PATH = join(REPO_ROOT, 'skills', 'studio', 'SKILL.md');
+const SKILL_MD_PATH = join(REPO_ROOT, 'skills', 'nfs-start', 'SKILL.md');
 const SUMMARY_MARKER = 'Skills routed to (by path)';
 
 function extractRoutingSummaryTargets(text) {
@@ -71,7 +71,7 @@ function extractRoutingSummaryTargets(text) {
   const summaryLine = lines.find((l) => l.includes(SUMMARY_MARKER));
   assert.ok(
     summaryLine,
-    'skills/studio/SKILL.md must carry a line containing "' + SUMMARY_MARKER + '" for this pin ' +
+    'skills/nfs-start/SKILL.md must carry a line containing "' + SUMMARY_MARKER + '" for this pin ' +
     'to derive from; the dispatcher summary format has changed and this pin needs a maintainer to ' +
     're-derive it by hand'
   );
@@ -89,7 +89,7 @@ function extractRoutingSummaryTargets(text) {
   return extracted;
 }
 
-test('skills/studio/SKILL.md routing summary matches the pinned target set exactly, in order', () => {
+test('skills/nfs-start/SKILL.md routing summary matches the pinned target set exactly, in order', () => {
   const text = readFileSync(SKILL_MD_PATH, 'utf8');
   const extracted = extractRoutingSummaryTargets(text);
   assert.deepEqual(
@@ -115,6 +115,6 @@ test('revise-pass is deliberately absent from the routing summary (Phase 2, not 
   assert.ok(
     !extracted.includes('revise-pass'),
     'revise-pass must not appear as a routing target on the summary line; it is a Phase 2 skill, ' +
-    'not shipped in v1 - see Step 4.2b and the Failure behavior section of skills/studio/SKILL.md'
+    'not shipped in v1 - see Step 4.2b and the Failure behavior section of skills/nfs-start/SKILL.md'
   );
 });

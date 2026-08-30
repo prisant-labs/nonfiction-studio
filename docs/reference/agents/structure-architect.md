@@ -36,10 +36,10 @@ and evidence).
 Invoke the `structure-architect` when any of the following holds.
 
 - `thesis-architect` has written and the author has confirmed
-  `structure/thesis.md`. The `outline-book` skill triggers `structure-architect`
+  `structure/thesis.md`. The `nfs-outline` skill triggers `structure-architect`
   to translate the argument spine into a chapter plan.
 - `structure/thesis.md` is confirmed but `structure/outline.md` does not yet
-  exist. The `outline-book` skill routes here directly.
+  exist. The `nfs-outline` skill routes here directly.
 - The outline needs revision as research findings come in and the chapter plan
   no longer matches available evidence.
 - Developmental editing reveals structural problems - a missing transition

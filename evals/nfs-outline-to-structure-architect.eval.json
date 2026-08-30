@@ -1,0 +1,14 @@
+{
+  "covers": { "chain": ["nfs-outline", "structure-architect"] },
+  "description": "The nfs-outline skill dispatches structure-architect to produce the chapter-by-chapter outline after the thesis is confirmed.",
+  "cases": [
+    {
+      "given": "nfs-outline is invoked and structure/thesis.md already exists and is confirmed",
+      "expect": "structure-architect agent is dispatched to produce the chapter-by-chapter outline in structure/outline.md"
+    },
+    {
+      "given": "nfs-outline runs after thesis-architect completes and a confirmed thesis is on disk",
+      "expect": "structure-architect is dispatched to lay out the chapter structure"
+    }
+  ]
+}

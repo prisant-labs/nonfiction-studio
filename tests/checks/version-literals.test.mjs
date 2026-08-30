@@ -3,7 +3,7 @@
 // what-it-does: scans every shipped instruction file (skills/**/SKILL.md and agents/*.md) for
 //               a comparison written against a bare numeric literal where a code constant is
 //               the source of truth, and fails naming the file and line.
-// why:          skills/run-quality-gate/SKILL.md told the model to treat a baseline as stale
+// why:          skills/nfs-check-chapter/SKILL.md told the model to treat a baseline as stale
 //               unless marker_set_version equalled a literal 2. CURRENT_MARKER_SET_VERSION had
 //               moved to 3, so every current baseline read as stale: the voice-drift check was
 //               skipped on every run through that skill, and the author was advised to

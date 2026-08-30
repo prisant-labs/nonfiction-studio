@@ -51,9 +51,9 @@ ISBN 978-0521663632.
 
 ## Session: registering the source and logging evidence
 
-**Author:** `/nonfiction-studio:research-pass`
+**Author:** `/nonfiction-studio:nfs-research`
 
-The `research-pass` skill routes to `research-librarian`.
+The `nfs-research` skill routes to `research-librarian`.
 
 **research-librarian:**
 

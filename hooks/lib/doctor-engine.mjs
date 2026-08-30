@@ -388,7 +388,7 @@ function checkStyleProfile(root, config, findings, notices) {
   if (!hasH1) {
     // Pre-capture stub state (e.g. templates/book-scaffold's HTML-comment
     // stub): legitimate on its own, but only when config.json has not already
-    // captured a baseline. capture-voice writes the profile and the baseline
+    // captured a baseline. nfs-capture-voice writes the profile and the baseline
     // together, so a baseline with no captured profile is inconsistent state.
     if (configBaseline) {
       findings.push({
@@ -396,15 +396,15 @@ function checkStyleProfile(root, config, findings, notices) {
         path: STYLE_PROFILE_REL_PATH,
         message:
           STYLE_PROFILE_REL_PATH + ' has no "# Style profile" heading (an uncaptured stub) but ' +
-          '.studio/config.json already carries a stylometry baseline; capture-voice writes both ' +
-          'together, so a baseline with no captured profile is inconsistent state. Run capture-voice ' +
+          '.studio/config.json already carries a stylometry baseline; nfs-capture-voice writes both ' +
+          'together, so a baseline with no captured profile is inconsistent state. Run nfs-capture-voice ' +
           'to write the profile, or clear the baseline.'
       });
     } else {
       notices.push({
         type: 'style-profile.not-captured',
         path: STYLE_PROFILE_REL_PATH,
-        message: 'style profile not yet captured; run capture-voice'
+        message: 'style profile not yet captured; run nfs-capture-voice'
       });
     }
     return;

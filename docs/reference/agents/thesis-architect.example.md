@@ -40,9 +40,9 @@ and promise but without an argument spine or scope flags section.
 
 ## Session: sharpening the thesis
 
-**Author:** `/nonfiction-studio:outline-book`
+**Author:** `/nonfiction-studio:nfs-outline`
 
-The `outline-book` skill checks for a non-empty `structure/thesis.md`. The
+The `nfs-outline` skill checks for a non-empty `structure/thesis.md`. The
 interviewer's draft exists but has no argument spine. The skill routes to
 `thesis-architect` first.
 

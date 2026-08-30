@@ -303,3 +303,140 @@ Windows) is the durable, committed record of that same spike's evidence.
 - TSK-011 (SPK-05 bin PATH on Windows): see ADR-0005 (bin PATH on Windows)
 - Spike stub files (permanent evidence): `skills/spike-echo/SKILL.md`, `skills/spike-status/SKILL.md`
 - ADR-0001 (hooks.json schema): `docs/adr/ADR-0001-hooks-json-schema.md`
+
+---
+
+## Amendment (2026-08-29): the nfs- skill naming convention
+
+- Status: Accepted
+- Date: 2026-08-29
+- Provenance: accepted under the maintainer's general delegation of the decision queue ("move forward with your best recommendations and decisions")
+
+This ADR's original decision concerned resolution mechanics: whether a bare verb reliably
+activates a skill. It found that it does, in every channel that matters, and closed the
+`commands/` alias-layer question. It did not settle a separate, adjacent question: whether
+the bare verb, once it resolves, is a name any other installed plugin could also plausibly
+claim. That question is settled here, as an amendment rather than a new record, because it
+is the same decision (skill invocation ergonomics) revisited on a second axis.
+
+### The problem this amendment closes
+
+A skill's short invocation form shares a namespace with every other installed plugin. This
+plugin shipped `/doctor`, `/studio`, `/tour`, `/init-project`, and ten more names, most of
+them ordinary enough that any other plugin could reasonably claim them first. The fully
+qualified form (`/nonfiction-studio:<name>`) always resolves regardless, so the entire
+benefit of a prefix is on the short form: an unprefixed name buys nothing once a second
+plugin defines the same verb, and an author with several plugins installed should not have
+to remember which one owns a given word. This is also the established convention across
+this house's sibling plugin libraries, each of which prefixes its own skill names for the
+identical reason. This plugin was the outlier.
+
+### The convention and its enforcement
+
+Every skill in this plugin is now named `nfs-<name>`, with no exceptions now or for any
+skill added later. The rule is machine-enforced in `scripts/check-frontmatter.mjs`, beside
+the pre-existing agent name-matches-filename check, as four rules, each mutation-tested
+against a planted violation in `tests/checks/check-frontmatter.test.mjs`:
+
+1. Every directory under `skills/` that contains a `SKILL.md` has a name matching
+   `^nfs-[a-z0-9]+(-[a-z0-9]+)*$`.
+2. Every `SKILL.md`'s `name:` frontmatter field equals its containing directory name.
+3. Every entry in `library.json` `components.skills[]` satisfies rule 1.
+4. Every directory under `skills/` contains a `SKILL.md`, closing PF-29 (skill-directory
+   existence gaps); this rule formalizes and pins enforcement the per-skill validation loop
+   already provided, rather than adding a new enforcement mechanism.
+
+A naming rule stated only in prose holds until the first contributor who never read the
+prose, which for a plugin about to ship publicly is soon. Shipping the convention as a
+check rather than a paragraph is the durable output of this amendment; the fourteen
+renames below are the one-time cost.
+
+### The improved-name principle: name it what an author would say
+
+Prefixing alone was applied to ten of the fourteen names. Four names needed more than a
+prefix, because the old name did not name the job an author actually reaches for:
+`run-quality-gate` becomes `nfs-check-chapter`, `init-project` becomes `nfs-new-book`, and
+`intake-interview` becomes `nfs-interview`, in each case because that is the word an author
+types when they mean that job, not the word an implementer wrote when the skill was built.
+`studio` is discussed on its own below. The full old-to-new map, all fourteen skills, no
+exemptions:
+
+| Old | New |
+|---|---|
+| `build-apparatus` | `nfs-build-apparatus` |
+| `capture-voice` | `nfs-capture-voice` |
+| `doctor` | `nfs-doctor` |
+| `draft-chapter` | `nfs-draft` |
+| `fact-check-pass` | `nfs-fact-check` |
+| `init-project` | `nfs-new-book` |
+| `intake-interview` | `nfs-interview` |
+| `outline-book` | `nfs-outline` |
+| `quick-scan` | `nfs-quick-scan` |
+| `research-pass` | `nfs-research` |
+| `run-quality-gate` | `nfs-check-chapter` |
+| `status-dashboard` | `nfs-status-dashboard` |
+| `studio` | `nfs-start` |
+| `tour` | `nfs-tour` |
+
+### Why `studio` becomes `nfs-start`, not `nfs-studio`
+
+`nfs-studio` would stutter, because `nfs` itself expands to non-fiction studio; a sentence
+carrying both reads as the same word twice. Prefixing `studio` unchanged and leaving it
+exempt would have been worse than the stutter: `studio` was the single most collision-prone
+name in the whole set, so an exemption would have stripped the prefix from precisely the
+name that needed it most, and a partial convention means an author can no longer predict a
+skill's name from its existence. The stutter is a symptom of an older naming error, not an
+argument against the prefix: no sibling plugin library names its front door after the
+product it belongs to, because the front door should be named for the job it does, not the
+container it lives in. This skill's own job is to remove the need for an author to know any
+skill name at all, so its own name has to be guessable by someone who knows nothing about
+this plugin yet. `start` is the near-universal entry-point word, and it reads verb-first
+like the rest of the set.
+
+### Rejected alternatives
+
+- `nfs-status` for the renamed status-dashboard skill: rejected because the `ns-status` CLI
+  already exists, and a `nfs-status` skill fronting an `ns-status` CLI would put two
+  different things one letter apart in the same sentence.
+- `nfs-front-door`: this plugin's own term for the front-door skill, but longer and less
+  guessable from cold than `start`.
+- `nfs-menu`: undersells a skill that inspects project state and routes conditionally
+  rather than presenting a static list.
+- `nfs-help`: a `doctor` skill already owns troubleshooting, so a `help` skill beside a
+  `doctor` skill forces a first-time author to guess which flavor of stuck they are in.
+- `nfs-dispatch` / `nfs-router`: accurate to what the skill does internally, aimed at the
+  wrong audience; an author does not think in dispatcher vocabulary.
+- `nfs-home`: reads better for an author already mid-book, but the guessing burden this
+  skill exists to solve falls almost entirely on a first-time author with no project yet,
+  for whom `start` is the more exact word; a returning author is already pointed here by
+  the session-start orientation message and does not need to guess.
+
+### The eight verb aliases: deleted, not migrated
+
+Every `SKILL.md` also carried a documentation-only "verb alias" clause (`/draft`,
+`/factcheck`, `/book-init`, `/interview`, `/outline`, `/research`, `/gate`, `/status`). All
+eight are deleted from every `SKILL.md`'s frontmatter and reference page, for three
+reasons taken together. First, this plugin ships no `commands/` directory, so none of these
+was ever a registered command; a "verb alias" was documentation shorthand describing a hope
+about model behavior, not a contract this plugin's own manifest declared. Second, per this
+ADR's own probe evidence above, invocation resolves by the model matching an author's
+intent against a skill's declared purpose, not by a deterministic alias table, so a
+documented alias was never more than probabilistic: it worked to the extent the model
+happened to associate the word with the skill, with nothing enforcing that association and
+nothing to catch it silently failing to fire. Third, and decisively, the renamed short
+names are now themselves the typeable verbs an author would reach for
+(`nfs-check-chapter`, `nfs-new-book`, `nfs-interview`, and the rest): maintaining a second,
+shorter, unregistered, unenforced alias beside a name that already reads as a verb adds a
+second thing that can drift out of sync with the skill it names, for no benefit an author
+would notice.
+
+### Consequences
+
+- The convention closes over every skill added to this plugin from this date forward; a
+  contributor who never reads this ADR still cannot ship an unprefixed skill name, because
+  `scripts/check-frontmatter.mjs` fails the build.
+- No alias-layer decision is reopened by this amendment; W-07 (commands alias layer) in
+  R-04 (scope boundaries) remains deferred, unaffected by the naming change above it.
+- This amendment authorizes a naming decision and its enforcement mechanism only; the
+  fourteen renames, the alias deletions, and the machine rules described above already
+  shipped in this same wave and are recorded in `CHANGELOG.md` and `MIGRATION.md`.

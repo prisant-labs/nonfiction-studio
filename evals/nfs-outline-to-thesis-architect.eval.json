@@ -1,0 +1,14 @@
+{
+  "covers": { "chain": ["nfs-outline", "thesis-architect"] },
+  "description": "The nfs-outline skill conditionally dispatches thesis-architect to produce or sharpen the controlling idea when structure/thesis.md is absent or unreviewed.",
+  "cases": [
+    {
+      "given": "nfs-outline runs and structure/thesis.md does not exist",
+      "expect": "thesis-architect agent is dispatched to develop the controlling idea before structure-architect runs"
+    },
+    {
+      "given": "nfs-outline runs with scope:thesis argument",
+      "expect": "thesis-architect agent is dispatched and the skill ends after thesis confirmation"
+    }
+  ]
+}

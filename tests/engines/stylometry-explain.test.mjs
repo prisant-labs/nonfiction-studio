@@ -259,12 +259,12 @@ test('exit code and error message are identical with and without --explain on th
     const withExplain = run(['--all', '--baseline=' + staleBaselinePath, '--explain'], clone);
 
     assert.strictEqual(without.status, 2, 'a stale baseline must exit 2; stderr: ' + without.stderr);
-    assert.ok(without.stderr.includes('capture-voice'),
-      'stale-baseline error must name capture-voice as the remedy; stderr: ' + without.stderr);
+    assert.ok(without.stderr.includes('nfs-capture-voice'),
+      'stale-baseline error must name nfs-capture-voice as the remedy; stderr: ' + without.stderr);
 
     assert.strictEqual(withExplain.status, 2,
       '--explain must not change the exit code on the operational-error path; stderr: ' + withExplain.stderr);
-    assert.ok(withExplain.stderr.includes('capture-voice'),
+    assert.ok(withExplain.stderr.includes('nfs-capture-voice'),
       '--explain must reach the same stale-baseline error, not a different one; stderr: ' + withExplain.stderr);
 
     assert.strictEqual(withExplain.stderr, without.stderr,

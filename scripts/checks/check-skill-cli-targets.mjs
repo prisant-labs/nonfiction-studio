@@ -4,7 +4,7 @@
 //               templates/, plus root-level .md files, for the literal invocation form a
 //               CLI-wrapper skill (or any other shipped document) uses to name a routing
 //               target - "bin/ns-<name>", the same shape node "<plugin-root>/bin/ns-<name>"
-//               resolves to once the plugin root is substituted in (see skills/init-project/
+//               resolves to once the plugin root is substituted in (see skills/nfs-new-book/
 //               SKILL.md Step 4 for that resolution) - and asserts each named CLI is genuinely
 //               shipped: the extensionless file exists directly under bin/. A bare "ns-<name>"
 //               mention with no "bin/" prefix (for example a sentence naming a sibling CLI in
@@ -25,7 +25,7 @@
 //               asserted that a CLI-wrapper skill's named routing target is a real, shipped
 //               file, so a typo'd or renamed CLI reference would ship silently and surface only
 //               as a runtime failure for an author. This is the generic, reusable form of that
-//               finding's fix; it was written to close the gap for status-dashboard's
+//               finding's fix; it was written to close the gap for nfs-status-dashboard's
 //               bin/ns-status reference, and it applies to every other skill in the same scan
 //               scope for free, at no extra cost, because the mechanism does not special-case
 //               any one skill. The scan scope was widened from skills/**/SKILL.md only to every
