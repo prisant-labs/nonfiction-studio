@@ -1,0 +1,14 @@
+{
+  "covers": { "chain": ["nfs-capture-voice", "voice-capture"] },
+  "description": "The nfs-capture-voice skill dispatches the voice-capture agent to analyze a writing sample and write context/style-profile.md.",
+  "cases": [
+    {
+      "given": "nfs-capture-voice is invoked with a writing sample provided by the author",
+      "expect": "voice-capture agent is dispatched to analyze the sample and write context/style-profile.md"
+    },
+    {
+      "given": "nfs-capture-voice skill runs and the author supplies two paragraphs of prose",
+      "expect": "voice-capture agent is invoked to score the sample and produce a style profile"
+    }
+  ]
+}

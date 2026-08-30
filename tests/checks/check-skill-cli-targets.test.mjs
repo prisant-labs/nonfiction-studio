@@ -12,7 +12,7 @@
 //                     real shipped skills at all;
 //                 (2) real-repo clones (clone-helper.mjs's cloneRepoToTemp), which exercise the
 //                     checker against the actual skills/**/SKILL.md scan scope, proving the
-//                     mechanism also confirms status-dashboard's real bin/ns-status routing
+//                     mechanism also confirms nfs-status-dashboard's real bin/ns-status routing
 //                     target resolves, and that a deliberate corruption of that same real
 //                     reference is caught.
 //               Every fixture gets a fresh copy of THIS REPO'S CURRENT on-disk checker script
@@ -20,7 +20,7 @@
 //               being staged in git's index, so this suite is never coupled to staging order
 //               during iteration - the same discipline check-workspace-refs.test.mjs uses.
 // why:          F-CI-07 (dispatcher and CLI-wrapper skills uncovered) - closed for
-//               status-dashboard's bin/ns-status reference specifically; these tests are the
+//               nfs-status-dashboard's bin/ns-status reference specifically; these tests are the
 //               durable, permanent proof that the checker has real teeth - F6 (checker negative
 //               tests): "a checker that cannot fail is not a checker" - not only a one-time
 //               manual run.
@@ -134,7 +134,7 @@ test('false-positive guard: a bare "ns-<name>" mention with no "bin/" prefix is 
 
 // ---------------------------------------------------------------------------
 // Real-repo integration: proves the mechanism against the actual scan scope,
-// including status-dashboard's real bin/ns-status routing target.
+// including nfs-status-dashboard's real bin/ns-status routing target.
 // ---------------------------------------------------------------------------
 
 test('real-repo scope: every shipped skill\'s bin/ns-<name> routing target resolves', () => {
@@ -147,7 +147,7 @@ test('real-repo scope: every shipped skill\'s bin/ns-<name> routing target resol
   }
 });
 
-test('real-repo scope: status-dashboard names bin/ns-status as its routing target, and the checker confirms it resolves', () => {
+test('real-repo scope: nfs-status-dashboard names bin/ns-status as its routing target, and the checker confirms it resolves', () => {
   const { root, cleanup } = cloneRealRepo('real-status-dashboard-positive');
   try {
     const skillPath = join(root, 'skills', 'nfs-status-dashboard', 'SKILL.md');
@@ -165,7 +165,7 @@ test('real-repo scope: status-dashboard names bin/ns-status as its routing targe
   }
 });
 
-test('real-repo scope: a deliberately corrupted bin/ns-status reference in status-dashboard/SKILL.md is caught', () => {
+test('real-repo scope: a deliberately corrupted bin/ns-status reference in nfs-status-dashboard/SKILL.md is caught', () => {
   const { root, cleanup } = cloneRealRepo('real-status-dashboard-corrupted');
   try {
     const skillPath = join(root, 'skills', 'nfs-status-dashboard', 'SKILL.md');

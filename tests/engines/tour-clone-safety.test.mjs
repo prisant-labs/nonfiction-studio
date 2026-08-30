@@ -1,16 +1,16 @@
 // tests/engines/tour-clone-safety.test.mjs
-// what-it-is:   safety proof for the tour skill's copy-before-demonstrate procedure
+// what-it-is:   safety proof for the nfs-tour skill's copy-before-demonstrate procedure
 // what-it-does: (1) proves the content-hash snapshot/diff helper this suite defines
 //               correctly DETECTS a write into a source tree, using a disposable
 //               synthetic fixture (never examples/); this is the suite's real
 //               red-then-green target, since the helper is new code written for this
-//               suite; (2) proves the tour's actual documented procedure: clone
+//               suite; (2) proves the nfs-tour's actual documented procedure: clone
 //               examples/sample-book to a fresh temp directory with fs.cpSync, then
 //               edit the gate mode, plant a defect, and revert it, all inside the
 //               clone only, leaves the real, committed examples/sample-book tree
 //               byte-for-byte unmodified. Mirrors the content-hash technique in
 //               scripts/test-fixtures.mjs's own temp-clone pattern.
-// why:          OPP-D17 (five-minute first win): the tour skill copies examples/sample-book
+// why:          OPP-D17 (five-minute first win): the nfs-tour skill copies examples/sample-book
 //               to a disposable location and plants a defect there, so the copy step itself
 //               needs a proof that it never writes into the source tree, since a direct write
 //               into a shipped example is a realistic mistake for any tour-like procedure to
@@ -112,7 +112,7 @@ test('detection sanity: diffSnapshots CATCHES a write into the source tree (the 
   try {
     const before = snapshotDir(src);
 
-    // Simulate the documented anti-pattern: a "tour" step that forgets to
+    // Simulate the documented anti-pattern: an nfs-tour step that forgets to
     // clone first and writes directly into the source tree instead.
     writeFileSync(join(src, 'a.md'), 'original content\nPLANTED DEFECT\n', 'utf8');
 
@@ -141,35 +141,35 @@ test('detection sanity: diffSnapshots CATCHES a new file created in the source t
 
 // ---------------------------------------------------------------------------
 // Part B: the real safety proof. Clone examples/sample-book with fs.cpSync
-// (the tour's documented mechanism) into a fresh temp directory, then run a
-// representative version of the tour's own procedure -- gate-mode edit,
+// (nfs-tour's documented mechanism) into a fresh temp directory, then run a
+// representative version of nfs-tour's own procedure -- gate-mode edit,
 // defect plant, revert -- entirely inside the clone. examples/sample-book
 // itself is only ever READ in this test (once, for the before-snapshot, and
 // implicitly as fs.cpSync's read-only source argument); it is never opened
 // for writing at any point.
 // ---------------------------------------------------------------------------
 
-test('tour procedure: cloning + editing the clone leaves examples/sample-book byte-for-byte unmodified', () => {
+test('nfs-tour procedure: cloning + editing the clone leaves examples/sample-book byte-for-byte unmodified', () => {
   const beforeSampleBook = snapshotDir(SAMPLE_BOOK);
 
   const destParent = mkdtempSync(join(tmpdir(), 'ns-tour-safety-real-'));
   const tourDir = join(destParent, 'sample-book-tour');
 
   try {
-    // Step 1 of the tour: clone via fs.cpSync (never writes to its source).
+    // Step 1 of nfs-tour: clone via fs.cpSync (never writes to its source).
     cpSync(SAMPLE_BOOK, tourDir, { recursive: true });
 
     const cloneRightAfterCopy = snapshotDir(tourDir);
 
-    // Step 2: flip the CLONE's gate mode from warn to block (an edit the
-    // tour performs only inside the clone).
+    // Step 2: flip the CLONE's gate mode from warn to block (an edit
+    // nfs-tour performs only inside the clone).
     const configPath = join(tourDir, '.studio', 'config.json');
     const configText = readFileSync(configPath, 'utf8');
     const blockedConfig = configText.replace('"mode": "warn",', '"mode": "block",');
     assert.notStrictEqual(blockedConfig, configText, 'the gate-mode replacement must actually match something');
     writeFileSync(configPath, blockedConfig, 'utf8');
 
-    // Step 3: plant the tour's defect (an AI self-reference line) in the CLONE only.
+    // Step 3: plant nfs-tour's defect (an AI self-reference line) in the CLONE only.
     const chapterPath = join(tourDir, 'chapters', '02-finding-your-network.md');
     const chapterText = readFileSync(chapterPath, 'utf8');
     const plantedText = chapterText + '\nHere is a draft of this paragraph for the author to revise.\n';
@@ -190,7 +190,7 @@ test('tour procedure: cloning + editing the clone leaves examples/sample-book by
     const afterSampleBook = snapshotDir(SAMPLE_BOOK);
     const sourceResidue = diffSnapshots(beforeSampleBook, afterSampleBook);
     assert.deepStrictEqual(sourceResidue, [],
-      'examples/sample-book must be byte-for-byte unmodified after the tour procedure; residue: ' +
+      'examples/sample-book must be byte-for-byte unmodified after the nfs-tour procedure; residue: ' +
       JSON.stringify(sourceResidue));
   } finally {
     rmSync(destParent, { recursive: true, force: true });

@@ -1,0 +1,14 @@
+{
+  "covers": { "chain": ["nfs-draft", "line-editor"] },
+  "description": "The nfs-draft skill dispatches line-editor after drafting-partner completes the chapter draft to perform a line-edit pass.",
+  "cases": [
+    {
+      "given": "nfs-draft runs and drafting-partner has produced a complete chapter draft",
+      "expect": "line-editor agent is dispatched to perform the line-edit pass on the chapter"
+    },
+    {
+      "given": "nfs-draft skill is invoked for chapter 02 and the initial draft is written",
+      "expect": "line-editor is dispatched to refine the chapter draft after drafting-partner completes"
+    }
+  ]
+}
