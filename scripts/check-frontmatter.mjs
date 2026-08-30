@@ -1,14 +1,24 @@
 // scripts/check-frontmatter.mjs
-// what-it-is:   agent and skill frontmatter validator with S4-enforcement fold
+// what-it-is:   agent and skill frontmatter validator with S4-enforcement fold, plus the
+//               nfs- skill naming convention (closing PF-29, skill-directory existence gaps)
 // what-it-does: verifies every agent carries the five-key house set (name,
 //               description, model, color, tools) with name matching its filename, color
 //               in the eight-value enum, model in the allowed set, and memory only on the
 //               D-09 roster (fact-checker); verifies no agent carries hooks, mcpServers,
-//               or permissionMode; verifies every skill carries name and a boolean
-//               user-invocable; enforces the S4 chain contract (TSK-044) bidirectionally
-//               against agents/_chain-permitted.yaml; verifies chain endpoint existence.
+//               or permissionMode; verifies every directory under skills/ contains a
+//               SKILL.md (rule 4, PF-29 (skill-directory existence gaps)); for every
+//               directory that does, verifies its name matches the nfs- naming
+//               convention, ^nfs-[a-z0-9]+(-[a-z0-9]+)*$ (rule 1), and that its SKILL.md
+//               carries name and a boolean user-invocable, with name equal to the
+//               containing directory name (rule 2); verifies every library.json
+//               components.skills[] entry also matches the naming convention (rule 3);
+//               enforces the S4 chain contract (TSK-044) bidirectionally against
+//               agents/_chain-permitted.yaml; verifies chain endpoint existence.
 // why:          Q-02 1.2 frontmatter-completeness step; resolves the phantom-caller era
-//               now that all Phase 1 skills and agents exist on disk per TSK-055.
+//               now that all Phase 1 skills and agents exist on disk per TSK-055. The
+//               nfs- naming convention ships as a machine rule here, beside the
+//               pre-existing agent name-matches-filename check, so it binds every skill
+//               added after this commit instead of living only in a planning document.
 // exit taxonomy: 0 = pass; 1 = named finding(s); 2 = operational error
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
@@ -27,6 +37,11 @@ const REPO_ROOT = resolve(__dirname, '..');
 const AGENTS_DIR = join(REPO_ROOT, 'agents');
 const SKILLS_DIR = join(REPO_ROOT, 'skills');
 const CHAIN_YAML = join(AGENTS_DIR, '_chain-permitted.yaml');
+const LIBRARY_JSON = join(REPO_ROOT, 'library.json');
+
+// The nfs- skill naming convention, rules 1 and 3: every skill directory name, and
+// every library.json components.skills[] entry, must match this.
+const SKILL_NAME_PATTERN = /^nfs-[a-z0-9]+(-[a-z0-9]+)*$/;
 
 // Eight-value color enum per D-19 (colors by pillar).
 const COLOR_ENUM = new Set(['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'cyan']);
@@ -251,8 +266,20 @@ for (const entry of skillEntries) {
   const filePath = 'skills/' + skillName + '/SKILL.md';
 
   if (!existsSync(skillMdPath)) {
-    addFinding(filePath + ': SKILL.md missing for skill "' + skillName + '"');
+    addFinding(
+      'skills/' + skillName + ': directory contains no SKILL.md (rule 4 of the nfs- ' +
+      'naming convention: every directory under skills/ must contain a SKILL.md)'
+    );
     continue;
+  }
+
+  // Rule 1 (nfs- naming convention): every directory under skills/ that contains a
+  // SKILL.md must match ^nfs-[a-z0-9]+(-[a-z0-9]+)*$.
+  if (!SKILL_NAME_PATTERN.test(skillName)) {
+    addFinding(
+      'skills/' + skillName + ': directory name does not match the nfs- naming ' +
+      'convention (rule 1: ^nfs-[a-z0-9]+(-[a-z0-9]+)*$)'
+    );
   }
 
   let text;
@@ -271,6 +298,14 @@ for (const entry of skillEntries) {
     if (!Object.prototype.hasOwnProperty.call(fm, key) || fm[key] === null || fm[key] === undefined) {
       addFinding(filePath + ': missing required frontmatter key "' + key + '"');
     }
+  }
+
+  // Rule 2 (nfs- naming convention): "name" must equal the containing directory name.
+  if (fm.name !== undefined && fm.name !== skillName) {
+    addFinding(
+      filePath + ': "name" value "' + fm.name + '" does not match directory name "' +
+      skillName + '" (rule 2 of the nfs- naming convention)'
+    );
   }
 
   // user-invocable must be boolean
@@ -306,6 +341,34 @@ for (const entry of skillEntries) {
 }
 
 // ---------------------------------------------------------------------------
+// Rule 3 (nfs- naming convention): every library.json components.skills[] entry
+// must also match the naming convention.
+// ---------------------------------------------------------------------------
+
+if (!existsSync(LIBRARY_JSON)) {
+  process.stderr.write('[check-frontmatter] FATAL: library.json not found\n');
+  process.exit(2);
+}
+
+let libraryJson;
+try {
+  libraryJson = JSON.parse(readFileSync(LIBRARY_JSON, 'utf8'));
+} catch (err) {
+  process.stderr.write('[check-frontmatter] FATAL: cannot parse library.json: ' + err.message + '\n');
+  process.exit(2);
+}
+
+const declaredSkills = Array.isArray(libraryJson?.components?.skills) ? libraryJson.components.skills : [];
+for (const declaredName of declaredSkills) {
+  if (typeof declaredName !== 'string' || !SKILL_NAME_PATTERN.test(declaredName)) {
+    addFinding(
+      'library.json components.skills: "' + declaredName + '" does not match the nfs- ' +
+      'naming convention (rule 3: ^nfs-[a-z0-9]+(-[a-z0-9]+)*$)'
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Report
 // ---------------------------------------------------------------------------
 
@@ -314,7 +377,7 @@ if (findings.length === 0) {
   const skillCount = skillEntries.length;
   process.stdout.write(
     '[check-frontmatter] pass: ' + agentCount + ' agent(s) and ' +
-    skillCount + ' skill(s) validated; chain contract enforced\n'
+    skillCount + ' skill(s) validated; chain contract enforced; nfs- naming convention enforced\n'
   );
   process.exit(0);
 } else {
