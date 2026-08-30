@@ -1,1 +1,9 @@
-{"profile":"plain-plugin"}
+{
+  "profile": "plain-plugin",
+  "suppressions": [
+    {
+      "reqId": "U13",
+      "reason": "U13 (scripts/checks/skill-registration.mjs) resolves the registered-skill set only from library.json components.skills[] entries that carry a path field (an object shape). This plugin's library.json declares components.skills[] as a flat array of bare skill name strings, the schema ADR-0006 (manifest authority split) establishes and scripts/checks/check-inventory.mjs enforces as the exact, bidirectional component-inventory contract. Converting components.skills[] to path-object entries to satisfy U13 was tested directly: check.mjs then reports 0 U13 warnings, but check-inventory.mjs fails with 28 errors, since its compareKind() treats each array element as an opaque hashable name, not a descriptor object. The two checks require mutually exclusive shapes for the same array, so U13's registration signal cannot be observed under this plugin's manifest layout without breaking the ADR-0006 contract. All fourteen nfs- skills are declared, exhaustively and correctly, in library.json components.skills[] under that contract. Revisit when U13 graduates to ERROR at Standard 0.13 (its own BURNDOWN note) or if this plugin ever adopts the toolkit's object-shaped component descriptors."
+    }
+  ]
+}

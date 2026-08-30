@@ -13,6 +13,7 @@ Skill inputs read:
 - `templates/project-init.guided.md` (guided setup template)
 - `templates/project-init.blank.md` (blank setup template)
 - `templates/config-defaults.json` (config defaults)
+- `.claude-plugin/plugin.json` (plugin version, read at Step 6, never hardcoded)
 
 ## Step 1 - Run the existence check (mandatory first tool call)
 
@@ -156,14 +157,14 @@ Create `.studio/` at the bible root alongside `context/` and `chapters/`.
 Token substitutions for state files:
 - Replace `{{DATETIME}}` with the current UTC date-time in RFC 3339 format (example: `2026-07-18T14:22:07Z`). This is a full timestamp, not a calendar date.
 - Replace `{{BOOK_TITLE}}` with the title from Step 2.
-- Replace `{{PLUGIN_VERSION}}` with `0.1.0`.
+- Replace `{{PLUGIN_VERSION}}` with the `version` field read from `PLUGIN_ROOT/.claude-plugin/plugin.json` (PLUGIN_ROOT was already resolved in Step 4). Read the file and use its current value; never write a version number from memory or from an earlier run.
 
 **`.studio/meta.json`** - write with all placeholders filled:
 ```json
 {
   "schema_version": "2",
   "created": "<RFC 3339 UTC timestamp>",
-  "plugin_version_at_creation": "0.1.0",
+  "plugin_version_at_creation": "<version field read from PLUGIN_ROOT/.claude-plugin/plugin.json>",
   "book_title": "<title from Step 2>"
 }
 ```
