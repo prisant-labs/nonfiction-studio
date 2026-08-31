@@ -6,7 +6,7 @@
 // why:          the CLI is the public surface; all logic lives in stylometry-engine.mjs so hooks
 //               and CI share the same computation path per S-07 section 4
 // usage:        ns-stylometry [--chapter=<slug>|--all] [--baseline=<path>] [--measure=<path>[,<path>...]]
-//               [--project=<dir>] [--json] [--explain]
+//               [--calibrate=<path>[,<path>...]] [--project=<dir>] [--json] [--explain]
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
@@ -16,6 +16,7 @@ import {
   measureChapter, measureBook, computeDrift, countWords, CURRENT_MARKER_SET_VERSION,
   DEFAULT_DRIFT_SCORE_MAX,
 } from '../hooks/lib/stylometry-engine.mjs';
+import { calibrateBaseline } from '../hooks/lib/stylometry-calibration.mjs';
 
 // ---- arg parsing ---------------------------------------------------------------
 
@@ -24,6 +25,7 @@ try {
   opts = parseArgs(process.argv.slice(2), [
     'chapter', 'all', 'baseline', 'project', 'json',
     { name: 'measure', type: 'list' },
+    { name: 'calibrate', type: 'list' },
     { name: 'explain', type: 'boolean' },
   ]);
 } catch (err) {
@@ -74,6 +76,80 @@ if (opts.measure !== null) {
     markers, marker_set_version: CURRENT_MARKER_SET_VERSION, files: resolvedPaths, totalWords,
   };
   process.stdout.write(JSON.stringify(out, null, 2) + '\n');
+  process.exit(0);
+}
+
+// ---- calibrate mode (read files, run the five-rung calibration recipe, print JSON; reads no
+// config, writes nothing) --------------------------------------------------------
+// usage: ns-stylometry --calibrate=<path>[,<path>...]
+// Deterministic: byte-identical stdout for identical input files (calibrateBaseline's own seed
+// default, 4242, is unconditional here -- there is no --seed flag). Exit 0 on success; exit 1
+// when the given files are too small to calibrate (CorpusTooSmallError -- a data-insufficiency
+// outcome, distinct from the exit-2 usage/I-O errors elsewhere in this file); exit 2 on missing
+// or unreadable file. A plain-language regime disclosure is written to stderr, separate from the
+// stdout JSON, so a human running this directly sees the verdict-scope decision without parsing
+// JSON (the honest-disclosure default per this implementation wave's design pins).
+
+if (opts.calibrate !== null) {
+  if (opts.calibrate.length === 0) {
+    process.stderr.write('ns-stylometry: --calibrate requires at least one file path\n');
+    process.exit(2);
+  }
+
+  const calibTexts = [];
+  const calibResolvedPaths = [];
+  let calibTotalWords = 0;
+
+  for (const rawPath of opts.calibrate) {
+    const absPath = resolve(rawPath);
+    let text;
+    try {
+      text = readFileSync(absPath, 'utf8');
+    } catch (err) {
+      process.stderr.write('ns-stylometry: cannot read file: ' + absPath + '\n');
+      process.exit(2);
+    }
+    calibTexts.push(text);
+    calibResolvedPaths.push(absPath.replace(/\\/g, '/'));
+    calibTotalWords += countWords(text);
+  }
+
+  let calibResult;
+  try {
+    calibResult = calibrateBaseline(calibTexts);
+  } catch (err) {
+    if (err.name === 'CorpusTooSmallError') {
+      process.stderr.write('ns-stylometry: ' + err.message + '\n');
+      process.exit(err.exitCode);
+    }
+    throw err;
+  }
+
+  const calibOut = {
+    markers: calibResult.markers,
+    marker_set_version: CURRENT_MARKER_SET_VERSION,
+    calibration: calibResult.calibration,
+    files: calibResolvedPaths,
+    totalWords: calibTotalWords,
+  };
+  process.stdout.write(JSON.stringify(calibOut, null, 2) + '\n');
+
+  // Two sentences, per this implementation wave's honest-disclosure default: one names the
+  // regime, the other names why -- not a single combined sentence, so each half of the
+  // disclosure is independently quotable.
+  const aucStr = calibResult.calibration.detectability_auc.toFixed(3);
+  const regimeSpan = calibResult.calibration.spans[0];
+  if (calibResult.calibration.regime === 'chapter') {
+    process.stderr.write(
+      'ns-stylometry: regime = chapter. Detectability AUC ' + aucStr + ' at the ' + regimeSpan +
+      '-word rung meets the 0.95 bar, so per-chapter verdicts are supportable.\n'
+    );
+  } else {
+    process.stderr.write(
+      'ns-stylometry: regime = book. Detectability AUC ' + aucStr + ' at the ' + regimeSpan +
+      '-word rung falls short of the 0.95 bar, so only a book-scale aggregate verdict is supportable.\n'
+    );
+  }
   process.exit(0);
 }
 
