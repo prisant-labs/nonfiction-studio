@@ -116,12 +116,30 @@ const TINY_CORPUS = 'This corpus is deliberately far too small to calibrate anyt
   + 'It has only a couple of short sentences in it, well under the floor. '
   + 'Nothing in it should ever be enough to satisfy the minimum word requirement.';
 
+// Review round 1 (empirically confirmed finding): countWords tolerates unpunctuated prose as
+// "words" -- it just matches letter sequences -- but splitSentences requires a terminal . ! or ?
+// and discards anything else. A comma-joined word list with no sentence-ending punctuation
+// anywhere clears MIN_CALIBRATION_WORDS on word count alone while yielding ZERO usable sentences,
+// which crashed calibrateBaseline (see the module's calibrateBaseline JSDoc and the guard right
+// after buildSentencePool for the fix).
+const PUNCTUATION_FREE_WORDS = [
+  'alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel', 'india', 'juliet',
+  'kilo', 'lima', 'mike', 'november', 'oscar', 'papa', 'quebec', 'romeo', 'sierra', 'tango',
+  'uniform', 'victor', 'whiskey', 'xray', 'yankee', 'zulu', 'amber', 'birch', 'cedar', 'willow',
+];
+const PUNCTUATION_FREE_CORPUS = Array.from(
+  { length: 2400 }, (_, i) => PUNCTUATION_FREE_WORDS[i % PUNCTUATION_FREE_WORDS.length]
+).join(', ');
+
 assert.ok(countWords(RICH_CORPUS) >= MIN_CALIBRATION_WORDS,
   'test setup: RICH_CORPUS must clear MIN_CALIBRATION_WORDS');
 assert.ok(countWords(PLAIN_CORPUS) >= MIN_CALIBRATION_WORDS,
   'test setup: PLAIN_CORPUS must clear MIN_CALIBRATION_WORDS');
 assert.ok(countWords(TINY_CORPUS) < MIN_CALIBRATION_WORDS,
   'test setup: TINY_CORPUS must stay below MIN_CALIBRATION_WORDS');
+assert.ok(countWords(PUNCTUATION_FREE_CORPUS) >= MIN_CALIBRATION_WORDS,
+  'test setup: PUNCTUATION_FREE_CORPUS must clear MIN_CALIBRATION_WORDS on word count alone -- ' +
+  'the whole point is that the word-count guard passes and a DIFFERENT guard must catch it');
 
 // ---------------------------------------------------------------------------
 // Shared fixtures: computed once at module load, reused across several tests below rather than
@@ -306,6 +324,24 @@ test('a corpus below MIN_CALIBRATION_WORDS throws CorpusTooSmallError naming the
   );
 });
 
+test('review round 1: a corpus that clears MIN_CALIBRATION_WORDS but yields zero usable (terminally-punctuated) sentences throws CorpusTooSmallError, not a raw TypeError', () => {
+  assert.throws(
+    () => calibrateBaseline([PUNCTUATION_FREE_CORPUS], { seed: DEFAULT_SEED }),
+    (err) => {
+      assert.ok(err instanceof CorpusTooSmallError,
+        'must throw the typed CorpusTooSmallError, not let an unhandled TypeError from ' +
+        'ghostwriteTransform(undefined) escape');
+      assert.strictEqual(err.name, 'CorpusTooSmallError');
+      assert.strictEqual(err.exitCode, 1);
+      assert.ok(err.message.includes('0 sentences'),
+        'message must name the found sentence count (0); got: ' + err.message);
+      assert.ok(err.message.toLowerCase().includes('terminal'),
+        'message must name what "usable" means here (terminal punctuation); got: ' + err.message);
+      return true;
+    }
+  );
+});
+
 test('MIN_CALIBRATION_WORDS is exactly 2200 (2x the 1100-word canonical rung)', () => {
   assert.strictEqual(MIN_CALIBRATION_WORDS, 2200);
 });
@@ -380,6 +416,25 @@ test('CLI --calibrate: a too-small corpus exits 1 with the plain-language messag
       'stderr must name the needed word count');
     assert.match(result.stderr, new RegExp(String(countWords(TINY_CORPUS))),
       'stderr must name the found word count');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('CLI --calibrate: review round 1 -- a corpus with words but zero usable sentences exits 1 with the plain-language message, not a raw stack trace', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ns-calibrate-test-'));
+  const tmpFile = join(dir, 'punctuation-free.md');
+  writeFileSync(tmpFile, PUNCTUATION_FREE_CORPUS, 'utf8');
+
+  try {
+    const result = runCalibrate(tmpFile);
+    assert.strictEqual(result.status, 1,
+      'must exit 1 via the documented typed-error path, not crash with an unhandled TypeError; stderr: ' + result.stderr);
+    assert.strictEqual(result.stdout, '', 'stdout must be empty on the error path');
+    assert.match(result.stderr, /0 sentences/,
+      'stderr must name the found sentence count (0)');
+    assert.doesNotMatch(result.stderr, /TypeError/,
+      'stderr must be the plain-language message, not a raw stack trace');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

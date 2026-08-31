@@ -386,7 +386,12 @@ function buildSentencePool(texts) {
  *   },
  * }}
  * @throws {CorpusTooSmallError} when the summed usable word count (countWords over every text)
- *   is below MIN_CALIBRATION_WORDS
+ *   is below MIN_CALIBRATION_WORDS, OR when the corpus clears that word-count floor but yields
+ *   zero sentences ending in terminal punctuation once markdown syntax is stripped (countWords
+ *   and the cleanMarkdown+splitSentences pipeline that feeds draw() disagree about what counts as
+ *   "usable" -- countWords tolerates markup, code fences, tables, and unpunctuated prose that
+ *   splitSentences discards outright -- so a corpus can pass the first guard and still have
+ *   nothing to resample from; this second, independent guard exists for exactly that gap)
  */
 export function calibrateBaseline(texts, opts = {}) {
   const seed = opts.seed ?? DEFAULT_SEED;
@@ -402,6 +407,23 @@ export function calibrateBaseline(texts, opts = {}) {
 
   const markers = texts.length === 1 ? measureChapter(texts[0]) : measureBook(texts);
   const { sentences, weights } = buildSentencePool(texts);
+
+  // Second, independent guard (review round 1): countWords (above) counts markup, code fences,
+  // tables, and unpunctuated prose as words, but splitSentences requires a terminal . ! or ? and
+  // discards everything else, so a corpus can clear MIN_CALIBRATION_WORDS on word count alone and
+  // still produce an EMPTY sentence pool -- draw() can never crash on any pool of one or more
+  // sentences (every index it picks is always in range), so zero is the exact and complete floor
+  // for the failure this guards against; a larger floor would be guarding against a different,
+  // not-yet-confirmed concern (degenerate-but-nonzero variance), which is out of this fix's scope.
+  if (sentences.length === 0) {
+    throw new CorpusTooSmallError(
+      'voice corpus has ' + totalWords + ' usable word(s) but 0 sentences ending in terminal ' +
+      'punctuation (a period, question mark, or exclamation point) once markdown syntax is ' +
+      'stripped; calibration resamples whole punctuated sentences, so at least one is needed ' +
+      '(add normal punctuated prose, then recapture)'
+    );
+  }
+
   const rng = mulberry32(seed);
 
   const noiseScales = {};
