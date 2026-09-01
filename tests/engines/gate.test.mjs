@@ -68,6 +68,25 @@ function makeTempClone(sourceDir, opts = {}) {
   return tmpDir;
 }
 
+// Shared skip reason for the three tests below whose own subject is the REAL committed
+// voice-drift fixture's planted defect actually blocking through the gate (T05, the WORDING
+// CONTRACT exceeds-case, and T07's voice-drift leg). See each test's own comment for the full
+// rationale; summary: ADR-0012 implementation wave Task 5 measured this fixture directly against
+// the v5 independent-corpus baseline every other sample-book-clone fixture now shares, and the
+// gate's book-regime floor (P6, MIN_BOOK_VERDICT_WORDS = 2200) makes this ~900-word fixture's
+// aggregate unable to block through the gate under ANY baseline built from this shared, sparse
+// voice, because that same sparseness is what puts the baseline in book regime (not chapter) in
+// the first place. BLOCKED pending a coordinator ruling (ADR-0012 implementation wave, Task 5),
+// not an implementer judgment call.
+const SKIP_BLOCKED_VOICE_DRIFT_GATE_REASON =
+  'BLOCKED pending a coordinator ruling (ADR-0012 implementation wave, Task 5): ' +
+  'examples/fixtures/voice-drift/.studio/config.json still carries a marker_set_version 4 ' +
+  'baseline; the gate\'s book-regime floor (MIN_BOOK_VERDICT_WORDS = 2200) makes this ' +
+  'fixture\'s ~900-word aggregate unable to block under any baseline built from the shared ' +
+  'sample-book voice, because that same sparse voice is what assigns book regime (not ' +
+  'chapter) in the first place; a fix needs a plan-level decision, not an implementer ' +
+  'judgment call';
+
 /**
  * Writes a block-mode gate config to the clone's .studio/config.json.
  * Sets gate.mode=block and all four deterministic checks to mode=block,
@@ -261,18 +280,21 @@ test('T04: continuity-error block clone: exit 1; continuity block; name-mismatch
 
 // ---- T05: voice-drift block clone ---------------------------------------------
 
-// Declared red until Task 5 (ADR-0012 implementation wave): this test's own subject is the
-// REAL committed voice-drift fixture's planted register-shift defect actually blocking, not
-// merely "some check finds something" -- exactly the "fixture's real baseline is the test's
-// substance" case makeTempClone's own comment names. examples/fixtures/voice-drift/.studio/
-// config.json still carries a marker_set_version 4 baseline with no calibration ladder; scoring
-// against it with the v5 computeDrift throws StaleBaselineError (exit 2), not the block this
-// test asserts. Task 5 recaptures that baseline; only then can this test re-verify the real
-// planted defect under the v5 engine.
+// BLOCKED pending a coordinator ruling (ADR-0012 implementation wave, Task 5): this test's
+// own subject is the REAL committed voice-drift fixture's
+// planted register-shift defect actually blocking, not merely "some check finds something" --
+// exactly the "fixture's real baseline is the test's substance" case makeTempClone's own
+// comment names. Task 5 measured this directly: even scored against the v5 independent-corpus
+// baseline every other sample-book-clone fixture now shares, the planted chapter's aggregate
+// is ~915 scored words, below MIN_BOOK_VERDICT_WORDS (2200), so the gate's book-regime floor
+// (P6) makes the aggregate unable to block regardless of the statistic -- and the fixture's own
+// calibration (same sparse voice as the golden book) is book regime, not chapter, so no
+// baseline built from this same voice can ever route this fixture's ~900-word gate check
+// through the floor-free chapter-regime path either. A fix needs a plan-level decision (a
+// voice-drift-specific corpus deliberately less sparse than the shared voice, or a change to
+// the fixture's own text), not an implementer judgment call.
 test('T05: voice-drift block clone: exit 1; stylometry block; drift-threshold in detail with score and threshold', {
-  skip: 'declared red until Task 5 (ADR-0012 implementation wave): examples/fixtures/voice-drift/' +
-    '.studio/config.json still carries a marker_set_version 4 baseline with no calibration ' +
-    'ladder; Task 5 recaptures it',
+  skip: SKIP_BLOCKED_VOICE_DRIFT_GATE_REASON,
 }, () => {
   const tmp = makeTempClone(join(EXAMPLES, 'fixtures', 'voice-drift'), { keepRealBaseline: true });
   try {
@@ -337,13 +359,12 @@ test('WORDING CONTRACT: stylometry pass-case (book regime, below the word floor)
   }
 });
 
-// Declared red until Task 5 (ADR-0012 implementation wave), for the same reason as T05 above:
-// this test's own subject is the REAL committed voice-drift fixture's planted defect actually
-// blocking, which needs its real (unpatched) v4 baseline recaptured under v5 calibration first.
+// BLOCKED for the same reason as T05 above (see SKIP_BLOCKED_VOICE_DRIFT_GATE_REASON): this
+// test's own subject is the REAL committed voice-drift fixture's planted defect actually
+// blocking through the gate, which the book-regime word floor makes structurally unreachable
+// under any baseline sharing the sample-book voice.
 test('WORDING CONTRACT: stylometry exceeds-case detail literally names the worst marker and the gate-coined token', {
-  skip: 'declared red until Task 5 (ADR-0012 implementation wave): examples/fixtures/voice-drift/' +
-    '.studio/config.json still carries a marker_set_version 4 baseline with no calibration ' +
-    'ladder; Task 5 recaptures it',
+  skip: SKIP_BLOCKED_VOICE_DRIFT_GATE_REASON,
 }, () => {
   const tmp = makeTempClone(join(EXAMPLES, 'fixtures', 'voice-drift'), { keepRealBaseline: true });
   try {
@@ -410,8 +431,9 @@ const BROKEN_WARN_FIXTURES = [
   // entirely from stylometry finding it, so (unlike continuity-error and ai-injection, which
   // carry their own non-stylometry findings) this leg cannot be proven with a synthetic
   // baseline patched to pass -- it is squarely the "fixture's real baseline is the test's
-  // substance" case, the same as T05 and the WORDING CONTRACT exceeds-case above. Declared red
-  // until Task 5 (ADR-0012 implementation wave) recaptures this fixture's baseline.
+  // substance" case, the same as T05 and the WORDING CONTRACT exceeds-case above. BLOCKED (see
+  // SKIP_BLOCKED_VOICE_DRIFT_GATE_REASON): the gate's book-regime word floor makes this leg
+  // structurally unreachable under any baseline sharing the sample-book voice.
   ['voice-drift',      join(EXAMPLES, 'fixtures', 'voice-drift'), true],
   ['ai-injection',     join(EXAMPLES, 'fixtures', 'ai-injection'), false],
 ];
@@ -419,9 +441,7 @@ const BROKEN_WARN_FIXTURES = [
 for (const [label, fixtureDir, keepRealBaseline] of BROKEN_WARN_FIXTURES) {
   const testOpts = keepRealBaseline
     ? {
-      skip: 'declared red until Task 5 (ADR-0012 implementation wave): examples/fixtures/' +
-        'voice-drift/.studio/config.json still carries a marker_set_version 4 baseline with no ' +
-        'calibration ladder; Task 5 recaptures it',
+      skip: SKIP_BLOCKED_VOICE_DRIFT_GATE_REASON,
     }
     : {};
   test('T07: ' + label + ' warn mode: exit 0 with top-level verdict warn', testOpts, () => {

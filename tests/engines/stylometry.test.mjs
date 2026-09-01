@@ -740,31 +740,40 @@ test('computeDrift v5: a blocking case -- first_person_rate collapsing to near-z
 
 // ---------------------------------------------------------------------------
 // Committed tree: BIN-spawning CLI tests against the REAL committed golden/voice-drift
-// fixtures, IN PLACE (not a clone) -- SKIPPED, declared red until Task 5 (ADR-0012
-// implementation wave)
+// fixtures, IN PLACE (not a clone)
 // ---------------------------------------------------------------------------
 
 // The four tests below run the CLI against examples/sample-book and examples/fixtures/
 // voice-drift AS COMMITTED, not a temp clone with a synthetic baseline patched in (unlike
 // tests/engines/gate.test.mjs's or stylometry-explain.test.mjs's approach): their own intent
 // is specifically to prove these two REAL fixtures' documented behavior under the shipped
-// engine, which is exactly "a v4 fixture baseline on disk" (THE RULE, (local working notes, not published)) --
-// both examples/sample-book/.studio/config.json and examples/fixtures/voice-drift/.studio/
-// config.json still carry a marker_set_version 4 baseline with no calibration ladder. Scoring
-// against either with the v5 computeDrift throws StaleBaselineError (CLI exit 2), not the
-// pass/block this pair asserts. Task 5 recaptures both baselines under v5; only then can these
-// re-verify the real fixtures. Bodies are reworked to the v5 JSON shape now (statistic/
-// worstMarker/threshold/exceeded/regime/scoredWords, perMarker.z replacing the retired
-// driftScore/contribution/capped triple) so Task 5 only needs to remove the skip option, not
-// rework the assertions again.
+// engine. Task 5 (ADR-0012 implementation wave) recaptured examples/sample-book/.studio/
+// config.json's baseline under v5 (an independent, disjoint voice corpus; regime book), which
+// un-skips the two golden-book tests below. examples/fixtures/voice-drift/.studio/config.json
+// still carries its original marker_set_version 4 baseline: measured directly (this task),
+// the fixture's planted register-shift chapter, scored against the SAME independent corpus
+// baseline every other sample-book-clone fixture now shares, does not exceed the calibrated
+// threshold at any span (aggregate, chapter 1, or chapter 2 -- confirmed by direct measurement,
+// not merely inferred), because first_person_rate and second_person_rate carry noise scales
+// wide enough that even a 100% deviation stays under threshold at this fixture's ~900-word
+// scale. Recalibrating a baseline that WOULD catch this defect needs either a voice-drift-
+// specific corpus deliberately less sparse than the shared voice (a plan-level call, not an
+// implementer judgment call) or a change to the fixture's chapter text; both are BLOCKED
+// pending a coordinator ruling. The two voice-drift tests below stay skipped for that reason.
+// Bodies are reworked to the v5 JSON shape now (statistic/worstMarker/threshold/exceeded/
+// regime/scoredWords, perMarker.z replacing the retired driftScore/contribution/capped triple)
+// so a future recapture only needs to remove the skip option, not rework the assertions again.
 
-const SKIP_UNTIL_TASK_5_REASON =
-  'declared red until Task 5 (ADR-0012 implementation wave): examples/sample-book and ' +
-  'examples/fixtures/voice-drift still carry marker_set_version 4 baselines with no ' +
-  'calibration ladder; scoring against either with the v5 computeDrift throws ' +
-  'StaleBaselineError (exit 2) instead of the pass/block this test asserts';
+const SKIP_BLOCKED_VOICE_DRIFT_REASON =
+  'BLOCKED pending a coordinator ruling (ADR-0012 implementation wave, Task 5): ' +
+  'examples/fixtures/voice-drift/.studio/config.json still carries a marker_set_version 4 ' +
+  'baseline; the planted register-shift chapter, measured against the v5 independent-corpus ' +
+  'baseline every other sample-book-clone fixture now shares, does not exceed the calibrated ' +
+  'threshold at any span (confirmed by direct measurement) because its own noise scales are ' +
+  'wide enough to absorb even a 100% first_person_rate/second_person_rate deviation at this ' +
+  'fixture\'s word count; a fix needs a plan-level decision, not an implementer judgment call';
 
-test('golden sample book CLI: --all --json exits 0', { skip: SKIP_UNTIL_TASK_5_REASON }, () => {
+test('golden sample book CLI: --all --json exits 0', () => {
   const bookRoot = join(EXAMPLES, 'sample-book');
   const result = spawnSync(
     process.execPath, [BIN, '--all', '--json'],
@@ -781,7 +790,7 @@ test('golden sample book CLI: --all --json exits 0', { skip: SKIP_UNTIL_TASK_5_R
     'statistic ' + out.statistic.toFixed(2) + ' < threshold ' + out.threshold);
 });
 
-test('golden sample book CLI: ns-stylometry --chapter=<slug> --json exits 0 for EVERY chapter', { skip: SKIP_UNTIL_TASK_5_REASON }, () => {
+test('golden sample book CLI: ns-stylometry --chapter=<slug> --json exits 0 for EVERY chapter', () => {
   const bookRoot = join(EXAMPLES, 'sample-book');
   const chapterDir = join(bookRoot, 'chapters');
   const chapterFiles = readdirSync(chapterDir).filter(f => f.endsWith('.md')).sort();
@@ -801,7 +810,7 @@ test('golden sample book CLI: ns-stylometry --chapter=<slug> --json exits 0 for 
   }
 });
 
-test('voice-drift fixture CLI: --all --json exits 1', { skip: SKIP_UNTIL_TASK_5_REASON }, () => {
+test('voice-drift fixture CLI: --all --json exits 1', { skip: SKIP_BLOCKED_VOICE_DRIFT_REASON }, () => {
   const bookRoot = join(EXAMPLES, 'fixtures', 'voice-drift');
   const result = spawnSync(
     process.execPath, [BIN, '--all', '--json'],
@@ -824,7 +833,7 @@ test('voice-drift fixture CLI: --all --json exits 1', { skip: SKIP_UNTIL_TASK_5_
   assert.strictEqual(typeof fpEntry[1].z, 'number', 'first_person_rate carries a numeric z');
 });
 
-test('voice-drift fixture CLI: ns-stylometry --chapter=<slug> --json exits 1 for EVERY chapter', { skip: SKIP_UNTIL_TASK_5_REASON }, () => {
+test('voice-drift fixture CLI: ns-stylometry --chapter=<slug> --json exits 1 for EVERY chapter', { skip: SKIP_BLOCKED_VOICE_DRIFT_REASON }, () => {
   const bookRoot = join(EXAMPLES, 'fixtures', 'voice-drift');
   const chapterDir = join(bookRoot, 'chapters');
   const chapterFiles = readdirSync(chapterDir).filter(f => f.endsWith('.md')).sort();

@@ -84,23 +84,17 @@ test('credential present, claude unreachable -> real failure still exits nonzero
 // here as an explicit regression guard now that the decision is routed through the shared
 // scripts/lib/credential-mode.mjs module.
 //
-// Declared red until Task 5 (ADR-0012 implementation wave): the dry-run assertion suite's
-// [gate-golden] step runs `bin/ns-gate` against a temp clone of the REAL, COMMITTED
-// examples/sample-book (scripts/run-integration.mjs's own makeTempClone, not this test file's
-// -- deliberately never patched with a synthetic baseline, unlike tests/engines/gate.test.mjs's
-// or tests/hooks/stop-gate.test.mjs's clones, because this script's whole purpose is verifying
-// the REAL golden sample book's gate actually passes; patching its baseline away would silently
-// stop verifying the thing this assertion exists to prove). examples/sample-book/.studio/
-// config.json still carries a marker_set_version 4 baseline with no calibration ladder; scoring
-// against it with the v5 computeDrift throws StaleBaselineError (ns-gate exit 2), not the exit
-// 0 [gate-golden] expects. Task 5 recaptures that baseline; only then can this re-verify the
-// real golden book end to end.
-test('developer machine, no credential, claude unreachable -> dry-run fallback, exit 0', {
-  skip: 'declared red until Task 5 (ADR-0012 implementation wave): the dry-run suite\'s ' +
-    '[gate-golden] step runs ns-gate against a temp clone of the REAL committed examples/' +
-    'sample-book, which still carries a marker_set_version 4 baseline with no calibration ' +
-    'ladder; Task 5 recaptures it',
-}, () => {
+// The dry-run assertion suite's [gate-golden] step runs `bin/ns-gate` against a temp clone of
+// the REAL, COMMITTED examples/sample-book (scripts/run-integration.mjs's own makeTempClone,
+// not this test file's -- deliberately never patched with a synthetic baseline, unlike
+// tests/engines/gate.test.mjs's or tests/hooks/stop-gate.test.mjs's clones, because this
+// script's whole purpose is verifying the REAL golden sample book's gate actually passes;
+// patching its baseline away would silently stop verifying the thing this assertion exists to
+// prove). examples/sample-book/.studio/config.json now carries a real v5 baseline (ADR-0012
+// implementation wave, Task 5: an independent, disjoint voice corpus; regime book), so scoring
+// against it with the v5 computeDrift succeeds and the golden book's stylometry check reports
+// its honest below-the-2200-word-floor pass-with-advice, un-skipping this test.
+test('developer machine, no credential, claude unreachable -> dry-run fallback, exit 0', () => {
   const noClaude = pathWithoutClaudeCli();
   const env = buildEnv({ CI: undefined, PATH: noClaude, Path: noClaude });
   const result = runNodeScript(SCRIPT, [], env);

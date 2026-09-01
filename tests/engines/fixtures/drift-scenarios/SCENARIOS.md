@@ -28,6 +28,27 @@ fixtures contain a smart quote. It was bumped again from 3 to 4 alongside the WO
 Unicode-letter fix (PF-07, accented words fragment), which changes no value here either,
 because none of these fixtures contain a non-ASCII letter.
 
+**2026-09-01 update (ADR-0012, voice verdict scope, Task 5): the freeze broke, and here is
+why.** `marker_set_version` moved from 4 to 5 alongside a change this note's original
+"exempt field" reasoning did not anticipate: a v5 baseline is unscorable without a
+`calibration` ladder (`InvalidCalibrationError`), and `calibrateBaseline` refuses to run
+below `MIN_CALIBRATION_WORDS` (2200 usable words) -- the two golden chapters this baseline
+was originally self-fit from total only 1055 words, so the exact frozen `markers` values
+above CANNOT be reproduced by any v5 `--calibrate` run over that same two-chapter source; the
+minimum-corpus floor did not exist when this file was first frozen. Rather than leave this
+fixture on an unscorable v4 baseline, `markers` and `marker_set_version` here were replaced
+wholesale with `examples/sample-book/.studio/config.json`'s own new v5 baseline (also carrying
+a `calibration` object, added here for the first time) -- the same independent, disjoint voice
+corpus (`examples/sample-book/context/samples/voice-corpus-01.md` through `-03.md`) every
+other sample-book-derived fixture in this wave now shares. This is a real, disclosed break
+from the "markers stay frozen" design this file's header describes, not a silent one: every
+percentage and score in the "Scenario table" below was computed against the OLD frozen
+markers under the OLD (now-retired) capped-sum formula, so that table's numbers no longer
+match what a live v5 run over these same scenario files would produce. `docs/reference/cli/
+ns-stylometry.md`'s Calibration section and this suite's own re-scope are Task 6's, per the
+implementation wave's task split; this note records only what changed here and why, not a new
+scenario table.
+
 ## Transformation methodology
 
 Two pronoun families are tracked by the engine: `FIRST_PERSON` (i, me, my, mine, myself, we,
