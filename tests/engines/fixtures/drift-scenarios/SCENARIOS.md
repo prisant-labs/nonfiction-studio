@@ -1,32 +1,33 @@
 # Drift calibration scenario suite
 
-Labeled ground-truth fixtures for `tests/engines/stylometry-calibration.test.mjs`. Each
-chapter file here is a single named transformation of the golden sample book's chapter 1
-(`examples/sample-book/chapters/01-listening-before-speaking.md`) or, for the two
-honest-variance files, both golden chapters with their closing paragraph removed.
+Ground-truth fixtures and provenance for `tests/engines/stylometry-calibration.test.mjs`, the
+golden drift-detection suite for the calibrated-null verdict statistic (ADR-0012, voice verdict
+scope). `baseline.json` in this directory is a frozen, committed copy of the corpus-calibrated v5
+baseline (`markers`, `marker_set_version`, `calibration`) that `examples/sample-book`'s own
+`.studio/config.json` also carries, measured by `calibrateBaseline`
+(`hooks/lib/stylometry-calibration.mjs`) from the sample book's independent voice corpus
+(`examples/sample-book/context/samples/voice-corpus-01.md` through `-03.md`). It deliberately
+carries only `{ markers, marker_set_version, calibration }` -- `captured` and `sample_count` are
+omitted on purpose: those two fields are written by the voice-capture agent for a real book config
+(the read-modify-write contract in `examples/sample-book/.studio/config.json`), not by
+`calibrateBaseline` itself, and this directory is a test fixture, not a book config, so it has
+nothing to capture them from.
 
-**Frozen by design.** Every file in this directory is a static, committed snapshot taken on
-2026-08-15. Nothing here is regenerated from `examples/` at test time and nothing in this
-directory is read by any shipped code path. This is deliberate: `examples/sample-book` is
-expected to change again (its padded closing paragraphs are scheduled for removal in a later
-task), and this suite's job is to keep measuring the same fixed scenarios before and after
-that happens, not to silently re-measure whatever `examples/` currently contains. If
-`examples/sample-book` changes, this directory does not need to change with it.
+The `chapters/` subdirectory in this folder holds fixture files from an earlier version of this
+suite (frozen transformations of the golden sample book's chapter 1, built before v5 shipped). No
+test in `stylometry-calibration.test.mjs` reads them any longer -- see "2026-09-02 update" below
+for why. They are left in place, unexercised, as a historical record of the transformation
+methodology described below; nothing in the shipped product or test suite depends on their
+continued presence.
 
-`baseline.json` is a frozen copy of the golden book's `stylometry.baseline` object as it was
-committed on 2026-08-15 (`markers` plus `marker_set_version`), copied verbatim from
-`examples/sample-book/.studio/config.json`.
+## marker_set_version history (background, still accurate)
 
-One field is exempt from the freeze, and only one: `marker_set_version`. It is a claim about
-which engine the stored `markers` were captured under, not a measurement, and `computeDrift`
-refuses to score against a version it does not recognise. So when the engine's marker set
-version moves, this field moves with it, or every scenario in this suite fails with a
-stale-baseline error instead of producing a score. The `markers` values themselves stay
-frozen, which is what the freeze is actually protecting. It was bumped from 2 to 3 alongside
-the typographic-normalization fix, whose fold changes no value here because none of these
-fixtures contain a smart quote. It was bumped again from 3 to 4 alongside the WORD_RE
-Unicode-letter fix (PF-07, accented words fragment), which changes no value here either,
-because none of these fixtures contain a non-ASCII letter.
+`marker_set_version` is a claim about which engine a stored baseline's `markers` were captured
+under, not a measurement -- `computeDrift` refuses to score against a version it does not
+recognise. It was bumped from 2 to 3 alongside a typographic-normalization fix, then 3 to 4
+alongside the WORD_RE Unicode-letter fix (PF-07, accented words fragment) -- neither changed any
+value in this directory's fixtures, because none of them contain a smart quote or a non-ASCII
+letter.
 
 **2026-09-01 update (ADR-0012, voice verdict scope, Task 5): the freeze broke, and here is
 why.** `marker_set_version` moved from 4 to 5 alongside a change this note's original
@@ -34,173 +35,100 @@ why.** `marker_set_version` moved from 4 to 5 alongside a change this note's ori
 `calibration` ladder (`InvalidCalibrationError`), and `calibrateBaseline` refuses to run
 below `MIN_CALIBRATION_WORDS` (2200 usable words) -- the two golden chapters this baseline
 was originally self-fit from total only 1055 words, so the exact frozen `markers` values
-above CANNOT be reproduced by any v5 `--calibrate` run over that same two-chapter source; the
-minimum-corpus floor did not exist when this file was first frozen. Rather than leave this
-fixture on an unscorable v4 baseline, `markers` and `marker_set_version` here were replaced
-wholesale with `examples/sample-book/.studio/config.json`'s own new v5 baseline (also carrying
-a `calibration` object, added here for the first time) -- the same independent, disjoint voice
-corpus (`examples/sample-book/context/samples/voice-corpus-01.md` through `-03.md`) every
-other sample-book-derived fixture in this wave now shares. This is a real, disclosed break
-from the "markers stay frozen" design this file's header describes, not a silent one: every
-percentage and score in the "Scenario table" below was computed against the OLD frozen
-markers under the OLD (now-retired) capped-sum formula, so that table's numbers no longer
-match what a live v5 run over these same scenario files would produce. `docs/reference/cli/
-ns-stylometry.md`'s Calibration section and this suite's own re-scope are Task 6's, per the
-implementation wave's task split; this note records only what changed here and why, not a new
-scenario table.
+this file used to carry CANNOT be reproduced by any v5 `--calibrate` run over that same
+two-chapter source; the minimum-corpus floor did not exist when this file was first frozen.
+Rather than leave this fixture on an unscorable v4 baseline, `markers` and `marker_set_version`
+here were replaced wholesale with `examples/sample-book/.studio/config.json`'s own new v5
+baseline (also carrying a `calibration` object, added here for the first time) -- the same
+independent, disjoint voice corpus every other sample-book-derived fixture in this wave shares.
 
-## Transformation methodology
+## Transformation methodology (background: how `ghostwriteTransform` works)
+
+This section documents the mechanism `ghostwriteTransform` (`hooks/lib/stylometry-calibration.mjs`
+-- now shipped product code, used by both `calibrateBaseline`'s own positive-class synthesis and
+this suite's ghost scenario) implements, kept here because it is the suite's most durable value
+regardless of which combining rule scores the result.
 
 Two pronoun families are tracked by the engine: `FIRST_PERSON` (i, me, my, mine, myself, we,
-us, our, ours, ourselves) and `SECOND_PERSON` (you, your, yours, yourself, yourselves). To
-remove a pronoun family from a passage while disturbing everything else as little as
-possible, every scenario substitutes third-person-plural forms (they/them/their/theirs/
-themselves) for first- or second-person pronouns. This choice is deliberate: third-person
-words are not tracked by either pronoun marker, they are already members of the engine's
-`FUNCTION_WORDS` set (so `function_word_rate` is not perturbed by the swap), and they are the
-closest grammatical substitute available, so sentence structure and word count stay close to
-the original.
+us, our, ours, ourselves) and `SECOND_PERSON` (you, your, yours, yourself, yourselves).
+`ghostwriteTransform` removes the first-person family from a passage while disturbing everything
+else as little as possible, by substituting third-person-plural forms (they/them/their/theirs/
+themselves) for first-person pronouns. This choice is deliberate: third-person words are not
+tracked by either pronoun marker, they are already members of the engine's `FUNCTION_WORDS` set
+(so `function_word_rate` is not perturbed by the swap), and they are the closest grammatical
+substitute available, so sentence structure and word count stay close to the original.
 
-To remove contractions, every apostrophe-bonded token the engine's `CONTRACTION_RE` would
-match (`I've`, `community's`, `people's`, `doesn't`, `I'm`) is expanded to its non-apostrophe
-form. Two of chapter 1's five apostrophe tokens (`I've`, `I'm`) are simultaneously
-first-person pronouns -- the pronoun IS the contraction in the source prose. Scenarios that
-remove only contractions expand these to `I have` / `I am` (keeping the pronoun); scenarios
-that remove only first person turn them into `They've` / `they're` (keeping the apostrophe);
-scenarios that remove both turn them into `They have` / `they are` (removing both markers at
-once). This is called out explicitly because an earlier draft of this suite chained two
-independent regex passes and the second pass silently no-op'd on text the first pass had
-already changed -- a real bug, caught by inspecting the per-marker output, not by inspection
-of the diff.
+To remove contractions, every apostrophe-bonded token the engine's `CONTRACTION_RE` would match
+(`I've`, `community's`, `doesn't`, `I'm`) is expanded to its non-apostrophe form. A token that is
+simultaneously a contraction and a first-person pronoun (`I've`, `I'm`) is handled by
+`ghostwriteTransform`'s own two-pass order: contraction expansion runs first (`I've` -> `I have`),
+then pronoun substitution runs on the result (`I have` -> `They have`) -- both markers collapse
+together, which is exactly the mechanism this transform is meant to model.
 
-De-padding (the two `*-honest-variance-depadded.md` files) removes the entire final paragraph
-of each golden chapter -- the shared "X is the Y, and the Y is the X" rhetorical closer both
-chapters end on. Chapter 1's closer contains no apostrophe or pronoun tokens; chapter 2's
-closer contains one of each (`It's`, `I`, `your`). This asymmetry is not engineered -- it is
-what is actually in the golden text -- and it is the mechanism behind the finding these two
-files exist to demonstrate (see "Honest-variance scenario" below).
+## The two-tier truth this suite asserts (2026-09-02 update, ADR-0012 Decision 2)
 
-`different-voice.md` is a verbatim copy of `examples/fixtures/voice-drift/chapters/
-02-finding-your-network.md` (the planted register-shift fixture's rewritten chapter 2:
-passive, third-person, impersonal). Copied here rather than read live so this suite does not
-depend on that fixture's file staying byte-identical. It is scored here against the GOLDEN
-baseline (not the voice-drift fixture's own baseline), for an apples-to-apples comparison
-against every other scenario in this suite. The voice-drift fixture's own pass/block
-behavior, against its own baseline and its own budget of 20, is verified separately by the
-pre-existing tests in `tests/engines/stylometry.test.mjs` and is not re-derived here.
+**What changed and why, in two sentences:** the OLD suite here asserted a per-chapter drift score
+against a hand-tuned budget (`DEFAULT_DRIFT_SCORE_MAX`, `MARKER_CONTRIBUTION_DIVISOR`), a combining
+rule measured on this implementation wave's own probe to discriminate a planted ghostwriting
+signature from ordinary voice variation at AUC 0.53 on real prose -- a coin flip, testing how
+uniform one sample book happens to be rather than whether drift detection works. `computeDrift` v5
+(ADR-0012, voice verdict scope) replaced that rule with the largest standardized deviation against
+a per-span noise-scale ladder measured from the author's own voice corpus, and this suite was
+rewritten, not patched, to assert THAT instrument's real measured behavior instead.
 
-## Scenario table
+Applying that instrument honestly, at the sample book's own real word count (approx 1,050 words
+across its two committed chapters), surfaced a structural finding rather than a simple pass/fail:
+the sample book is honestly a BOOK-regime voice (its own calibration measures
+`detectability_auc: 0.59556` at the shortest rung, well under the 0.95 bar a chapter-scale verdict
+needs -- see `baseline.json`), so even a genuine ghostwriting transform, applied directly to the
+real chapters, does not cross threshold at that word count. The suite asserts this as a pinned
+property of the system, not a caveat to explain away, in three parts:
 
-Scores below are `measureChapter` + `computeDrift` against `baseline.json`, divisor
-unchanged at 3 (`MARKER_CONTRIBUTION_DIVISOR` in `hooks/lib/stylometry-engine.mjs`). "Old
-default" is 35, the value shipped before this recalibration. "New default" is 25
-(`DEFAULT_DRIFT_SCORE_MAX` in `hooks/lib/stylometry-engine.mjs`), chosen from a budget sweep
-of 20 through 35 as the value that gives row 5 below a comfortable, non-hairline margin
-(7.6% of budget) while leaving rows 1-4 safely passing and row 6 measuring pass despite a
-ground truth of block (a disclosed divergence, not a design goal; see "Row 6" below); a
-smaller per-marker divisor
-and a raw-occurrence-count damped bound were also evaluated and rejected (see the
-`DEFAULT_DRIFT_SCORE_MAX` doc comment in `hooks/lib/stylometry-engine.mjs` for why).
+1. **Separation at the real span**: the ghostwritten aggregate's statistic (2.3121) exceeds the
+   honest aggregate's statistic (1.8320) at each text's own real scored-word count -- the
+   transform's signal is real and measurable, even where the verdict scale cannot support a block.
+2. **Non-block at the real span is a pinned property**: the ghost aggregate's statistic (2.3121)
+   stays under its threshold (3.5835) at its real span (approx 1,047 scored words). This is the
+   measured reason this baseline's regime is `"book"` and why the gate's book-scale word floor
+   (`MIN_BOOK_VERDICT_WORDS`, `hooks/lib/gate-engine.mjs`) exists -- not a gap the suite is hiding.
+   If a future engine change ever made this scenario block at approx 1,050 words, this property
+   should fail and force a look at what changed.
+3. **Block at extended spans**: the SAME measured ghost marker rates, evaluated through
+   `computeDrift`'s `scoredWords` parameter at the calibration ladder's 4,400- and 8,800-word
+   rungs, exceed threshold (statistic 4.9585 vs threshold 4.8650 at 4,400; 6.5317 vs 5.4269 at
+   8,800), while the honest rates never exceed threshold at any of the ladder's five rungs (worst
+   case 5.3931 vs 5.4269 at 8,800). This is a rates-sustained-at-span evaluation of the ladder and
+   threshold themselves -- it asks whether this same deviation would register given enough scored
+   words for the noise scale to tighten, not whether resampling this short text into a longer one
+   would look like a realistic ghostwritten chapter. (It would not: a synthetic resample from only
+   these two chapters' handful of sentences was measured, during this task's escalation, to break
+   `type_token_ratio` for BOTH honest and ghostwritten resamples via sentence-reuse artifacts --
+   exactly why this suite evaluates the real measured rates at each span rather than fabricating
+   longer text to reach one.)
 
-| # | File | Transformation | Ground truth | Old default (35) | New default (25) |
-|---|---|---|---|---|---|
-| 1 | `01-unchanged.md` | none | pass | 10.86 pass | 10.86 pass |
-| 2 | `01-contractions-removed.md` | contractions only | pass | 23.20 pass | 19.87 pass |
-| 3 | `01-first-person-removed.md` | first person only | pass | 21.87 pass | 18.53 pass |
-| 4 | `01-second-person-removed.md` | second person only | pass | 15.98 pass | 12.65 pass |
-| 5 | `01-contractions-and-first-person-removed.md` | contractions + first person | **block** | 33.58 pass | 26.91 **block** |
-| 6 | `01-first-and-second-person-removed.md` | first + second person | block (see note) | 26.78 pass | 20.11 **pass** |
-| 7 | `01-contractions-first-second-removed.md` | all three | block | 38.27 block | 28.27 block |
-| 8 | `different-voice.md` | genuinely different voice (voice-drift ch2) | block | 62.97 block | 51.35 block |
-| 9 | `01-honest-variance-depadded.md` | de-padded ch1, self-fit baseline | pass (see note) | 41.46 block | 34.80 block |
-| 10 | `02-honest-variance-depadded.md` | de-padded ch2, self-fit baseline | pass (see note) | 39.98 block | 33.08 block |
+**Honest-variance canary** (regression guard, advisory framing -- matching
+`hooks/lib/gate-engine.mjs`'s own book-regime handling, where per-chapter statistics are computed
+and carried as advice and never decide the verdict): the two real, honest sample-book chapters
+measure well inside the 1.5x-threshold canary bound.
 
-Row 5 is the regression this task exists to close: at the old default, a chapter with every
-contraction and every first-person pronoun stripped -- the canonical ghostwriting signature,
-literally half of this project's own planted `voice-drift` defect -- passed. At the new
-default it blocks.
+| Chapter | statistic | threshold | ratio |
+|---|---|---|---|
+| `01-listening-before-speaking.md` | 1.4558 | 3.6716 | 0.3965 |
+| `02-finding-your-network.md` | 1.6224 | 3.6716 | 0.4419 |
 
-### What actually makes row 5 block, decomposed
+**The CHAPTER-tier block demonstration lives elsewhere, on purpose.** A voice that DOES clear the
+0.95 detectability bar, and DOES block a planted drift at chapter scale, is
+`examples/fixtures/voice-drift` -- its own calibrated author voice, deliberately less sparse than
+the sample book's. Its gate- and CLI-level block coverage is verified by
+`tests/engines/gate.test.mjs` and `tests/engines/stylometry.test.mjs`, not duplicated here: each
+regime's block proof has one named home. This suite (the sample book's own fixtures) is the
+book-regime demonstration; `voice-drift` is the chapter-regime one. Together they exercise both
+tiers of ADR-0012 Decision 2's gate topology honestly, rather than one fixture pretending to prove
+both.
 
-Row 5's score at the shipped default (26.91) is not mostly the transformation's own signal.
-Rescored against chapter 1's own true baseline instead of the two-chapter self-fit baseline
-(removing the population-mismatch floor every chapter carries when scored against a baseline
-it is only half of), row 5's genuine knock-on in the six markers the transformation does not
-touch directly is about 6.05 points -- short of the roughly 8.33 points that budget 25's
-per-marker cap would need from residual alone to push the two fully-saturated markers over
-budget. The other roughly 4.2 points of the 10.25-point residual actually measured (against
-the real, shipped, same-book self-fit baseline) are the same population-mismatch floor an
-UNCHANGED chapter 1 carries on its own (10.86 points, row 1 above). At the shipped default,
-this calibration blocks row 5 partly by leaning on that floor, not from the transformation's
-signal alone.
-
-### Row 6: ground truth set from measurement, not independent judgment
-
-An earlier version of this file labeled row 6 "pass," on the reasoning used for rows 2-4:
-that the per-marker bound exists so a single stylistic axis cannot alone decide the verdict.
-Row 6 moves two axes (first- and second-person pronouns both removed), the same count as row
-5, so that reasoning does not actually reach it -- the label was set to match what the engine
-does, not derived independently the way rows 2-5, 7, and 8 are. Row 5's own reasoning (two
-markers moving together is the signature this recalibration targets) applies to row 6 just as
-much, so ground truth here is relabeled **block**, and the divergence from the shipped
-default's measured verdict (**pass**, at both the old and new default) is disclosed the same
-way rows 9-10 disclose theirs, rather than silently matching the label to the measurement.
-
-The mechanism is the same knock-on-versus-floor split as row 5, at different magnitudes.
-Summed across the six markers the transformation does not directly touch, row 5 carries about
-10.2 points of residual against the shipped self-fit baseline (about 6.05 genuine, about 4.2
-floor, per the decomposition above); row 6 carries about 3.4. Both are two-marker signatures;
-the difference is entirely in how much the surrounding six markers also move, and expanding
-contractions (row 5) disturbs them more than substituting pronouns alone (row 6) does. This
-is a real, measured difference in this corpus, not a reason row 6 deserved a different ground
-truth -- it is the reason row 6 is the calibration's binding constraint: at divisor 3, no
-budget both keeps row 1 passing and makes row 6 block (row 6 needs budget under about 10.3
-for its own two-marker-plus-residual sum to reach it, and row 1's own floor is 10.86, already
-above that). Catching row 6 at divisor 3 is not available at any budget; it would need either
-a different divisor or the joint budget-and-divisor region described in
-`docs/reference/cli/ns-stylometry.md`'s Calibration section.
-
-### Honest-variance scenario (rows 9-10): ground truth vs. measured verdict
-
-These two rows are the case this recalibration was commissioned to fix. Ground truth is
-**pass**: two honestly written chapters from the same author, scored against a baseline
-self-fit from just the two of them, is natural variation, not drift. The measured verdict at
-the shipped default (divisor 3, budget 25) is **block**, at both the old and the new default
-budget. Proof for the shipped divisor specifically: while exactly two markers stay pinned at
-the per-marker bound for both row 5 and rows 9-10 -- true at both budget 35 and budget 25,
-divisor 3 -- each case's score is `2 x (budget/divisor) + residual`, with `residual` constant
-across budget and divisor IN THAT REGIME. Row 5's residual is about 10.2; rows 9 and 10's are
-about 18.1 and 16.7. Honest variance is offset above the ghostwriting signature by that gap
-throughout the regime, so at divisor 3, no budget in the range this calibration could
-responsibly ship passes rows 9-10 while blocking row 5.
-
-That regime does not hold everywhere, and the constant-residual argument does not generalize
-past it the way an earlier version of this file claimed. Rows 9-10's largest single deviation
-(16.49% for row 9) means their score has a hard ceiling: once the per-marker cap exceeds that
-value, every marker is uncapped and the score stops changing (47.09 for row 9, 44.54 for row
-10) no matter how much further the cap grows. Row 5's two manipulated markers sit at exactly
-100% deviation and have no such ceiling below a cap of 100. Past a cap of about 18.42, row
-5's climbing score exceeds rows 9-10's flat ceiling, and the two cases separate. Budget 50,
-divisor 2.5 (cap 20) is a verified working point: row 5 scores 50.24 and blocks, rows 9-10
-score 47.09 and 44.54 and pass, and every other row in the table above still matches its
-ground truth. This was not adopted as the shipped default; see `docs/reference/cli/
-ns-stylometry.md`'s Calibration section for the real reasons (the feasible region is narrow,
-it degrades the three-marker guarantee at its own low end, and it ripples into every
-divisor-derived number this project ships) and for what changing the shipped default there
-would actually require.
-
-The test for rows 6, 9, and 10 asserts the MEASURED verdict, not the ground truth, and says
-so in the test's own comments -- a suite that silently matched ground truth to whatever the
-engine currently does would be hiding these findings, and a suite that left the rows out
-would be hiding them more effectively.
-
-### The suite does not, by itself, select 25
-
-At divisor 3, the eight scenarios above other than rows 9-10 are jointly consistent with any
-budget from about 16.12 to 30.73 -- a band roughly 14.6 points wide, not a single point. 25
-sits inside that band; it is not derived uniquely from the labeled scenarios the way each
-scenario's own verdict is. The floor-fraction test in `tests/engines/stylometry-
-calibration.test.mjs` (asserting row 1's score is 43.4% of budget) narrows the pin further,
-but that test is a statistic computed from the chosen value of 25, not an independent
-ground-truth constraint like the scenario verdicts above -- it detects drift away from 25
-once 25 is chosen, it does not justify 25 over another point in the 14.6-point band.
+**Determinism**: recalibrating `calibrateBaseline` from the three committed voice-corpus files, in
+the test process itself, reproduces both this directory's `baseline.json` and
+`examples/sample-book/.studio/config.json`'s own baseline (`markers` and `calibration` only --
+`captured`/`sample_count`/`method` are agent-written, not measured, and excluded from the
+comparison by construction) byte-for-byte. Measured runtime for the single `calibrateBaseline` call
+this determinism check performs: approx 10-11 seconds.
