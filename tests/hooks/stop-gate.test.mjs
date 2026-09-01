@@ -43,6 +43,7 @@ import {
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
+import { writeSyntheticV5Baseline } from '../lib/synthetic-v5-baseline.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..');
@@ -54,15 +55,29 @@ const AI_INJECTION = join(REPO_ROOT, 'examples', 'fixtures', 'ai-injection');
 // Helpers
 // ---------------------------------------------------------------------------
 
+// Every committed examples/ fixture still carries a marker_set_version 4 stylometry baseline
+// with no calibration ladder (Task 5, ADR-0012 implementation wave, recaptures those); scoring
+// against it with the v5 computeDrift throws StaleBaselineError, which -- through the gate's
+// existing, unchanged engine-error handling -- forces the WHOLE gate run's exit code to 2, even
+// for a test whose actual subject is prompt_scrub or the Stop hook's own plumbing, not
+// stylometry at all. Both clone helpers below patch the clone with a synthetic, self-consistent
+// v5 baseline (measured from the clone's own current chapters/*.md) BY DEFAULT so a test whose
+// subject is something else is not collaterally blocked by a fixture-recapture task outside
+// Task 4's scope. Mirrors tests/engines/gate.test.mjs's own makeTempClone patch (ratified
+// deviation outside Task 4's nominal file list; see "Concerns for the coordinator" in
+// (local working notes, not published)).
+
 function cloneSampleBook(label) {
   const dir = join(tmpdir(), 'ns-tsk034-' + label + '-' + Date.now());
   cpSync(SAMPLE_BOOK, dir, { recursive: true });
+  writeSyntheticV5Baseline(dir);
   return dir;
 }
 
 function cloneFixture(fixturePath, label) {
   const dir = join(tmpdir(), 'ns-tsk034-' + label + '-' + Date.now());
   cpSync(fixturePath, dir, { recursive: true });
+  writeSyntheticV5Baseline(dir);
   return dir;
 }
 

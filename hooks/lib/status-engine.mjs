@@ -14,16 +14,21 @@
 // used-by:      bin/ns-status, and hooks/post-tool-batch.mjs, which imports
 //               DEMOTION_FALLBACK_STATUS, parseDecisionsLog, and isEligibleForFinal directly
 //
-// GATE-SOURCE INVARIANT: gate verdict and drift score for a chapter come ONLY from the newest
-// report file per chapter slug under .studio/gate/, never from progress.json's per-chapter
-// `last_gate` field, and never from progress.json's per-chapter `drift_score` field either. Both
-// fields are read by no function in this module. `last_gate` stays null in every v1 writer by
-// design (finding F-HK-05 (last_gate never written), resolved by re-specification, not
-// implementation); a hand-authored fixture may populate it for one chapter as sample content,
-// which is exactly the trap a naive implementation would pass by accident. `drift_score` is a
-// separate, hook-maintained convenience field that this board never treats as authoritative
-// either, for the same reason. See computeStatusBoard below, whose only per-chapter fs read is
-// a .studio/gate/ report file.
+// GATE-SOURCE INVARIANT: gate verdict, drift statistic, and drift threshold for a chapter come
+// ONLY from the newest report file per chapter slug under .studio/gate/, never from
+// progress.json's per-chapter `last_gate` field, never from progress.json's per-chapter
+// `drift_score` field, and (since ADR-0012, voice verdict scope, Decision 2) never from
+// .studio/config.json's `thresholds.drift_score_max` either -- that knob is retired and read by
+// nothing in this module. The drift statistic and its threshold are both per-report: each report
+// already carries the calibration ladder's own resolved threshold for whatever scored word count
+// it measured, so there is no longer a single board-wide number to read from config the way
+// drift_score_max was. None of `last_gate`, `drift_score`, or config's retired threshold field is
+// read by any function in this module. `last_gate` stays null in every v1 writer by design
+// (finding F-HK-05 (last_gate never written), resolved by re-specification, not implementation);
+// a hand-authored fixture may populate it for one chapter as sample content, which is exactly the
+// trap a naive implementation would pass by accident. `drift_score` is a separate, hook-maintained
+// convenience field that this board never treats as authoritative either, for the same reason.
+// See computeStatusBoard below, whose only per-chapter fs read is a .studio/gate/ report file.
 //
 // DETERMINISM INVARIANT: no function in this module stamps a generation timestamp, reads the
 // system clock, or formats a number with a locale-aware method (no toLocaleString, no
@@ -45,16 +50,6 @@
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { DEFAULT_DRIFT_SCORE_MAX } from './stylometry-engine.mjs';
-
-// This engine's own built-in default, applied when .studio/config.json or its
-// thresholds.drift_score_max field is absent. skills/nfs-status-dashboard/SKILL.md deliberately
-// documents no threshold number of its own; it narrates whichever value and isDefault flag this
-// module reports. Re-exported under this module's own name (rather than importing
-// DEFAULT_DRIFT_SCORE_MAX directly at call sites) so this module keeps its own stable public
-// name while hooks/lib/stylometry-engine.mjs stays the single source of truth for the number
-// itself.
-export const DEFAULT_DRIFT_THRESHOLD = DEFAULT_DRIFT_SCORE_MAX;
 
 /**
  * Parses a .studio/gate/ filename against the two significant patterns documented in
@@ -161,22 +156,29 @@ export function extractGateVerdict(report) {
   return report.verdict;
 }
 
-// Matches the live hooks/lib/gate-engine.mjs detail-string shape ("drift score 10.86 within
-// threshold 25" / "... exceeds threshold 25; stylometry.drift-threshold") and the
-// underscore-joined shape docs/formats/gate-report.md's own worked example uses
-// ("drift_score 38 exceeds threshold 25"), so a wording gap between the engine and its
-// documentation does not silently stop this function from parsing a real report either way.
+// Matches the live hooks/lib/gate-engine.mjs pre-ADR-0012 detail-string shape ("drift score
+// 10.86 within threshold 25" / "... exceeds threshold 25; stylometry.drift-threshold") and the
+// underscore-joined shape docs/formats/gate-report.md's own worked example uses ("drift_score 38
+// exceeds threshold 25"). Kept as the fallback path for reports written before the structured
+// `drift` field existed (ADR-0012, voice verdict scope, Decision 2, PF-14): the CURRENT engine
+// still writes a "drift statistic N.NN ..." phrase inside `detail` (worded differently -
+// "statistic", not "score" - see gate-engine.mjs), which this pattern does NOT match by design,
+// so a present-day report is read through `drift.statistic` (see extractDriftScore below) and
+// only an older report without that structured field falls back to parsing this phrase out of
+// prose at all.
 const DRIFT_SCORE_PATTERN = /drift[ _]score\s+(-?\d+(?:\.\d+)?)/i;
 
 /**
- * Extracts the numeric drift score from a parsed gate report's `stylometry` check entry.
- * Returns null when: the report is null/malformed, no `checks[]` entry has `check ===
+ * Extracts the numeric drift statistic from a parsed gate report's `stylometry` check entry.
+ * Prefers the structured `drift.statistic` field (ADR-0012 voice verdict scope, Decision 2,
+ * PF-14) when it is present and a finite number; falls back to parsing the legacy "drift score
+ * N.NN ..." prose out of `detail` (DRIFT_SCORE_PATTERN) for a report written before that field
+ * existed. Returns null when: the report is null/malformed, no `checks[]` entry has `check ===
  * "stylometry"`, that entry's own verdict is "skip" (the same "Drift cell is -" rule
  * bin/ns-status's JSON reports and skills/nfs-status-dashboard/SKILL.md narrates verbatim, rather
- * than re-deriving), or its `detail` string carries no recognizable "drift score N" phrase.
- * Never throws: an
- * unparseable detail string degrades to null (an honest "no drift score available" cell)
- * rather than failing the whole board over one chapter's report.
+ * than re-deriving), or neither the structured field nor the prose fallback yields a number.
+ * Never throws: an unparseable detail string degrades to null (an honest "no drift score
+ * available" cell) rather than failing the whole board over one chapter's report.
  *
  * @param {object|null} report
  * @returns {number|null}
@@ -185,6 +187,11 @@ export function extractDriftScore(report) {
   if (!report || !Array.isArray(report.checks)) return null;
   const styloCheck = report.checks.find((c) => c && c.check === 'stylometry');
   if (!styloCheck || styloCheck.verdict === 'skip') return null;
+
+  if (styloCheck.drift && typeof styloCheck.drift.statistic === 'number' && Number.isFinite(styloCheck.drift.statistic)) {
+    return styloCheck.drift.statistic;
+  }
+
   if (typeof styloCheck.detail !== 'string') return null;
   const match = DRIFT_SCORE_PATTERN.exec(styloCheck.detail);
   if (!match) return null;
@@ -193,24 +200,28 @@ export function extractDriftScore(report) {
 }
 
 /**
- * Reads config.json's `thresholds.drift_score_max`. Returns the configured value when it is a
- * finite number; otherwise DEFAULT_DRIFT_THRESHOLD with isDefault: true. skills/nfs-status-dashboard/
- * SKILL.md documents no default of its own; it narrates whichever value and isDefault flag this
- * function returns. A present-but-malformed value (wrong type,
- * non-finite) is treated the same as an absent one for this purpose. An unreadable
- * config.json itself never reaches this function: findBookRoot's loadBible already throws a
- * BibleError on a corrupt config.json, which the CLI surfaces as an exit-2 operational error
- * before computeStatusBoard is ever called.
+ * Extracts the numeric drift threshold from a parsed gate report's `stylometry` check entry's
+ * structured `drift.threshold` field (ADR-0012 voice verdict scope, Decision 2, PF-14) -- the
+ * calibration ladder's own resolved threshold for whatever scored word count that report
+ * measured. Unlike extractDriftScore, there is no prose fallback here: a report written before
+ * the structured field existed carried no threshold number a reader could recover honestly
+ * (the retired `thresholds.drift_score_max` config value was a single board-wide number, not
+ * per-report, and this module no longer reads it at all -- see the GATE-SOURCE INVARIANT
+ * comment above). Returns null when the report is null/malformed, no `checks[]` entry has
+ * `check === "stylometry"`, that entry's own verdict is "skip", or `drift.threshold` is absent
+ * or not a finite number.
  *
- * @param {object|null} config
- * @returns {{value: number, isDefault: boolean}}
+ * @param {object|null} report
+ * @returns {number|null}
  */
-export function deriveDriftThreshold(config) {
-  const raw = config && config.thresholds && config.thresholds.drift_score_max;
-  if (typeof raw === 'number' && Number.isFinite(raw)) {
-    return { value: raw, isDefault: false };
+export function extractDriftThreshold(report) {
+  if (!report || !Array.isArray(report.checks)) return null;
+  const styloCheck = report.checks.find((c) => c && c.check === 'stylometry');
+  if (!styloCheck || styloCheck.verdict === 'skip') return null;
+  if (!styloCheck.drift || typeof styloCheck.drift.threshold !== 'number' || !Number.isFinite(styloCheck.drift.threshold)) {
+    return null;
   }
-  return { value: DEFAULT_DRIFT_THRESHOLD, isDefault: true };
+  return styloCheck.drift.threshold;
 }
 
 /**
@@ -247,42 +258,49 @@ export function deriveChapterTitle(chapter) {
 }
 
 /**
- * A chapter row is highlighted when its drift score exceeds the effective threshold, or its
- * gate verdict is "block" - the same two conditions this engine alone applies.
- * skills/nfs-status-dashboard/SKILL.md reads the resulting `highlighted` field verbatim rather than
- * re-deriving them. A chapter with no drift score (null) can never be highlighted on the drift
- * condition alone.
+ * A chapter row is highlighted when its drift statistic exceeds ITS OWN report's threshold, or
+ * its gate verdict is "block" - the same two conditions this engine alone applies. Since
+ * ADR-0012 (voice verdict scope, Decision 2), the threshold is per-report (the calibration
+ * ladder's own resolved value for whatever scored word count that chapter's report measured),
+ * not a single board-wide config value, so both `row.drift` and `row.threshold` must come from
+ * the SAME report and both must be present: a chapter with no drift statistic (null) or no
+ * threshold (null, for example a report written before the structured `drift` field existed)
+ * can never be highlighted on the drift condition alone. skills/nfs-status-dashboard/SKILL.md
+ * reads the resulting `highlighted` field verbatim rather than re-deriving it.
  *
- * @param {{drift: number|null, gate: string|null}} row
- * @param {number} thresholdValue
+ * @param {{drift: number|null, threshold: number|null, gate: string|null}} row
  * @returns {boolean}
  */
-export function isHighlighted(row, thresholdValue) {
-  const driftExceeds = typeof row.drift === 'number' && row.drift > thresholdValue;
+export function isHighlighted(row) {
+  const driftExceeds = typeof row.drift === 'number' && typeof row.threshold === 'number' && row.drift > row.threshold;
   const blocked = row.gate === 'block';
   return driftExceeds || blocked;
 }
 
 /**
  * Computes the full chapter board: one row per progress.json chapters[] entry (array order
- * preserved), whole-book totals, the newest whole-book gate annotation if any all.<ts>.json
- * report exists, and the effective drift threshold. The sole fs access here beyond what the
- * caller already performed to obtain `progress` and `config` is listing and reading
- * .studio/gate/; a missing or empty gate directory is not an error
- * (skills/nfs-status-dashboard/SKILL.md: "not a halt condition") - it simply leaves every
- * chapter's drift and gate null.
+ * preserved), whole-book totals, and the newest whole-book gate annotation if any
+ * all.<ts>.json report exists. The sole fs access here beyond what the caller already performed
+ * to obtain `progress` and `config` is listing and reading .studio/gate/; a missing or empty
+ * gate directory is not an error (skills/nfs-status-dashboard/SKILL.md: "not a halt condition")
+ * - it simply leaves every chapter's drift, threshold, and gate null. `config` is accepted for
+ * forward compatibility (a caller may still hand it in) but is not read by this function: since
+ * ADR-0012 (voice verdict scope, Decision 2) retired `thresholds.drift_score_max`, there is no
+ * longer a config-sourced value this board computes - each row's own threshold comes from that
+ * SAME row's newest gate report (see extractDriftThreshold).
  *
  * @param {string} root - absolute book root (used only to locate .studio/gate/)
  * @param {object} progress - already-parsed progress.json (hooks/lib/bible.mjs readProgress)
- * @param {object|null} config - already-parsed config.json, or null (findBookRoot's loadBible)
+ * @param {object|null} config - already-parsed config.json, or null (findBookRoot's loadBible);
+ *   unused by this function, kept in the signature for caller compatibility
  * @returns {{
  *   chapters: Array<{slug: string, number: string|null, title: string, status: string|null,
  *                     wordCount: number, openClaimCount: number, drift: number|null,
- *                     gate: string|null, reportPath: string|null, highlighted: boolean}>,
+ *                     threshold: number|null, gate: string|null, reportPath: string|null,
+ *                     highlighted: boolean}>,
  *   totals: {wordCount: number, openClaimCount: number, chaptersFinal: number,
  *            chaptersTotal: number|null, chaptersRemaining: number|null},
  *   wholeBookGate: string|null,
- *   thresholds: {driftScoreMax: number, driftScoreMaxIsDefault: boolean},
  * }}
  */
 export function computeStatusBoard(root, progress, config) {
@@ -296,8 +314,6 @@ export function computeStatusBoard(root, progress, config) {
     }
   }
   const { perSlug, wholeBook } = selectNewestGateFilenames(filenames);
-
-  const { value: driftScoreMax, isDefault: driftScoreMaxIsDefault } = deriveDriftThreshold(config);
 
   const chaptersRaw = Array.isArray(progress.chapters) ? progress.chapters : [];
   const chapters = chaptersRaw.map((chapter) => {
@@ -315,10 +331,11 @@ export function computeStatusBoard(root, progress, config) {
       wordCount: typeof chapter.word_count === 'number' ? chapter.word_count : 0,
       openClaimCount: typeof chapter.open_claim_count === 'number' ? chapter.open_claim_count : 0,
       drift: extractDriftScore(report),
+      threshold: extractDriftThreshold(report),
       gate: extractGateVerdict(report),
       reportPath,
     };
-    row.highlighted = isHighlighted(row, driftScoreMax);
+    row.highlighted = isHighlighted(row);
     return row;
   });
 
@@ -339,22 +356,21 @@ export function computeStatusBoard(root, progress, config) {
     wholeBookGate = extractGateVerdict(readJsonSafe(join(gateDir, wholeBook)));
   }
 
-  return {
-    chapters,
-    totals,
-    wholeBookGate,
-    thresholds: { driftScoreMax, driftScoreMaxIsDefault },
-  };
+  return { chapters, totals, wholeBookGate };
 }
 
 /**
- * Renders a computeStatusBoard() result as a Markdown table (columns: #, Title, Status,
- * Words, Drift, Open Claims, Gate - the same column set skills/nfs-status-dashboard/SKILL.md's
- * JSON-driven render also uses) plus a short footer: the drift threshold and its source, and the
- * chapters-remaining-to-final count when progress.json's totals carry a chapters_total. A
- * highlighted row (see isHighlighted) carries a leading "!" in its # cell; skills/nfs-status-dashboard/
- * SKILL.md's own render applies that same leading "!" by reading the `highlighted` field
- * directly, not by re-deriving it. Deterministic: no timestamp, no
+ * Renders a computeStatusBoard() result as a Markdown table (columns: #, Title, Status, Words,
+ * Drift, Threshold, Open Claims, Gate - the same column set skills/nfs-status-dashboard/SKILL.md's
+ * JSON-driven render also uses) plus the chapters-remaining-to-final count when progress.json's
+ * totals carry a chapters_total. The Threshold column replaces the pre-ADR-0012 single-value
+ * footer line ("Drift threshold: thresholds.drift_score_max = N ..."): since ADR-0012 (voice
+ * verdict scope, Decision 2) retired that config field, there is no longer one board-wide number
+ * to state in a footer - each row's threshold is its own report's calibration-ladder value for
+ * whatever scored word count that chapter measured, so it is rendered per row instead. A
+ * highlighted row (see isHighlighted) carries a leading "!" in its # cell;
+ * skills/nfs-status-dashboard/SKILL.md's own render applies that same leading "!" by reading the
+ * `highlighted` field directly, not by re-deriving it. Deterministic: no timestamp, no
  * locale-formatted number (plain string concatenation only - JavaScript's default
  * Number-to-string conversion is locale-independent, unlike toLocaleString/Intl.NumberFormat),
  * no absolute path (reportPath, when present, is always book-root-relative).
@@ -364,16 +380,17 @@ export function computeStatusBoard(root, progress, config) {
  */
 export function renderBoardMarkdown(board) {
   const lines = [];
-  lines.push('| # | Title | Status | Words | Drift | Open Claims | Gate |');
-  lines.push('|---|---|---|---|---|---|---|');
+  lines.push('| # | Title | Status | Words | Drift | Threshold | Open Claims | Gate |');
+  lines.push('|---|---|---|---|---|---|---|---|');
 
   for (const row of board.chapters) {
     const numCell = (row.highlighted ? '! ' : '') + (row.number || '');
     const drift = typeof row.drift === 'number' ? String(row.drift) : '-';
+    const threshold = typeof row.threshold === 'number' ? String(row.threshold) : '-';
     const gate = row.gate || '-';
     lines.push(
       '| ' + numCell + ' | ' + row.title + ' | ' + (row.status || '-') + ' | ' + row.wordCount +
-      ' | ' + drift + ' | ' + row.openClaimCount + ' | ' + gate + ' |'
+      ' | ' + drift + ' | ' + threshold + ' | ' + row.openClaimCount + ' | ' + gate + ' |'
     );
   }
 
@@ -382,17 +399,11 @@ export function renderBoardMarkdown(board) {
     : board.totals.chaptersFinal + ' final';
   const wholeBookAnnotation = board.wholeBookGate ? ' (whole-book gate: ' + board.wholeBookGate + ')' : '';
   lines.push(
-    '| **Totals** | | | **' + board.totals.wordCount + '** | | **' + board.totals.openClaimCount +
+    '| **Totals** | | | **' + board.totals.wordCount + '** | | | **' + board.totals.openClaimCount +
     '** | **' + chaptersFinalCell + '**' + wholeBookAnnotation + ' |'
   );
 
   lines.push('');
-  const thresholdSource = board.thresholds.driftScoreMaxIsDefault
-    ? ' (default applied; field absent from .studio/config.json)'
-    : ' (from .studio/config.json)';
-  lines.push(
-    'Drift threshold: thresholds.drift_score_max = ' + board.thresholds.driftScoreMax + thresholdSource + '.'
-  );
 
   if (board.totals.chaptersRemaining !== null) {
     lines.push(board.totals.chaptersRemaining + ' chapter(s) remaining to final.');

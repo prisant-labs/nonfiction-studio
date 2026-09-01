@@ -18,7 +18,7 @@ This skill is the read-only project status dashboard. It fronts `bin/ns-status` 
 
 Skill inputs read (by `bin/ns-status` via `--project=.`):
 - `.studio/progress.json` (chapter status, word count, open_claim_count; totals block; required)
-- `.studio/config.json` (`thresholds.drift_score_max` for the highlight threshold; the CLI applies its own built-in default when the field is absent)
+- `.studio/config.json` (`stylometry.baseline` and its calibration ladder; the per-chapter drift threshold itself is per-report, read from each chapter's own newest gate report, not from config - see the [ns-status CLI reference](../../docs/reference/cli/ns-status.md))
 - `.studio/gate/` directory listing, then the newest report per chapter slug (drift score and gate verdict per chapter; newest whole-book report for the totals annotation)
 
 No skill chain edges exist for this skill.
@@ -68,19 +68,20 @@ Capture the exit code, stdout (JSON), and stderr. Proceed to Step 3.
 
 ### Exit 0 - render the dashboard
 
-Parse stdout as the board JSON. Build a Markdown table with columns `#`, `Title`, `Status`, `Words`, `Drift`, `Open Claims`, `Gate`. For each entry in the JSON's `chapters` array, in array order, render one row:
+Parse stdout as the board JSON. Build a Markdown table with columns `#`, `Title`, `Status`, `Words`, `Drift`, `Threshold`, `Open Claims`, `Gate`. For each entry in the JSON's `chapters` array, in array order, render one row:
 
 - **#** - the entry's `number` field; when the entry's `highlighted` field is `true`, prefix the cell with `! `.
 - **Title** - the entry's `title` field.
 - **Status** - the entry's `status` field, verbatim (see "Status vocabulary" above).
 - **Words** - the entry's `wordCount` field.
 - **Drift** - the entry's `drift` field; render `-` when it is `null`.
+- **Threshold** - the entry's `threshold` field (that SAME chapter's own newest gate report resolved this from its calibration ladder; ADR-0012, voice verdict scope); render `-` when it is `null`.
 - **Open Claims** - the entry's `openClaimCount` field.
 - **Gate** - the entry's `gate` field; render `-` when it is `null`.
 
 Add a totals row from the JSON's `totals` object: Words = `totals.wordCount`, Open Claims = `totals.openClaimCount`, and a "Chapters final" cell reading `totals.chaptersFinal` followed by `of <totals.chaptersTotal> final` when `chaptersTotal` is not `null`, or just `<totals.chaptersFinal> final` when it is. When the JSON's top-level `wholeBookGate` is not `null`, append `(whole-book gate: <wholeBookGate>)` to the totals row.
 
-Below the table, add a footer line built directly from the JSON's `thresholds` object: "Drift threshold: `thresholds.drift_score_max` = `<thresholds.driftScoreMax>` (from `.studio/config.json`)." when `driftScoreMaxIsDefault` is `false`, or "Drift threshold: `thresholds.drift_score_max` = `<thresholds.driftScoreMax>` (ns-status's built-in default; `.studio/config.json` does not set `thresholds.drift_score_max`)." when it is `true`. When `totals.chaptersRemaining` is not `null`, add a line: "`<totals.chaptersRemaining>` chapter(s) remaining to final."
+Below the table, there is no board-wide drift-threshold footer line: each row already carries its own Threshold cell (there is no longer a single config-sourced number to state once - ADR-0012, voice verdict scope, Decision 2, retired `thresholds.drift_score_max`). When `totals.chaptersRemaining` is not `null`, add a line: "`<totals.chaptersRemaining>` chapter(s) remaining to final."
 
 If no entry in `chapters` has `highlighted: true`, state "No rows flagged." after the footer. Otherwise, state that rows are marked with a leading `!` because `bin/ns-status` flagged them (drift above the configured threshold, or a block gate verdict).
 
@@ -123,4 +124,4 @@ If no entry in `chapters` has `highlighted: true`, state "No rows flagged." afte
 
 **Missing or empty gate directory.** Not a halt condition: `bin/ns-status` itself returns `null` for `drift` and `gate` on every chapter with no matching report, which Step 3 renders as "-". Next actions suggests running the quality gate for every such chapter.
 
-**Missing or unreadable `.studio/config.json`.** Not a halt condition: `bin/ns-status` applies its own built-in default and reports `driftScoreMaxIsDefault: true`, which Step 3's footer states plainly.
+**Missing or unreadable `.studio/config.json`.** Not a halt condition: since ADR-0012 (voice verdict scope, Decision 2) retired `thresholds.drift_score_max`, `bin/ns-status`'s board computation does not read `config.json` at all - each chapter's Threshold cell comes from that SAME chapter's own newest gate report, independent of `config.json`.

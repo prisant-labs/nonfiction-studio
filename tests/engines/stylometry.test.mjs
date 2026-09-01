@@ -21,24 +21,20 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync, mkdtempSync, writeFileSync, statSync, readdirSync, rmSync } from 'node:fs';
+import {
+  readFileSync, existsSync, mkdtempSync, writeFileSync, statSync, readdirSync, rmSync, cpSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { writeSyntheticV5Baseline } from '../lib/synthetic-v5-baseline.mjs';
 
 import {
   measureChapter, measureBook, computeDrift, countWords, CURRENT_MARKER_SET_VERSION,
   StaleBaselineError, InvalidCalibrationError,
 } from '../../hooks/lib/stylometry-engine.mjs';
 
-// Reason string shared by every skipped BIN-spawning test below (Task 4 fixes
-// gate-engine.mjs, status-engine.mjs, and bin/ns-stylometry to stop importing the retired
-// DEFAULT_DRIFT_SCORE_MAX export; until then the CLI process fails at ESM module-link time
-// for every invocation, regardless of arguments).
-const SKIP_BIN_REASON =
-  'declared red until Task 4 (ADR-0012 implementation wave): bin/ns-stylometry still imports ' +
-  'the retired DEFAULT_DRIFT_SCORE_MAX export and fails to load as a subprocess';
 
 // A complete, hand-built v5 calibration object, shaped per P2 ((local working notes, not published)), used by every
 // synthetic computeDrift test below so none of them depend on a real .studio/config.json
@@ -743,19 +739,32 @@ test('computeDrift v5: a blocking case -- first_person_rate collapsing to near-z
 });
 
 // ---------------------------------------------------------------------------
-// Committed tree: BIN-spawning CLI tests, SKIPPED (declared red until Task 4; see
-// SKIP_BIN_REASON above)
+// Committed tree: BIN-spawning CLI tests against the REAL committed golden/voice-drift
+// fixtures, IN PLACE (not a clone) -- SKIPPED, declared red until Task 5 (ADR-0012
+// implementation wave)
 // ---------------------------------------------------------------------------
 
-// Bodies below are kept intact (not emptied) even though the tests are skipped, so Task 4 has
-// working coverage to re-enable rather than history to excavate. The first four assume the
-// v4-shaped output.driftScore/threshold/verdict CLI JSON contract; Task 4's fix to bin/ns-
-// stylometry's scoring path (per Task 3's design pins, P1/P6) will change that JSON shape, so
-// these four will likely need output-shape rework alongside being un-skipped, not just an
-// un-skip. The exit-2 and five measure-mode bodies below (further down this file) are version-
-// agnostic and should need no changes beyond removing the skip option.
+// The four tests below run the CLI against examples/sample-book and examples/fixtures/
+// voice-drift AS COMMITTED, not a temp clone with a synthetic baseline patched in (unlike
+// tests/engines/gate.test.mjs's or stylometry-explain.test.mjs's approach): their own intent
+// is specifically to prove these two REAL fixtures' documented behavior under the shipped
+// engine, which is exactly "a v4 fixture baseline on disk" (THE RULE, (local working notes, not published)) --
+// both examples/sample-book/.studio/config.json and examples/fixtures/voice-drift/.studio/
+// config.json still carry a marker_set_version 4 baseline with no calibration ladder. Scoring
+// against either with the v5 computeDrift throws StaleBaselineError (CLI exit 2), not the
+// pass/block this pair asserts. Task 5 recaptures both baselines under v5; only then can these
+// re-verify the real fixtures. Bodies are reworked to the v5 JSON shape now (statistic/
+// worstMarker/threshold/exceeded/regime/scoredWords, perMarker.z replacing the retired
+// driftScore/contribution/capped triple) so Task 5 only needs to remove the skip option, not
+// rework the assertions again.
 
-test('golden sample book CLI: --all --json exits 0', { skip: SKIP_BIN_REASON }, () => {
+const SKIP_UNTIL_TASK_5_REASON =
+  'declared red until Task 5 (ADR-0012 implementation wave): examples/sample-book and ' +
+  'examples/fixtures/voice-drift still carry marker_set_version 4 baselines with no ' +
+  'calibration ladder; scoring against either with the v5 computeDrift throws ' +
+  'StaleBaselineError (exit 2) instead of the pass/block this test asserts';
+
+test('golden sample book CLI: --all --json exits 0', { skip: SKIP_UNTIL_TASK_5_REASON }, () => {
   const bookRoot = join(EXAMPLES, 'sample-book');
   const result = spawnSync(
     process.execPath, [BIN, '--all', '--json'],
@@ -765,13 +774,14 @@ test('golden sample book CLI: --all --json exits 0', { skip: SKIP_BIN_REASON }, 
     'golden book CLI exits 0; stderr: ' + result.stderr);
 
   const out = JSON.parse(result.stdout);
-  assert.ok(typeof out.driftScore === 'number', 'driftScore is a number');
+  assert.ok(typeof out.statistic === 'number', 'statistic is a number');
   assert.strictEqual(out.verdict, 'pass', 'verdict is pass');
-  assert.ok(out.driftScore < out.threshold,
-    'driftScore ' + out.driftScore.toFixed(2) + ' < threshold ' + out.threshold);
+  assert.strictEqual(out.exceeded, false);
+  assert.ok(out.statistic < out.threshold,
+    'statistic ' + out.statistic.toFixed(2) + ' < threshold ' + out.threshold);
 });
 
-test('golden sample book CLI: ns-stylometry --chapter=<slug> --json exits 0 for EVERY chapter', { skip: SKIP_BIN_REASON }, () => {
+test('golden sample book CLI: ns-stylometry --chapter=<slug> --json exits 0 for EVERY chapter', { skip: SKIP_UNTIL_TASK_5_REASON }, () => {
   const bookRoot = join(EXAMPLES, 'sample-book');
   const chapterDir = join(bookRoot, 'chapters');
   const chapterFiles = readdirSync(chapterDir).filter(f => f.endsWith('.md')).sort();
@@ -787,11 +797,11 @@ test('golden sample book CLI: ns-stylometry --chapter=<slug> --json exits 0 for 
     const out = JSON.parse(result.stdout);
     assert.strictEqual(out.verdict, 'pass',
       'chapter ' + slug + ' verdict must be pass; got ' + out.verdict +
-      ' (drift ' + out.driftScore.toFixed(2) + ' vs threshold ' + out.threshold + ')');
+      ' (statistic ' + out.statistic.toFixed(2) + ' vs threshold ' + out.threshold + ')');
   }
 });
 
-test('voice-drift fixture CLI: --all --json exits 1', { skip: SKIP_BIN_REASON }, () => {
+test('voice-drift fixture CLI: --all --json exits 1', { skip: SKIP_UNTIL_TASK_5_REASON }, () => {
   const bookRoot = join(EXAMPLES, 'fixtures', 'voice-drift');
   const result = spawnSync(
     process.execPath, [BIN, '--all', '--json'],
@@ -801,18 +811,20 @@ test('voice-drift fixture CLI: --all --json exits 1', { skip: SKIP_BIN_REASON },
     'voice-drift CLI exits 1; stderr: ' + result.stderr);
 
   const out = JSON.parse(result.stdout);
-  assert.ok(typeof out.driftScore === 'number', 'driftScore is a number');
+  assert.ok(typeof out.statistic === 'number', 'statistic is a number');
   assert.strictEqual(out.verdict, 'block', 'verdict is block');
-  assert.ok(out.driftScore >= out.threshold,
-    'driftScore ' + out.driftScore.toFixed(2) + ' >= threshold ' + out.threshold);
+  assert.strictEqual(out.exceeded, true);
+  assert.ok(out.statistic >= out.threshold,
+    'statistic ' + out.statistic.toFixed(2) + ' >= threshold ' + out.threshold);
 
   // first_person_rate must be flagged (reconciliation-stable flag)
   const fpEntry = Object.entries(out.markers).find(([k]) => k === 'first_person_rate');
   assert.ok(fpEntry, 'first_person_rate present in markers output');
   assert.strictEqual(fpEntry[1].flagged, true, 'first_person_rate flagged in JSON output');
+  assert.strictEqual(typeof fpEntry[1].z, 'number', 'first_person_rate carries a numeric z');
 });
 
-test('voice-drift fixture CLI: ns-stylometry --chapter=<slug> --json exits 1 for EVERY chapter', { skip: SKIP_BIN_REASON }, () => {
+test('voice-drift fixture CLI: ns-stylometry --chapter=<slug> --json exits 1 for EVERY chapter', { skip: SKIP_UNTIL_TASK_5_REASON }, () => {
   const bookRoot = join(EXAMPLES, 'fixtures', 'voice-drift');
   const chapterDir = join(bookRoot, 'chapters');
   const chapterFiles = readdirSync(chapterDir).filter(f => f.endsWith('.md')).sort();
@@ -829,9 +841,9 @@ test('voice-drift fixture CLI: ns-stylometry --chapter=<slug> --json exits 1 for
     const out = JSON.parse(result.stdout);
     assert.strictEqual(out.verdict, 'block',
       'chapter ' + slug + ' verdict must be block; got ' + out.verdict +
-      ' (drift ' + out.driftScore.toFixed(2) + ' vs threshold ' + out.threshold + ')');
-    assert.ok(out.driftScore >= out.threshold,
-      'chapter ' + slug + ' driftScore ' + out.driftScore.toFixed(2) + ' must be >= threshold ' + out.threshold);
+      ' (statistic ' + out.statistic.toFixed(2) + ' vs threshold ' + out.threshold + ')');
+    assert.ok(out.statistic >= out.threshold,
+      'chapter ' + slug + ' statistic ' + out.statistic.toFixed(2) + ' must be >= threshold ' + out.threshold);
   }
 });
 
@@ -851,12 +863,12 @@ test('measureBook: empty chapter list returns zero-vector with 8 keys', () => {
 });
 
 // ---------------------------------------------------------------------------
-// CLI exit codes -- SKIPPED (declared red until Task 4; see SKIP_BIN_REASON above). Every
-// bin/ns-stylometry invocation fails at ESM module-link time regardless of arguments, so this
-// exercises nothing about the --project argument handling it names.
+// CLI exit codes -- version-agnostic (--project resolution happens before any stylometry
+// measurement), un-skipped by Task 4 alongside the gate-engine.mjs/status-engine.mjs/
+// bin/ns-stylometry import fix.
 // ---------------------------------------------------------------------------
 
-test('CLI exits 2 when --project points to non-existent directory', { skip: SKIP_BIN_REASON }, () => {
+test('CLI exits 2 when --project points to non-existent directory', () => {
   const result = spawnSync(
     process.execPath, [BIN, '--project=/nonexistent/path/xyz', '--all'],
     { encoding: 'utf8' }
@@ -865,13 +877,59 @@ test('CLI exits 2 when --project points to non-existent directory', { skip: SKIP
 });
 
 // ---------------------------------------------------------------------------
-// --measure mode (TSK-037: voice-capture agent) -- SKIPPED (declared red until Task 4; see
-// SKIP_BIN_REASON above). This is the only coverage in the repo for --measure mode; bodies are
-// kept intact (version-agnostic -- --measure only calls measureChapter/measureBook, never
-// computeDrift) so Task 4's brief can re-enable these five tests by removing the skip option.
+// P7 (ADR-0012 voice verdict scope): thresholds.drift_score_max deprecation notice surfaced on
+// stderr -- the CLI half of the two P7 surfaces (the gate's own detail-string surface is tested
+// in tests/engines/gate.test.mjs). Uses a temp clone of the golden book patched with a
+// synthetic, self-consistent v5 baseline (writeSyntheticV5Baseline) so this test does not depend
+// on Task 5's fixture recapture; the deprecation notice comes from thresholds.drift_score_max
+// being present in config, independent of whether the drift verdict itself passes or blocks.
 // ---------------------------------------------------------------------------
 
-test('measure mode: single chapter output equals measureChapter direct result', { skip: SKIP_BIN_REASON }, () => {
+test('CLI: thresholds.drift_score_max present -> the P7 retirement notice is printed to stderr', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ns-stylometry-deprecation-'));
+  try {
+    cpSync(join(EXAMPLES, 'sample-book'), dir, { recursive: true });
+    writeSyntheticV5Baseline(dir);
+    const configPath = join(dir, '.studio', 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.thresholds = config.thresholds || {};
+    config.thresholds.drift_score_max = 25;
+    writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+
+    const result = spawnSync(process.execPath, [BIN, '--all', '--json'], { cwd: dir, encoding: 'utf8' });
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    assert.ok(
+      result.stderr.includes(
+        'thresholds.drift_score_max is retired by the calibrated-null verdict and is ignored'
+      ),
+      'stderr must carry the P7 retirement notice; got: ' + result.stderr
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('CLI: thresholds.drift_score_max absent -> stderr carries no deprecation notice', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ns-stylometry-no-deprecation-'));
+  try {
+    cpSync(join(EXAMPLES, 'sample-book'), dir, { recursive: true });
+    writeSyntheticV5Baseline(dir);
+
+    const result = spawnSync(process.execPath, [BIN, '--all', '--json'], { cwd: dir, encoding: 'utf8' });
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    assert.strictEqual(result.stderr, '', 'no deprecation notice when the retired key is absent; got stderr: ' + result.stderr);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// --measure mode (TSK-037: voice-capture agent) -- version-agnostic (--measure only calls
+// measureChapter/measureBook, never computeDrift), un-skipped by Task 4 alongside the
+// gate-engine.mjs/status-engine.mjs/bin/ns-stylometry import fix.
+// ---------------------------------------------------------------------------
+
+test('measure mode: single chapter output equals measureChapter direct result', () => {
   const chFile = join(EXAMPLES, 'sample-book', 'chapters', '01-listening-before-speaking.md');
   const result = spawnSync(
     process.execPath, [BIN, '--measure=' + chFile],
@@ -889,7 +947,7 @@ test('measure mode: single chapter output equals measureChapter direct result', 
   }
 });
 
-test('measure mode: two chapters output equals measureBook aggregate', { skip: SKIP_BIN_REASON }, () => {
+test('measure mode: two chapters output equals measureBook aggregate', () => {
   const ch1 = join(EXAMPLES, 'sample-book', 'chapters', '01-listening-before-speaking.md');
   const ch2 = join(EXAMPLES, 'sample-book', 'chapters', '02-finding-your-network.md');
   const result = spawnSync(
@@ -909,7 +967,7 @@ test('measure mode: two chapters output equals measureBook aggregate', { skip: S
   }
 });
 
-test('measure mode: missing file exits 2 naming the file', { skip: SKIP_BIN_REASON }, () => {
+test('measure mode: missing file exits 2 naming the file', () => {
   const missing = '/nonexistent-ns-measure-xyz/no-such-chapter.md';
   const result = spawnSync(
     process.execPath, [BIN, '--measure=' + missing],
@@ -922,7 +980,7 @@ test('measure mode: missing file exits 2 naming the file', { skip: SKIP_BIN_REAS
   );
 });
 
-test('measure mode: markers key set equals golden config baseline.markers key set', { skip: SKIP_BIN_REASON }, () => {
+test('measure mode: markers key set equals golden config baseline.markers key set', () => {
   const chFile = join(EXAMPLES, 'sample-book', 'chapters', '01-listening-before-speaking.md');
   const result = spawnSync(
     process.execPath, [BIN, '--measure=' + chFile],
@@ -941,7 +999,7 @@ test('measure mode: markers key set equals golden config baseline.markers key se
   );
 });
 
-test('measure mode: writes nothing to disk', { skip: SKIP_BIN_REASON }, () => {
+test('measure mode: writes nothing to disk', () => {
   const tmpDir = mkdtempSync(join(tmpdir(), 'ns-measure-test-'));
   const tmpFile = join(tmpDir, 'test-sample.md');
   const srcText = readFileSync(

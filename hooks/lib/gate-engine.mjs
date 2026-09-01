@@ -2,7 +2,8 @@
 // what-it-does: composes the four deterministic engines (claims, stylometry,
 //               scrub/injection, scrub/continuity) plus the session-write flag check
 //               into a single policy verdict; loads and coerces the gate config per D-03;
-//               returns a structured gate report matching S-08 section 11 exactly;
+//               returns a structured gate report matching S-08 section 11 exactly, plus the
+//               stylometry entry's `drift` sibling per ADR-0012 (PF-14 structured drift field);
 //               handles per-check verdict derivation and the mode-dependent exit taxonomy;
 //               writes and prunes gate reports under .studio/gate/
 // why:          all engine logic lives in lib modules per S-07 section 4; bin/ns-gate is
@@ -25,7 +26,7 @@ import {
 } from 'node:fs';
 import { join, relative } from 'node:path';
 import { computeCoverage, scanChapter, scanQuoteAnchors, computeQuoteFindings } from './claims-engine.mjs';
-import { measureBook, computeDrift, DEFAULT_DRIFT_SCORE_MAX } from './stylometry-engine.mjs';
+import { measureBook, measureChapter, countWords, computeDrift } from './stylometry-engine.mjs';
 import { scrub } from './scrub-engine.mjs';
 import { parseEvidenceLog } from './ledger.mjs';
 // [TSK-029b (state-coherence gate check) 2026-07-18 per OQ-13 (gate coherence check) decision:
@@ -39,7 +40,11 @@ import { checkWordCountCoherence } from './doctor-engine.mjs';
 //   [OPP-D03 (quote fidelity and source packets) 2026-08-09, roadmap row 1.5: block mode
 //    is structurally coerced to warn in loadGateConfig below until the normalization and
 //    adjudication policy ships]
-// 'stylometry'       -> 'stylometry'      -> measureBook + computeDrift
+// 'stylometry'       -> 'stylometry'      -> regime-aware: measureChapter+computeDrift per
+//                                            chapter (regime "chapter") or measureBook+
+//                                            computeDrift on the aggregate (regime "book"),
+//                                            per the baseline's own stored calibration.regime
+//                                            (ADR-0012, voice verdict scope, Decision 2)
 // 'scrub'            -> 'prompt_scrub'    -> scrub(chapters, 'injection')
 // 'continuity-quick' -> 'continuity'      -> scrub(chapters, 'continuity')
 // 'coherence'        -> 'state_coherence' -> checkWordCountCoherence(root)
@@ -63,6 +68,24 @@ const SEVERITY = { skip: 1, pass: 2, warn: 3, block: 4 };
 function maxVerdict(a, b) {
   return (SEVERITY[a] || 0) >= (SEVERITY[b] || 0) ? a : b;
 }
+
+// MIN_SCORABLE_CHAPTER_WORDS (P6, ADR-0012 voice verdict scope): chapter regime scores each
+// chapter separately, so a stub or empty chapter file -- a normal, modeled state on a fresh
+// book, created by scaffolding before the author has written anything -- must never crash the
+// check by handing computeDrift a scoredWords the calibration ladder was never measured near.
+// 50 is round and comfortably below the shipped ladder's own first rung (550 words): it excludes
+// only genuinely unwritten placeholder text, not any real short chapter.
+const MIN_SCORABLE_CHAPTER_WORDS = 50;
+
+// MIN_BOOK_VERDICT_WORDS (P6, ADR-0012 voice verdict scope): book regime blocks only once the
+// aggregate reaches this many scored words. Task 1's probe (re-derived at N=1000 under the
+// exact shipped statistic; the citation source of record is the Task 1 decision record, not the
+// earlier PF-21 table) measured every source's detectability statistic clearing 0.96 AUC by
+// 2,200 scored words -- the calibration ladder's own third rung -- with growing margin beyond
+// it. That is the book-scale line ADR-0012 (voice verdict scope) itself draws: below it, a block
+// would reintroduce exactly the unsupported verdict the book regime exists to avoid, so the
+// check reports pass-with-advice instead of blocking.
+const MIN_BOOK_VERDICT_WORDS = 2200;
 
 // Default gate config per S-08 section 4 sample
 const DEFAULT_GATE = {
@@ -191,7 +214,11 @@ function loadChapters(root, chapterSlug) {
 
 /**
  * Constructs a per-check entry for the S-08 section 11 report.
- * Exact keys: check, verdict, detail, evidence, next - NO extras.
+ * Exact keys: check, verdict, detail, evidence, next - NO extras, with ONE named exception:
+ * the stylometry entry alone also carries a structured `drift` sibling to `detail` (PF-14,
+ * ADR-0012 voice verdict scope Decision 2) - see the STYLOMETRY block below, which merges that
+ * field onto the object this function returns rather than widening this function's own
+ * signature for every other check.
  *
  * @param {string}       checkName - report check name (e.g., 'claim_coverage')
  * @param {string}       verdict   - 'pass', 'warn', 'block', or 'skip'
@@ -234,7 +261,8 @@ function deriveVerdict(checkConfig, hasFindings) {
 
 /**
  * Main gate orchestrator. Runs the requested checks in-process and returns a
- * gate report matching S-08 section 11 exactly plus the aggregate exit code.
+ * gate report matching S-08 section 11 exactly (plus the stylometry entry's
+ * `drift` sibling per ADR-0012) and the aggregate exit code.
  *
  * @param {string} root - absolute path to the book root
  * @param {object} [opts]
@@ -406,8 +434,11 @@ export function runGate(root, opts = {}) {
       checkEntries.push(makeEntry(reportName, 'skip', 'check disabled in config', [], null));
     } else if ((styloConfig.mode || 'warn') === 'off') {
       checkEntries.push(makeEntry(reportName, 'skip', 'check mode is off in config', [], null));
-    } else if (chapters.length === 0) {
-      // No chapters: no drift possible
+    } else if (chapters.length === 0 || chapters.every(c => countWords(c.text) === 0)) {
+      // No chapters, or every chapter file measures to zero scored words (a stranger edge case
+      // than a single stub -- every chapter would have to be genuinely empty text -- but
+      // computeDrift's own scoredWords > 0 guard would otherwise turn it into a plain
+      // engine-error skip rather than this honest "nothing to measure" pass; P6).
       checkEntries.push(makeEntry(reportName, 'pass', 'no chapters to measure; stylometry.pass', [], null));
     } else {
       try {
@@ -420,40 +451,142 @@ export function runGate(root, opts = {}) {
         ) {
           throw new Error('no baseline vector in config.json (stylometry.baseline.markers missing or null)');
         }
-
-        // Correction: pass the whole stylometry.baseline object (markers plus
-        // marker_set_version), not just .markers -- computeDrift needs both to
-        // apply the stale-baseline guard (roadmap row 1.7, voice registers). A
-        // thrown StaleBaselineError is caught by this block's existing try/catch
-        // below, exactly like any other engine error: skip verdict, exit code 2.
         const baseline = fullConfig.stylometry.baseline;
-        const chapterTexts = chapters.map(c => c.text);
-        const chapterFiles = chapters.map(c => c.file);
 
-        const measured = measureBook(chapterTexts);
-        const { score, exceeded } = computeDrift(measured, baseline, thresholds);
-        const driftMax = (thresholds && thresholds.drift_score_max != null)
-          ? thresholds.drift_score_max : DEFAULT_DRIFT_SCORE_MAX;
+        const aggregateWords = chapters.reduce((sum, c) => sum + countWords(c.text), 0);
 
-        const verdict = deriveVerdict(styloConfig, exceeded);
+        // One probe call against the book-level aggregate: validates the baseline (any
+        // StaleBaselineError/InvalidCalibrationError bubbles to this block's existing
+        // try/catch below exactly like any other engine error -- skip verdict, exit code 2 --
+        // P6's "baseline/calibration errors keep flowing through the existing try/catch skip
+        // path"), reads the regime computeDrift itself already resolved from the baseline
+        // (never re-derived from baseline.calibration.regime directly, so a malformed
+        // calibration object fails through the SAME typed-error path instead of a bare
+        // TypeError), and doubles as the book regime's own aggregate result below.
+        const aggregateResult = computeDrift(
+          measureBook(chapters.map(c => c.text)), baseline, thresholds, { scoredWords: aggregateWords }
+        );
+        const regime = aggregateResult.regime;
+        const deprecations = aggregateResult.deprecations;
 
-        let detail, evidence, next;
-        if (!exceeded) {
-          detail = 'drift score ' + score.toFixed(2) + ' within threshold ' + driftMax;
-          evidence = [];
-          next = null;
+        let verdict, detail, evidence, next, driftField;
+
+        if (regime === 'book') {
+          // Book regime: the aggregate alone drives the verdict; per-chapter figures are
+          // advisory only and never affect it (P6).
+          const perChapterAdvice = [];
+          const skipped = [];
+          for (const c of chapters) {
+            const words = countWords(c.text);
+            if (words < MIN_SCORABLE_CHAPTER_WORDS) {
+              skipped.push({ file: c.file, reason: 'below ' + MIN_SCORABLE_CHAPTER_WORDS + ' scorable words' });
+              continue;
+            }
+            const chResult = computeDrift(measureChapter(c.text), baseline, thresholds, { scoredWords: words });
+            perChapterAdvice.push({ file: c.file, statistic: chResult.statistic, worst_marker: chResult.worstMarker });
+          }
+
+          const belowFloor = aggregateWords < MIN_BOOK_VERDICT_WORDS;
+          const anyExceeded = !belowFloor && aggregateResult.exceeded;
+          verdict = deriveVerdict(styloConfig, anyExceeded);
+
+          if (belowFloor) {
+            detail =
+              'book-scale verdict only: ' + aggregateWords + ' scored word(s) is below the ' +
+              MIN_BOOK_VERDICT_WORDS + '-word floor a supportable book-scale verdict needs; ' +
+              'reporting for advice only, never blocking below the floor';
+            evidence = [];
+            next = null;
+          } else if (!anyExceeded) {
+            detail =
+              'book-scale drift statistic ' + aggregateResult.statistic.toFixed(2) +
+              ' within threshold ' + aggregateResult.threshold.toFixed(2);
+            evidence = [];
+            next = null;
+          } else {
+            detail =
+              'book-scale drift statistic ' + aggregateResult.statistic.toFixed(2) +
+              ' exceeds threshold ' + aggregateResult.threshold.toFixed(2) +
+              '; stylometry.drift-threshold';
+            evidence = chapters.map(c => c.file);
+            next = 'Review the flagged markers against the voice baseline and revise the drifted chapters.';
+          }
+
+          driftField = {
+            regime: 'book',
+            statistic: aggregateResult.statistic,
+            threshold: aggregateResult.threshold,
+            worst_marker: aggregateResult.worstMarker,
+            worst_chapter: null,
+            per_chapter: perChapterAdvice,
+            skipped,
+          };
         } else {
-          // Gate-coined token: stylometry.drift-threshold
-          detail =
-            'drift score ' + score.toFixed(2) +
-            ' exceeds threshold ' + driftMax +
-            '; stylometry.drift-threshold';
-          // Evidence: chapter file paths (no line anchor for stylometry per brief)
-          evidence = chapterFiles;
-          next = 'Review the flagged markers against the voice baseline and revise the drifted chapter.';
+          // Chapter regime: each chapter is scored, and judged, on its own.
+          const perChapter = [];
+          const skipped = [];
+          let worst = null; // { file, statistic, worstMarker, threshold, exceeded }
+          const exceedingFiles = [];
+
+          for (const c of chapters) {
+            const words = countWords(c.text);
+            if (words < MIN_SCORABLE_CHAPTER_WORDS) {
+              skipped.push({ file: c.file, reason: 'below ' + MIN_SCORABLE_CHAPTER_WORDS + ' scorable words' });
+              continue;
+            }
+            const r = computeDrift(measureChapter(c.text), baseline, thresholds, { scoredWords: words });
+            perChapter.push({ file: c.file, statistic: r.statistic, worst_marker: r.worstMarker });
+            if (r.exceeded) exceedingFiles.push(c.file);
+            // "Worst" chapter is the one attaining the largest raw statistic (mirrors
+            // computeDrift's own worstMarker selection over markers), independent of whether
+            // it happens to be the chapter that exceeded -- informative on a pass too.
+            if (!worst || r.statistic > worst.statistic) {
+              worst = { file: c.file, statistic: r.statistic, worstMarker: r.worstMarker, threshold: r.threshold };
+            }
+          }
+
+          const anyExceeded = exceedingFiles.length > 0;
+          verdict = deriveVerdict(styloConfig, anyExceeded);
+
+          if (!worst) {
+            detail = 'no scorable chapters (all below ' + MIN_SCORABLE_CHAPTER_WORDS + ' words); stylometry.pass';
+            evidence = [];
+            next = null;
+          } else if (!anyExceeded) {
+            detail =
+              'worst chapter ' + worst.file + ': drift statistic ' + worst.statistic.toFixed(2) +
+              ' within threshold ' + worst.threshold.toFixed(2);
+            evidence = [];
+            next = null;
+          } else {
+            detail =
+              'worst chapter ' + worst.file + ': drift statistic ' + worst.statistic.toFixed(2) +
+              ' exceeds threshold ' + worst.threshold.toFixed(2) +
+              '; stylometry.drift-threshold';
+            evidence = exceedingFiles;
+            next = 'Review the flagged markers against the voice baseline and revise the drifted chapter.';
+          }
+
+          driftField = {
+            regime: 'chapter',
+            statistic: worst ? worst.statistic : null,
+            threshold: worst ? worst.threshold : null,
+            worst_marker: worst ? worst.worstMarker : null,
+            worst_chapter: worst ? worst.file : null,
+            per_chapter: perChapter,
+            skipped,
+          };
         }
 
-        checkEntries.push(makeEntry(reportName, verdict, detail, evidence, next));
+        // P7: the retirement notice is surfaced once per run in the check detail (the CLI
+        // surfaces the same string to stderr; both surfaces are tested).
+        if (deprecations.length > 0) {
+          detail += '; ' + deprecations[0];
+        }
+
+        const entry = makeEntry(reportName, verdict, detail, evidence, next);
+        entry.drift = driftField;
+        checkEntries.push(entry);
       } catch (err) {
         checkEntries.push(makeEntry(reportName, 'skip', 'engine error: ' + err.message, [], null));
         hasEngineError = true;

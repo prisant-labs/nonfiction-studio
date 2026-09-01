@@ -14,11 +14,11 @@ The `nfs-status-dashboard` skill renders a read-only per-chapter project overvie
 
 `nfs-status-dashboard` gives the author an at-a-glance view of their book's state: how far each chapter has progressed, how many words have been written, whether drift or coverage issues have been flagged by a gate run, and which chapters still need a gate run. The skill resolves the plugin root, invokes `bin/ns-status --json`, and renders the result: every status value, word count, open-claim count, drift score, gate verdict, threshold value, and highlight decision in the rendered table is read directly from a field the CLI has already computed. The skill performs no arithmetic, parses no number out of prose, and compares nothing against a threshold itself.
 
-**Column sourcing.** Every cell comes directly from `bin/ns-status`'s JSON output. The CLI itself reads `.studio/progress.json` for status, word count, and open claims (hook-maintained truth per TSK-050b (progress entry ownership)); lists `.studio/gate/` for the newest dot-form gate report per chapter slug to supply drift score and gate verdict (filenames `<slug>.<YYYYMMDDTHHMMSSZ>.json`; newest identified by lexicographic sort of the timestamp suffix); and reads `.studio/config.json` for the drift threshold. A chapter with no gate report on record shows "-" in both the Drift and Gate cells. Whole-book `all.<YYYYMMDDTHHMMSSZ>.json` reports annotate the totals row only, not per-chapter cells. The `progress.last_gate` and `progress.drift_score` per-chapter fields are never treated as authoritative; see the [ns-status CLI reference](../cli/ns-status.md) for the full derivation.
+**Column sourcing.** Every cell comes directly from `bin/ns-status`'s JSON output. The CLI itself reads `.studio/progress.json` for status, word count, and open claims (hook-maintained truth per TSK-050b (progress entry ownership)); and lists `.studio/gate/` for the newest dot-form gate report per chapter slug to supply drift statistic, drift threshold, and gate verdict (filenames `<slug>.<YYYYMMDDTHHMMSSZ>.json`; newest identified by lexicographic sort of the timestamp suffix). Since ADR-0012 (voice verdict scope, Decision 2) retired `thresholds.drift_score_max`, `.studio/config.json` is not read for this at all: each chapter's own threshold comes from that SAME chapter's newest report, not a single board-wide config value. A chapter with no gate report on record shows "-" in the Drift, Threshold, and Gate cells. Whole-book `all.<YYYYMMDDTHHMMSSZ>.json` reports annotate the totals row only, not per-chapter cells. The `progress.last_gate` and `progress.drift_score` per-chapter fields are never treated as authoritative; see the [ns-status CLI reference](../cli/ns-status.md) for the full derivation.
 
 **Status vocabulary.** The Status column displays the committed schema enum values verbatim: `empty`, `outlined`, `drafting`, `drafted`, `revised`, `gated`, `final`. No mapping or renaming is applied. `final` is a real terminal state: reaching it requires a dated human attestation entry in `context/decisions.md`, and editing a chapter's file after it reaches `final` automatically falls it back to `revised`, both enforced by `hooks/post-tool-batch.mjs` rather than by this skill or by `bin/ns-status`. See [ns-status's ceremony section](../cli/ns-status.md#the-promotion-ceremony-and-automatic-demotion) for the full rule; this skill only ever displays whatever `status` value the CLI's JSON output already carries.
 
-**Highlight mechanism.** A row is highlighted when `bin/ns-status`'s JSON marks its `highlighted` field `true` - the CLI's own determination that either the drift score exceeds `thresholds.drift_score_max` from `.studio/config.json`, or the newest gate report carries a `block` verdict. The skill reads that field directly; it never re-derives the comparison.
+**Highlight mechanism.** A row is highlighted when `bin/ns-status`'s JSON marks its `highlighted` field `true` - the CLI's own determination that either the drift statistic exceeds that SAME row's own `threshold` field (both sourced from the chapter's own newest gate report; ADR-0012, voice verdict scope, Decision 2), or the newest gate report carries a `block` verdict. The skill reads that field directly; it never re-derives the comparison.
 
 **The skill writes nothing.** No file writes, no `.studio/` mutations, no agent invocations. Grep-provable against the skill body.
 
@@ -43,8 +43,7 @@ Alternate entry points:
 | Path | When it is read | Why |
 |---|---|---|
 | `.studio/progress.json` | By `bin/ns-status`, via its Step 2 `--project=.` invocation | Chapter status, word count, open_claim_count, totals block |
-| `.studio/config.json` | By `bin/ns-status`, via its Step 2 `--project=.` invocation | `thresholds.drift_score_max` for the highlight threshold; the CLI applies its own built-in default when absent |
-| `.studio/gate/` | By `bin/ns-status`, via its Step 2 `--project=.` invocation | Drift score and gate verdict per chapter; newest all-report for the totals annotation |
+| `.studio/gate/` | By `bin/ns-status`, via its Step 2 `--project=.` invocation | Drift statistic, per-chapter drift threshold, and gate verdict per chapter (each from that SAME chapter's own newest report; ADR-0012, voice verdict scope, Decision 2); newest all-report for the totals annotation |
 
 The skill itself performs no file reads beyond the plugin-root lookup in Step 1; every project-state read happens inside `bin/ns-status`.
 
@@ -75,10 +74,11 @@ The skill runs three steps.
 | Status | `chapters[].status` (schema enum, verbatim) | always present |
 | Words | `chapters[].wordCount` | always present |
 | Drift | `chapters[].drift` | `-` when `null` |
+| Threshold | `chapters[].threshold` (that SAME chapter's own newest report's resolved calibration-ladder threshold; ADR-0012, voice verdict scope, Decision 2) | `-` when `null` |
 | Open Claims | `chapters[].openClaimCount` | always present |
 | Gate | `chapters[].gate` | `-` when `null` |
 
-The totals row reads `totals.wordCount`, `totals.openClaimCount`, `totals.chaptersFinal`, and (when not `null`) `totals.chaptersTotal`; the top-level `wholeBookGate`, when not `null`, annotates the totals row. The footer reads `thresholds.driftScoreMax` and `thresholds.driftScoreMaxIsDefault` directly, and (when not `null`) `totals.chaptersRemaining`. See the [ns-status CLI reference](../cli/ns-status.md#json---json) for the full JSON shape.
+The totals row reads `totals.wordCount`, `totals.openClaimCount`, `totals.chaptersFinal`, and (when not `null`) `totals.chaptersTotal`; the top-level `wholeBookGate`, when not `null`, annotates the totals row. There is no board-wide threshold footer: since ADR-0012 (voice verdict scope, Decision 2) retired `thresholds.drift_score_max`, each row already carries its own Threshold cell above. When not `null`, `totals.chaptersRemaining` appears as its own line. See the [ns-status CLI reference](../cli/ns-status.md#json---json) for the full JSON shape.
 
 ## Status Vocabulary
 
@@ -132,7 +132,7 @@ The dashboard renders identically on all three surfaces per D-14 (three-surface 
 
 **Missing or empty gate directory.** Not a halt condition. `bin/ns-status` returns `null` for `drift` and `gate` on every chapter with no matching report; the skill renders "-" for both cells and Next Actions suggests running the quality gate for every such chapter.
 
-**Missing or unreadable `.studio/config.json`.** Not a halt condition. `bin/ns-status` applies its own built-in default and reports `driftScoreMaxIsDefault: true`, which the footer states plainly.
+**Missing or unreadable `.studio/config.json`.** Not a halt condition: since ADR-0012 (voice verdict scope, Decision 2) retired `thresholds.drift_score_max`, `bin/ns-status`'s board computation does not read `config.json` at all.
 
 ## Worked Example
 

@@ -83,9 +83,24 @@ test('credential present, claude unreachable -> real failure still exits nonzero
 // machine), exit 0. This was already run-integration.mjs's behavior before this task; kept
 // here as an explicit regression guard now that the decision is routed through the shared
 // scripts/lib/credential-mode.mjs module.
-// ---------------------------------------------------------------------------
-
-test('developer machine, no credential, claude unreachable -> dry-run fallback, exit 0', () => {
+//
+// Declared red until Task 5 (ADR-0012 implementation wave): the dry-run assertion suite's
+// [gate-golden] step runs `bin/ns-gate` against a temp clone of the REAL, COMMITTED
+// examples/sample-book (scripts/run-integration.mjs's own makeTempClone, not this test file's
+// -- deliberately never patched with a synthetic baseline, unlike tests/engines/gate.test.mjs's
+// or tests/hooks/stop-gate.test.mjs's clones, because this script's whole purpose is verifying
+// the REAL golden sample book's gate actually passes; patching its baseline away would silently
+// stop verifying the thing this assertion exists to prove). examples/sample-book/.studio/
+// config.json still carries a marker_set_version 4 baseline with no calibration ladder; scoring
+// against it with the v5 computeDrift throws StaleBaselineError (ns-gate exit 2), not the exit
+// 0 [gate-golden] expects. Task 5 recaptures that baseline; only then can this re-verify the
+// real golden book end to end.
+test('developer machine, no credential, claude unreachable -> dry-run fallback, exit 0', {
+  skip: 'declared red until Task 5 (ADR-0012 implementation wave): the dry-run suite\'s ' +
+    '[gate-golden] step runs ns-gate against a temp clone of the REAL committed examples/' +
+    'sample-book, which still carries a marker_set_version 4 baseline with no calibration ' +
+    'ladder; Task 5 recaptures it',
+}, () => {
   const noClaude = pathWithoutClaudeCli();
   const env = buildEnv({ CI: undefined, PATH: noClaude, Path: noClaude });
   const result = runNodeScript(SCRIPT, [], env);

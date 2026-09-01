@@ -35,6 +35,46 @@ Each entry in the `checks` array carries:
 | `detail` | string | required | A human-readable summary of the check finding |
 | `evidence` | array of strings | required | Bible-relative pointers to the supporting evidence: file paths with optional line anchors (for example, `chapters/03-the-signal.md#L44`) or JSON pointers into `progress.json` (for example, `.studio/progress.json#/chapters/2/drift_score`) |
 | `next` | string or null | required | The recommended author action, or `null` when the verdict is `pass` or `skip` |
+| `drift` | object | only on the `stylometry` entry | The structured drift field (ADR-0012, voice verdict scope, Decision 2; PF-14) - see "The stylometry entry's `drift` field", below. No other check entry carries this field; `version` stays `2` for its addition (additive, and no shipped validator asserts the check-entry key set exhaustively except one test in the implementation wave's own test suite). |
+
+### The stylometry entry's `drift` field
+
+Since ADR-0012 (voice verdict scope), the `stylometry` check entry alone carries a structured
+sibling to `detail`, closing PF-14 (structured drift field) - the register item for a consumer
+that needs to parse the drift statistic and threshold as numbers rather than out of a prose
+sentence:
+
+```json
+"drift": {
+  "regime": "chapter",
+  "statistic": 1.42,
+  "threshold": 3.87,
+  "worst_marker": "contraction_rate",
+  "worst_chapter": "chapters/01-listening-before-speaking.md",
+  "per_chapter": [
+    { "file": "chapters/01-listening-before-speaking.md", "statistic": 1.42, "worst_marker": "contraction_rate" }
+  ],
+  "skipped": [
+    { "file": "chapters/02-finding-your-network.md", "reason": "below 50 scorable words" }
+  ]
+}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `regime` | enum | `"chapter"` or `"book"`, read from the stored baseline's own calibration (never re-derived by the gate) |
+| `statistic` | number or null | The verdict statistic (max standardized deviation, \|z\|) that drove (or, in book regime below the word floor, would have driven) the verdict; `null` only when every chapter was skipped |
+| `threshold` | number or null | The calibrated threshold `statistic` is compared against, resolved from the baseline's calibration ladder at the scored word count; `null` only when every chapter was skipped |
+| `worst_marker` | string or null | The marker attaining `statistic` |
+| `worst_chapter` | string or null | Chapter regime only: the bible-relative file of the chapter attaining `statistic`; always `null` in book regime (the aggregate, not one chapter, drives the verdict) |
+| `per_chapter` | array | One entry per SCORED chapter (`{ file, statistic, worst_marker }`), advisory in book regime, verdict-driving in chapter regime |
+| `skipped` | array | One entry per chapter below the scorable-word floor (`{ file, reason }`), advisory only, in either regime |
+
+Numbers in this field are JSON numbers, never strings. In chapter regime, the check verdict
+derives from the worst SCORED chapter; a chapter below the scorable-word floor is skipped, never
+crashes the check, and an all-skipped book passes with an advisory detail. In book regime, the
+verdict derives from the aggregate alone once it reaches the book-verdict word floor; below the
+floor the check reports pass-with-advice and never blocks, regardless of the aggregate statistic.
 
 ### Verdict values
 
@@ -79,9 +119,20 @@ Each entry in the `checks` array carries:
     {
       "check": "stylometry",
       "verdict": "warn",
-      "detail": "drift_score 38 exceeds threshold 25",
-      "evidence": [".studio/progress.json#/chapters/2/drift_score"],
-      "next": "Review long-sentence rate and contraction rate against the baseline."
+      "detail": "worst chapter chapters/03-the-signal.md: drift statistic 4.12 exceeds threshold 3.87; stylometry.drift-threshold",
+      "evidence": ["chapters/03-the-signal.md"],
+      "next": "Review the flagged markers against the voice baseline and revise the drifted chapter.",
+      "drift": {
+        "regime": "chapter",
+        "statistic": 4.12,
+        "threshold": 3.87,
+        "worst_marker": "contraction_rate",
+        "worst_chapter": "chapters/03-the-signal.md",
+        "per_chapter": [
+          { "file": "chapters/03-the-signal.md", "statistic": 4.12, "worst_marker": "contraction_rate" }
+        ],
+        "skipped": []
+      }
     }
   ]
 }
