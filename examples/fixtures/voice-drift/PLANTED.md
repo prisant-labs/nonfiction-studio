@@ -1,109 +1,167 @@
-# Planted Defect: Voice Drift (Register Shift in Chapter 2)
+# Planted Defect: Voice Drift (Ghostwriting Transform on Chapter 2)
+
+## Purpose
+
+This fixture demonstrates the CHAPTER-REGIME tier of ADR-0012 (voice verdict scope) Decision 2,
+complementing `examples/sample-book`'s book-regime demonstration. The two fixtures together prove
+both branches of the gate's two-tier regime dispatch (P6, `hooks/lib/gate-engine.mjs`):
+
+- `examples/sample-book` -- a sparse, book-scale voice (calibration regime: book) -- proves the
+  aggregate-only, floor-gated path.
+- `examples/fixtures/voice-drift` (this fixture) -- a first-person-rich, contraction-rich
+  conversational-essay voice (calibration regime: chapter) -- proves the per-chapter, floor-free
+  path, including the gate's chapter-regime detail phrasing that names the worst chapter and its
+  worst marker.
+
+This fixture carries its OWN author voice, calibrated from its OWN independent corpus
+(`context/samples/voice-corpus-01.md`, `-02.md`, `-03.md`), distinct from the sample book's voice.
+The two fixtures are not clones of the same author; they are deliberately different authors
+demonstrating different regimes.
 
 ## Location
 
 File: `chapters/02-finding-your-network.md`
 Scope: entire chapter 2
 
-## Register Changes
+Chapter 1 (`chapters/01-listening-before-speaking.md`) is this fixture's own undrifted voice,
+written fresh in the calibrated author's register. It carries no transformation and is expected
+to PASS.
 
-Chapter 2 has been rewritten from the golden book's active, second-person, direct-address register to a passive, impersonal third-person register. Specific changes applied throughout:
+## The transformation
 
-- All second-person address eliminated ("you", "your") and replaced with impersonal constructions ("one", "it is recommended", "a network should", etc.)
-- All first-person pronouns eliminated ("I", "my") and replaced with impersonal constructions
-- Active constructions replaced with passive voice ("It is recommended that one begin" instead of "Start with"; "should be resisted" instead of "Resist")
-- Formal connectives introduced ("it is therefore advisable", "it follows that", "it is therefore recommended")
-- Direct imperative sentences replaced with impersonal declarative equivalents
+Chapter 2's committed text is NOT hand-authored prose imitating a register shift. It is the
+mechanical output of `ghostwriteTransform` (`hooks/lib/stylometry-calibration.mjs`), the same
+transform `calibrateBaseline` itself uses to synthesize the positive (ghostwritten) class for the
+regime detectability measurement, applied here to a real, hand-authored undrifted draft of
+chapter 2 written in the same voice as chapter 1.
 
-Chapter 1 is unchanged from the golden baseline.
+`ghostwriteTransform` is deliberately crude, not grammar-aware (quoting its own doc comment,
+`hooks/lib/stylometry-calibration.mjs`):
 
-All five claim markers (EV-0006 through EV-0010) are preserved on the same assertions they labeled in the golden book. No marker was moved, removed, or added.
+> every contraction is expanded to its (approximate) full form, and every first-person pronoun --
+> singular or plural -- becomes its third-person-plural equivalent, case-preserved. This is a
+> crude, mechanical transform, not a grammar-aware rewrite: "I'm" becomes "I am" and then, in the
+> same pass, "I" becomes "They", yielding "They am" rather than "They are" -- the transform is not
+> trying to produce fluent prose, only to move the eight-marker vector the same direction a
+> wholesale ghostwriting pass reliably moves it (contraction_rate and first_person_rate collapsing
+> toward zero).
 
-## Marker Census
+The committed chapter 2 reads exactly this way: "They just hadn made the list deliberate" (from
+"I just hadn't made the list deliberate" -- `'t` expands to nothing, then `I` becomes `They`), "For
+them it been a technical skill" (from "For me it's been a technical skill" -- `'s` also expands to
+nothing), "an industry workings" (from "an industry's workings" -- the same empty `'s` expansion
+applied to a possessive, not just a contraction). This is the documented, intended crudeness, not
+an authoring mistake -- it is the exact same transform `calibrateBaseline` measures
+`detectability_auc` against, applied here to real chapter content instead of a resampled
+calibration block.
 
-Golden chapter 2 markers: EV-0006, EV-0007, EV-0008, EV-0009, EV-0010 (5 markers)
-Fixture chapter 2 markers: EV-0006, EV-0007, EV-0008, EV-0009, EV-0010 (5 markers)
+All five claim markers on chapter 2 (EV-0006 through EV-0010) and all five on chapter 1 (EV-0001
+through EV-0005) are preserved verbatim: the transform's regexes only touch apostrophe-joined
+tokens and first-person pronoun words, never `[claim: EV-nnnn]` marker text.
 
-Marker census: UNCHANGED. All 5 EV references remain on the same claims.
+## The corpus and calibration
 
-## Measurement Method
+`context/samples/voice-corpus-01.md`, `-02.md`, `-03.md`: 2,551 usable words (measured by the
+canonical tokenizer, `countWords`), well above `MIN_CALIBRATION_WORDS` (2,200). Three independent
+personal essays in the calibrated voice (a first-person, contraction-dense, anecdote-driven
+register), none of them chapter text and none of them the source draft chapter 2 was transformed
+from.
 
-Method: word-tokenized prose from chapters/01 and chapters/02 combined; markdown headings and `[claim: EV-nnnn]` markers stripped. Canonical implementation: hooks/lib/stylometry-engine.mjs (TSK-026, as corrected 2026-08-15 per roadmap row 1.7, voice registers). Hyphenated compounds counted as single tokens. Sentence count from sentence-ending punctuation sequences.
+Calibrated via `ns-stylometry --calibrate=<the three corpus files>` (ADR-0012, voice
+verdict scope). The regime call is measured, not asserted:
 
-Baseline values are the stored values in `.studio/config.json -> stylometry.baseline.markers`, re-captured 2026-08-15 under the corrected engine. The baseline is measured from the TSK-019 golden two-chapter text as originally committed, not from this fixture's own chapter 2, because chapter 2 carries the planted defect this fixture exists to demonstrate; scoring against a baseline built from the drifted text would trivially erase the drift the fixture is designed to catch. All numbers below reflect this recaptured baseline and the corrected engine's measurements.
+```
+ns-stylometry: regime = chapter. Detectability AUC 1.000 at the 550-word rung meets the 0.95 bar,
+so per-chapter verdicts are supportable.
+```
 
-Two corrections landed together in this recapture (roadmap row 1.7, voice registers): `type_token_ratio` is now a moving average over 100-token windows rather than a flat unique/total ratio, which is length-invariant by construction; and no single marker's contribution to the drift score may exceed one third of the configured budget, so a marker with an extreme relative deviation (`first_person_rate` and `contraction_rate` below, both near or at 100%) can no longer single-handedly decide the verdict. The recapture also superseded the manual TSK-026 rounding-rule reconciliation for the other seven markers with a direct engine measurement of the same golden text, which moves a few of them by a fraction of a percentage point (see the baseline table below); it does not change any of this fixture's conclusions.
+`detectability_auc` of 1.000 means the ghostwritten (positive-class) resampled blocks and the
+same-voice (negative-class) resampled blocks were perfectly separated by the max\|z\| statistic at
+every one of the 1,000 calibration replicates at the 550-word rung -- the corpus's saturating,
+near-universal first-person/contraction density (11.45 first-person mentions per 100 words; 1.32
+contractions per sentence) leaves no ambiguous middle ground for the transform to hide in.
 
-## Before/After Measurement Table (roadmap row 1.7 correction, corrected 2026-08-15)
+## Measured verdicts (real engine, real committed files)
 
-### Baseline: before this correction vs after
+### Per chapter (`ns-stylometry --chapter=<slug> --json`)
 
-| Marker | Baseline before | Baseline after | What changed |
-|---|---|---|---|
-| function_word_rate | 0.4717 | 0.4717 | unchanged |
-| contraction_rate | 0.0299 | 0.0299 | unchanged |
-| first_person_rate | 0.2268 | 0.2262 | direct recapture supersedes TSK-026 "stands" rounding |
-| second_person_rate | 3.4014 | 3.3937 | direct recapture supersedes TSK-026 "stands" rounding |
-| type_token_ratio | 0.4558 | 0.7516 | Correction A: flat ratio to moving-average |
-| avg_word_length | 5.2041 | 5.1923 | direct recapture supersedes TSK-026 "stands" rounding |
-| avg_sentence_length | 13.1642 | 13.1940 | direct recapture supersedes TSK-026 "stands" rounding |
-| punctuation_rate | 13.0090 | 13.0090 | unchanged |
-
-### Fixture vs corrected baseline, book level (chapters 01 and 02 combined)
-
-| Marker | Baseline | Measured | deviationPct (honest) | Capped? | Contribution to score |
+| Chapter | scoredWords | statistic | threshold | worst marker | verdict |
 |---|---|---|---|---|---|
-| function_word_rate | 0.4717 | 0.4754 | 0.79% | no | 0.79 |
-| contraction_rate | 0.0299 | 0.0448 | 49.75% | YES | 6.67 |
-| first_person_rate | 0.2262 | 0.0000 | 100.00% | YES | 6.67 |
-| second_person_rate | 3.3937 | 1.7486 | 48.47% | YES | 6.67 |
-| type_token_ratio | 0.7516 | 0.7525 | 0.11% | no | 0.11 |
-| avg_word_length | 5.1923 | 5.2284 | 0.70% | no | 0.70 |
-| avg_sentence_length | 13.1940 | 13.6567 | 3.51% | no | 3.51 |
-| punctuation_rate | 13.0090 | 12.5683 | 3.39% | no | 3.39 |
+| 01-listening-before-speaking (undrifted) | 685 | 2.40 | 3.50 | type_token_ratio | pass |
+| 02-finding-your-network (planted/drifted) | 586 | 13.62 | 3.52 | first_person_rate | block |
 
-Book-level drift score: 28.49 (sum of the Contribution column). Budget is 20, so the per-marker cap (one third of budget) is 6.67; three markers hit it. `deviationPct` stays the honest, uncapped number in every case -- `first_person_rate` still reports exactly 100%, not 6.67% -- only its contribution to the running score total is bounded.
+Chapter 2's `first_person_rate` collapses to exactly 0.0000 (100% deviation, z = -13.62): every
+first-person pronoun in the undrifted draft was converted to a third-person-plural form.
+`contraction_rate` also collapses to exactly 0.0000 (100% deviation, z = -7.07): every apostrophe
+contraction was expanded (or, for `'s`/`'t`, silently dropped, per the transform's own crudeness).
+`avg_word_length` rises sharply (z = 12.95): expanding contractions removes the many very-short
+apostrophe-fragment tokens ("ve", "re", "d") that the tokenizer produces from unexpanded
+contractions, so word length is measurably longer once they're gone.
 
-Notes: `first_person_rate` drops to 0.0000 because all first-person pronouns were removed from the rewritten chapter 2. `second_person_rate` drops because all second-person pronouns were removed from the rewritten chapter 2; the 16 remaining tokens come from the unchanged chapter 1. `contraction_rate` rises because the rewrite introduces "one's" possessive in chapter 2 (golden chapter 1 had "community's"; the fixture gains a second apostrophe token). `function_word_rate` deviation is 0.79%, below the 2% per-marker tolerance band: passive constructions add auxiliary function words ("is", "are", "should") but simultaneously remove first/second-person pronouns (also function words), leaving the net rate nearly unchanged relative to the baseline. `type_token_ratio` deviation is now 0.11% (was 0.48% under the flat ratio) -- the moving-average correction leaves this marker's already-small deviation just as small, because the length-invariance fix targets the artifact from comparing populations of different SIZES, not this fixture's genuine register shift, which barely moves vocabulary variety either way.
+### Aggregate (`ns-stylometry --json`, the default/`--all` scope -- also what
+`scripts/test-fixtures.mjs`'s matrix row runs)
 
-### Fixture vs corrected baseline, per chapter
+statistic 10.60, threshold 3.49, worst marker first_person_rate, scoredWords 1271. Exceeds even
+diluted by half against the unchanged chapter 1: the planted chapter's signal is strong enough
+that the book-wide average still clears the calibrated threshold by roughly 3x.
 
-The per-chapter reading is the criterion that distinguishes a corrected metric from a disabled one: the fixture must still exceed its threshold not only in aggregate but for every chapter measured individually against the same book-level baseline.
+### Gate (`ns-gate --json`, block mode, chapter regime)
 
-| Chapter | Drift score | Threshold | Exceeds? | Markers capped at the bound |
-|---|---|---|---|---|
-| 01-listening-before-speaking (unchanged from golden) | 26.66 | 20 | YES | contraction_rate, first_person_rate, second_person_rate |
-| 02-finding-your-network (the planted rewrite) | 33.60 | 20 | YES | first_person_rate, second_person_rate, avg_sentence_length |
+```
+worst chapter chapters/02-finding-your-network.md (worst marker first_person_rate): drift
+statistic 13.62 exceeds threshold 3.52; stylometry.drift-threshold
+```
 
-Chapter 1 is unchanged prose (see Register Changes, above) and still exceeds the threshold on its own: chapter 1's `contraction_rate`, `first_person_rate`, and `second_person_rate` are measured against the same book-level baseline that includes chapter 2's contribution, so chapter 1 alone reads as a deviation from a population it is only half of -- the same book-versus-chapter population mismatch documented in `docs/reference/cli/ns-stylometry.md`, distinct from this fixture's planted register shift. This is expected and does not weaken the fixture: chapter 2, which carries the actual planted defect, exceeds by a wider margin (33.60 versus 26.66).
+Top-level verdict: block, exit 1. Chapter regime has no book-scale word floor (P6,
+`MIN_BOOK_VERDICT_WORDS` applies only to the book-regime path); each chapter is scored and judged
+on its own against `MIN_SCORABLE_CHAPTER_WORDS` (50), which both chapters clear comfortably. The
+gate's `drift.per_chapter` field carries both chapters' individual statistics: chapter 1's 2.40
+never approaches its own 3.50 threshold, so the worst-chapter ranking (by statistic/threshold
+ratio, not raw statistic) correctly names chapter 2.
 
-## Drift Score and Pinned Threshold
+In the fixture's own default (warn) gate mode, the same measurement produces top-level verdict
+warn, exit 0 (T07).
 
-Drift score formula (TSK-022 documented, as amended by roadmap row 1.7's per-marker contribution cap): sum, across all 8 markers, of each marker's deviationPct capped at one third of the configured drift budget.
+## Expected engine behavior
 
-Fixture drift score: 28.49 (book level), 26.66 (chapter 1 alone), 33.60 (chapter 2 alone).
+- `bin/ns-stylometry --chapter=01-listening-before-speaking` exits 0 (pass).
+- `bin/ns-stylometry --chapter=02-finding-your-network` exits 1 (block; first_person_rate).
+- `bin/ns-stylometry` (default/`--all`, the aggregate) exits 1 (block; first_person_rate).
+- `ns-gate` in block mode exits 1, top-level verdict block, stylometry check block. In the
+  fixture's own warn mode, exits 0, top-level verdict warn.
+- All other CLIs exit 0 on this fixture: claim markers resolve (`ns-claims`, 10/10, 100%
+  coverage), no continuity name-mismatches (`ns-scrub`), no doctor anomalies (`ns-doctor
+  --check`), no prompt-scrub violations (`ns-probe`).
 
-Golden book drift score: 0.01 (book level; all markers close to the self-referential baseline, well below threshold). See `docs/reference/cli/ns-stylometry.md` for the golden book's own per-chapter reading, which also improved under this correction (chapter 1 fell from 29.80 to 10.86 of a 25 budget).
+## Changed-file footprint
 
-Pinned threshold (`thresholds.drift_score_max` in `.studio/config.json`): **20**
+This fixture differs from a hypothetical undrifted version of itself in these locations:
 
-- Golden book drift (0.01) is below the threshold: ns-stylometry passes the golden book
-- Fixture drift exceeds the threshold at book level (28.49) and for every chapter individually (26.66, 33.60)
-- Book-level margin: 8.49 points above threshold
+1. **`chapters/01-listening-before-speaking.md`** -- rewritten in this fixture's own calibrated
+   voice (first-person, contraction-dense, anecdote-driven); undrifted; carries EV-0001 through
+   EV-0005 on the same underlying claims as before.
+2. **`chapters/02-finding-your-network.md`** -- rewritten in the same voice, then mechanically
+   transformed by `ghostwriteTransform`; the planted defect; carries EV-0006 through EV-0010 on
+   the same underlying claims as before.
+3. **`context/samples/voice-corpus-01.md`, `-02.md`, `-03.md`** (new) -- this fixture's
+   independent calibration corpus, 2,551 usable words across three personal essays. Supersedes
+   `context/samples/voice-sample-01.md` (removed; it modeled the sample book's voice, not this
+   fixture's own).
+4. **`context/style-profile.md`** -- Voice/Diction/Rhythm/Do/Do-not sections rewritten for the
+   new author; Exemplars point at the three new corpus files; Baseline reference `captured` and
+   `sample_count` agree with `.studio/config.json`.
+5. **`context/brief.md`** -- section 6 (Voice) rewritten to match; unrelated sections unchanged.
+6. **`.studio/config.json`** -- `thresholds.drift_score_max` removed (P7, ADR-0012 retirement);
+   `stylometry.baseline` replaced wholesale with the real, measured v5 baseline (markers +
+   `marker_set_version: 5` + a full five-rung `calibration` ladder, `captured`, `sample_count: 3`,
+   `method`) from `ns-stylometry --calibrate` over the three corpus files. `gate.checks.stylometry
+   .mode` stays `warn` (the fixture's own default); mode toggles have no effect on `ns-stylometry`
+   CLI exit codes, only on the gate's pass/fail decision.
+7. **`.studio/progress.json`**, **`structure/chapter-list.md`** -- word counts updated to 685
+   (chapter 1), 586 (chapter 2), 1271 (total), matching `countWords` (the same authority
+   `ns-doctor`'s word-count coherence check uses) on the final committed chapter text.
 
-## Expected Engine Behavior
-
-- `bin/ns-stylometry` exits 1 for `--all` (drift score 28.49 exceeds `thresholds.drift_score_max` 20) and for `--chapter=<slug>` on EVERY chapter (26.66 and 33.60, both exceeding 20). Flagged markers at book level: `contraction_rate`, `first_person_rate`, `second_person_rate`, `avg_sentence_length`, `punctuation_rate`. `function_word_rate` is not flagged at book level (0.79% deviation, within the 2% per-marker band).
-
-- All other CLIs exit 0. The claim markers are intact and resolve correctly (ns-claims exits 0). No continuity name mismatches were introduced (ns-scrub exits 0). No doctor anomalies beyond what the rewrite itself introduces (ns-doctor exits 0). No prompt-scrub violations (ns-probe exits 0).
-
-## Changed-file Footprint
-
-This fixture differs from the golden book in exactly four locations:
-
-1. **chapters/02-finding-your-network.md** - Register rewrite from golden baseline (second-person active) to passive third-person impersonal.
-2. **.studio/config.json** - `thresholds.drift_score_max` pinned to 20 only; `gate.checks.stylometry.mode` and `dod.require_drift_under_threshold` restored to their golden values. Mode toggles have no effect on exit codes: the ns-stylometry engine exits 1 on threshold exceedance per the S-07 (hooks and scripts) contract, regardless of gate mode. Gate mode governs only the gate's pass/fail decision.
-3. **.studio/progress.json** - Word counts updated to 493 (chapter 2) and 913 (total) to match the rewritten chapter and maintain state coherence. The ns-doctor coherence check exits 0 here; the coherence anomaly detector lives in the unsourced-claim fixture.
-4. **structure/chapter-list.md** - Chapter 2 word count (462 to 493) and total (882 to 913) kept coherent with progress.json.
-
-(Footprint documented 2026-07-18 per the TSK-022 (voice-drift fixture) review adjudication.)
+(Footprint rewritten 2026-09-01 per the ADR-0012 implementation wave, Task 5 continuation: the
+coordinator's ruling that this fixture becomes the chapter-regime demonstration, replacing the
+prior v4 book-level drift-score-max design, which could not be recaptured under v5 because its own
+undrifted two-chapter source text -- 1,055 words -- sits below `MIN_CALIBRATION_WORDS` (2,200).)

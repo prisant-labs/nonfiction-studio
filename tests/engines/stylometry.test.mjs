@@ -38,10 +38,8 @@ import {
 
 // A complete, hand-built v5 calibration object, shaped per P2 ((local working notes, not published)), used by every
 // synthetic computeDrift test below so none of them depend on a real .studio/config.json
-// baseline (examples/sample-book and examples/fixtures/voice-drift still carry v4 baselines
-// without a calibration ladder; Tasks 5 and 6 recapture them). Two rungs only (550, 2200) --
-// matching the brief's own worked example -- not the shipped five-rung ladder; computeDrift's
-// contract does not hardcode a rung count.
+// baseline. Two rungs only (550, 2200) -- matching the brief's own worked example -- not the
+// shipped five-rung ladder; computeDrift's contract does not hardcode a rung count.
 function buildCalibration(overrides = {}) {
   return {
     spans: [550, 2200],
@@ -743,35 +741,19 @@ test('computeDrift v5: a blocking case -- first_person_rate collapsing to near-z
 // fixtures, IN PLACE (not a clone)
 // ---------------------------------------------------------------------------
 
-// The four tests below run the CLI against examples/sample-book and examples/fixtures/
-// voice-drift AS COMMITTED, not a temp clone with a synthetic baseline patched in (unlike
-// tests/engines/gate.test.mjs's or stylometry-explain.test.mjs's approach): their own intent
-// is specifically to prove these two REAL fixtures' documented behavior under the shipped
-// engine. Task 5 (ADR-0012 implementation wave) recaptured examples/sample-book/.studio/
-// config.json's baseline under v5 (an independent, disjoint voice corpus; regime book), which
-// un-skips the two golden-book tests below. examples/fixtures/voice-drift/.studio/config.json
-// still carries its original marker_set_version 4 baseline: measured directly (this task),
-// the fixture's planted register-shift chapter, scored against the SAME independent corpus
-// baseline every other sample-book-clone fixture now shares, does not exceed the calibrated
-// threshold at any span (aggregate, chapter 1, or chapter 2 -- confirmed by direct measurement,
-// not merely inferred), because first_person_rate and second_person_rate carry noise scales
-// wide enough that even a 100% deviation stays under threshold at this fixture's ~900-word
-// scale. Recalibrating a baseline that WOULD catch this defect needs either a voice-drift-
-// specific corpus deliberately less sparse than the shared voice (a plan-level call, not an
-// implementer judgment call) or a change to the fixture's chapter text; both are BLOCKED
-// pending a coordinator ruling. The two voice-drift tests below stay skipped for that reason.
-// Bodies are reworked to the v5 JSON shape now (statistic/worstMarker/threshold/exceeded/
-// regime/scoredWords, perMarker.z replacing the retired driftScore/contribution/capped triple)
-// so a future recapture only needs to remove the skip option, not rework the assertions again.
-
-const SKIP_BLOCKED_VOICE_DRIFT_REASON =
-  'BLOCKED pending a coordinator ruling (ADR-0012 implementation wave, Task 5): ' +
-  'examples/fixtures/voice-drift/.studio/config.json still carries a marker_set_version 4 ' +
-  'baseline; the planted register-shift chapter, measured against the v5 independent-corpus ' +
-  'baseline every other sample-book-clone fixture now shares, does not exceed the calibrated ' +
-  'threshold at any span (confirmed by direct measurement) because its own noise scales are ' +
-  'wide enough to absorb even a 100% first_person_rate/second_person_rate deviation at this ' +
-  'fixture\'s word count; a fix needs a plan-level decision, not an implementer judgment call';
+// The tests below run the CLI against examples/sample-book and examples/fixtures/voice-drift AS
+// COMMITTED, not a temp clone with a synthetic baseline patched in (unlike tests/engines/
+// gate.test.mjs's or stylometry-explain.test.mjs's approach): their own intent is specifically
+// to prove these two REAL fixtures' documented behavior under the shipped engine. Task 5
+// (ADR-0012 implementation wave) recaptured examples/sample-book/.studio/config.json's baseline
+// under v5 (an independent, disjoint voice corpus; regime book). A coordinator ruling later in
+// the same task gave examples/fixtures/voice-drift its own independent, first-person-rich,
+// contraction-rich voice corpus, calibrating to regime chapter -- the fixture now demonstrates
+// the OTHER tier of ADR-0012 Decision 2's two-tier regime dispatch (see PLANTED.md). Its
+// chapter 1 (undrifted) passes; its chapter 2 (the planted, mechanically ghostwritten chapter)
+// blocks, at both the per-chapter and the aggregate (--all) scope. Bodies use the v5 JSON shape
+// (statistic/worstMarker/threshold/exceeded/regime/scoredWords, perMarker.z replacing the
+// retired driftScore/contribution/capped triple).
 
 test('golden sample book CLI: --all --json exits 0', () => {
   const bookRoot = join(EXAMPLES, 'sample-book');
@@ -810,7 +792,7 @@ test('golden sample book CLI: ns-stylometry --chapter=<slug> --json exits 0 for 
   }
 });
 
-test('voice-drift fixture CLI: --all --json exits 1', { skip: SKIP_BLOCKED_VOICE_DRIFT_REASON }, () => {
+test('voice-drift fixture CLI: --all --json exits 1', () => {
   const bookRoot = join(EXAMPLES, 'fixtures', 'voice-drift');
   const result = spawnSync(
     process.execPath, [BIN, '--all', '--json'],
@@ -833,26 +815,50 @@ test('voice-drift fixture CLI: --all --json exits 1', { skip: SKIP_BLOCKED_VOICE
   assert.strictEqual(typeof fpEntry[1].z, 'number', 'first_person_rate carries a numeric z');
 });
 
-test('voice-drift fixture CLI: ns-stylometry --chapter=<slug> --json exits 1 for EVERY chapter', { skip: SKIP_BLOCKED_VOICE_DRIFT_REASON }, () => {
+// This fixture's two chapters are NOT symmetric under chapter regime, unlike the old (retired)
+// v4 design where both chapters exceeded a shared book-level drift_score_max: chapter 1 is this
+// fixture's own genuine, undrifted voice and chapter 2 is that same voice put through
+// ghostwriteTransform (see PLANTED.md). A per-chapter CLI run must therefore PASS chapter 1 and
+// BLOCK chapter 2 -- proving the chapter-regime path actually discriminates drifted from
+// undrifted content, not merely that "the fixture blocks somewhere."
+test('voice-drift fixture CLI: ns-stylometry --chapter=<slug> --json: undrifted chapter 1 passes, planted chapter 2 blocks', () => {
   const bookRoot = join(EXAMPLES, 'fixtures', 'voice-drift');
+
+  const EXPECTED = {
+    '01-listening-before-speaking': { status: 0, verdict: 'pass' },
+    '02-finding-your-network': { status: 1, verdict: 'block' },
+  };
+
   const chapterDir = join(bookRoot, 'chapters');
   const chapterFiles = readdirSync(chapterDir).filter(f => f.endsWith('.md')).sort();
+  assert.deepStrictEqual(
+    chapterFiles.map(f => f.replace(/\.md$/, '')).sort(),
+    Object.keys(EXPECTED).sort(),
+    'this test\'s expectation table must cover exactly the fixture\'s committed chapters'
+  );
 
   for (const file of chapterFiles) {
     const slug = file.replace(/\.md$/, '');
+    const expected = EXPECTED[slug];
     const result = spawnSync(
       process.execPath, [BIN, '--chapter=' + slug, '--json'],
       { cwd: bookRoot, encoding: 'utf8' }
     );
-    assert.strictEqual(result.status, 1,
-      'chapter ' + slug + ' CLI must exit 1 (the fixture must still catch drift per chapter); stderr: ' +
-      result.stderr);
+    assert.strictEqual(result.status, expected.status,
+      'chapter ' + slug + ' CLI must exit ' + expected.status + '; stderr: ' + result.stderr);
     const out = JSON.parse(result.stdout);
-    assert.strictEqual(out.verdict, 'block',
-      'chapter ' + slug + ' verdict must be block; got ' + out.verdict +
+    assert.strictEqual(out.verdict, expected.verdict,
+      'chapter ' + slug + ' verdict must be ' + expected.verdict + '; got ' + out.verdict +
       ' (statistic ' + out.statistic.toFixed(2) + ' vs threshold ' + out.threshold + ')');
-    assert.ok(out.statistic >= out.threshold,
-      'chapter ' + slug + ' statistic ' + out.statistic.toFixed(2) + ' must be >= threshold ' + out.threshold);
+    if (expected.verdict === 'block') {
+      assert.ok(out.statistic >= out.threshold,
+        'chapter ' + slug + ' statistic ' + out.statistic.toFixed(2) + ' must be >= threshold ' + out.threshold);
+      assert.strictEqual(out.worstMarker, 'first_person_rate',
+        'chapter ' + slug + ' worst marker must be first_person_rate; got ' + out.worstMarker);
+    } else {
+      assert.ok(out.statistic < out.threshold,
+        'chapter ' + slug + ' statistic ' + out.statistic.toFixed(2) + ' must be < threshold ' + out.threshold);
+    }
   }
 });
 
