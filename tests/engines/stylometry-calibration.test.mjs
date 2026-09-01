@@ -36,7 +36,7 @@
 //               sample book: every scored-word count is stated explicitly, and the two per-chapter
 //               numbers this suite reports (the honest-variance canary) are framed as advisory
 //               statistics, matching how hooks/lib/gate-engine.mjs's book-regime branch carries
-//               per-chapter statistics as advice that never affects the verdict ((local working notes, not published) P6).
+//               per-chapter statistics as advice that never affects the verdict.
 // runner:       node --test tests/engines/*.test.mjs
 
 import { test } from 'node:test';
@@ -105,12 +105,11 @@ test('honest aggregate (both real sample-book chapters, unmodified): PASS at boo
 });
 
 // ---------------------------------------------------------------------------
-// 2, 3, 4. The ghostwriting scenario, as three assertions from real measurements (coordinator
-// ruling on this task's BLOCKED escalation -- see (local working notes, not published) for the full probe record).
-// The plan's original "the ghostwriting scenario BLOCKS at book scale" acceptance criterion does
-// not survive contact with this baseline's own honest smallness (the sample book's two chapters
-// total ~1,050 words); rather than relabel the measured "does not block" result or hide it, the
-// ruling reframes it as three separate, independently true properties.
+// 2, 3, 4. The ghostwriting scenario, as three assertions from real measurements. The plan's
+// original "the ghostwriting scenario BLOCKS at book scale" acceptance criterion does not survive
+// contact with this baseline's own honest smallness (the sample book's two chapters total
+// ~1,050 words); rather than relabel the measured "does not block" result or hide it, this is
+// reframed as three separate, independently true properties.
 // ---------------------------------------------------------------------------
 
 test('ghost scenario, property 1 of 3 -- SEPARATION: ghost statistic exceeds honest statistic at each text\'s own real span', () => {
@@ -141,12 +140,8 @@ test('ghost scenario, property 2 of 3 -- NON-BLOCK AT REAL SPAN IS A PINNED PROP
 // own higher rungs, cross threshold -- while the honest rates at every rung on the ladder never
 // do. This is a rates-sustained-at-span evaluation through computeDrift's scoredWords parameter:
 // it asks "if this author had written enough words for the ladder's noise scale to tighten, would
-// this same deviation register?", not "does resampling this short text up to a larger span
-// produce a realistic longer ghostwritten chapter?" (it would not -- a synthetic resample from
-// only these two chapters' ~78 sentences was measured, during this task's escalation, to break
-// TYPE_TOKEN_RATIO for BOTH honest and ghostwritten resamples via sentence-reuse artifacts, which
-// is exactly why this suite evaluates the real measured rates at each span rather than fabricating
-// longer text; see (local working notes, not published) for that measurement).
+// this same deviation register?", not a claim about resampled text -- see SCENARIOS.md for why
+// fabricating a longer draw was measured and rejected as a way to test this.
 // ---------------------------------------------------------------------------
 
 const EXTENDED_BLOCK_SPANS = [4400, 8800];
@@ -174,10 +169,10 @@ test('honest rates never exceed threshold at any rung on the calibration ladder'
 // ---------------------------------------------------------------------------
 // Honest-variance canary (regression guard): the per-chapter statistic for each real, honest
 // chapter, reported ADVISORY -- matching hooks/lib/gate-engine.mjs's own book-regime handling,
-// where per-chapter statistics are computed and carried as advice and never decide the verdict
-// ((local working notes, not published) P6). This is not a chapter-scale verdict claim; it is a bound on a number the gate
-// already reports for advice, so an engine change that quietly widens per-chapter drift for this
-// voice gets caught here before it reaches a renderer.
+// where per-chapter statistics are computed and carried as advice and never decide the verdict.
+// This is not a chapter-scale verdict claim; it is a bound on a number the gate already reports
+// for advice, so an engine change that quietly widens per-chapter drift for this voice gets
+// caught here before it reaches a renderer.
 // ---------------------------------------------------------------------------
 
 const HONEST_CANARY_MULTIPLE = 1.5;
