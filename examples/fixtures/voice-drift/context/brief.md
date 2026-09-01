@@ -22,7 +22,7 @@ What this book covers: building, curating, and maintaining a personal learning n
 What it does not cover: social media strategy, personal branding, or growing a public audience.
 
 ## 6. Voice
-Plainspoken, warm, practical. Second person for instruction. First person for occasional anecdote. Trade non-fiction register, pitched at an informed friend rather than a lecturer.
+Candid, self-examining, conversational. First person throughout, anecdote-driven, contraction-dense -- the author speaking as "I" about what actually happened, not delivering instruction in the second person. Second person appears only in passing, when directly addressing the reader.
 
 ## 7. Research
 Primary research: four interviews with knowledge workers who built deliberate personal learning networks over five-plus years.

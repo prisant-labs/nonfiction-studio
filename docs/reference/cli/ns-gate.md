@@ -107,16 +107,40 @@ Invariant 2, `hooks/lib/gate-engine.mjs:625`).
 
 Human-readable summary:
 
+Real run against the shipped sample book (`node "<plugin-root>/bin/ns-gate"
+--project=examples/sample-book --chapter=01-listening-before-speaking`, book-regime baseline,
+aggregate below the 2,200-word floor):
+
 ```
-[ns-gate] verdict: pass (report: .studio/gate/01-listening-before-speaking.20260719T120000Z.json)
-  [claim_coverage] pass: coverage 100.0% (10/10 markers resolved)
-  [prompt_scrub] pass: no injection patterns found
-  [stylometry] pass: drift score 2.34 is within threshold 25
+[ns-gate] verdict: pass (report: .studio/gate/01-listening-before-speaking.20260901T044929Z.json)
+  [claim_coverage] pass: claim coverage 100%; no open markers
+  [quote_fidelity] pass: 0 quote anchor(s) checked; all match verbatim excerpts exactly
+  [stylometry] pass: book-scale verdict only: 528 scored word(s) is below the 2200-word floor a supportable book-scale verdict needs; reporting for advice only, never blocking below the floor
+  [prompt_scrub] pass: no agent scaffolding or prompt residue found
+  [continuity] pass: no name consistency issues found
+  [state_coherence] pass: word-count coherence pass; no mismatch between chapters and progress.json
+  [session_write_flag] skip: no chapter writes detected in this session; gate.no-write
 ```
+
+Once the scored word count clears the tier-appropriate floor, the `stylometry` line instead
+names the drift statistic and the calibrated threshold it was compared against, for example
+`worst chapter chapters/03-the-signal.md (worst marker contraction_rate): drift statistic 4.12
+exceeds threshold 3.87; stylometry.drift-threshold` (chapter regime - see
+[docs/formats/gate-report.md](../../formats/gate-report.md)'s own worked example) or `book-scale
+drift statistic 4.21 exceeds threshold 3.58; stylometry.drift-threshold` (book regime) - the
+threshold is always read from the report's own `drift.threshold` field (ADR-0012, voice verdict
+scope, Decision 1), resolved from the baseline's calibration ladder at the scored word count,
+never an assumed or config-sourced number.
 
 JSON output (with `--json`) follows the S-08 section 11 gate-report shape with `verdict`,
 `checks`, `ts`, and per-check entries (each with `check`, `verdict`, `detail`, `evidence`,
-`next` fields).
+`next` fields). The `stylometry` check entry alone gains a structured `drift` sibling to
+`detail` (PF-14, structured drift field, ADR-0012 voice verdict scope, Decision 2):
+`{ regime, statistic, threshold, worst_marker, worst_chapter, per_chapter, skipped }` -
+`worst_chapter` and per-chapter figures are `null`/advisory-only under `regime: "book"`, since
+book regime blocks on the aggregate alone; chapters below `MIN_SCORABLE_CHAPTER_WORDS` (50
+words) are skipped rather than scored, and listed in `skipped` with a reason. See
+[docs/formats/gate-report.md](../../formats/gate-report.md) for the full shape.
 
 ## Report files
 

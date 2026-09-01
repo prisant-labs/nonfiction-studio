@@ -6,7 +6,7 @@
       "slug": "01-listening-before-speaking",
       "title": "Listening Before Speaking",
       "status": "drafted",
-      "word_count": 422,
+      "word_count": 685,
       "drift_score": 0,
       "open_claim_count": 0,
       "last_gate": {
@@ -19,14 +19,14 @@
       "slug": "02-finding-your-network",
       "title": "Finding Your Network",
       "status": "drafted",
-      "word_count": 493,
+      "word_count": 586,
       "drift_score": 0,
       "open_claim_count": 0,
       "last_gate": null
     }
   ],
   "totals": {
-    "word_count": 915,
+    "word_count": 1271,
     "open_claim_count": 0,
     "chapters_final": 0,
     "chapters_total": 6

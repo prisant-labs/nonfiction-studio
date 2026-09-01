@@ -26,8 +26,11 @@
 
 ## Exemplars
 - context/samples/voice-sample-01.md
+- context/samples/voice-corpus-01.md
+- context/samples/voice-corpus-02.md
+- context/samples/voice-corpus-03.md
 
 ## Baseline reference
 - vector: .studio/config.json -> stylometry.baseline.markers
-- captured: 2026-08-10T09:00:00Z
-- sample_count: 2
+- captured: 2026-09-01T01:04:55Z
+- sample_count: 3

@@ -43,6 +43,7 @@ import {
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
+import { writeSyntheticV5Baseline } from '../lib/synthetic-v5-baseline.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..');
@@ -54,15 +55,32 @@ const AI_INJECTION = join(REPO_ROOT, 'examples', 'fixtures', 'ai-injection');
 // Helpers
 // ---------------------------------------------------------------------------
 
+// Every committed examples/ fixture has, since Task 5 (ADR-0012 implementation wave), carried a
+// full marker_set_version 5 baseline with a calibration ladder; when this helper was first
+// written the fixtures were still on marker_set_version 4 with no calibration ladder, so scoring
+// against it with the v5 computeDrift threw StaleBaselineError, which -- through the gate's
+// existing, unchanged engine-error handling -- forced the WHOLE gate run's exit code to 2, even
+// for a test whose actual subject is prompt_scrub or the Stop hook's own plumbing, not
+// stylometry at all. That specific failure mode no longer applies, but both clone helpers below
+// still patch the clone with a synthetic, self-consistent v5 baseline (measured from the clone's
+// own current chapters/*.md) BY DEFAULT, for deterministic isolation: it guarantees z = 0 on
+// unchanged content regardless of whatever margin the real captured baseline's calibration
+// ladder happens to carry, so a test whose subject is something else is never collaterally
+// blocked by an unrelated calibration margin. Mirrors tests/engines/gate.test.mjs's own
+// makeTempClone patch (ratified deviation outside Task 4's nominal file list; see this
+// implementation wave's own Task 4 review record for "Concerns for the coordinator").
+
 function cloneSampleBook(label) {
   const dir = join(tmpdir(), 'ns-tsk034-' + label + '-' + Date.now());
   cpSync(SAMPLE_BOOK, dir, { recursive: true });
+  writeSyntheticV5Baseline(dir);
   return dir;
 }
 
 function cloneFixture(fixturePath, label) {
   const dir = join(tmpdir(), 'ns-tsk034-' + label + '-' + Date.now());
   cpSync(fixturePath, dir, { recursive: true });
+  writeSyntheticV5Baseline(dir);
   return dir;
 }
 

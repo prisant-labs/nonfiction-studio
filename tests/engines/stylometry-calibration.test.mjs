@@ -1,20 +1,42 @@
 // tests/engines/stylometry-calibration.test.mjs
-// what-it-is:   the labeled ground-truth scenario suite for the drift budget recalibration
-// what-it-does: scores every fixture under tests/engines/fixtures/drift-scenarios/ (frozen,
-//               self-contained -- see that directory's SCENARIOS.md) against the shipped
-//               engine default (thresholds passed as null throughout, so this suite always
-//               tests whatever DEFAULT_DRIFT_SCORE_MAX currently is, never a number
-//               hardcoded a second time in this file) and asserts the expected verdict.
-//               Two rows (the honest-variance chapters) assert the MEASURED verdict, which
-//               diverges from ground truth -- that divergence is the documented structural
-//               finding this recalibration could close for the ghostwriting signature but
-//               not for natural author variation; see SCENARIOS.md for the full reasoning.
-// why:          the review that triggered this task found that shrinking the drift score's
-//               scale (marker_set_version 2) without recalibrating the budget let a chapter
-//               stripped of every contraction and every first-person pronoun -- the canonical
-//               ghostwriting signature -- pass. This suite is the measuring instrument that
-//               calibration was fitted against, committed so the fit is falsifiable rather
-//               than a number nobody measured.
+// what-it-is:   the golden drift-detection suite for the calibrated-null verdict statistic
+//               (ADR-0012, voice verdict scope).
+// what-it-does: this suite was rewritten, not patched, per ADR-0012's own recorded consequence.
+//               The OLD suite asserted a per-chapter drift score against a hand-tuned budget
+//               (DEFAULT_DRIFT_SCORE_MAX, MARKER_CONTRIBUTION_DIVISOR) -- both retired. Measured
+//               on this implementation wave's own probe, that combining rule discriminated a
+//               planted ghostwriting signature from ordinary chapter-to-chapter voice variation
+//               at AUC 0.53 on real prose at chapter scale: a coin flip. It was not testing
+//               whether drift detection works; it was testing how uniform one specific sample
+//               book happens to be. computeDrift v5 replaces the combining rule with the largest
+//               standardized deviation (max |z|) against a per-span noise-scale ladder measured
+//               from the author's own voice corpus (hooks/lib/stylometry-engine.mjs,
+//               hooks/lib/stylometry-calibration.mjs) -- this suite asserts THAT instrument's
+//               behavior instead.
+//
+//               Two-tier truth (coordinator ruling on this task): the shipped sample book is
+//               honestly a BOOK-regime voice -- its own calibration measures
+//               detectability_auc 0.596 at the shortest rung, well under the 0.95 bar a
+//               per-chapter verdict needs (hooks/lib/stylometry-calibration.mjs,
+//               REGIME_AUC_THRESHOLD). At the approx 1,050 words its two real chapters actually
+//               contain, the calibrated null is wide enough that even a genuine ghostwriting
+//               transform does not cross threshold -- and this suite asserts that as a PINNED
+//               PROPERTY, not a caveat: it is the measured reason this baseline's regime is
+//               "book" and the gate's MIN_BOOK_VERDICT_WORDS floor (hooks/lib/gate-engine.mjs)
+//               exists at all. The same ladder DOES separate ghostwritten from honest text once
+//               enough scored words are on the table (the same measured marker rates, evaluated
+//               at the ladder's higher rungs) -- proving the statistic's math is sound, not merely
+//               that this one short demo happens to pass. The CHAPTER-regime block demonstration
+//               (a voice that DOES clear the 0.95 bar, and DOES block a planted drift at chapter
+//               scale) lives in examples/fixtures/voice-drift, its own calibrated author voice --
+//               see tests/engines/gate.test.mjs and tests/engines/stylometry.test.mjs. This suite
+//               does not duplicate that coverage.
+//
+//               No assertion in this file claims a chapter-scale or gate-blocking verdict for the
+//               sample book: every scored-word count is stated explicitly, and the two per-chapter
+//               numbers this suite reports (the honest-variance canary) are framed as advisory
+//               statistics, matching how hooks/lib/gate-engine.mjs's book-regime branch carries
+//               per-chapter statistics as advice that never affects the verdict.
 // runner:       node --test tests/engines/*.test.mjs
 
 import { test } from 'node:test';
@@ -24,228 +46,194 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  measureChapter, measureBook, computeDrift, DEFAULT_DRIFT_SCORE_MAX,
+  measureChapter, measureBook, computeDrift, countWords,
 } from '../../hooks/lib/stylometry-engine.mjs';
+import { calibrateBaseline, ghostwriteTransform } from '../../hooks/lib/stylometry-calibration.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const FIXTURES = join(__dirname, 'fixtures', 'drift-scenarios');
-const CHAPTERS = join(FIXTURES, 'chapters');
+const SAMPLE_BOOK = join(__dirname, '..', '..', 'examples', 'sample-book');
+const SAMPLE_BOOK_CHAPTERS = join(SAMPLE_BOOK, 'chapters');
+const SAMPLE_BOOK_SAMPLES = join(SAMPLE_BOOK, 'context', 'samples');
 
-// Frozen golden-book baseline, copied 2026-08-15 -- see SCENARIOS.md for why this directory
-// does not read examples/ live.
+// The committed, frozen v5 baseline for this suite (markers + calibration ladder, corpus-
+// calibrated from examples/sample-book's own independent voice corpus -- see SCENARIOS.md for
+// full provenance). Deliberately read from this directory's own copy, not examples/sample-book's
+// live config, so this suite is not silently re-scoped by an unrelated future edit to the shipped
+// example's config.json.
 const baseline = JSON.parse(readFileSync(join(FIXTURES, 'baseline.json'), 'utf8'));
 
-function scoreScenario(filename, base = baseline) {
-  const text = readFileSync(join(CHAPTERS, filename), 'utf8');
-  const measured = measureChapter(text);
-  // thresholds omitted (null): exercises the engine's own shipped default (the
-  // computeDrift fallback, DEFAULT_DRIFT_SCORE_MAX) rather than a number this test file
-  // would otherwise have to hardcode and keep in sync by hand.
-  return computeDrift(measured, base, null);
-}
+// The two real, committed sample-book chapters -- read live, not a frozen copy, because the
+// ghost-scenario assertions below require the REAL ghostwriteTransform applied to REAL chapter
+// text (coordinator ruling: "not a hand-mangled string").
+const ch1Text = readFileSync(join(SAMPLE_BOOK_CHAPTERS, '01-listening-before-speaking.md'), 'utf8');
+const ch2Text = readFileSync(join(SAMPLE_BOOK_CHAPTERS, '02-finding-your-network.md'), 'utf8');
 
 // ---------------------------------------------------------------------------
-// The pinned constant. Strict equality rejects every value but 25 in either direction --
-// a stronger pin than an inequality can give, and the same shape the acceptance criteria
-// ask for after Task 2's bound test was caught asserting only an upper bound.
+// Shared measurements, computed once and reused across the assertions below (each is a pure
+// function of committed inputs, so sharing them does not couple the tests' outcomes to each
+// other -- every test below still calls computeDrift itself with its own scoredWords).
 // ---------------------------------------------------------------------------
 
-test('DEFAULT_DRIFT_SCORE_MAX is exactly 25', () => {
-  assert.strictEqual(DEFAULT_DRIFT_SCORE_MAX, 25,
-    'the recalibrated default drift budget must be exactly 25, not a neighboring value -- ' +
-    'see the DEFAULT_DRIFT_SCORE_MAX doc comment in hooks/lib/stylometry-engine.mjs for the ' +
-    'reasoning this was chosen from');
+const honestMeasured = measureBook([ch1Text, ch2Text]);
+const honestScoredWords = countWords(ch1Text) + countWords(ch2Text);
+const honestResult = computeDrift(honestMeasured, baseline, null, { scoredWords: honestScoredWords });
+
+// The ghostwriting scenario: the REAL ghostwriteTransform (hooks/lib/stylometry-calibration.mjs
+// -- the exact function calibrateBaseline itself uses to synthesize its positive class) applied
+// directly to the REAL chapter text, then aggregated the same way measureBook aggregates any
+// two-chapter book. Word count shifts slightly from the honest aggregate (1055 -> ghostScoredWords)
+// because contraction expansion adds words ("I've" -> "I have").
+const ghost1Text = ghostwriteTransform(ch1Text);
+const ghost2Text = ghostwriteTransform(ch2Text);
+const ghostMeasured = measureBook([ghost1Text, ghost2Text]);
+const ghostScoredWords = countWords(ghost1Text) + countWords(ghost2Text);
+const ghostResult = computeDrift(ghostMeasured, baseline, null, { scoredWords: ghostScoredWords });
+
+// ---------------------------------------------------------------------------
+// 1. Honest aggregate: two real, unmodified chapters, scored at book scale against the committed
+//    baseline, must not spuriously block. This is the suite's basic sanity floor -- if this ever
+//    fails, the calibration itself (not a scenario fixture) has drifted from the shipped voice.
+// ---------------------------------------------------------------------------
+
+test('honest aggregate (both real sample-book chapters, unmodified): PASS at book scale', () => {
+  assert.strictEqual(honestResult.exceeded, false,
+    'the unmodified two-chapter aggregate must not block against its own corpus-calibrated ' +
+    'baseline; got statistic ' + honestResult.statistic.toFixed(4) + ' vs threshold ' +
+    honestResult.threshold.toFixed(4) + ' at scoredWords ' + honestScoredWords);
 });
 
 // ---------------------------------------------------------------------------
-// The engine constant alone is not the whole calibration: three data files and one
-// re-exported constant each carry their own copy of the chosen value, and a strict-equality
-// pin on DEFAULT_DRIFT_SCORE_MAX above proves nothing about any of them. Every one of these
-// could silently drift back to 35 (a bad merge, a reverted line, a stale re-export) without
-// failing a single other test in this suite, because the suite above always reads
-// DEFAULT_DRIFT_SCORE_MAX itself, never one of these copies. This is exactly the
-// "passes silently" shape the acceptance criteria warn about, so each copy gets its own
-// strict-equality assertion against the single source of truth. Reading these four files is
-// a narrow, deliberate exception to "no live reads from examples/" elsewhere in this suite:
-// unlike the frozen chapter/baseline fixtures, these are THIS task's own deployed artifacts,
-// not content a later de-padding task is expected to change.
+// 2, 3, 4. The ghostwriting scenario, as three assertions from real measurements. The plan's
+// original "the ghostwriting scenario BLOCKS at book scale" acceptance criterion does not survive
+// contact with this baseline's own honest smallness (the sample book's two chapters total
+// ~1,050 words); rather than relabel the measured "does not block" result or hide it, this is
+// reframed as three separate, independently true properties.
 // ---------------------------------------------------------------------------
 
-test('templates/config-defaults.json ships drift_score_max equal to DEFAULT_DRIFT_SCORE_MAX', () => {
-  const config = JSON.parse(readFileSync(join(__dirname, '..', '..', 'templates', 'config-defaults.json'), 'utf8'));
-  assert.strictEqual(config.thresholds.drift_score_max, DEFAULT_DRIFT_SCORE_MAX,
-    'the shipped default config must match the engine default exactly, not silently diverge');
+test('ghost scenario, property 1 of 3 -- SEPARATION: ghost statistic exceeds honest statistic at each text\'s own real span', () => {
+  assert.ok(ghostResult.statistic > honestResult.statistic,
+    'the ghostwriting transform must move the statistic even where the calibrated null is too ' +
+    'wide to support a block verdict; got ghost ' + ghostResult.statistic.toFixed(4) +
+    ' (scoredWords ' + ghostScoredWords + ') vs honest ' + honestResult.statistic.toFixed(4) +
+    ' (scoredWords ' + honestScoredWords + ') -- signal exists even where the verdict scale ' +
+    'cannot support blocking');
 });
 
-test('templates/book-scaffold/.studio/config.json ships drift_score_max equal to DEFAULT_DRIFT_SCORE_MAX', () => {
-  const config = JSON.parse(readFileSync(
-    join(__dirname, '..', '..', 'templates', 'book-scaffold', '.studio', 'config.json'), 'utf8'
-  ));
-  assert.strictEqual(config.thresholds.drift_score_max, DEFAULT_DRIFT_SCORE_MAX,
-    'the book-scaffold template config must match the engine default exactly, not silently diverge');
+test('ghost scenario, property 2 of 3 -- NON-BLOCK AT REAL SPAN IS A PINNED PROPERTY, not a caveat', () => {
+  assert.strictEqual(ghostResult.exceeded, false,
+    'ghost statistic ' + ghostResult.statistic.toFixed(4) + ' must stay under threshold ' +
+    ghostResult.threshold.toFixed(4) + ' at the real scoredWords (' + ghostScoredWords + '). ' +
+    'This is not a detection gap: it is the measured reason this baseline carries regime "' +
+    baseline.calibration.regime + '" (detectability_auc ' +
+    baseline.calibration.detectability_auc.toFixed(5) + ', see baseline.json -- well under the ' +
+    '0.95 bar a chapter-scale verdict needs) and why the gate never trusts a verdict below its ' +
+    'book-scale word floor. If a future engine change made this scenario block at ~1,050 words, ' +
+    'this assertion SHOULD fail and force a look at what changed -- see property 3 below for ' +
+    'where this same transform IS detectable.');
 });
 
-test('examples/sample-book/.studio/config.json ships drift_score_max equal to DEFAULT_DRIFT_SCORE_MAX', () => {
-  const config = JSON.parse(readFileSync(
-    join(__dirname, '..', '..', 'examples', 'sample-book', '.studio', 'config.json'), 'utf8'
-  ));
-  assert.strictEqual(config.thresholds.drift_score_max, DEFAULT_DRIFT_SCORE_MAX,
-    'the golden example config must match the engine default exactly, not silently diverge ' +
-    '(the literal 25 in tests/engines/status-cli.test.mjs pins the same value from the CLI ' +
-    'side; this pins it from the constant side, so a mismatch between the two is caught)');
-});
+// ---------------------------------------------------------------------------
+// Property 3 of 3 -- BLOCK AT EXTENDED SPANS: the SAME measured marker rates (the real ghost
+// aggregate vector above, unchanged), evaluated with scoredWords set to the calibration ladder's
+// own higher rungs, cross threshold -- while the honest rates at every rung on the ladder never
+// do. This is a rates-sustained-at-span evaluation through computeDrift's scoredWords parameter:
+// it asks "if this author had written enough words for the ladder's noise scale to tighten, would
+// this same deviation register?", not a claim about resampled text -- see SCENARIOS.md for why
+// fabricating a longer draw was measured and rejected as a way to test this.
+// ---------------------------------------------------------------------------
 
-// The four non-voice-drift fixture configs (ai-injection, continuity-error, unsourced-claim,
-// config-coercion) were also brought to DEFAULT_DRIFT_SCORE_MAX for consistency across the
-// example fleet. None of them is exercised by a live stylometry score in a way that would
-// catch a silent revert to 35 (config-coercion's baseline is null, so stylometry never scores
-// against it at all; the other three score near zero regardless of threshold), so each gets
-// its own pin here rather than relying on fixture-matrix behavior to notice.
-const OTHER_FIXTURE_CONFIGS = [
-  'ai-injection', 'continuity-error', 'unsourced-claim', 'config-coercion',
-];
-for (const fixture of OTHER_FIXTURE_CONFIGS) {
-  test('examples/fixtures/' + fixture + '/.studio/config.json ships drift_score_max equal to DEFAULT_DRIFT_SCORE_MAX', () => {
-    const configPath = fixture === 'config-coercion'
-      ? join(__dirname, '..', '..', 'examples', 'fixtures', fixture, 'config.json')
-      : join(__dirname, '..', '..', 'examples', 'fixtures', fixture, '.studio', 'config.json');
-    const config = JSON.parse(readFileSync(configPath, 'utf8'));
-    assert.strictEqual(config.thresholds.drift_score_max, DEFAULT_DRIFT_SCORE_MAX,
-      fixture + '\'s config must match the engine default exactly, not silently diverge');
+const EXTENDED_BLOCK_SPANS = [4400, 8800];
+
+for (const W of EXTENDED_BLOCK_SPANS) {
+  test('ghost scenario, property 3 of 3 -- rates sustained at ' + W + ' scored words exceed threshold', () => {
+    const result = computeDrift(ghostMeasured, baseline, null, { scoredWords: W });
+    assert.strictEqual(result.exceeded, true,
+      'the ghost aggregate\'s real measured marker rates, evaluated at scoredWords ' + W +
+      ' via the calibration ladder, must exceed threshold: got statistic ' +
+      result.statistic.toFixed(4) + ' vs threshold ' + result.threshold.toFixed(4));
   });
 }
 
-test('status-engine.mjs re-exports the SAME value as DEFAULT_DRIFT_SCORE_MAX, not an independent copy', async () => {
-  const { DEFAULT_DRIFT_THRESHOLD } = await import('../../hooks/lib/status-engine.mjs');
-  assert.strictEqual(DEFAULT_DRIFT_THRESHOLD, DEFAULT_DRIFT_SCORE_MAX,
-    'status-engine.mjs must derive its default from the engine constant, not carry its own ' +
-    'literal that could drift out of sync (this is exactly what a merge-conflict resolution ' +
-    'on a concurrently-edited file could silently reintroduce)');
+// Forewarning: the tightest margin here is at 8,800 words (statistic 5.3931 vs threshold
+// 5.4269, ratio 0.994 -- roughly 0.6 percent headroom, per SCENARIOS.md). That is deliberately
+// thin, not a defect; a future corpus recalibration or a chapter-text edit that flips this
+// assertion is expected behavior given that margin, not a mystery to chase.
+test('honest rates never exceed threshold at any rung on the calibration ladder', () => {
+  for (const W of baseline.calibration.spans) {
+    const result = computeDrift(honestMeasured, baseline, null, { scoredWords: W });
+    assert.strictEqual(result.exceeded, false,
+      'the honest aggregate\'s real measured marker rates must not exceed threshold at any ' +
+      'ladder rung; got statistic ' + result.statistic.toFixed(4) + ' vs threshold ' +
+      result.threshold.toFixed(4) + ' at scoredWords ' + W);
+  }
 });
 
-test('before/after: the ghostwriting scenario passed at the old default (35) and blocks at the new default', () => {
-  const measured = measureChapter(
-    readFileSync(join(CHAPTERS, '01-contractions-and-first-person-removed.md'), 'utf8')
+// ---------------------------------------------------------------------------
+// Honest-variance canary (regression guard): the per-chapter statistic for each real, honest
+// chapter, reported ADVISORY -- matching hooks/lib/gate-engine.mjs's own book-regime handling,
+// where per-chapter statistics are computed and carried as advice and never decide the verdict.
+// This is not a chapter-scale verdict claim; it is a bound on a number the gate already reports
+// for advice, so an engine change that quietly widens per-chapter drift for this voice gets
+// caught here before it reaches a renderer.
+// ---------------------------------------------------------------------------
+
+const HONEST_CANARY_MULTIPLE = 1.5;
+
+test('honest-variance canary: no honest sample-book chapter\'s advisory per-chapter statistic exceeds 1.5x its own threshold', () => {
+  for (const [label, text] of [
+    ['01-listening-before-speaking.md', ch1Text],
+    ['02-finding-your-network.md', ch2Text],
+  ]) {
+    const scoredWords = countWords(text);
+    const result = computeDrift(measureChapter(text), baseline, null, { scoredWords });
+    const bound = HONEST_CANARY_MULTIPLE * result.threshold;
+    assert.ok(result.statistic <= bound,
+      label + ': advisory per-chapter statistic ' + result.statistic.toFixed(4) +
+      ' must stay at or under 1.5x its threshold (' + bound.toFixed(4) + '); got ratio ' +
+      (result.statistic / result.threshold).toFixed(4));
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Determinism: recalibrating from the three committed voice-corpus files, in this test process,
+// must reproduce BOTH the committed drift-scenarios baseline.json AND examples/sample-book's own
+// config.json baseline (markers + calibration only -- captured/sample_count/method are agent-
+// written per config.json's own read-modify-write contract, not measured, so they are excluded
+// from this comparison by construction: only fields calibrateBaseline actually returns are
+// compared). This is the guard that catches accidental corpus or seed drift -- a bad merge, a
+// stale re-export, a corpus file edited without recapturing.
+//
+// "Byte-for-byte" cashes out here as JSON.stringify equality on the exact substructures
+// calibrateBaseline returns, both sides serialized identically in this test (rather than a raw
+// file-bytes diff, which would also be sensitive to how the committed files happen to be pretty-
+// printed on disk -- a formatting concern this determinism guard is not testing). Because
+// JSON.stringify on a number requires bit-identical floats to agree, this is exact reproduction,
+// not an approximation.
+//
+// Fallback (pre-authorized, unused on this run): if this ever fails ONLY on a Windows CI leg
+// (float or line-ending exposure), the recorded fallback is deep-equality on parsed values with a
+// comment saying why, never deletion. Measured on this task's own Windows run: strict string
+// equality passed cleanly, so the fallback is not invoked.
+// ---------------------------------------------------------------------------
+
+test('determinism: recalibrating from the committed voice corpus reproduces the committed baselines byte-for-byte', () => {
+  const corpusTexts = ['voice-corpus-01.md', 'voice-corpus-02.md', 'voice-corpus-03.md']
+    .map((f) => readFileSync(join(SAMPLE_BOOK_SAMPLES, f), 'utf8'));
+  const recalibrated = calibrateBaseline(corpusTexts);
+
+  const sampleBookConfig = JSON.parse(
+    readFileSync(join(SAMPLE_BOOK, '.studio', 'config.json'), 'utf8')
   );
-  const atOld = computeDrift(measured, baseline, { drift_score_max: 35, stylometry_marker_tolerance: 2.0 });
-  const atNew = computeDrift(measured, baseline, { drift_score_max: DEFAULT_DRIFT_SCORE_MAX, stylometry_marker_tolerance: 2.0 });
-  assert.strictEqual(atOld.exceeded, false,
-    'documents the regression this task exists to close: at the old default (35) this scenario passed (score ' +
-    atOld.score.toFixed(2) + ')');
-  assert.strictEqual(atNew.exceeded, true,
-    'proves the fix: at the new default this scenario blocks (score ' + atNew.score.toFixed(2) + ')');
-});
+  const sampleBookBaseline = sampleBookConfig.stylometry.baseline;
 
-// ---------------------------------------------------------------------------
-// Main scenario table. See fixtures/drift-scenarios/SCENARIOS.md for the transformation
-// methodology and the full before/after score table.
-// ---------------------------------------------------------------------------
-
-const SCENARIOS = [
-  { file: '01-unchanged.md', label: 'unchanged chapter, zero real drift', expected: 'pass' },
-  { file: '01-contractions-removed.md', label: 'contractions removed (single axis)', expected: 'pass' },
-  { file: '01-first-person-removed.md', label: 'first-person voice removed (single axis)', expected: 'pass' },
-  { file: '01-second-person-removed.md', label: 'second-person voice removed (single axis)', expected: 'pass' },
-  {
-    file: '01-contractions-and-first-person-removed.md',
-    label: 'contractions + first person removed -- the ghostwriting signature (THE regression this task closes)',
-    expected: 'block',
-  },
-  // Row 6 (first + second person removed) is NOT in this table -- see the dedicated
-  // divergence test below, matching how rows 9-10 (honest variance) are handled.
-  { file: '01-contractions-first-second-removed.md', label: 'contractions + first + second person all removed', expected: 'block' },
-  { file: 'different-voice.md', label: 'genuinely different authorial voice (voice-drift fixture ch2, copied static)', expected: 'block' },
-];
-
-for (const s of SCENARIOS) {
-  test('scenario: ' + s.label + ' -> ' + s.expected, () => {
-    const { score, exceeded } = scoreScenario(s.file);
-    const verdict = exceeded ? 'block' : 'pass';
-    assert.strictEqual(verdict, s.expected,
-      s.label + ': expected ' + s.expected + ', got ' + verdict + ' (score ' + score.toFixed(2) + ')');
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Row 6: ground truth BLOCK, measured verdict PASS. An earlier version of this suite
-// labeled row 6 "pass" using the single-axis reasoning that justifies rows 2-4, which does
-// not actually reach row 6 (it moves two axes, same count as row 5). That label was set to
-// match the measurement, not derived independently -- exactly the shape this task exists to
-// eliminate. Row 5's own reasoning (two markers moving together is the ghostwriting
-// signature this recalibration targets) applies here too, so ground truth is BLOCK. The
-// measured verdict stays PASS at the shipped default: row 6's residual in the six markers
-// the transformation does not touch (about 3.4 points) is far smaller than row 5's (about
-// 10.2), so it never reaches budget at divisor 3. See SCENARIOS.md's "Row 6" section for
-// the full reasoning, including why row 6 is this calibration's binding constraint.
-// ---------------------------------------------------------------------------
-
-test('row 6 (first + second person removed): ground truth BLOCK, measured verdict PASS -- label set from the same two-axis reasoning as row 5, not from measurement', () => {
-  const { score, exceeded } = scoreScenario('01-first-and-second-person-removed.md');
-  assert.strictEqual(exceeded, false,
-    'measured verdict is pass under the shipped default (score ' + score.toFixed(2) + '). Ground truth is block: ' +
-    'this is a two-axis pronoun-removal signature, the same count as row 5, which this suite treats as ' +
-    'suspicious enough to warrant blocking. It passes here because its residual in the other six markers ' +
-    '(about 3.4 points) is much smaller than row 5\'s (about 10.2) -- see SCENARIOS.md for why, and for why ' +
-    'this is the binding constraint on this calibration at divisor 3.');
-});
-
-// ---------------------------------------------------------------------------
-// Honest-variance: ground truth PASS, measured verdict BLOCK. See SCENARIOS.md's
-// "Honest-variance scenario" section for the full reasoning. This suite asserts the
-// MEASURED verdict deliberately -- asserting the ground truth here would make the suite
-// lie about what the shipped calibration actually does; omitting the row would hide the
-// finding instead of disclosing it.
-// ---------------------------------------------------------------------------
-
-const ch1Depadded = readFileSync(join(CHAPTERS, '01-honest-variance-depadded.md'), 'utf8');
-const ch2Depadded = readFileSync(join(CHAPTERS, '02-honest-variance-depadded.md'), 'utf8');
-const selfFitBaseline = {
-  markers: measureBook([ch1Depadded, ch2Depadded]),
-  marker_set_version: baseline.marker_set_version,
-};
-
-test('honest-variance ch1 (de-padded, self-fit baseline): ground truth PASS, measured verdict BLOCK -- structural finding, not a defect in this calibration', () => {
-  const { score, exceeded } = computeDrift(measureChapter(ch1Depadded), selfFitBaseline, null);
-  assert.strictEqual(exceeded, true,
-    'measured verdict is block under the shipped default (score ' + score.toFixed(2) + '). Ground truth is pass: ' +
-    'two honestly written chapters differing naturally should not block. At divisor 3 (the shipped divisor), ' +
-    'no budget in the range this calibration could responsibly ship closes this gap; separation DOES exist ' +
-    'in the joint budget-and-divisor space but was not adopted -- see the "Honest-variance scenario" section ' +
-    'of SCENARIOS.md and the Calibration section of docs/reference/cli/ns-stylometry.md for the full proof ' +
-    'and the reasons.');
-});
-
-test('honest-variance ch2 (de-padded, self-fit baseline): same finding as ch1', () => {
-  const { score, exceeded } = computeDrift(measureChapter(ch2Depadded), selfFitBaseline, null);
-  assert.strictEqual(exceeded, true,
-    'measured verdict is block under the shipped default (score ' + score.toFixed(2) + '); ground truth is pass, ' +
-    'same structural finding as chapter 1');
-});
-
-test('honest-variance, BOOK level: stays near zero -- the self-fit baseline absorbs both chapters, so the finding above is a per-chapter phenomenon, not a book-level one', () => {
-  const bookMeasured = measureBook([ch1Depadded, ch2Depadded]);
-  const { score, exceeded } = computeDrift(bookMeasured, selfFitBaseline, null);
-  assert.strictEqual(exceeded, false, 'book-level score must stay well within budget; got ' + score.toFixed(4));
-  assert.ok(score < 0.1, 'book-level score should be near zero (self-fit population); got ' + score.toFixed(4));
-});
-
-// ---------------------------------------------------------------------------
-// Margin and floor-fraction visibility (acceptance criteria: the unchanged chapter's pass
-// margin, and the zero-drift floor, must both be stated as a fraction of budget rather than
-// left implicit).
-// ---------------------------------------------------------------------------
-
-test('unchanged chapter passes with a stated margin: more than half of budget remains headroom', () => {
-  const { score } = scoreScenario('01-unchanged.md');
-  const margin = (DEFAULT_DRIFT_SCORE_MAX - score) / DEFAULT_DRIFT_SCORE_MAX;
-  assert.ok(margin > 0.5,
-    'margin should be a comfortable majority of budget; got ' + (margin * 100).toFixed(1) + '% (score ' + score.toFixed(2) + ')');
-});
-
-test('zero-drift floor is a stated, non-trivial fraction of budget (43.4%) -- visible, not ignored', () => {
-  const { score } = scoreScenario('01-unchanged.md');
-  const floorFraction = score / DEFAULT_DRIFT_SCORE_MAX;
-  assert.ok(Math.abs(floorFraction - 0.434) < 0.01,
-    'zero-drift floor fraction drifted from the value the report states; got ' + (floorFraction * 100).toFixed(1) + '%');
+  assert.strictEqual(JSON.stringify(recalibrated.markers), JSON.stringify(baseline.markers),
+    'recalibrated markers must reproduce fixtures/drift-scenarios/baseline.json exactly');
+  assert.strictEqual(JSON.stringify(recalibrated.calibration), JSON.stringify(baseline.calibration),
+    'recalibrated calibration ladder must reproduce fixtures/drift-scenarios/baseline.json exactly');
+  assert.strictEqual(JSON.stringify(recalibrated.markers), JSON.stringify(sampleBookBaseline.markers),
+    'recalibrated markers must reproduce examples/sample-book/.studio/config.json exactly');
+  assert.strictEqual(JSON.stringify(recalibrated.calibration), JSON.stringify(sampleBookBaseline.calibration),
+    'recalibrated calibration ladder must reproduce examples/sample-book/.studio/config.json exactly');
 });

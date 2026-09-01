@@ -276,7 +276,7 @@ same logical position.
 - **No structural critique.** All observations in this session are sentence-level.
   If the agent had noticed an argument sequencing issue, it would have noted it
   and deferred to `developmental-editor` without issuing an edit proposal.
-- **No voice scoring.** The transcript contains no drift score, no qualitative
+- **No voice scoring.** The transcript contains no drift statistic, no qualitative
   register assessment, and no note about overall style adherence. Voice assessment
   belongs to `voice-guardian`.
 - **House convention reused.** All proposals use the `drafting-partner`

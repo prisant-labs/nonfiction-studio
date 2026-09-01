@@ -334,10 +334,11 @@ function styleProfileParseFieldBlock(bodyLines) {
 // this, `stylometry.baseline: {}` (present but empty) would read as "config
 // carries a baseline" for the stub rule below, when nothing has actually been
 // captured. captured/sample_count are the fields this check itself compares;
-// markers/marker_set_version are included too because voice-capture's current
-// write contract (agents/voice-capture.md) sets only those two, not
-// captured/sample_count - a real, current baseline that has never carried the
-// two temporal fields must still count as substantive.
+// markers/marker_set_version are included too because a baseline captured
+// before the voice-capture write contract (agents/voice-capture.md) was
+// fixed to write the full v5 baseline may carry only those two fields - a
+// real, older baseline that has never carried the two temporal fields must
+// still count as substantive.
 function styleProfileConfigBaselineHasSubstance(baseline) {
   return baseline.captured !== undefined ||
     baseline.sample_count !== undefined ||
@@ -466,11 +467,11 @@ function checkStyleProfile(root, config, findings, notices) {
     // Config agreement (the format doc's first promised behavior): only
     // checked when config.json actually carries a baseline to compare against,
     // AND only per-field when config's own baseline actually carries that
-    // field. voice-capture's current write contract (agents/voice-capture.md)
-    // sets only markers/marker_set_version, not captured/sample_count, so a
-    // real, current baseline commonly has neither; comparing against an
-    // absent config field would otherwise report a false "disagrees with ...
-    // undefined" finding on an otherwise-correct profile.
+    // field. The voice-capture write contract (agents/voice-capture.md) now
+    // writes captured/sample_count on every capture, but a baseline captured
+    // before that fix may carry only markers/marker_set_version; comparing
+    // against an absent config field would otherwise report a false
+    // "disagrees with ... undefined" finding on an otherwise-correct profile.
     if (configBaseline) {
       if (configBaseline.captured !== undefined &&
           baselineFields.captured !== undefined &&

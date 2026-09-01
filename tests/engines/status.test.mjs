@@ -16,13 +16,12 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import {
-  DEFAULT_DRIFT_THRESHOLD,
   parseGateFilename,
   selectNewestGateFilenames,
   readJsonSafe,
   extractGateVerdict,
   extractDriftScore,
-  deriveDriftThreshold,
+  extractDriftThreshold,
   deriveChapterNumber,
   deriveChapterTitle,
   isHighlighted,
@@ -180,27 +179,49 @@ test('extractGateVerdict: null when report is null, malformed, or verdict is abs
   assert.equal(extractGateVerdict({ verdict: 42 }), null);
 });
 
-// ---- extractDriftScore --------------------------------------------------------
+// ---- extractDriftScore (ADR-0012 voice verdict scope, Decision 2, PF-14: structured-field- ----
+// first, prose-fallback-second) -------------------------------------------------------------
 
-test('extractDriftScore: parses the live gate-engine detail shape ("drift score X.XX within threshold N")', () => {
+test('extractDriftScore: prefers the structured drift.statistic field when present (a number)', () => {
+  const report = {
+    checks: [{
+      check: 'stylometry', verdict: 'pass',
+      detail: 'book-scale drift statistic 1.42 within threshold 3.87',
+      drift: { statistic: 1.42, threshold: 3.87 },
+    }],
+  };
+  assert.equal(extractDriftScore(report), 1.42);
+});
+
+test('extractDriftScore: falls back to the legacy prose pattern ("drift score X.XX within threshold N") when drift.statistic is absent', () => {
   const report = {
     checks: [{ check: 'stylometry', verdict: 'pass', detail: 'drift score 10.86 within threshold 35' }],
   };
   assert.equal(extractDriftScore(report), 10.86);
 });
 
-test('extractDriftScore: parses the "exceeds threshold" phrasing too', () => {
+test('extractDriftScore: prose fallback parses the "exceeds threshold" phrasing too', () => {
   const report = {
     checks: [{ check: 'stylometry', verdict: 'warn', detail: 'drift score 38.00 exceeds threshold 35; stylometry.drift-threshold' }],
   };
   assert.equal(extractDriftScore(report), 38);
 });
 
-test('extractDriftScore: also parses the underscore-joined legacy phrasing ("drift_score N")', () => {
+test('extractDriftScore: prose fallback also parses the underscore-joined legacy phrasing ("drift_score N")', () => {
   const report = {
     checks: [{ check: 'stylometry', verdict: 'pass', detail: 'drift_score 0 is within threshold 35; chapter prose matches the baseline voice profile.' }],
   };
   assert.equal(extractDriftScore(report), 0);
+});
+
+test('extractDriftScore: a present but non-numeric drift.statistic falls back to the prose pattern, not a thrown error', () => {
+  const report = {
+    checks: [{
+      check: 'stylometry', verdict: 'pass', detail: 'drift score 10.86 within threshold 35',
+      drift: { statistic: 'not-a-number' },
+    }],
+  };
+  assert.equal(extractDriftScore(report), 10.86);
 });
 
 test('extractDriftScore: null when the stylometry entry is absent', () => {
@@ -208,12 +229,14 @@ test('extractDriftScore: null when the stylometry entry is absent', () => {
   assert.equal(extractDriftScore(report), null);
 });
 
-test('extractDriftScore: null when the stylometry entry\'s own verdict is skip', () => {
-  const report = { checks: [{ check: 'stylometry', verdict: 'skip', detail: 'check disabled in config' }] };
+test('extractDriftScore: null when the stylometry entry\'s own verdict is skip (even with a structured drift field)', () => {
+  const report = {
+    checks: [{ check: 'stylometry', verdict: 'skip', detail: 'check disabled in config', drift: { statistic: 1.42 } }],
+  };
   assert.equal(extractDriftScore(report), null);
 });
 
-test('extractDriftScore: null (never throws) when detail has no recognizable "drift score N" phrase', () => {
+test('extractDriftScore: null (never throws) when neither drift.statistic nor a recognizable prose phrase is present', () => {
   const report = { checks: [{ check: 'stylometry', verdict: 'pass', detail: 'no numeric phrase here at all' }] };
   assert.doesNotThrow(() => extractDriftScore(report));
   assert.equal(extractDriftScore(report), null);
@@ -225,20 +248,42 @@ test('extractDriftScore: null (never throws) when report is null or checks is mi
   assert.equal(extractDriftScore({ checks: 'not-an-array' }), null);
 });
 
-// ---- deriveDriftThreshold -----------------------------------------------------
+// ---- extractDriftThreshold (ADR-0012 voice verdict scope, Decision 2, PF-14: per-report, -----
+// no prose fallback) --------------------------------------------------------------------------
 
-test('deriveDriftThreshold: reads config.thresholds.drift_score_max when it is a finite number', () => {
-  const { value, isDefault } = deriveDriftThreshold({ thresholds: { drift_score_max: 20 } });
-  assert.equal(value, 20);
-  assert.equal(isDefault, false);
+test('extractDriftThreshold: reads the structured drift.threshold field when present (a number)', () => {
+  const report = {
+    checks: [{ check: 'stylometry', verdict: 'pass', detail: 'irrelevant', drift: { statistic: 1.42, threshold: 3.87 } }],
+  };
+  assert.equal(extractDriftThreshold(report), 3.87);
 });
 
-test('deriveDriftThreshold: falls back to DEFAULT_DRIFT_THRESHOLD, isDefault true, when absent or malformed', () => {
-  for (const config of [null, {}, { thresholds: {} }, { thresholds: { drift_score_max: 'a lot' } }, { thresholds: { drift_score_max: NaN } }]) {
-    const { value, isDefault } = deriveDriftThreshold(config);
-    assert.equal(value, DEFAULT_DRIFT_THRESHOLD);
-    assert.equal(isDefault, true);
-  }
+test('extractDriftThreshold: null when drift is absent entirely (a report written before the structured field existed) -- NO prose fallback', () => {
+  const report = {
+    checks: [{ check: 'stylometry', verdict: 'pass', detail: 'drift score 10.86 within threshold 35' }],
+  };
+  assert.equal(extractDriftThreshold(report), null,
+    'unlike extractDriftScore, there is no config-sourced or prose-parsed fallback for threshold');
+});
+
+test('extractDriftThreshold: null when drift.threshold is present but non-numeric', () => {
+  const report = {
+    checks: [{ check: 'stylometry', verdict: 'pass', detail: 'irrelevant', drift: { threshold: 'not-a-number' } }],
+  };
+  assert.equal(extractDriftThreshold(report), null);
+});
+
+test('extractDriftThreshold: null when the stylometry entry\'s own verdict is skip', () => {
+  const report = {
+    checks: [{ check: 'stylometry', verdict: 'skip', detail: 'irrelevant', drift: { threshold: 3.87 } }],
+  };
+  assert.equal(extractDriftThreshold(report), null);
+});
+
+test('extractDriftThreshold: null (never throws) when the stylometry entry or report is absent/malformed', () => {
+  assert.equal(extractDriftThreshold(null), null);
+  assert.equal(extractDriftThreshold({}), null);
+  assert.equal(extractDriftThreshold({ checks: [{ check: 'claim_coverage', verdict: 'pass' }] }), null);
 });
 
 // ---- deriveChapterNumber -------------------------------------------------------
@@ -271,39 +316,52 @@ test('deriveChapterTitle: derives from the slug when title is an empty string', 
 
 // ---- isHighlighted -----------------------------------------------------------------
 
-test('isHighlighted: true when drift exceeds the threshold', () => {
-  assert.equal(isHighlighted({ drift: 41, gate: 'warn' }, 35), true);
+test('isHighlighted: true when drift exceeds ITS OWN row\'s threshold', () => {
+  assert.equal(isHighlighted({ drift: 41, threshold: 35, gate: 'warn' }), true);
 });
 
-test('isHighlighted: true when gate verdict is block, regardless of drift', () => {
-  assert.equal(isHighlighted({ drift: 0, gate: 'block' }, 35), true);
-  assert.equal(isHighlighted({ drift: null, gate: 'block' }, 35), true);
+test('isHighlighted: true when gate verdict is block, regardless of drift or threshold', () => {
+  assert.equal(isHighlighted({ drift: 0, threshold: 35, gate: 'block' }), true);
+  assert.equal(isHighlighted({ drift: null, threshold: null, gate: 'block' }), true);
 });
 
 test('isHighlighted: false when drift is at or under the threshold and gate is not block', () => {
-  assert.equal(isHighlighted({ drift: 35, gate: 'pass' }, 35), false);
-  assert.equal(isHighlighted({ drift: 10, gate: 'warn' }, 35), false);
+  assert.equal(isHighlighted({ drift: 35, threshold: 35, gate: 'pass' }), false);
+  assert.equal(isHighlighted({ drift: 10, threshold: 35, gate: 'warn' }), false);
 });
 
 test('isHighlighted: false (never throws) when drift is null and gate is not block', () => {
-  assert.equal(isHighlighted({ drift: null, gate: null }, 35), false);
-  assert.equal(isHighlighted({ drift: null, gate: 'pass' }, 35), false);
+  assert.equal(isHighlighted({ drift: null, threshold: null, gate: null }), false);
+  assert.equal(isHighlighted({ drift: null, threshold: 35, gate: 'pass' }), false);
+});
+
+test('isHighlighted: false (never throws) when threshold is null even though drift is a number and gate is not block', () => {
+  // Since ADR-0012 (voice verdict scope, Decision 2), threshold is per-report; a report written
+  // before the structured drift field existed carries no threshold at all (extractDriftThreshold
+  // has no prose fallback), so a chapter with a drift NUMBER but no threshold can never be
+  // highlighted on the drift condition alone -- the same defensive posture as a null drift.
+  assert.equal(isHighlighted({ drift: 41, threshold: null, gate: 'warn' }), false);
 });
 
 // ---- computeStatusBoard (the one fs-touching function) ------------------------------
 
-test('computeStatusBoard: a chapter with a matching gate report gets drift, gate, and a book-relative reportPath', () => {
+test('computeStatusBoard: a chapter with a matching gate report gets drift, threshold, gate, and a book-relative reportPath', () => {
   const root = makeGateDir({
     '01-a.20260810T091000Z.json': {
       version: 2, chapter: '01-a', ts: '2026-08-10T09:10:00Z', verdict: 'pass',
-      checks: [{ check: 'stylometry', verdict: 'pass', detail: 'drift score 10.86 within threshold 35', evidence: [], next: null }],
+      checks: [{
+        check: 'stylometry', verdict: 'pass',
+        detail: 'worst chapter chapters/01-a.md: drift statistic 1.42 within threshold 3.87',
+        evidence: [], next: null,
+        drift: { regime: 'chapter', statistic: 1.42, threshold: 3.87, worst_marker: 'contraction_rate', worst_chapter: 'chapters/01-a.md', per_chapter: [], skipped: [] },
+      }],
     },
   });
   const progress = {
     chapters: [{ slug: '01-a', title: 'Chapter A', status: 'drafted', word_count: 500, open_claim_count: 0 }],
     totals: { word_count: 500, open_claim_count: 0, chapters_final: 0, chapters_total: 2 },
   };
-  const board = computeStatusBoard(root, progress, { thresholds: { drift_score_max: 35 } });
+  const board = computeStatusBoard(root, progress, null);
 
   assert.equal(board.chapters.length, 1);
   const row = board.chapters[0];
@@ -313,13 +371,32 @@ test('computeStatusBoard: a chapter with a matching gate report gets drift, gate
   assert.equal(row.status, 'drafted');
   assert.equal(row.wordCount, 500);
   assert.equal(row.openClaimCount, 0);
-  assert.equal(row.drift, 10.86);
+  assert.equal(row.drift, 1.42);
+  assert.equal(row.threshold, 3.87);
   assert.equal(row.gate, 'pass');
   assert.equal(row.reportPath, '.studio/gate/01-a.20260810T091000Z.json');
   assert.equal(row.highlighted, false);
 });
 
-test('computeStatusBoard: a chapter with no matching gate report gets null drift, null gate, null reportPath', () => {
+test('computeStatusBoard: a chapter whose report predates the structured drift field falls back to the prose pattern for drift, and gets a null threshold', () => {
+  const root = makeGateDir({
+    '01-a.20260810T091000Z.json': {
+      version: 2, chapter: '01-a', ts: '2026-08-10T09:10:00Z', verdict: 'pass',
+      checks: [{ check: 'stylometry', verdict: 'pass', detail: 'drift score 10.86 within threshold 35', evidence: [], next: null }],
+    },
+  });
+  const progress = {
+    chapters: [{ slug: '01-a', title: 'Chapter A', status: 'drafted', word_count: 500, open_claim_count: 0 }],
+    totals: { word_count: 500, open_claim_count: 0, chapters_final: 0, chapters_total: 1 },
+  };
+  const board = computeStatusBoard(root, progress, null);
+  const row = board.chapters[0];
+  assert.equal(row.drift, 10.86, 'must fall back to prose parsing for a pre-structured-field report');
+  assert.equal(row.threshold, null, 'threshold has no prose fallback');
+  assert.equal(row.highlighted, false, 'a null threshold can never drive highlighting');
+});
+
+test('computeStatusBoard: a chapter with no matching gate report gets null drift, null threshold, null gate, null reportPath', () => {
   const root = makeGateDir({});
   const progress = {
     chapters: [{ slug: '02-b', title: 'Chapter B', status: 'drafted', word_count: 300, open_claim_count: 1 }],
@@ -328,9 +405,28 @@ test('computeStatusBoard: a chapter with no matching gate report gets null drift
   const board = computeStatusBoard(root, progress, null);
   const row = board.chapters[0];
   assert.equal(row.drift, null);
+  assert.equal(row.threshold, null);
   assert.equal(row.gate, null);
   assert.equal(row.reportPath, null);
   assert.equal(row.highlighted, false);
+});
+
+test('computeStatusBoard: a chapter whose drift exceeds ITS OWN report\'s threshold is highlighted', () => {
+  const root = makeGateDir({
+    '01-a.20260810T091000Z.json': {
+      version: 2, chapter: '01-a', ts: '2026-08-10T09:10:00Z', verdict: 'warn',
+      checks: [{
+        check: 'stylometry', verdict: 'warn', detail: 'irrelevant', evidence: [], next: null,
+        drift: { regime: 'chapter', statistic: 5.0, threshold: 3.0, worst_marker: 'm', worst_chapter: 'chapters/01-a.md', per_chapter: [], skipped: [] },
+      }],
+    },
+  });
+  const progress = {
+    chapters: [{ slug: '01-a', title: 'Chapter A', status: 'drafted', word_count: 500, open_claim_count: 0 }],
+    totals: { word_count: 500, open_claim_count: 0, chapters_final: 0, chapters_total: 1 },
+  };
+  const board = computeStatusBoard(root, progress, null);
+  assert.equal(board.chapters[0].highlighted, true);
 });
 
 test('computeStatusBoard: missing .studio/gate/ directory entirely is not an error (every row degrades, not a throw)', () => {
@@ -354,11 +450,14 @@ test('computeStatusBoard: missing .studio/gate/ directory entirely is not an err
 // implementation that reads either progress.json field for either value would pass a naive
 // test but fail this one.
 
-test('GATE SOURCE: computeStatusBoard follows the newest .studio/gate/ report, never progress.json last_gate or drift_score', () => {
+test('GATE SOURCE: computeStatusBoard follows the newest .studio/gate/ report, never progress.json last_gate, drift_score, or config\'s retired drift_score_max', () => {
   const root = makeGateDir({
     '01-a.20260810T091000Z.json': {
       version: 2, chapter: '01-a', ts: '2026-08-10T09:10:00Z', verdict: 'pass',
-      checks: [{ check: 'stylometry', verdict: 'pass', detail: 'drift score 10.86 within threshold 35', evidence: [], next: null }],
+      checks: [{
+        check: 'stylometry', verdict: 'pass', detail: 'irrelevant', evidence: [], next: null,
+        drift: { regime: 'chapter', statistic: 1.42, threshold: 3.87, worst_marker: 'm', worst_chapter: 'chapters/01-a.md', per_chapter: [], skipped: [] },
+      }],
     },
   });
   const progress = {
@@ -370,10 +469,13 @@ test('GATE SOURCE: computeStatusBoard follows the newest .studio/gate/ report, n
     }],
     totals: { word_count: 500, open_claim_count: 0, chapters_final: 0, chapters_total: 1 },
   };
-  const board = computeStatusBoard(root, progress, { thresholds: { drift_score_max: 35 } });
+  // config carries a retired thresholds.drift_score_max, deliberately disagreeing with the
+  // report's own drift.threshold too -- this module reads NEITHER (ADR-0012 Decision 2).
+  const board = computeStatusBoard(root, progress, { thresholds: { drift_score_max: 999 } });
   const row = board.chapters[0];
   assert.equal(row.gate, 'pass', 'gate verdict must come from the gate directory report, not progress.json last_gate ("block")');
-  assert.equal(row.drift, 10.86, 'drift must come from the gate directory report, not progress.json drift_score (99.9)');
+  assert.equal(row.drift, 1.42, 'drift must come from the gate directory report, not progress.json drift_score (99.9)');
+  assert.equal(row.threshold, 3.87, 'threshold must come from the report\'s own drift.threshold, not config\'s retired drift_score_max (999)');
 });
 
 // ---- totals and chaptersRemaining ---------------------------------------------------
@@ -415,32 +517,27 @@ test('computeStatusBoard: wholeBookGate is null when no all.<ts>.json report exi
   assert.equal(board.wholeBookGate, null);
 });
 
-test('computeStatusBoard: thresholds carries the effective value and whether the default was applied', () => {
-  const root = makeGateDir({});
-  const progress = { chapters: [], totals: { word_count: 0, open_claim_count: 0, chapters_final: 0 } };
-  const withConfig = computeStatusBoard(root, progress, { thresholds: { drift_score_max: 20 } });
-  assert.equal(withConfig.thresholds.driftScoreMax, 20);
-  assert.equal(withConfig.thresholds.driftScoreMaxIsDefault, false);
-
-  const withoutConfig = computeStatusBoard(root, progress, null);
-  assert.equal(withoutConfig.thresholds.driftScoreMax, DEFAULT_DRIFT_THRESHOLD);
-  assert.equal(withoutConfig.thresholds.driftScoreMaxIsDefault, true);
-});
+// board.thresholds (a single board-wide config-sourced value) no longer exists: ADR-0012 (voice
+// verdict scope, Decision 2) retired thresholds.drift_score_max, and each row's own threshold
+// now comes from that SAME row's report (extractDriftThreshold, tested above, and
+// "gets drift, threshold, gate" above at the computeStatusBoard level).
 
 test('computeStatusBoard: two calls against the same unchanged inputs produce deep-equal results', () => {
   const root = makeGateDir({
     '01-a.20260810T091000Z.json': {
       version: 2, chapter: '01-a', ts: '2026-08-10T09:10:00Z', verdict: 'pass',
-      checks: [{ check: 'stylometry', verdict: 'pass', detail: 'drift score 10.86 within threshold 35', evidence: [], next: null }],
+      checks: [{
+        check: 'stylometry', verdict: 'pass', detail: 'irrelevant', evidence: [], next: null,
+        drift: { regime: 'chapter', statistic: 1.42, threshold: 3.87, worst_marker: 'm', worst_chapter: 'chapters/01-a.md', per_chapter: [], skipped: [] },
+      }],
     },
   });
   const progress = {
     chapters: [{ slug: '01-a', title: 'Chapter A', status: 'drafted', word_count: 500, open_claim_count: 0 }],
     totals: { word_count: 500, open_claim_count: 0, chapters_final: 0, chapters_total: 1 },
   };
-  const config = { thresholds: { drift_score_max: 35 } };
-  const first = computeStatusBoard(root, progress, config);
-  const second = computeStatusBoard(root, progress, config);
+  const first = computeStatusBoard(root, progress, null);
+  const second = computeStatusBoard(root, progress, null);
   assert.deepEqual(first, second);
 });
 
@@ -465,25 +562,24 @@ function sampleBoard() {
     chapters: [
       {
         slug: '01-a', number: '01', title: 'Chapter A', status: 'drafted', wordCount: 528,
-        openClaimCount: 0, drift: 10.86, gate: 'pass', reportPath: '.studio/gate/01-a.20260810T091000Z.json',
-        highlighted: false,
+        openClaimCount: 0, drift: 1.42, threshold: 3.87, gate: 'pass',
+        reportPath: '.studio/gate/01-a.20260810T091000Z.json', highlighted: false,
       },
       {
         slug: '02-b', number: '02', title: 'Chapter B', status: 'drafted', wordCount: 527,
-        openClaimCount: 0, drift: null, gate: null, reportPath: null, highlighted: false,
+        openClaimCount: 0, drift: null, threshold: null, gate: null, reportPath: null, highlighted: false,
       },
     ],
     totals: { wordCount: 1055, openClaimCount: 0, chaptersFinal: 0, chaptersTotal: 6, chaptersRemaining: 6 },
     wholeBookGate: null,
-    thresholds: { driftScoreMax: 35, driftScoreMaxIsDefault: false },
   };
 }
 
 test('renderBoardMarkdown: renders a Markdown table with one row per chapter plus a totals row', () => {
   const md = renderBoardMarkdown(sampleBoard());
-  assert.match(md, /\|\s*#\s*\|\s*Title\s*\|\s*Status\s*\|\s*Words\s*\|\s*Drift\s*\|\s*Open Claims\s*\|\s*Gate\s*\|/);
-  assert.match(md, /01.*Chapter A.*drafted.*528.*10\.86.*0.*pass/);
-  assert.match(md, /02.*Chapter B.*drafted.*527.*-.*0.*-/);
+  assert.match(md, /\|\s*#\s*\|\s*Title\s*\|\s*Status\s*\|\s*Words\s*\|\s*Drift\s*\|\s*Threshold\s*\|\s*Open Claims\s*\|\s*Gate\s*\|/);
+  assert.match(md, /01.*Chapter A.*drafted.*528.*1\.42.*3\.87.*0.*pass/);
+  assert.match(md, /02.*Chapter B.*drafted.*527.*-.*-.*0.*-/);
   assert.match(md, /Totals/);
   assert.match(md, /1055/);
 });
@@ -492,16 +588,19 @@ test('renderBoardMarkdown: a highlighted row carries a "!" marker in the # cell'
   const board = sampleBoard();
   board.chapters[1].highlighted = true;
   board.chapters[1].drift = 41;
+  board.chapters[1].threshold = 35;
   board.chapters[1].gate = 'warn';
   const md = renderBoardMarkdown(board);
   const rowLine = md.split('\n').find((l) => l.includes('Chapter B'));
   assert.ok(rowLine.includes('!'), 'highlighted row must carry a "!" marker; got: ' + rowLine);
 });
 
-test('renderBoardMarkdown: the drift threshold and chapters-remaining count both appear', () => {
+test('renderBoardMarkdown: each row\'s own threshold cell appears (no board-wide footer line since ADR-0012 retired the single config value)', () => {
   const md = renderBoardMarkdown(sampleBoard());
-  assert.match(md, /35/);
+  assert.match(md, /3\.87/, 'row 1\'s own threshold must appear in its Threshold cell');
   assert.match(md, /6 chapter\(s\) remaining/);
+  assert.ok(!md.includes('drift_score_max'),
+    'the retired thresholds.drift_score_max footer line must be gone entirely; got:\n' + md);
 });
 
 test('renderBoardMarkdown: appends the whole-book gate annotation to the totals row when present', () => {

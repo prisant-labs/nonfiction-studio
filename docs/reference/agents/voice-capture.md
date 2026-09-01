@@ -8,23 +8,28 @@ tags: ["agent", "intake", "voice", "style-profile", "stylometry"]
 
 # voice-capture
 
-The `voice-capture` agent builds the author's operational voice profile and sets
-the numeric stylometric baseline. It is a Phase 1 Intake-pillar agent specified in
-S-01 (intake and context agents) and governed by D-08 (hybrid voice scoring). It
-works in tandem with `bin/ns-stylometry`: the engine computes and prints the
-vector; the agent writes it into config.
+The `voice-capture` agent builds the author's operational voice profile and
+calibrates the stylometric baseline. It is a Phase 1 Intake-pillar agent specified in
+S-01 (intake and context agents) and governed by D-08 (hybrid voice scoring) and
+ADR-0012 (voice verdict scope, Decision 3: capture calibrates, not just measures). It
+works in tandem with `bin/ns-stylometry`: the engine resamples the corpus, computes,
+and prints the vector plus the calibration ladder; the agent writes it into config.
 
 ## Purpose
 
 The `voice-capture` agent converts author writing samples, or a confirmed bootstrap
-passage when no samples exist, into two outputs: `context/style-profile.md` (the
-human-readable voice contract every other agent reads for craft guidance) and the
-`stylometry.baseline.markers` object plus `stylometry.baseline.marker_set_version`
-number in `.studio/config.json` (the numeric anchor the gate uses to score drift,
-and the version stamp that lets the drift scorer refuse a baseline captured under
-a different marker computation). Neither output is committed until the author
-confirms the draft profile. The agent does not evaluate whether the captured voice
-is good; it observes, describes, and records.
+passage plus additional generated passages when no samples exist, into two outputs
+that must agree with each other: `context/style-profile.md` (the human-readable
+voice contract every other agent reads for craft guidance, in the seven-section
+grammar normative in `docs/formats/style-profile.md`) and the full calibrated
+baseline - `stylometry.baseline.markers`, `marker_set_version`, `calibration`,
+`captured`, and `sample_count` - in `.studio/config.json` (the numeric anchor the
+gate uses to score drift, the calibration ladder that gives the verdict a null
+distribution measured on this author's own voice, and the version stamp that lets
+the drift scorer refuse a baseline captured under a different marker computation).
+The numeric baseline is written as soon as calibration completes; the profile is
+written only after the author confirms the draft. The agent does not evaluate
+whether the captured voice is good; it observes, describes, and records.
 
 The `voice-capture` agent is typically the second agent to run after `interviewer`,
 though it can run at any point when new samples arrive or a voice-change decision
@@ -42,7 +47,8 @@ Invoke the `voice-capture` agent when any of the following holds.
   decision in `context/decisions.md` indicating the existing profile no longer
   applies.
 - The author has no writing samples and wants a bootstrapped profile built through
-  the three-passage generation and reaction loop.
+  the three-passage generation and reaction loop, extended into a calibratable
+  corpus.
 - The `nfs-start` dispatcher, per D-17 (guided front door), routes here when the
   author says "capture my voice," "set my writing style," or "I have samples to
   share."
@@ -65,8 +71,9 @@ is conversational and analytical work that runs well on the session model. The b
 color follows D-19 (colors by pillar), which assigns blue to the Intake pillar. The
 agent declares no `memory` because the captured profile lives on disk in
 `context/style-profile.md`, not in agent memory. Bash is the narrowest tool needed
-to invoke `bin/ns-stylometry --measure` per the ADR-0005 (bin PATH on Windows)
-resolution.
+to invoke `bin/ns-stylometry --calibrate` per the ADR-0005 (bin PATH on Windows)
+resolution; no other Bash command is permitted, so both the capture timestamp and
+the sample count the agent writes are stated directly rather than shelled out to.
 
 ## Inputs
 
@@ -76,58 +83,76 @@ The `voice-capture` agent reads only these paths.
 |---|---|---|
 | `context/brief.md` | Start of every invocation | Extract section 6 voice notes: tone adjectives, POV, tense, formality register, emulate/avoid lists, and banned tics named during intake |
 | Author writing samples (pasted or file path) | When the author supplies them | The primary source material for voice analysis and baseline computation |
+| `context/samples/` | On re-invocation | Determine the next free `voice-sample-NN.md` number and fold prior samples into a re-calibration when augmenting |
 
 ## Outputs
 
-The `voice-capture` agent writes only these paths, and only after the author
-confirms the draft profile.
+The `voice-capture` agent writes only these paths. The numeric baseline is
+written as soon as calibration completes; the profile is written only after the
+author confirms the draft.
 
 | Path | Written when | Contents |
 |---|---|---|
-| `context/style-profile.md` | After author confirmation | Full operational voice profile per the S-08 section 9 schema, covering all eleven fields: tone, diction, rhythm, POV, tense, do list, do-not list, banned tics, exemplar passages, narrator voice note, and the bootstrapped flag |
-| `.studio/config.json` | After the engine run (before profile confirmation) | The `stylometry.baseline.markers` object AND `stylometry.baseline.marker_set_version` number, both printed by `bin/ns-stylometry --measure`, written via read-modify-write; no other config fields are touched |
+| `context/samples/voice-sample-NN.md` | Before calibration runs | Every sample used to compute the baseline, persisted so `--calibrate` reads real files and the profile's `Exemplars` paths resolve |
+| `context/style-profile.md` | After author confirmation | Full operational voice profile in the seven-section grammar (`docs/formats/style-profile.md`): Voice, Diction, Rhythm, Do, Do not, Exemplars, Baseline reference |
+| `.studio/config.json` | As soon as calibration completes (before profile confirmation) | `stylometry.baseline`: `markers`, `marker_set_version`, and `calibration` verbatim from `bin/ns-stylometry --calibrate` stdout, plus the agent-supplied `captured` (RFC 3339 UTC) and `sample_count`, written via read-modify-write; no other config fields are touched |
 
-The numeric baseline in `.studio/config.json` is written when the engine runs
-(Path A step 4 or Path B step 6). The profile in `context/style-profile.md` is
-written after the author confirms. The `Baseline reference` section of the profile
-points at `.studio/config.json -> stylometry.baseline.markers` rather than
-duplicating the vector values.
+The `Baseline reference` section of the profile points at
+`.studio/config.json -> stylometry.baseline.markers` rather than duplicating the
+vector values, and copies its `captured`/`sample_count` values from what was just
+written to config - a single source of truth for both fields, since `bin/ns-doctor`
+compares them by exact equality.
 
 ## The two paths
 
 **Path A (writing samples available):** The agent reads `context/brief.md` section
-6, accepts up to three author writing passages (200 to 500 words each), analyzes
-the marker set, runs `bin/ns-stylometry --measure` to compute the baseline vector,
-drafts the profile, and commits with `bootstrapped: false` after author
-confirmation.
+6, accepts the samples the invoking skill already assessed against the roughly
+2,200-word calibration floor, persists them under `context/samples/`, runs
+`bin/ns-stylometry --calibrate` to compute the baseline vector and the five-rung
+calibration ladder, writes the full baseline to config, drafts the profile, and
+commits with `bootstrapped: false` after author confirmation.
 
 **Path B (no samples available):** The agent generates three candidate passages
 (250 to 350 words each) on the book's topic, each representing a different position
 in the voice space suggested by intake preferences. The author reacts to each,
 the agent revises toward the feedback, and the loop typically converges in two to
-three iterations. Once the author confirms a target passage, Path A's measurement
-and commit steps apply, with `bootstrapped: true` and a recommendation to replace
-the baseline when own prose becomes available.
+three iterations. Once the author confirms a target passage, the agent generates
+additional passages in that confirmed voice until the corpus totals at least
+2,400 words, presents them for one skim-confirm round, persists all of them, and
+calibrates over the full generated corpus - a single 250-to-350-word passage can
+never clear the calibration floor. Path A's write and commit steps apply, with
+`bootstrapped: true` and a recommendation to replace the baseline when own prose
+becomes available.
 
 ## Guardrails
 
 - **Own-prose primacy.** Author writing samples are the authoritative source.
   Generated passages are a bootstrap, never a permanent substitute. A bootstrapped
   profile must surface a recommendation for the author to provide own prose.
-- **No profile without a numeric baseline.** `bin/ns-stylometry --measure` must run
-  and produce the eight-marker vector before `context/style-profile.md` is
-  committed. A profile without the vector leaves the gate unable to score drift.
+- **No profile without a full calibrated baseline.** `bin/ns-stylometry
+  --calibrate` must run and return `markers`, `marker_set_version`, and
+  `calibration` before `context/style-profile.md` is committed. A profile without
+  the full baseline leaves the gate unable to score drift.
+- **Persist before calibrating.** Pasted text and generated passages are written
+  to `context/samples/voice-sample-NN.md` before `--calibrate` runs, never handed
+  to the engine directly - a sample the doctor cannot resolve as an Exemplars
+  path is not a usable sample.
 - **Emulation targets are reference only.** The agent may observe "your sample
   shares an opener pattern with Gawande"; it does not treat an admired author's
   passage as the baseline.
 - **Distinguish author voice from narrator voice.** When the author's natural prose
   voice differs from the book's narrator voice (for example, a first-person
   memoirist who has chosen second-person present for the book), both are recorded
-  in the profile. The `narrator_voice_note` field is required in that case.
+  in the profile. A `narrator-voice-note` bullet in `## Voice` is required in that
+  case.
+- **Regime disclosure relayed, never re-derived.** The engine's stderr carries
+  two plain-language sentences naming the assigned regime (chapter-scale or
+  book-scale verdicts) and why. The agent carries both verbatim into its
+  completion report; it does not rephrase or recompute the regime call.
 - **CLI via ADR-0005 (bin PATH on Windows).** The agent resolves the plugin
   root first (the variable hooks.json uses is not set in a live Bash shell),
   then invokes the engine as `node "<plugin-root>/bin/ns-stylometry"
-  --measure=<paths>` via Bash; bare CLI invocation fails on Windows.
+  --calibrate=<paths>` via Bash; bare CLI invocation fails on Windows.
 
 Per A-02 (platform capability baseline), a plugin-shipped agent cannot declare
 `hooks`, `permissionMode`, or `mcpServers` in frontmatter; the platform ignores

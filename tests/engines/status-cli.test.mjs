@@ -185,7 +185,13 @@ test('golden book (--json): chapter and totals figures match the committed fixtu
     assert.equal(ch1.status, 'drafted');
     assert.equal(ch1.wordCount, 528);
     assert.equal(ch1.openClaimCount, 0);
+    // The committed report predates the structured drift field (ADR-0012 voice verdict scope,
+    // Decision 2): drift falls back to the legacy prose pattern ("drift score 10.86 within
+    // threshold 25"), but threshold has no prose fallback by design (extractDriftThreshold),
+    // so it is null even though the number 25 is right there in the same prose.
     assert.equal(ch1.drift, 10.86);
+    assert.equal(ch1.threshold, null,
+      'a pre-structured-field report carries no drift.threshold, and there is no prose fallback for it');
     assert.equal(ch1.gate, 'pass');
     assert.equal(ch1.reportPath, '.studio/gate/01-listening-before-speaking.20260810T091000Z.json');
     assert.equal(ch1.highlighted, false);
@@ -193,6 +199,7 @@ test('golden book (--json): chapter and totals figures match the committed fixtu
     const ch2 = json.chapters[1];
     assert.equal(ch2.slug, '02-finding-your-network');
     assert.equal(ch2.drift, null, 'chapter 2 has no gate report on record');
+    assert.equal(ch2.threshold, null);
     assert.equal(ch2.gate, null);
     assert.equal(ch2.reportPath, null);
 
@@ -203,8 +210,10 @@ test('golden book (--json): chapter and totals figures match the committed fixtu
     assert.equal(json.totals.chaptersRemaining, 6);
 
     assert.equal(json.wholeBookGate, null, 'no all.<ts>.json report is committed in the fixture');
-    assert.equal(json.thresholds.driftScoreMax, 25);
-    assert.equal(json.thresholds.driftScoreMaxIsDefault, false);
+    // board.thresholds (a single board-wide config-sourced value) no longer exists: ADR-0012
+    // (voice verdict scope, Decision 2) retired thresholds.drift_score_max entirely.
+    assert.equal(Object.prototype.hasOwnProperty.call(json, 'thresholds'), false,
+      'the retired board-wide thresholds object must be absent from the JSON shape entirely');
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

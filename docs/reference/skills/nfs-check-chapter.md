@@ -86,15 +86,15 @@ The mapping mirrors the Stop hook's exit-code semantics (hooks/stop-gate.mjs) bu
 
 ## Baseline Pre-Check and Degradation
 
-The `bin/ns-gate` engine exits 2 when `stylometry.baseline.markers` is absent from `.studio/config.json`, or when `stylometry.baseline.marker_set_version` does not match the engine's current marker set version (a `StaleBaselineError`, the state of every baseline captured before that field existed), while the stylometry check is enabled. Rather than surfacing an exit 2 error, the skill pre-checks the style profile and both parts of the config baseline before invoking the gate.
+The `bin/ns-gate` engine exits 2 when `stylometry.baseline.markers` is absent from `.studio/config.json`, when `stylometry.baseline.marker_set_version` does not match the engine's current marker set version (a `StaleBaselineError`, the state of every baseline captured before that field existed), or when `stylometry.baseline.calibration` is absent or incomplete - missing `spans`, `noise_scales`, `block_thresholds`, or `regime` - while the stylometry check is enabled. Rather than surfacing an exit 2 error, the skill pre-checks the style profile and all three parts of the config baseline before invoking the gate.
 
-When any of these is missing or stale:
+When any of these is missing, stale, or incomplete:
 - The skill sets `--check=claims,scrub,continuity-quick,coherence` on the gate invocation
 - The stylometry check is excluded from this run
 - The skill warns the author explicitly: "Voice drift check skipped: [reason]. Run `/nonfiction-studio:nfs-capture-voice` to enable voice drift detection."
 - The gate still runs the four remaining checks and produces a valid report
 
-The baseline must be established via `/nonfiction-studio:nfs-capture-voice`, which runs `bin/ns-stylometry --measure` and writes the marker vector to `.studio/config.json`.
+The baseline must be established via `/nonfiction-studio:nfs-capture-voice`, which runs `bin/ns-stylometry --calibrate` and writes the full v5 baseline (`markers`, `marker_set_version`, `calibration`, `captured`, `sample_count`, and `method`) to `.studio/config.json`.
 
 ## Chapter Resolution from Progress.json
 
@@ -140,7 +140,7 @@ The top-level `verdict` is the most severe check verdict subject to the D-03 coe
 - `thesis_alignment.mode: block` is coerced to `warn` (judgment checks cannot block in v1)
 - When `gate.mode` is `warn` (the default), the top-level verdict is capped at `warn` even if per-check entries carry `block`; per-check entries keep their actual verdict so authors see what would block once they opt in
 
-Reports are retained and pruned to the last 10 per chapter slug by `bin/ns-gate`. `bin/ns-status` reads the timestamp in the most recent report file name per slug to derive the drift score and gate verdict in its JSON output; `nfs-status-dashboard` narrates that JSON rather than reading report files itself.
+Reports are retained and pruned to the last 10 per chapter slug by `bin/ns-gate`. `bin/ns-status` reads the timestamp in the most recent report file name per slug to derive the drift statistic and gate verdict in its JSON output; `nfs-status-dashboard` narrates that JSON rather than reading report files itself.
 
 ## Failure Behavior
 

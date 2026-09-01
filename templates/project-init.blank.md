@@ -93,9 +93,11 @@ confirmed brief, not a drafted chapter.
         Enforcement mode (warn / block, default warn): ___
         Maps to: gate.checks.claim_coverage.mode
 
-    [ ] Voice drift - prose stays within the style-profile baseline
-        Max drift score 0-100 (default 25, lower is stricter): ___
-        Maps to: thresholds.drift_score_max
+    [ ] Voice drift - prose stays within the calibrated voice baseline
+        Enforcement mode (warn / block, default warn): ___
+        Maps to: gate.checks.stylometry.mode
+        Note: the block threshold is calibrated automatically from your own voice
+          samples (nfs-capture-voice) - it is not a number you set here.
 
     [ ] Prompt scrub - no confidential or legally sensitive material in the chapter
         Enforcement mode (warn / block, default block): ___

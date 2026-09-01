@@ -48,6 +48,7 @@ import {
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
+import { writeSyntheticV5Baseline } from '../lib/synthetic-v5-baseline.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..');
@@ -60,9 +61,23 @@ const SAMPLE_BOOK = join(REPO_ROOT, 'examples', 'sample-book');
 // so this file stays self-contained, matching the existing tests/hooks/ convention).
 // ---------------------------------------------------------------------------
 
+// examples/sample-book/.studio/config.json now carries a full marker_set_version 5 stylometry
+// baseline with a calibration ladder (recaptured in Task 5, ADR-0012 implementation wave); when
+// this helper was first written it still carried marker_set_version 4 with no calibration
+// ladder, so scoring against it with the v5 computeDrift threw StaleBaselineError, which --
+// through the gate's existing, unchanged engine-error handling -- forced the whole gate run's
+// exit code to 2. That specific failure mode no longer applies, but this test file's own subject
+// is still the Stop-to-SessionStart integration plumbing, not stylometry, so the clone is
+// patched with a synthetic, self-consistent v5 baseline by default regardless: it guarantees
+// z = 0 on unchanged content, for deterministic isolation independent of whatever margin the
+// real captured baseline's calibration ladder carries. Mirrors tests/engines/gate.test.mjs's and
+// tests/hooks/stop-gate.test.mjs's own patch (ratified deviation outside Task 4's nominal file
+// list; see this implementation wave's own Task 4 review record for "Concerns for the
+// coordinator").
 function cloneSampleBook(label) {
   const dir = join(tmpdir(), 'ns-w2-int-' + label + '-' + Date.now());
   cpSync(SAMPLE_BOOK, dir, { recursive: true });
+  writeSyntheticV5Baseline(dir);
   return dir;
 }
 

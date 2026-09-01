@@ -192,7 +192,7 @@ or thesis alignment are out of scope. The line-editor notes any such observation
 and explicitly defers it to `developmental-editor`, named as the Phase 2 agent
 for structural work.
 
-**Voice scoring.** The line-editor does not produce a voice-drift score, a
+**Voice scoring.** The line-editor does not produce a voice-drift statistic, a
 qualitative style-adherence assessment, or a note about overall register
 consistency. Voice assessment belongs to `voice-guardian`, which runs after the
 line-editor pass and interprets the deterministic output of `bin/ns-stylometry`.

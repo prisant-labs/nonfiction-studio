@@ -83,8 +83,17 @@ test('credential present, claude unreachable -> real failure still exits nonzero
 // machine), exit 0. This was already run-integration.mjs's behavior before this task; kept
 // here as an explicit regression guard now that the decision is routed through the shared
 // scripts/lib/credential-mode.mjs module.
-// ---------------------------------------------------------------------------
-
+//
+// The dry-run assertion suite's [gate-golden] step runs `bin/ns-gate` against a temp clone of
+// the REAL, COMMITTED examples/sample-book (scripts/run-integration.mjs's own makeTempClone,
+// not this test file's -- deliberately never patched with a synthetic baseline, unlike
+// tests/engines/gate.test.mjs's or tests/hooks/stop-gate.test.mjs's clones, because this
+// script's whole purpose is verifying the REAL golden sample book's gate actually passes;
+// patching its baseline away would silently stop verifying the thing this assertion exists to
+// prove). examples/sample-book/.studio/config.json now carries a real v5 baseline (ADR-0012
+// implementation wave, Task 5: an independent, disjoint voice corpus; regime book), so scoring
+// against it with the v5 computeDrift succeeds and the golden book's stylometry check reports
+// its honest below-the-2200-word-floor pass-with-advice, un-skipping this test.
 test('developer machine, no credential, claude unreachable -> dry-run fallback, exit 0', () => {
   const noClaude = pathWithoutClaudeCli();
   const env = buildEnv({ CI: undefined, PATH: noClaude, Path: noClaude });

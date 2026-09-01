@@ -3,26 +3,82 @@
 // what-it-does: verifies measureChapter, measureBook, and computeDrift against:
 //               (1) a hand-computable two-sentence synthetic text where every marker
 //                   can be verified by arithmetic in these comments;
-//               (2) the golden sample-book (exit 0, score well below threshold);
-//               (3) the voice-drift fixture (exit 1, first_person_rate flagged);
-//               (4) the zero-baseline rule;
-//               (5) the missing-baseline exit-2 contract (via CLI invocation);
-//               (6) computeDrift's per-marker contribution and maxMarkerContribution fields
-//                   (the data ns-stylometry --explain renders; see tests/engines/
-//                   stylometry-explain.test.mjs for the CLI-level rendering tests).
+//               (2) computeDrift v5 (ADR-0012, voice verdict scope): the calibration ladder
+//                   lookup (exact rung, ln-space midpoint, beyond-either-end clamp), the
+//                   verdict statistic (max |z| across markers) and its boundary (>=)
+//                   behavior, the validation order (missing markers, stale version, invalid
+//                   calibration, missing/non-positive scoredWords), the drift_score_max
+//                   deprecation notice, and the exact v5 return and perMarker shapes (the old
+//                   score/contribution/capped/maxMarkerContribution keys are gone);
+//               (3) the zero-baseline rule;
+//               (4) preprocess, typography folding, and Unicode word tokenization.
+//               Tests that spawn bin/ns-stylometry (measure mode, --all/--chapter CLI exits,
+//               the bad --project path) are SKIPPED, not deleted: this task's declared-red
+//               map (ADR-0012 implementation wave, Task 3) leaves bin/ns-stylometry importing
+//               the retired DEFAULT_DRIFT_SCORE_MAX export until Task 4 fixes its callers; see
+//               each skipped test's reason string.
 // runner:       node --test tests/engines/stylometry.test.mjs
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync, mkdtempSync, writeFileSync, statSync, readdirSync, rmSync } from 'node:fs';
+import {
+  readFileSync, existsSync, mkdtempSync, writeFileSync, statSync, readdirSync, rmSync, cpSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { writeSyntheticV5Baseline } from '../lib/synthetic-v5-baseline.mjs';
 
 import {
   measureChapter, measureBook, computeDrift, countWords, CURRENT_MARKER_SET_VERSION,
+  StaleBaselineError, InvalidCalibrationError, locateWorstWindow, compareRegister,
 } from '../../hooks/lib/stylometry-engine.mjs';
+
+
+// A complete, hand-built v5 calibration object, shaped per this implementation wave's design
+// pin P2, used by every
+// synthetic computeDrift test below so none of them depend on a real .studio/config.json
+// baseline. Two rungs only (550, 2200) -- matching the brief's own worked example -- not the
+// shipped five-rung ladder; computeDrift's contract does not hardcode a rung count.
+function buildCalibration(overrides = {}) {
+  return {
+    spans: [550, 2200],
+    noise_scales: {
+      '550': {
+        function_word_rate: 8.0, contraction_rate: 8.0, first_person_rate: 10.0,
+        second_person_rate: 8.0, type_token_ratio: 8.0, avg_word_length: 8.0,
+        avg_sentence_length: 8.0, punctuation_rate: 8.0,
+      },
+      '2200': {
+        function_word_rate: 4.0, contraction_rate: 4.0, first_person_rate: 5.0,
+        second_person_rate: 4.0, type_token_ratio: 4.0, avg_word_length: 4.0,
+        avg_sentence_length: 4.0, punctuation_rate: 4.0,
+      },
+    },
+    block_thresholds: { '550': 3.0, '2200': 2.5 },
+    detectability_auc: 0.98,
+    regime: 'chapter',
+    replicates: 300,
+    seed: 4242,
+    ...overrides,
+  };
+}
+
+const SYNTHETIC_MARKERS = {
+  function_word_rate: 0.5, contraction_rate: 1.0, first_person_rate: 2.0,
+  second_person_rate: 1.0, type_token_ratio: 0.7, avg_word_length: 5.0,
+  avg_sentence_length: 12.0, punctuation_rate: 10.0,
+};
+
+function buildBaseline(overrides = {}) {
+  return {
+    markers: SYNTHETIC_MARKERS,
+    marker_set_version: CURRENT_MARKER_SET_VERSION,
+    calibration: buildCalibration(),
+    ...overrides,
+  };
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -217,55 +273,402 @@ test('countWords is unaffected by [quote:], [UNVERIFIED], or [SOURCE-UNVERIFIABL
 });
 
 // ---------------------------------------------------------------------------
-// computeDrift: zero-baseline rule
+// computeDrift: zero-baseline rule (unchanged under v5: relDev/deviationPct still 0 or
+// +100, never -100, even though z is now signed for every other marker)
 // ---------------------------------------------------------------------------
 
-test('computeDrift: zero-baseline with zero measured gives 0 deviationPct', () => {
-  const measured  = { marker_a: 0, marker_b: 1.0 };
-  const baseline  = { markers: { marker_a: 0, marker_b: 1.0 }, marker_set_version: CURRENT_MARKER_SET_VERSION };
-  const { perMarker } = computeDrift(measured, baseline, { drift_score_max: 10, stylometry_marker_tolerance: 2.0 });
+test('computeDrift: zero-baseline with zero measured gives 0 deviationPct and z', () => {
+  const baseline = buildBaseline({
+    markers: { marker_a: 0, marker_b: 1.0 },
+    calibration: buildCalibration({
+      noise_scales: {
+        '550':  { marker_a: 10.0, marker_b: 10.0 },
+        '2200': { marker_a: 5.0,  marker_b: 5.0 },
+      },
+    }),
+  });
+  const { perMarker } = computeDrift({ marker_a: 0, marker_b: 1.0 }, baseline, {}, { scoredWords: 550 });
   const ma = perMarker.find(m => m.marker === 'marker_a');
   assert.strictEqual(ma.deviationPct, 0, 'zero baseline / zero measured -> deviationPct 0');
+  assert.strictEqual(ma.z, 0, 'zero baseline / zero measured -> z 0');
   assert.strictEqual(ma.flagged, false, 'deviationPct 0 is not flagged');
 });
 
-test('computeDrift: zero-baseline with non-zero measured gives 100 deviationPct', () => {
-  const measured = { marker_a: 5.0 };
-  const baseline = { markers: { marker_a: 0 }, marker_set_version: CURRENT_MARKER_SET_VERSION };
-  const { perMarker } = computeDrift(measured, baseline, { drift_score_max: 10, stylometry_marker_tolerance: 2.0 });
+test('computeDrift: zero-baseline with non-zero measured gives 100 deviationPct, never -100', () => {
+  const baseline = buildBaseline({
+    markers: { marker_a: 0 },
+    calibration: buildCalibration({
+      noise_scales: { '550': { marker_a: 10.0 }, '2200': { marker_a: 5.0 } },
+    }),
+  });
+  // measured is NEGATIVE: proves the zero-baseline rule always reports +100, never -100,
+  // regardless of which direction a non-zero measured value would naively point.
+  const { perMarker } = computeDrift({ marker_a: -5.0 }, baseline, {}, { scoredWords: 550 });
   const ma = perMarker.find(m => m.marker === 'marker_a');
   assert.strictEqual(ma.deviationPct, 100, 'zero baseline / non-zero measured -> deviationPct 100');
+  assert.strictEqual(ma.z, 10, 'zero baseline / non-zero measured -> relDev +100, z = 100/10 = 10 (never negative)');
   assert.strictEqual(ma.flagged, true, 'deviationPct 100 is flagged (exceeds 2% band)');
 });
 
-test('computeDrift: exceeded is true when score >= drift_score_max', () => {
-  // Four markers, each deviating far enough to be capped at driftScoreMax / 3; their
-  // combined capped contribution comfortably clears the threshold. A single wildly
-  // deviating marker cannot do this alone anymore (Correction B, roadmap row 1.7);
-  // see the dedicated single-marker-bound property test for that guarantee.
-  const baseline = {
-    markers: { a: 1.0, b: 1.0, c: 1.0, d: 1.0 },
-    marker_set_version: CURRENT_MARKER_SET_VERSION,
-  };
-  const measured = { a: 100.0, b: 100.0, c: 100.0, d: 100.0 };
-  const { exceeded, score } = computeDrift(measured, baseline,
-    { drift_score_max: 10, stylometry_marker_tolerance: 2.0 });
-  assert.ok(score > 10, 'score should be large');
-  assert.strictEqual(exceeded, true, 'exceeded is true when score >= threshold');
+// ---------------------------------------------------------------------------
+// computeDrift v5: the calibration ladder lookup (P1/P3, ADR-0012 voice verdict scope)
+// ---------------------------------------------------------------------------
+//
+// Hand-computable two-rung ladder, matching the brief's own worked example exactly:
+//   spans = [550, 2200]; first_person_rate noise_scales: 10.0 at 550, 5.0 at 2200;
+//   block_thresholds: 3.0 at 550, 2.5 at 2200.
+//   baseline first_person_rate = 2.0; measured = 3.0 -> relDev = (3-2)/2*100 = 50%.
+// Interpolation is LINEAR IN ln(scoredWords), with linear rung values (not linear in W
+// itself, and not sqrt-extrapolated beyond the rungs -- see the mutation proofs in the
+// task report for why each of those alternate shapes is distinguishable from this one).
+
+function ladderBaseline() {
+  return buildBaseline({
+    markers: { first_person_rate: 2.0 },
+    calibration: buildCalibration({
+      noise_scales: { '550': { first_person_rate: 10.0 }, '2200': { first_person_rate: 5.0 } },
+      block_thresholds: { '550': 3.0, '2200': 2.5 },
+    }),
+  });
+}
+
+test('ladder lookup: scoredWords exactly at a rung uses that rung\'s values verbatim', () => {
+  const { statistic, threshold, exceeded } = computeDrift(
+    { first_person_rate: 3.0 }, ladderBaseline(), {}, { scoredWords: 550 }
+  );
+  // z = relDev / scale = 50 / 10.0 = 5.0; threshold = 3.0 (the 550 rung verbatim).
+  assert.ok(Math.abs(statistic - 5.0) < 1e-9, 'statistic at the 550 rung should be exactly 5.0; got ' + statistic);
+  assert.ok(Math.abs(threshold - 3.0) < 1e-9, 'threshold at the 550 rung should be exactly 3.0; got ' + threshold);
+  assert.strictEqual(exceeded, true, '5.0 >= 3.0 -> exceeded');
 });
 
-test('computeDrift: exceeded is false when score < drift_score_max', () => {
-  const baseline = { markers: { x: 1.0 }, marker_set_version: CURRENT_MARKER_SET_VERSION };
-  const measured = { x: 1.0 };
-  const { exceeded, score } = computeDrift(measured, baseline,
-    { drift_score_max: 10, stylometry_marker_tolerance: 2.0 });
-  assert.strictEqual(score, 0, 'identical values give score 0');
-  assert.strictEqual(exceeded, false, 'exceeded is false when score < threshold');
+test('ladder lookup: scoredWords at the ln-space midpoint of two rungs yields the log-linear interpolant', () => {
+  // sqrt(550 * 2200) = 1100 is the ln-space midpoint of [550, 2200]:
+  //   t = (ln(1100) - ln(550)) / (ln(2200) - ln(550)) = ln(2) / ln(4) = 0.5 exactly.
+  // scale = 10.0 + 0.5 * (5.0 - 10.0) = 7.5; z = 50 / 7.5 = 6.6667 (repeating).
+  // threshold = 3.0 + 0.5 * (2.5 - 3.0) = 2.75.
+  const { statistic, threshold, exceeded } = computeDrift(
+    { first_person_rate: 3.0 }, ladderBaseline(), {}, { scoredWords: 1100 }
+  );
+  assert.ok(Math.abs(statistic - 50 / 7.5) < 1e-9,
+    'statistic at the ln-midpoint should be 50/7.5 = 6.6667; got ' + statistic);
+  assert.ok(Math.abs(threshold - 2.75) < 1e-9,
+    'threshold at the ln-midpoint should be 2.75; got ' + threshold);
+  assert.strictEqual(exceeded, true, '6.6667 >= 2.75 -> exceeded');
+});
+
+test('ladder lookup: scoredWords below the first rung clamps to that rung\'s values', () => {
+  const atRung = computeDrift({ first_person_rate: 3.0 }, ladderBaseline(), {}, { scoredWords: 550 });
+  const below = computeDrift({ first_person_rate: 3.0 }, ladderBaseline(), {}, { scoredWords: 300 });
+  assert.strictEqual(below.statistic, atRung.statistic,
+    'scoredWords below the first rung must clamp to the first rung\'s statistic, not extrapolate');
+  assert.strictEqual(below.threshold, atRung.threshold,
+    'scoredWords below the first rung must clamp to the first rung\'s threshold, not extrapolate');
+});
+
+test('ladder lookup: scoredWords beyond the last rung clamps to that rung\'s values (never extrapolates)', () => {
+  const { statistic, threshold } = computeDrift(
+    { first_person_rate: 3.0 }, ladderBaseline(), {}, { scoredWords: 8800 }
+  );
+  // Clamped: scale stays 5.0 (the 2200 rung), z = 50/5.0 = 10.0, threshold stays 2.5.
+  // An sqrt-law extrapolation from 2200 to 8800 (factor sqrt(2200/8800) = 0.5) would instead
+  // shrink the scale to 2.5 and give z = 20.0 -- a clearly distinguishable wrong answer,
+  // which is what the "extrapolation instead of clamping" mutation proof breaks toward.
+  assert.ok(Math.abs(statistic - 10.0) < 1e-9,
+    'statistic beyond the last rung must clamp to z = 50/5.0 = 10.0, not extrapolate to 20.0; got ' + statistic);
+  assert.ok(Math.abs(threshold - 2.5) < 1e-9,
+    'threshold beyond the last rung must clamp to 2.5; got ' + threshold);
 });
 
 // ---------------------------------------------------------------------------
-// Committed tree: golden sample book (exit 0)
+// computeDrift v5: verdict statistic, worstMarker, and the >= boundary (P1)
 // ---------------------------------------------------------------------------
+
+test('computeDrift: statistic is the MAX |z| across markers, and worstMarker names the marker attaining it', () => {
+  const baseline = buildBaseline({
+    markers: { quiet: 1.0, loud: 1.0 },
+    calibration: buildCalibration({
+      noise_scales: {
+        '550':  { quiet: 10.0, loud: 10.0 },
+        '2200': { quiet: 10.0, loud: 10.0 },
+      },
+      block_thresholds: { '550': 100.0, '2200': 100.0 }, // high enough that neither exceeds
+    }),
+  });
+  const measured = { quiet: 1.05, loud: 3.0 }; // quiet: relDev 5%, z=0.5; loud: relDev 200%, z=20
+  const { statistic, worstMarker } = computeDrift(measured, baseline, {}, { scoredWords: 550 });
+  assert.ok(Math.abs(statistic - 20) < 1e-9, 'statistic must be the larger |z| (loud, 20), not quiet\'s 0.5; got ' + statistic);
+  assert.strictEqual(worstMarker, 'loud', 'worstMarker must name the marker attaining the max |z|');
+});
+
+test('computeDrift: worstMarker ties break to the FIRST marker in Object.keys(baseline.markers) order', () => {
+  // Both markers deviate identically (relDev 100%, scale 10 -> z = 10 for each). "first"
+  // is defined by insertion order in the markers object literal below, not sorted order.
+  const baseline = buildBaseline({
+    markers: { zeta: 1.0, alpha: 1.0 },
+    calibration: buildCalibration({
+      noise_scales: {
+        '550':  { zeta: 10.0, alpha: 10.0 },
+        '2200': { zeta: 10.0, alpha: 10.0 },
+      },
+    }),
+  });
+  const { worstMarker } = computeDrift({ zeta: 2.0, alpha: 2.0 }, baseline, {}, { scoredWords: 550 });
+  assert.strictEqual(worstMarker, 'zeta',
+    'a tie must resolve to the first key in Object.keys(baseline.markers) order (zeta, not alpha)');
+});
+
+test('computeDrift: z is SIGNED (negative when measured falls below baseline); deviationPct and statistic stay non-negative', () => {
+  const baseline = buildBaseline({
+    markers: { m: 10.0 },
+    calibration: buildCalibration({
+      noise_scales: { '550': { m: 10.0 }, '2200': { m: 10.0 } },
+    }),
+  });
+  const { perMarker, statistic } = computeDrift({ m: 5.0 }, baseline, {}, { scoredWords: 550 });
+  const entry = perMarker.find(x => x.marker === 'm');
+  // relDev = (5 - 10) / 10 * 100 = -50; z = -50 / 10 = -5.
+  assert.ok(entry.z < 0, 'z must be negative when measured falls below baseline; got ' + entry.z);
+  assert.ok(Math.abs(entry.z - (-5)) < 1e-9, 'z should be exactly -5; got ' + entry.z);
+  assert.ok(entry.deviationPct > 0, 'deviationPct stays a non-negative magnitude even when z is negative');
+  assert.ok(Math.abs(entry.deviationPct - 50) < 1e-9, 'deviationPct should be 50 (the honest magnitude); got ' + entry.deviationPct);
+  assert.ok(Math.abs(statistic - 5) < 1e-9, 'statistic (max |z|) must be the positive magnitude 5, not -5; got ' + statistic);
+});
+
+test('computeDrift: exceeded boundary uses >= (statistic exactly equal to threshold is exceeded)', () => {
+  // scale=10 at both rungs, so z = relDev/10 regardless of scoredWords in [550, 2200].
+  // relDev = 30% -> z = 3.0, matching block_thresholds exactly at both rungs (3.0 at 550,
+  // set equal here at 2200 too so the boundary holds across the whole span).
+  const baseline = buildBaseline({
+    markers: { m: 10.0 },
+    calibration: buildCalibration({
+      noise_scales: { '550': { m: 10.0 }, '2200': { m: 10.0 } },
+      block_thresholds: { '550': 3.0, '2200': 3.0 },
+    }),
+  });
+  const { statistic, threshold, exceeded } = computeDrift({ m: 13.0 }, baseline, {}, { scoredWords: 550 });
+  assert.ok(Math.abs(statistic - threshold) < 1e-9,
+    'this test requires statistic to exactly equal threshold; got statistic=' + statistic + ' threshold=' + threshold);
+  assert.strictEqual(exceeded, true, 'statistic == threshold must be exceeded (>=, not >)');
+});
+
+// ---------------------------------------------------------------------------
+// computeDrift v5: return shape and perMarker shape (P1) -- the old score, contribution,
+// capped, and maxMarkerContribution keys are REMOVED, not just unused
+// ---------------------------------------------------------------------------
+
+test('computeDrift: return shape is exactly statistic, worstMarker, threshold, exceeded, regime, perMarker, markerTolerance, deprecations', () => {
+  const result = computeDrift(SYNTHETIC_MARKERS, buildBaseline(), {}, { scoredWords: 550 });
+  const expectedKeys = [
+    'statistic', 'worstMarker', 'threshold', 'exceeded', 'regime',
+    'perMarker', 'markerTolerance', 'deprecations',
+  ].sort();
+  assert.deepStrictEqual(Object.keys(result).sort(), expectedKeys,
+    'computeDrift must return exactly the v5 keys, no more and no fewer; got ' + Object.keys(result).sort());
+  for (const retired of ['score', 'contribution', 'capped', 'maxMarkerContribution']) {
+    assert.ok(!(retired in result), 'retired key "' + retired + '" must not be present in the v5 return shape');
+  }
+});
+
+test('computeDrift: regime is passed through verbatim from baseline.calibration.regime', () => {
+  const chapterResult = computeDrift(SYNTHETIC_MARKERS, buildBaseline(), {}, { scoredWords: 550 });
+  assert.strictEqual(chapterResult.regime, 'chapter');
+
+  const bookBaseline = buildBaseline({ calibration: buildCalibration({ regime: 'book' }) });
+  const bookResult = computeDrift(SYNTHETIC_MARKERS, bookBaseline, {}, { scoredWords: 550 });
+  assert.strictEqual(bookResult.regime, 'book');
+});
+
+test('computeDrift: perMarker entries carry exactly marker, baseline, measured, deviationPct, z, flagged', () => {
+  const { perMarker } = computeDrift(SYNTHETIC_MARKERS, buildBaseline(), {}, { scoredWords: 550 });
+  const expectedKeys = ['marker', 'baseline', 'measured', 'deviationPct', 'z', 'flagged'].sort();
+  for (const entry of perMarker) {
+    assert.deepStrictEqual(Object.keys(entry).sort(), expectedKeys,
+      'perMarker entry for ' + entry.marker + ' must carry exactly the v5 keys; got ' + Object.keys(entry).sort());
+    for (const retired of ['contribution', 'capped']) {
+      assert.ok(!(retired in entry), 'retired key "' + retired + '" must not be present on a perMarker entry');
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// computeDrift v5: a single extreme marker CAN trigger exceeded alone -- the opposite
+// guarantee of the retired capped-sum rule (roadmap row 1.7's Correction B is gone; the max
+// statistic concentrates on wherever the real signal lives instead of diluting it across
+// every marker, which is the whole reason the capped-sum rule measured at coin-flip AUC)
+// ---------------------------------------------------------------------------
+
+test('property: one wildly deviating marker alone is enough to exceed, with three stable markers contributing nothing', () => {
+  const baseline = buildBaseline({
+    markers: { onlyBad: 1.0, stable1: 1.0, stable2: 1.0, stable3: 1.0 },
+    calibration: buildCalibration({
+      noise_scales: {
+        '550':  { onlyBad: 10.0, stable1: 10.0, stable2: 10.0, stable3: 10.0 },
+        '2200': { onlyBad: 10.0, stable1: 10.0, stable2: 10.0, stable3: 10.0 },
+      },
+      block_thresholds: { '550': 5.0, '2200': 5.0 },
+    }),
+  });
+  const measured = { onlyBad: 999999, stable1: 1, stable2: 1, stable3: 1 };
+  const { statistic, worstMarker, exceeded } = computeDrift(measured, baseline, {}, { scoredWords: 550 });
+  assert.strictEqual(worstMarker, 'onlyBad', 'the one wildly deviating marker must be the worst marker');
+  assert.ok(statistic > 5.0, 'the single marker\'s z alone must exceed the threshold; got ' + statistic);
+  assert.strictEqual(exceeded, true,
+    'a single marker\'s deviation, unlike the retired capped-sum rule, is now sufficient to trigger exceeded on its own');
+});
+
+// ---------------------------------------------------------------------------
+// computeDrift v5: thresholds.drift_score_max deprecation notice (P7)
+// ---------------------------------------------------------------------------
+
+const DRIFT_SCORE_MAX_DEPRECATION =
+  'thresholds.drift_score_max is retired by the calibrated-null verdict and is ignored; ' +
+  'remove it from config.json (it will be an error in a future release)';
+
+test('computeDrift: deprecations carries the drift_score_max notice verbatim when the key is present', () => {
+  const { deprecations } = computeDrift(
+    SYNTHETIC_MARKERS, buildBaseline(), { drift_score_max: 25 }, { scoredWords: 550 }
+  );
+  assert.deepStrictEqual(deprecations, [DRIFT_SCORE_MAX_DEPRECATION],
+    'deprecations must carry exactly the P7 string when thresholds.drift_score_max is present');
+});
+
+test('computeDrift: deprecations is empty when thresholds.drift_score_max is absent', () => {
+  const { deprecations } = computeDrift(
+    SYNTHETIC_MARKERS, buildBaseline(), { stylometry_marker_tolerance: 2.0 }, { scoredWords: 550 }
+  );
+  assert.deepStrictEqual(deprecations, [], 'deprecations must be empty when thresholds.drift_score_max is absent');
+});
+
+test('computeDrift: deprecations is empty when thresholds itself is absent entirely', () => {
+  const { deprecations } = computeDrift(SYNTHETIC_MARKERS, buildBaseline(), undefined, { scoredWords: 550 });
+  assert.deepStrictEqual(deprecations, [], 'deprecations must be empty when thresholds is undefined');
+});
+
+// ---------------------------------------------------------------------------
+// computeDrift v5: validation order and error types (P1)
+//   1. baseline.markers missing            -> plain Error
+//   2. marker_set_version mismatch          -> StaleBaselineError
+//   3. calibration missing/incomplete       -> InvalidCalibrationError
+//   4. opts.scoredWords missing/non-positive -> plain Error
+// ---------------------------------------------------------------------------
+
+test('computeDrift: baseline.markers missing throws a plain Error (not a typed one)', () => {
+  assert.throws(
+    () => computeDrift(SYNTHETIC_MARKERS, {}, {}, { scoredWords: 550 }),
+    (err) => {
+      assert.strictEqual(err.name, 'Error', 'baseline.markers missing must throw a plain Error; got ' + err.name);
+      return true;
+    }
+  );
+});
+
+test('computeDrift v5: a marker_set_version 4 baseline throws StaleBaselineError naming nfs-capture-voice as the remedy', () => {
+  const v4Baseline = { markers: SYNTHETIC_MARKERS, marker_set_version: 4 };
+  assert.throws(
+    () => computeDrift(SYNTHETIC_MARKERS, v4Baseline, {}, { scoredWords: 550 }),
+    (err) => {
+      assert.strictEqual(err.name, 'StaleBaselineError', 'a v4 baseline must throw StaleBaselineError; got ' + err.name);
+      assert.ok(err.message.includes('nfs-capture-voice'), 'error message must name nfs-capture-voice as the remedy; got: ' + err.message);
+      return true;
+    }
+  );
+});
+
+test('computeDrift v5: current version but no calibration object at all throws InvalidCalibrationError', () => {
+  const baseline = { markers: SYNTHETIC_MARKERS, marker_set_version: CURRENT_MARKER_SET_VERSION };
+  assert.throws(
+    () => computeDrift(SYNTHETIC_MARKERS, baseline, {}, { scoredWords: 550 }),
+    (err) => {
+      assert.strictEqual(err.name, 'InvalidCalibrationError', 'got ' + err.name);
+      assert.strictEqual(err.code, 'INVALID_CALIBRATION', 'got ' + err.code);
+      assert.strictEqual(err.exitCode, 2, 'got ' + err.exitCode);
+      assert.ok(err.message.includes('nfs-capture-voice'), 'error message must name nfs-capture-voice as the remedy; got: ' + err.message);
+      return true;
+    }
+  );
+});
+
+for (const missingField of ['spans', 'noise_scales', 'block_thresholds', 'regime']) {
+  test('computeDrift v5: calibration missing "' + missingField + '" throws InvalidCalibrationError', () => {
+    const calibration = buildCalibration();
+    delete calibration[missingField];
+    const baseline = buildBaseline({ calibration });
+    assert.throws(
+      () => computeDrift(SYNTHETIC_MARKERS, baseline, {}, { scoredWords: 550 }),
+      (err) => {
+        assert.strictEqual(err.name, 'InvalidCalibrationError',
+          'missing calibration.' + missingField + ' must throw InvalidCalibrationError; got ' + err.name);
+        return true;
+      }
+    );
+  });
+}
+
+test('computeDrift v5: a marker present in baseline.markers but absent from a rung\'s noise_scales throws InvalidCalibrationError naming the marker and the rung', () => {
+  const calibration = buildCalibration();
+  delete calibration.noise_scales['2200'].contraction_rate;
+  const baseline = buildBaseline({ calibration });
+  assert.throws(
+    () => computeDrift(SYNTHETIC_MARKERS, baseline, {}, { scoredWords: 550 }),
+    (err) => {
+      assert.strictEqual(err.name, 'InvalidCalibrationError', 'got ' + err.name);
+      assert.ok(err.message.includes('contraction_rate'), 'error must name the missing marker; got: ' + err.message);
+      assert.ok(err.message.includes('2200'), 'error must name the rung missing the marker; got: ' + err.message);
+      return true;
+    }
+  );
+});
+
+test('computeDrift v5: validation order -- a stale version AND an incomplete calibration throws StaleBaselineError, not InvalidCalibrationError', () => {
+  const baseline = { markers: SYNTHETIC_MARKERS, marker_set_version: 4 }; // no calibration at all
+  assert.throws(
+    () => computeDrift(SYNTHETIC_MARKERS, baseline, {}, { scoredWords: 550 }),
+    (err) => {
+      assert.strictEqual(err.name, 'StaleBaselineError',
+        'the version check must run BEFORE the calibration check; got ' + err.name);
+      return true;
+    }
+  );
+});
+
+test('computeDrift v5: opts.scoredWords missing throws a plain Error naming the parameter', () => {
+  assert.throws(
+    () => computeDrift(SYNTHETIC_MARKERS, buildBaseline(), {}),
+    (err) => {
+      assert.strictEqual(err.name, 'Error', 'got ' + err.name);
+      assert.ok(err.message.includes('scoredWords'), 'error must name the scoredWords parameter; got: ' + err.message);
+      return true;
+    }
+  );
+});
+
+for (const bad of [0, -1, -100]) {
+  test('computeDrift v5: opts.scoredWords = ' + bad + ' (non-positive) throws a plain Error', () => {
+    assert.throws(
+      () => computeDrift(SYNTHETIC_MARKERS, buildBaseline(), {}, { scoredWords: bad }),
+      (err) => {
+        assert.strictEqual(err.name, 'Error', 'got ' + err.name);
+        assert.ok(err.message.includes('scoredWords'), 'error must name the scoredWords parameter; got: ' + err.message);
+        return true;
+      }
+    );
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Committed tree: golden sample book (measureBook shape only -- NOT computeDrift)
+// ---------------------------------------------------------------------------
+//
+// The computeDrift-against-the-golden-baseline intent (a real chapter pair scoring as a
+// PASS) and the voice-drift-fixture intent (a real chapter pair scoring as a BLOCK, with
+// first_person_rate the worst marker) both moved to synthetic v5 tests below ("computeDrift
+// v5: a passing case" / "a blocking case"), rather than reading either example's
+// .studio/config.json: both examples still carry v4 baselines with no calibration ladder
+// (declared red until Tasks 5 and 6 recapture them), and coupling this file's green status to
+// that fixture state would break this file again the moment those baselines are recaptured
+// to different numbers. measureChapter/measureBook themselves are version-independent (they
+// only measure text, never read a baseline), so the shape test below is unaffected and stays.
 
 test('golden sample book: measureBook produces 8-marker vector', () => {
   const root = join(EXAMPLES, 'sample-book');
@@ -281,26 +684,77 @@ test('golden sample book: measureBook produces 8-marker vector', () => {
   }
 });
 
-test('golden sample book: computeDrift score is below threshold (exit 0)', () => {
-  const root = join(EXAMPLES, 'sample-book');
-  const ch1 = readFileSync(join(root, 'chapters', '01-listening-before-speaking.md'), 'utf8');
-  const ch2 = readFileSync(join(root, 'chapters', '02-finding-your-network.md'), 'utf8');
-  const config = JSON.parse(readFileSync(join(root, '.studio', 'config.json'), 'utf8'));
+// ---------------------------------------------------------------------------
+// computeDrift v5: a passing case and a blocking case (synthetic, replacing the
+// golden-sample-book / voice-drift-fixture computeDrift tests above -- see the comment there)
+// ---------------------------------------------------------------------------
 
-  const measured = measureBook([ch1, ch2]);
-  const baseline = config.stylometry.baseline;
-  const thresholds = config.thresholds;
+test('computeDrift v5: a passing case -- every marker within its calibrated noise scale is not exceeded', () => {
+  const baseline = buildBaseline(); // SYNTHETIC_MARKERS verbatim as both baseline and measured
+  const { statistic, threshold, exceeded } = computeDrift(SYNTHETIC_MARKERS, baseline, {}, { scoredWords: 550 });
+  assert.strictEqual(statistic, 0, 'identical measured and baseline vectors give statistic 0');
+  assert.ok(!exceeded, 'statistic 0 must not exceed any positive threshold; threshold=' + threshold);
+});
 
-  const { score, exceeded } = computeDrift(measured, baseline, thresholds);
-  assert.ok(!exceeded, 'golden book drift does not exceed threshold; score=' + score);
-  // The golden book score should be very low (engine baseline was set to engine values)
-  assert.ok(score < thresholds.drift_score_max,
-    'golden score ' + score.toFixed(2) + ' must be < threshold ' + thresholds.drift_score_max);
+test('computeDrift v5: a blocking case -- first_person_rate collapsing to near-zero is the worst marker and exceeds', () => {
+  // Modeled on the shipped voice-drift fixture's own defect (PLANTED.md): first_person_rate
+  // baseline 0.2262 drops to measured 0, a 100% deviation, while the other seven markers
+  // stay within their calibrated noise.
+  const baseline = buildBaseline({
+    markers: {
+      function_word_rate: 0.4717, contraction_rate: 0.0299, first_person_rate: 0.2262,
+      second_person_rate: 3.3937, type_token_ratio: 0.7516, avg_word_length: 5.1923,
+      avg_sentence_length: 13.1940, punctuation_rate: 13.0090,
+    },
+    calibration: buildCalibration({
+      noise_scales: {
+        '550': {
+          function_word_rate: 8.0, contraction_rate: 8.0, first_person_rate: 15.0,
+          second_person_rate: 8.0, type_token_ratio: 8.0, avg_word_length: 8.0,
+          avg_sentence_length: 8.0, punctuation_rate: 8.0,
+        },
+        '2200': {
+          function_word_rate: 4.0, contraction_rate: 4.0, first_person_rate: 8.0,
+          second_person_rate: 4.0, type_token_ratio: 4.0, avg_word_length: 4.0,
+          avg_sentence_length: 4.0, punctuation_rate: 4.0,
+        },
+      },
+      block_thresholds: { '550': 3.0, '2200': 2.5 },
+    }),
+  });
+  const measured = {
+    function_word_rate: 0.4736, contraction_rate: 0.0301, first_person_rate: 0,
+    second_person_rate: 3.4102, type_token_ratio: 0.7498, avg_word_length: 5.1801,
+    avg_sentence_length: 13.2400, punctuation_rate: 13.0522,
+  };
+  const { statistic, threshold, exceeded, worstMarker, perMarker } = computeDrift(measured, baseline, {}, { scoredWords: 550 });
+  assert.strictEqual(worstMarker, 'first_person_rate',
+    'first_person_rate (100% deviation, a zero-baseline collapse) must be the worst marker; got ' + worstMarker);
+  assert.strictEqual(exceeded, true,
+    'statistic ' + statistic + ' must exceed threshold ' + threshold);
+  const fp = perMarker.find(m => m.marker === 'first_person_rate');
+  assert.strictEqual(fp.flagged, true, 'first_person_rate must be flagged (100% deviation clears the 2% band)');
+  assert.strictEqual(fp.measured, 0, 'first_person_rate measured must be 0');
 });
 
 // ---------------------------------------------------------------------------
-// Committed tree: golden sample book via CLI (exit 0)
+// Committed tree: BIN-spawning CLI tests against the REAL committed golden/voice-drift
+// fixtures, IN PLACE (not a clone)
 // ---------------------------------------------------------------------------
+
+// The tests below run the CLI against examples/sample-book and examples/fixtures/voice-drift AS
+// COMMITTED, not a temp clone with a synthetic baseline patched in (unlike tests/engines/
+// gate.test.mjs's or stylometry-explain.test.mjs's approach): their own intent is specifically
+// to prove these two REAL fixtures' documented behavior under the shipped engine. Task 5
+// (ADR-0012 implementation wave) recaptured examples/sample-book/.studio/config.json's baseline
+// under v5 (an independent, disjoint voice corpus; regime book). A coordinator ruling later in
+// the same task gave examples/fixtures/voice-drift its own independent, first-person-rich,
+// contraction-rich voice corpus, calibrating to regime chapter -- the fixture now demonstrates
+// the OTHER tier of ADR-0012 Decision 2's two-tier regime dispatch (see PLANTED.md). Its
+// chapter 1 (undrifted) passes; its chapter 2 (the planted, mechanically ghostwritten chapter)
+// blocks, at both the per-chapter and the aggregate (--all) scope. Bodies use the v5 JSON shape
+// (statistic/worstMarker/threshold/exceeded/regime/scoredWords, perMarker.z replacing the
+// retired driftScore/contribution/capped triple).
 
 test('golden sample book CLI: --all --json exits 0', () => {
   const bookRoot = join(EXAMPLES, 'sample-book');
@@ -312,62 +766,11 @@ test('golden sample book CLI: --all --json exits 0', () => {
     'golden book CLI exits 0; stderr: ' + result.stderr);
 
   const out = JSON.parse(result.stdout);
-  assert.ok(typeof out.driftScore === 'number', 'driftScore is a number');
+  assert.ok(typeof out.statistic === 'number', 'statistic is a number');
   assert.strictEqual(out.verdict, 'pass', 'verdict is pass');
-  assert.ok(out.driftScore < out.threshold,
-    'driftScore ' + out.driftScore.toFixed(2) + ' < threshold ' + out.threshold);
-});
-
-// ---------------------------------------------------------------------------
-// Committed tree: golden sample book, EVERY CHAPTER INDIVIDUALLY (roadmap row 1.7)
-// ---------------------------------------------------------------------------
-//
-// The two "golden sample book" tests above only prove the WHOLE BOOK passes as
-// a combined sample. They do not prove any individual chapter passes on its
-// own, and a per-chapter gate run measures exactly one chapter (measureChapter,
-// a much smaller denominator) against the same book-level baseline -- a
-// materially different computation from measureBook. A book can pass in
-// aggregate while every one of its chapters individually blocks: prior to the
-// chapters being made voice-consistent, both chapters measured well over 200
-// against a threshold of 35 in isolation, driven substantially by a
-// near-zero-baseline instability in deviationPct that is written up for
-// roadmap row 1.7 (voice registers) and the D-08 (hybrid voice scoring)
-// amendment.
-//
-// This guarantee currently holds only because both golden chapters still
-// carry the padded closing paragraph the stylometry baseline was fit against
-// (examples/sample-book/.studio/config.json's stylometry.baseline.method
-// discloses the padding and that de-padding stays deferred behind baseline
-// architecture). A de-padding attempt made earlier in this wave measured the
-// two chapters, once de-padded, at 40.72 and 37.78 against the then-shipped
-// budget of 35 -- both already over. Independently re-verified against HEAD
-// at the current budget of 25: 38.86 and 38.56 against the baseline left
-// unchanged, and still 34.80 and 33.08 against a baseline re-captured from
-// the de-padded chapters themselves. Whoever unblocks de-padding should
-// expect this test, and the CLI test below it, to need rework, not treat a
-// new failure here as a regression.
-
-test('golden sample book: EVERY chapter passes its own stylometry check individually, not just the combined book', () => {
-  const root = join(EXAMPLES, 'sample-book');
-  const config = JSON.parse(readFileSync(join(root, '.studio', 'config.json'), 'utf8'));
-  const baseline = config.stylometry.baseline;
-  const thresholds = config.thresholds;
-
-  const chapterDir = join(root, 'chapters');
-  const chapterFiles = readdirSync(chapterDir).filter(f => f.endsWith('.md')).sort();
-  assert.ok(chapterFiles.length >= 2, 'golden book must have at least two chapters to exercise this check');
-
-  for (const file of chapterFiles) {
-    const text = readFileSync(join(chapterDir, file), 'utf8');
-    const measured = measureChapter(text);
-    const { score, exceeded } = computeDrift(measured, baseline, thresholds);
-    assert.ok(
-      !exceeded,
-      'chapter ' + file + ' must pass its OWN stylometry check individually; drift score ' +
-      score.toFixed(2) + ' vs threshold ' + thresholds.drift_score_max +
-      ' (a whole-book pass does not guarantee a per-chapter pass)'
-    );
-  }
+  assert.strictEqual(out.exceeded, false);
+  assert.ok(out.statistic < out.threshold,
+    'statistic ' + out.statistic.toFixed(2) + ' < threshold ' + out.threshold);
 });
 
 test('golden sample book CLI: ns-stylometry --chapter=<slug> --json exits 0 for EVERY chapter', () => {
@@ -386,53 +789,8 @@ test('golden sample book CLI: ns-stylometry --chapter=<slug> --json exits 0 for 
     const out = JSON.parse(result.stdout);
     assert.strictEqual(out.verdict, 'pass',
       'chapter ' + slug + ' verdict must be pass; got ' + out.verdict +
-      ' (drift ' + out.driftScore.toFixed(2) + ' vs threshold ' + out.threshold + ')');
+      ' (statistic ' + out.statistic.toFixed(2) + ' vs threshold ' + out.threshold + ')');
   }
-});
-
-// ---------------------------------------------------------------------------
-// Committed tree: voice-drift fixture (exit 1, first_person_rate flagged)
-// ---------------------------------------------------------------------------
-//
-// Reconciliation outcome (TSK-026): function_word_rate is NOT flagged after
-// reconciliation because the passive rewrite removes first/second-person pronouns
-// (function words) while adding auxiliary verbs (also function words); the net
-// rate change is 0.79%, within the 2% per-marker tolerance band. This is
-// documented in voice-drift/PLANTED.md. first_person_rate flags at 100%
-// deviation (0 vs 0.2262 baseline). The fixture exits 1 because total score
-// (~28, book level, under the roadmap row 1.7 per-marker contribution cap)
-// decisively exceeds threshold (20).
-
-test('voice-drift fixture: measureBook + computeDrift exceeds threshold (exit 1)', () => {
-  const root = join(EXAMPLES, 'fixtures', 'voice-drift');
-  const ch1 = readFileSync(join(root, 'chapters', '01-listening-before-speaking.md'), 'utf8');
-  const ch2 = readFileSync(join(root, 'chapters', '02-finding-your-network.md'), 'utf8');
-  const config = JSON.parse(readFileSync(join(root, '.studio', 'config.json'), 'utf8'));
-
-  const measured = measureBook([ch1, ch2]);
-  const baseline = config.stylometry.baseline;
-  const thresholds = config.thresholds;
-
-  const { score, exceeded } = computeDrift(measured, baseline, thresholds);
-  assert.strictEqual(exceeded, true,
-    'voice-drift drift score ' + score.toFixed(2) + ' must exceed threshold ' + thresholds.drift_score_max);
-});
-
-test('voice-drift fixture: first_person_rate is flagged', () => {
-  const root = join(EXAMPLES, 'fixtures', 'voice-drift');
-  const ch1 = readFileSync(join(root, 'chapters', '01-listening-before-speaking.md'), 'utf8');
-  const ch2 = readFileSync(join(root, 'chapters', '02-finding-your-network.md'), 'utf8');
-  const config = JSON.parse(readFileSync(join(root, '.studio', 'config.json'), 'utf8'));
-
-  const measured = measureBook([ch1, ch2]);
-  const { perMarker } = computeDrift(measured, config.stylometry.baseline, config.thresholds);
-
-  const fp = perMarker.find(m => m.marker === 'first_person_rate');
-  assert.ok(fp, 'first_person_rate entry present in perMarker');
-  assert.strictEqual(fp.flagged, true,
-    'first_person_rate is flagged (drops from ' + fp.baseline + ' to ' + fp.measured + ')');
-  assert.strictEqual(fp.measured, 0,
-    'first_person_rate measured = 0 in voice-drift (no first-person pronouns)');
 });
 
 test('voice-drift fixture CLI: --all --json exits 1', () => {
@@ -445,44 +803,63 @@ test('voice-drift fixture CLI: --all --json exits 1', () => {
     'voice-drift CLI exits 1; stderr: ' + result.stderr);
 
   const out = JSON.parse(result.stdout);
-  assert.ok(typeof out.driftScore === 'number', 'driftScore is a number');
+  assert.ok(typeof out.statistic === 'number', 'statistic is a number');
   assert.strictEqual(out.verdict, 'block', 'verdict is block');
-  assert.ok(out.driftScore >= out.threshold,
-    'driftScore ' + out.driftScore.toFixed(2) + ' >= threshold ' + out.threshold);
+  assert.strictEqual(out.exceeded, true);
+  assert.ok(out.statistic >= out.threshold,
+    'statistic ' + out.statistic.toFixed(2) + ' >= threshold ' + out.threshold);
 
   // first_person_rate must be flagged (reconciliation-stable flag)
   const fpEntry = Object.entries(out.markers).find(([k]) => k === 'first_person_rate');
   assert.ok(fpEntry, 'first_person_rate present in markers output');
   assert.strictEqual(fpEntry[1].flagged, true, 'first_person_rate flagged in JSON output');
+  assert.strictEqual(typeof fpEntry[1].z, 'number', 'first_person_rate carries a numeric z');
 });
 
-// This is the acceptance criterion that distinguishes a corrected metric from a
-// disabled one (roadmap row 1.7, voice registers): the planted fixture must still
-// exceed its threshold not only at book level but for EVERY chapter measured
-// individually, the same per-chapter shape the golden book's own individually-
-// passing test above exercises. Chapter 1 is unchanged from the golden baseline
-// (PLANTED.md), so this also proves the corrections did not manufacture a false
-// pass on the one chapter that carries no planted defect at all.
-test('voice-drift fixture CLI: ns-stylometry --chapter=<slug> --json exits 1 for EVERY chapter', () => {
+// This fixture's two chapters are NOT symmetric under chapter regime, unlike the old (retired)
+// v4 design where both chapters exceeded a shared book-level drift_score_max: chapter 1 is this
+// fixture's own genuine, undrifted voice and chapter 2 is that same voice put through
+// ghostwriteTransform (see PLANTED.md). A per-chapter CLI run must therefore PASS chapter 1 and
+// BLOCK chapter 2 -- proving the chapter-regime path actually discriminates drifted from
+// undrifted content, not merely that "the fixture blocks somewhere."
+test('voice-drift fixture CLI: ns-stylometry --chapter=<slug> --json: undrifted chapter 1 passes, planted chapter 2 blocks', () => {
   const bookRoot = join(EXAMPLES, 'fixtures', 'voice-drift');
+
+  const EXPECTED = {
+    '01-listening-before-speaking': { status: 0, verdict: 'pass' },
+    '02-finding-your-network': { status: 1, verdict: 'block' },
+  };
+
   const chapterDir = join(bookRoot, 'chapters');
   const chapterFiles = readdirSync(chapterDir).filter(f => f.endsWith('.md')).sort();
+  assert.deepStrictEqual(
+    chapterFiles.map(f => f.replace(/\.md$/, '')).sort(),
+    Object.keys(EXPECTED).sort(),
+    'this test\'s expectation table must cover exactly the fixture\'s committed chapters'
+  );
 
   for (const file of chapterFiles) {
     const slug = file.replace(/\.md$/, '');
+    const expected = EXPECTED[slug];
     const result = spawnSync(
       process.execPath, [BIN, '--chapter=' + slug, '--json'],
       { cwd: bookRoot, encoding: 'utf8' }
     );
-    assert.strictEqual(result.status, 1,
-      'chapter ' + slug + ' CLI must exit 1 (the fixture must still catch drift per chapter); stderr: ' +
-      result.stderr);
+    assert.strictEqual(result.status, expected.status,
+      'chapter ' + slug + ' CLI must exit ' + expected.status + '; stderr: ' + result.stderr);
     const out = JSON.parse(result.stdout);
-    assert.strictEqual(out.verdict, 'block',
-      'chapter ' + slug + ' verdict must be block; got ' + out.verdict +
-      ' (drift ' + out.driftScore.toFixed(2) + ' vs threshold ' + out.threshold + ')');
-    assert.ok(out.driftScore >= out.threshold,
-      'chapter ' + slug + ' driftScore ' + out.driftScore.toFixed(2) + ' must be >= threshold ' + out.threshold);
+    assert.strictEqual(out.verdict, expected.verdict,
+      'chapter ' + slug + ' verdict must be ' + expected.verdict + '; got ' + out.verdict +
+      ' (statistic ' + out.statistic.toFixed(2) + ' vs threshold ' + out.threshold + ')');
+    if (expected.verdict === 'block') {
+      assert.ok(out.statistic >= out.threshold,
+        'chapter ' + slug + ' statistic ' + out.statistic.toFixed(2) + ' must be >= threshold ' + out.threshold);
+      assert.strictEqual(out.worstMarker, 'first_person_rate',
+        'chapter ' + slug + ' worst marker must be first_person_rate; got ' + out.worstMarker);
+    } else {
+      assert.ok(out.statistic < out.threshold,
+        'chapter ' + slug + ' statistic ' + out.statistic.toFixed(2) + ' must be < threshold ' + out.threshold);
+    }
   }
 });
 
@@ -502,7 +879,9 @@ test('measureBook: empty chapter list returns zero-vector with 8 keys', () => {
 });
 
 // ---------------------------------------------------------------------------
-// CLI exit codes
+// CLI exit codes -- version-agnostic (--project resolution happens before any stylometry
+// measurement), un-skipped by Task 4 alongside the gate-engine.mjs/status-engine.mjs/
+// bin/ns-stylometry import fix.
 // ---------------------------------------------------------------------------
 
 test('CLI exits 2 when --project points to non-existent directory', () => {
@@ -514,7 +893,56 @@ test('CLI exits 2 when --project points to non-existent directory', () => {
 });
 
 // ---------------------------------------------------------------------------
-// --measure mode (TSK-037: voice-capture agent)
+// P7 (ADR-0012 voice verdict scope): thresholds.drift_score_max deprecation notice surfaced on
+// stderr -- the CLI half of the two P7 surfaces (the gate's own detail-string surface is tested
+// in tests/engines/gate.test.mjs). Uses a temp clone of the golden book patched with a
+// synthetic, self-consistent v5 baseline (writeSyntheticV5Baseline) so this test does not depend
+// on Task 5's fixture recapture; the deprecation notice comes from thresholds.drift_score_max
+// being present in config, independent of whether the drift verdict itself passes or blocks.
+// ---------------------------------------------------------------------------
+
+test('CLI: thresholds.drift_score_max present -> the P7 retirement notice is printed to stderr', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ns-stylometry-deprecation-'));
+  try {
+    cpSync(join(EXAMPLES, 'sample-book'), dir, { recursive: true });
+    writeSyntheticV5Baseline(dir);
+    const configPath = join(dir, '.studio', 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.thresholds = config.thresholds || {};
+    config.thresholds.drift_score_max = 25;
+    writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+
+    const result = spawnSync(process.execPath, [BIN, '--all', '--json'], { cwd: dir, encoding: 'utf8' });
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    assert.ok(
+      result.stderr.includes(
+        'thresholds.drift_score_max is retired by the calibrated-null verdict and is ignored'
+      ),
+      'stderr must carry the P7 retirement notice; got: ' + result.stderr
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('CLI: thresholds.drift_score_max absent -> stderr carries no deprecation notice', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ns-stylometry-no-deprecation-'));
+  try {
+    cpSync(join(EXAMPLES, 'sample-book'), dir, { recursive: true });
+    writeSyntheticV5Baseline(dir);
+
+    const result = spawnSync(process.execPath, [BIN, '--all', '--json'], { cwd: dir, encoding: 'utf8' });
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    assert.strictEqual(result.stderr, '', 'no deprecation notice when the retired key is absent; got stderr: ' + result.stderr);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// --measure mode (TSK-037: voice-capture agent) -- version-agnostic (--measure only calls
+// measureChapter/measureBook, never computeDrift), un-skipped by Task 4 alongside the
+// gate-engine.mjs/status-engine.mjs/bin/ns-stylometry import fix.
 // ---------------------------------------------------------------------------
 
 test('measure mode: single chapter output equals measureChapter direct result', () => {
@@ -689,117 +1117,13 @@ test('unit: type_token_ratio moving average over a hand-computable two-window co
 });
 
 // ---------------------------------------------------------------------------
-// Correction B: no single marker may contribute more than one third of the
-// drift budget to the score (roadmap row 1.7)
-// ---------------------------------------------------------------------------
-//
-// Both tests use synthetic marker vectors, not named real markers, per the
-// acceptance criteria.
-
-test('property: no single marker can push the score to the threshold alone, at more than one configured budget', () => {
-  const measured = { onlyBad: 999999, stable1: 1, stable2: 1, stable3: 1 };
-  const baseline = {
-    markers: { onlyBad: 1, stable1: 1, stable2: 1, stable3: 1 },
-    marker_set_version: CURRENT_MARKER_SET_VERSION,
-  };
-
-  for (const driftScoreMax of [30, 90]) {
-    const { score, exceeded, perMarker } = computeDrift(
-      measured, baseline, { drift_score_max: driftScoreMax, stylometry_marker_tolerance: 2.0 }
-    );
-    const bad = perMarker.find(m => m.marker === 'onlyBad');
-    assert.ok(
-      bad.deviationPct > driftScoreMax,
-      'the single marker\'s honest deviation must exceed the whole budget for this to be a meaningful test; got ' +
-      bad.deviationPct
-    );
-    assert.strictEqual(bad.capped, true,
-      'the single dominant marker\'s contribution must be recorded as capped');
-    assert.ok(
-      score <= driftScoreMax / 3 + 1e-9,
-      'one marker alone must not push the score past one third of budget ' + driftScoreMax + '; got ' + score
-    );
-    // Pins the divisor from below as well as above: a hardcoded cap (for example a
-    // literal 10, forbidden by the brief) would satisfy the upper-bound assertion
-    // above at both budgets in this loop, since 10 <= driftScoreMax / 3 for both 30
-    // and 90, without ever proving the cap scales with the configured budget. With
-    // only one marker deviating and three stable markers contributing 0, score
-    // equals the cap exactly, so asserting equality (not just <=) at more than one
-    // budget value is what actually proves the bound is driftScoreMax / 3 and not
-    // some fixed number that happens to be small enough to pass at these budgets.
-    assert.ok(
-      Math.abs(score - driftScoreMax / 3) < 1e-9,
-      'a single fully capped marker\'s contribution must equal exactly one third of budget ' +
-      driftScoreMax + ', proving the bound scales with the configured budget rather than being ' +
-      'a hardcoded number; got ' + score
-    );
-    assert.strictEqual(exceeded, false,
-      'one marker alone must not exceed the threshold at budget ' + driftScoreMax + '; score=' + score);
-  }
-});
-
-test('computeDrift: deviationPct stays honest (uncapped) even though the marker\'s contribution to score is capped', () => {
-  const measured = { onlyMarker: 1000 };
-  const baseline = { markers: { onlyMarker: 1 }, marker_set_version: CURRENT_MARKER_SET_VERSION };
-  const { score, perMarker } = computeDrift(
-    measured, baseline, { drift_score_max: 30, stylometry_marker_tolerance: 2.0 }
-  );
-  const m = perMarker.find(x => x.marker === 'onlyMarker');
-  assert.strictEqual(m.capped, true,
-    'this marker\'s contribution must have been capped for the test to be meaningful');
-  assert.ok(
-    m.deviationPct > score,
-    'deviationPct (' + m.deviationPct + ') must exceed the marker\'s capped contribution to the total score (' + score + ')'
-  );
-});
-
-// ---------------------------------------------------------------------------
-// computeDrift: explicit per-marker contribution and the per-run bound (TSK
-// "ns-stylometry --explain"; this data was computed internally but never
-// returned before -- surfacing it is the whole basis for the explain feature)
-// ---------------------------------------------------------------------------
-
-test('computeDrift: returns maxMarkerContribution equal to driftScoreMax divided by the (private) divisor', () => {
-  const baseline = { markers: { x: 1.0 }, marker_set_version: CURRENT_MARKER_SET_VERSION };
-  const measured = { x: 1.0 };
-  const { maxMarkerContribution } = computeDrift(measured, baseline,
-    { drift_score_max: 30, stylometry_marker_tolerance: 2.0 });
-  // The divisor (currently 3) is a private engine constant this test does not name or
-  // import; it only pins the OBSERVABLE result (30 / 3 = 10) the way a caller would.
-  assert.strictEqual(maxMarkerContribution, 10,
-    'maxMarkerContribution must be the per-marker bound derived from the configured budget; got ' + maxMarkerContribution);
-});
-
-test('computeDrift: each perMarker record carries its actual contribution -- capped equals the bound, uncapped equals the honest deviation', () => {
-  const baseline = {
-    markers: { cappedMarker: 1, plainMarker: 1 },
-    marker_set_version: CURRENT_MARKER_SET_VERSION,
-  };
-  // cappedMarker deviates 900% (honest), far past any single-digit-percent bound.
-  // plainMarker deviates exactly 1% (honest), comfortably under the bound at this budget.
-  const measured = { cappedMarker: 10, plainMarker: 1.01 };
-  const { perMarker, maxMarkerContribution } = computeDrift(
-    measured, baseline, { drift_score_max: 30, stylometry_marker_tolerance: 2.0 }
-  );
-
-  const capped = perMarker.find(m => m.marker === 'cappedMarker');
-  const plain = perMarker.find(m => m.marker === 'plainMarker');
-
-  assert.strictEqual(capped.capped, true, 'cappedMarker must be capped for this test to be meaningful');
-  assert.strictEqual(capped.contribution, maxMarkerContribution,
-    'a capped marker\'s contribution must equal the per-marker bound exactly; got ' + capped.contribution);
-  assert.ok(capped.deviationPct > capped.contribution,
-    'a capped marker\'s honest deviation must exceed its own contribution; deviation=' +
-    capped.deviationPct + ' contribution=' + capped.contribution);
-
-  assert.strictEqual(plain.capped, false, 'plainMarker must not be capped for this test to be meaningful');
-  assert.strictEqual(plain.contribution, plain.deviationPct,
-    'an uncapped marker\'s contribution must equal its honest deviation exactly; got ' +
-    plain.contribution + ' vs deviation ' + plain.deviationPct);
-});
-
-// ---------------------------------------------------------------------------
-// The stale-baseline guard: marker_set_version (roadmap row 1.7)
+// The stale-baseline guard: marker_set_version. computeDrift v5's return shape and
+// per-marker-contribution/capped tests (formerly here, roadmap row 1.7's "Correction B")
+// moved above to the "computeDrift v5" sections, since the capped-sum rule and its
+// contribution/capped fields are retired entirely (ADR-0012, voice verdict scope); the stale-
+// version guard itself is unchanged by the v5 combining-rule swap, so these two tests are
+// unchanged (the version check runs, and throws, before either test's baseline is examined
+// for a calibration object at all -- see the validation-order tests above).
 // ---------------------------------------------------------------------------
 
 test('computeDrift: scoring against a baseline whose marker_set_version does not match the current one fails with a named, actionable error', () => {
@@ -807,7 +1131,7 @@ test('computeDrift: scoring against a baseline whose marker_set_version does not
   const staleBaseline = { markers: { x: 1.0 }, marker_set_version: 1 };
 
   assert.throws(
-    () => computeDrift(measured, staleBaseline, { drift_score_max: 30, stylometry_marker_tolerance: 2.0 }),
+    () => computeDrift(measured, staleBaseline, { drift_score_max: 30, stylometry_marker_tolerance: 2.0 }, { scoredWords: 550 }),
     (err) => {
       assert.strictEqual(err.name, 'StaleBaselineError',
         'error must be a named StaleBaselineError; got ' + err.name);
@@ -823,7 +1147,7 @@ test('computeDrift: a baseline with no marker_set_version field at all is treate
   const noVersionBaseline = { markers: { x: 1.0 } }; // marker_set_version absent entirely
 
   assert.throws(
-    () => computeDrift(measured, noVersionBaseline, { drift_score_max: 30, stylometry_marker_tolerance: 2.0 }),
+    () => computeDrift(measured, noVersionBaseline, { drift_score_max: 30, stylometry_marker_tolerance: 2.0 }, { scoredWords: 550 }),
     /nfs-capture-voice/,
     'an absent marker_set_version field must be treated as version 1 and rejected as stale'
   );
@@ -1033,4 +1357,115 @@ test('word tokenization: CONTRACTION_RE stays ASCII-only, unaffected by the WORD
     'a possessive whose stem ends in a non-ASCII letter must not be counted as a ' +
     'contraction; if this fails, CONTRACTION_RE has been widened to match non-ASCII ' +
     'letters, which is a deliberate decision this test exists to force, not an accident');
+});
+
+// ---------------------------------------------------------------------------
+// locateWorstWindow (roadmap row 1.7, voice registers; ADR-0012 voice verdict scope,
+// Decision 4 -- advisory-only passage attribution for --explain). A pure, deterministic
+// helper: slides a fixed 100-word window one word at a time over the (preprocessed,
+// normalized) text, re-measuring the given marker's LOCAL value inside each window's exact
+// word span, and returns the window whose local value is furthest (by absolute distance)
+// from a caller-supplied baseline value. No RNG anywhere.
+//
+// CONSTRUCTED_TEXT below is built so the answer is known by construction, not asserted
+// blind: 150 filler words ("team", first_person_rate contribution zero), then EXACTLY 100
+// words that are all first-person pronouns ("I"), then 150 more filler words. Word tokens
+// 1-150 are filler, 151-250 are the all-"I" block, 251-400 are filler again. Because the
+// window is exactly 100 words wide, the ONE window that aligns exactly with the all-"I"
+// block (start word 151) has local first_person_rate = 100 (every one of its 100 words is
+// first-person); every other window position mixes in at least one filler word, which can
+// only pull the local rate below 100. So the window of maximum |local - baseline| (baseline
+// 0 here) is uniquely and unambiguously word range 151-250 -- hand-verifiable arithmetic,
+// not a value read back from the function under test.
+// ---------------------------------------------------------------------------
+
+const WINDOW_FILLER_COUNT = 150;
+const WINDOW_DEVIANT_COUNT = 100;
+
+function buildWindowLocatorText() {
+  const filler = Array(WINDOW_FILLER_COUNT).fill('team').join(' ');
+  const deviant = Array(WINDOW_DEVIANT_COUNT).fill('I').join(' ');
+  return filler + '. ' + deviant + '. ' + filler + '.';
+}
+
+test('locateWorstWindow: locates the exact known deviant 100-word window in a constructed text (known by construction)', () => {
+  const text = buildWindowLocatorText();
+  const result = locateWorstWindow(text, 'first_person_rate', 0);
+
+  assert.ok(result, 'locateWorstWindow must return a result for non-empty text');
+  assert.equal(result.marker, 'first_person_rate');
+  assert.equal(result.startWord, 151, 'the deviant window must start at word 151 (1-indexed)');
+  assert.equal(result.endWord, 250, 'the deviant window must end at word 250 (a 100-word window)');
+  assert.equal(result.value, 100, 'the deviant window is entirely first-person pronouns: local rate 100');
+  assert.equal(result.deltaAbs, 100, 'deltaAbs against a baseline of 0 must equal the local value itself');
+});
+
+test('locateWorstWindow: deterministic -- byte-identical result across two calls on the same input', () => {
+  const text = buildWindowLocatorText();
+  const r1 = locateWorstWindow(text, 'first_person_rate', 0);
+  const r2 = locateWorstWindow(text, 'first_person_rate', 0);
+  assert.deepEqual(r1, r2);
+});
+
+test('locateWorstWindow: text shorter than or equal to one window returns a single window spanning the whole text', () => {
+  const shortText = 'I went to the market and I bought bread and I came home again.';
+  const n = countWords(shortText);
+  assert.ok(n <= 100, 'sanity: this fixture text must be short text (<=100 words) for this case');
+  const result = locateWorstWindow(shortText, 'first_person_rate', 0);
+  assert.equal(result.startWord, 1);
+  assert.equal(result.endWord, n);
+});
+
+test('locateWorstWindow: empty text returns null (nothing to locate)', () => {
+  assert.equal(locateWorstWindow('', 'first_person_rate', 0), null);
+  assert.equal(locateWorstWindow('# only a heading', 'first_person_rate', 0), null,
+    'a heading-only text strips to nothing under the same preprocessing extractCounts uses');
+});
+
+test('locateWorstWindow: worst-window value is real for a marker not defined by a per-word count (contraction_rate, sentence-denominated)', () => {
+  // contraction_rate's denominator is sentences, not words, and a window can start or end
+  // mid-sentence -- this test only proves the helper does not crash or return NaN/undefined
+  // for a marker whose ratio is not word-denominated, not that the window position is exactly
+  // one thing (unlike the word-denominated markers above, a hand-computable single answer
+  // does not exist for this marker under an arbitrary word-boundary slice).
+  const text = buildWindowLocatorText();
+  const result = locateWorstWindow(text, 'contraction_rate', 0);
+  assert.ok(result);
+  assert.equal(typeof result.value, 'number');
+  assert.ok(!Number.isNaN(result.value));
+});
+
+// ---------------------------------------------------------------------------
+// compareRegister (P8, ADR-0012 voice verdict scope, Decision 4: registers carry a plain
+// measured vector, no calibration ladder, so there is no z here -- only the same signed
+// relative deviation formula computeDrift uses for its own honest deviationPct, per marker,
+// with no combining rule and no verdict).
+// ---------------------------------------------------------------------------
+
+test('compareRegister: per-marker deviationPct against a plain register vector, no z field', () => {
+  const measured = { function_word_rate: 0.55, first_person_rate: 2.0 };
+  const register = { function_word_rate: 0.50, first_person_rate: 0.0 };
+  const result = compareRegister(measured, register);
+
+  assert.equal(result.length, 2);
+  const fw = result.find(m => m.marker === 'function_word_rate');
+  assert.equal(fw.baseline, 0.50);
+  assert.equal(fw.measured, 0.55);
+  assert.ok(Math.abs(fw.deviationPct - 10) < 1e-9, 'got ' + fw.deviationPct);
+  assert.equal(fw.z, undefined, 'compareRegister must not report a z; no calibration exists at register scale');
+
+  const fp = result.find(m => m.marker === 'first_person_rate');
+  assert.equal(fp.deviationPct, 100,
+    'zero-baseline rule: nonzero measured against zero baseline is a 100% deviation, never -100');
+});
+
+test('compareRegister: zero baseline and zero measured is 0 deviation, not the +100 zero-baseline branch', () => {
+  const result = compareRegister({ x: 0 }, { x: 0 });
+  assert.equal(result[0].deviationPct, 0);
+});
+
+test('compareRegister: measured missing a marker the register carries reads as 0, matching computeDrift\'s own convention', () => {
+  const result = compareRegister({}, { first_person_rate: 2.0 });
+  assert.equal(result[0].measured, 0);
+  assert.equal(result[0].deviationPct, 100);
 });

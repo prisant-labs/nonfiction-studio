@@ -183,8 +183,10 @@ export function formatWords(wordCount, target) {
  *   - driftBand: the `verdict` of the `checks[]` entry whose `check` is "stylometry", lower-cased.
  *     Using the existing pass/warn/block/skip vocabulary rather than inventing a new banding
  *     scheme: no other part of this codebase categorizes drift any other way (checked against
- *     hooks/lib/gate-engine.mjs, which only ever compares drift_score to drift_score_max and
- *     emits one of those four verdict tokens).
+ *     hooks/lib/gate-engine.mjs, which -- since ADR-0012, voice verdict scope, Decision 2 --
+ *     compares a calibrated max-|z| drift statistic against a per-scored-word-count threshold
+ *     read from the baseline's own calibration ladder, not a single fixed drift_score_max, and
+ *     still emits one of those four verdict tokens either way).
  *
  * Both are null when lastGate is null, has no string top-level verdict, or (for driftBand only)
  * carries no stylometry entry in checks[].

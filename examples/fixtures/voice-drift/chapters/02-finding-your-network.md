@@ -1,31 +1,27 @@
 # Chapter 2: Finding Your Network
 
-The phrase "personal learning network" can sound like a vague ambition. In practice, it refers to a specific list of people, publications, and communities that are returned to with intention.
+"Personal learning network" sounds like a vague ambition when They say it out loud, so let them make it concrete. They mean a specific list of people, publications, and communities They actually return to on purpose, not the sprawling feed They used to call the same thing.
 
-Most professionals already have something of this kind. There is the colleague consulted when one is stuck, the newsletter that is actually read, the podcast listened to on Monday mornings. The purpose of this chapter is to make that list deliberate.
+They already had something like this before They ever named it. There was the colleague They consulted when They got stuck, the newsletter They actually read instead of archiving, the podcast They listened to on Monday mornings without fail. They just hadn made the list deliberate, and They want to walk you through how They did that.
 
-## Start with the question, not the platform
+## They started with a question, not a platform
 
-The first mistake that new network builders make is platform-first thinking. A service is joined, people are followed, and the result is a feed that mixes personal announcements with professional insight with promotional content. The feed grows over time and becomes harder to curate.
+Their first mistake, and They made it more than once, was platform-first thinking. They would join a service, follow a bunch of people, and end up with a feed mixing personal announcements with professional insight with promotional noise. The feed grew, and it got harder to curate every month They let it run.
 
-It is recommended instead that one begin with a question: what is most worth understanding in the next twelve months? The question could concern a technical skill, or the workings of a particular industry, or how communication may be made clearer with a specific audience.
+What worked better, They have found, is starting with a question: what do They most need to understand in the next twelve months? For them it been a technical skill some years, an industry workings other years, sometimes just how to communicate more clearly with a specific audience. Once They have named the question, They go looking for the people already answering it. Not just discussing it, actually demonstrating it in their work. They have noticed commentators are easy to find. Practitioners who show their reasoning are rarer, and They have learned they are worth more.
 
-Once the question has been identified, one should look for the people who are already answering it. Not merely discussing it, but demonstrating it in their work. The distinction matters. Commentators are easy to find. Practitioners who share their reasoning are rarer and more valuable.
+## Breadth versus depth, in their own experience
 
-## Breadth versus depth
+They have read that people can maintain stable relationships with roughly 150 individuals at a time. [claim: EV-0006] They don think that means their learning network should hold 150 people. It means their capacity for real relationships is finite, and They have decided to spend it carefully rather than widely.
 
-Research on social cognition suggests that people can maintain stable relationships with roughly 150 individuals at one time. [claim: EV-0006] This does not mean that a learning network should contain 150 people. It means that the capacity for real relationships is finite, and that capacity ought to be spent carefully.
+They have noticed, in themselves and in the people They have talked to about this, that curating your own information sources tends to produce more satisfaction with what you learn than leaning on an algorithmic feed. [claim: EV-0007] They usually recommend starting with ten or fifteen sources: a mix of people whose thinking holds up and publications or communities that actually cover the question They am chasing.
 
-Professionals who curate their information sources report higher satisfaction with their learning outcomes than those who rely on algorithmic feeds. [claim: EV-0007] It is therefore advisable to begin with ten to fifteen sources: a mix of individuals whose thinking is worth following and publications or communities that cover the relevant question area.
+They have also learned that weak-tie connections, the contacts outside their immediate team or field, hand them more genuinely novel information than their strong ties ever do. [claim: EV-0008] So They don let their network just mirror their own discipline. They try to reach into adjacent areas where people are solving the same problems differently than They would.
 
-Weak-tie connections, contacts outside one's immediate team or domain, provide more novel information than strong-tie connections in the same field. [claim: EV-0008] It follows that a learning network should not merely reflect the existing discipline. It ought to reach into adjacent areas where the same problems are solved differently.
+They have seen this pattern hold for retention, too: They learn more durably from three or more distinct kinds of sources than They ever did from relying on one medium. [claim: EV-0009] They aim for at least one long-form source, one community where practitioners actually talk to each other, and one person They can ask directly when They am stuck.
 
-Adults who learn from three or more distinct types of sources show more durable knowledge retention than those who rely on a single medium. [claim: EV-0009] It is therefore recommended that a network include at least one long-form source, one community where practitioners talk, and one person who may occasionally be consulted directly.
+They try to add no more than five new connections a week, especially in the first few months, so They actually have time to evaluate each one. [claim: EV-0010] They have felt the pull to follow everyone at once, and They have learned to resist it. A small, curated network has compounded faster for them than any large, undifferentiated one ever did.
 
-Learning network researchers recommend adding no more than five new connections per week during the first three months to allow deliberate evaluation. [claim: EV-0010] The impulse to follow everyone should be resisted. A curated small network compounds faster than a large undifferentiated one.
+## Building their own list
 
-## Building the list
-
-A blank document is the appropriate starting point. Three categories are identified: people, publications, communities. Under each, what is already relied upon should be listed. The question to ask is: what is absent from the question area?
-
-This list is the starting point. It will change, and that is to be expected.
+They start with a blank document. Three categories: people, publications, communities. Under each, They list what They already rely on. Then They ask themselves what missing from the question They am actually trying to answer. They know the list will change. They have stopped expecting it not to.

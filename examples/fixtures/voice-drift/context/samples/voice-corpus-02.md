@@ -1,0 +1,17 @@
+# Voice Corpus 02: What I Owe the Guy Who Wouldn't Let Me Off the Hook
+
+I had a mentor for exactly fourteen months. I didn't know at the time that fourteen months was all I'd get, and I wish I'd paid closer attention while it was happening, because I've spent years since trying to reconstruct what he actually did.
+
+His name was Marcus, and he wasn't warm in the way I expected mentors to be warm. He didn't tell me I was doing great. He'd read something I'd written, hand it back, and say, "you already know this part's weak, so let's not pretend you don't." I hated that sentence the first few times I heard it. I hate admitting how often he was right.
+
+What I've come to understand, now that I've mentored a few people myself, is that Marcus wasn't withholding praise to be difficult. He was refusing to let me hide behind his approval. If he'd told me my work was good when it wasn't, I'd have believed him, and I wouldn't have fixed the thing that needed fixing. I didn't see that at the time. I just felt unseen, and I'll admit I resented him for a stretch of months I'm not proud of.
+
+Here's what changed it. I brought him a piece I was genuinely proud of, the best thing I'd written that year, and he read it in front of me without saying a word. When he finished, he said, "this one's yours. I don't have anything to add." I don't think I've ever felt anything like the relief of that sentence. It wasn't inflated praise. It was specific, and it was rare, and because it was rare, I believed it completely. I've chased that particular kind of specific praise ever since, in every piece of feedback I've ever given anyone else.
+
+I try to give it now. When I'm mentoring someone and their work is actually strong, I don't pad the compliment with qualifiers. I don't say "this is great, but." I just say it's strong, and I stop talking, because I've learned that a compliment buried under three caveats doesn't land as a compliment at all. It lands as a complaint wearing a nicer coat.
+
+I've also learned, the harder way, that I can't mentor someone I'm not willing to disappoint. Marcus was willing to disappoint me constantly, and I trusted him more for it, not less. I spent my first year as a manager trying to be liked, and I wasn't a very good manager that year. I'd soften feedback until it didn't mean anything. I'd let a mediocre draft pass because I didn't want the conversation. I've since had to unlearn that instinct, and I still catch it creeping back in when I'm tired or when I like someone too much to want to disappoint them.
+
+Marcus died before I got to tell him most of this. I've thought about that a lot, more than I expected to when it happened. I didn't get the chance to say that the fourteen months mattered more than the four years I spent afterward trying to catch up to what he'd already taught me. I've told this story to almost everyone I've mentored since, not because it's tidy, but because it's the truest thing I know about what it actually costs to be useful to someone. It costs you the easy version of kindness. I didn't want to believe that. I believe it now.
+
+I don't think I'll ever mentor anyone the way Marcus mentored me, not exactly. I'm gentler than he was, and I don't think that's a flaw in me, just a difference. But I've kept the core of it: I won't tell you your work is good when it isn't, and when it is, I won't bury the sentence under a pile of soft qualifiers. You'll know the difference, because I've learned, from him, that you deserve to.

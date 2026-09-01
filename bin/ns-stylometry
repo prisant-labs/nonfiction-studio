@@ -6,7 +6,7 @@
 // why:          the CLI is the public surface; all logic lives in stylometry-engine.mjs so hooks
 //               and CI share the same computation path per S-07 section 4
 // usage:        ns-stylometry [--chapter=<slug>|--all] [--baseline=<path>] [--measure=<path>[,<path>...]]
-//               [--project=<dir>] [--json] [--explain]
+//               [--calibrate=<path>[,<path>...]] [--project=<dir>] [--json] [--explain] [--by-register]
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
@@ -14,8 +14,16 @@ import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
 import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
 import {
   measureChapter, measureBook, computeDrift, countWords, CURRENT_MARKER_SET_VERSION,
-  DEFAULT_DRIFT_SCORE_MAX,
+  compareRegister, locateWorstWindow,
 } from '../hooks/lib/stylometry-engine.mjs';
+import { calibrateBaseline } from '../hooks/lib/stylometry-calibration.mjs';
+
+// P8 (ADR-0012 voice verdict scope, Decision 4): the VERBATIM advisory label every --by-register
+// output carries, wherever it appears (text mode header, every JSON registers[] entry's `note`).
+// One string constant, not a phrase re-typed at each call site, so it cannot drift between them.
+const REGISTER_ADVISORY_LABEL =
+  'advisory - no blocking verdict at register scale; register-sized text is far below the ' +
+  'roughly 2,200 words a blocking verdict needs';
 
 // ---- arg parsing ---------------------------------------------------------------
 
@@ -24,7 +32,9 @@ try {
   opts = parseArgs(process.argv.slice(2), [
     'chapter', 'all', 'baseline', 'project', 'json',
     { name: 'measure', type: 'list' },
+    { name: 'calibrate', type: 'list' },
     { name: 'explain', type: 'boolean' },
+    { name: 'by-register', type: 'boolean' },
   ]);
 } catch (err) {
   if (err.name === 'ArgsError') {
@@ -74,6 +84,80 @@ if (opts.measure !== null) {
     markers, marker_set_version: CURRENT_MARKER_SET_VERSION, files: resolvedPaths, totalWords,
   };
   process.stdout.write(JSON.stringify(out, null, 2) + '\n');
+  process.exit(0);
+}
+
+// ---- calibrate mode (read files, run the five-rung calibration recipe, print JSON; reads no
+// config, writes nothing) --------------------------------------------------------
+// usage: ns-stylometry --calibrate=<path>[,<path>...]
+// Deterministic: byte-identical stdout for identical input files (calibrateBaseline's own seed
+// default, 4242, is unconditional here -- there is no --seed flag). Exit 0 on success; exit 1
+// when the given files are too small to calibrate (CorpusTooSmallError -- a data-insufficiency
+// outcome, distinct from the exit-2 usage/I-O errors elsewhere in this file); exit 2 on missing
+// or unreadable file. A plain-language regime disclosure is written to stderr, separate from the
+// stdout JSON, so a human running this directly sees the verdict-scope decision without parsing
+// JSON (the honest-disclosure default per this implementation wave's design pins).
+
+if (opts.calibrate !== null) {
+  if (opts.calibrate.length === 0) {
+    process.stderr.write('ns-stylometry: --calibrate requires at least one file path\n');
+    process.exit(2);
+  }
+
+  const calibTexts = [];
+  const calibResolvedPaths = [];
+  let calibTotalWords = 0;
+
+  for (const rawPath of opts.calibrate) {
+    const absPath = resolve(rawPath);
+    let text;
+    try {
+      text = readFileSync(absPath, 'utf8');
+    } catch (err) {
+      process.stderr.write('ns-stylometry: cannot read file: ' + absPath + '\n');
+      process.exit(2);
+    }
+    calibTexts.push(text);
+    calibResolvedPaths.push(absPath.replace(/\\/g, '/'));
+    calibTotalWords += countWords(text);
+  }
+
+  let calibResult;
+  try {
+    calibResult = calibrateBaseline(calibTexts);
+  } catch (err) {
+    if (err.name === 'CorpusTooSmallError') {
+      process.stderr.write('ns-stylometry: ' + err.message + '\n');
+      process.exit(err.exitCode);
+    }
+    throw err;
+  }
+
+  const calibOut = {
+    markers: calibResult.markers,
+    marker_set_version: CURRENT_MARKER_SET_VERSION,
+    calibration: calibResult.calibration,
+    files: calibResolvedPaths,
+    totalWords: calibTotalWords,
+  };
+  process.stdout.write(JSON.stringify(calibOut, null, 2) + '\n');
+
+  // Two sentences, per this implementation wave's honest-disclosure default: one names the
+  // regime, the other names why -- not a single combined sentence, so each half of the
+  // disclosure is independently quotable.
+  const aucStr = calibResult.calibration.detectability_auc.toFixed(3);
+  const regimeSpan = calibResult.calibration.spans[0];
+  if (calibResult.calibration.regime === 'chapter') {
+    process.stderr.write(
+      'ns-stylometry: regime = chapter. Detectability AUC ' + aucStr + ' at the ' + regimeSpan +
+      '-word rung meets the 0.95 bar, so per-chapter verdicts are supportable.\n'
+    );
+  } else {
+    process.stderr.write(
+      'ns-stylometry: regime = book. Detectability AUC ' + aucStr + ' at the ' + regimeSpan +
+      '-word rung falls short of the 0.95 bar, so only a book-scale aggregate verdict is supportable.\n'
+    );
+  }
   process.exit(0);
 }
 
@@ -155,6 +239,27 @@ if (opts.baseline) {
   thresholds = config.thresholds || null;
 }
 
+// ---- registers discovery (P8, ADR-0012 voice verdict scope, Decision 4 -- advisory only) -------
+// Read independently of which baseline branch above ran (an explicit --baseline override reads a
+// baseline from elsewhere, but stylometry.registers, when it exists, still lives in this project's
+// own .studio/config.json). Any read or parse failure here is treated the same as "no registers
+// configured" -- advisory output degrading quietly is the correct failure mode for a feature that
+// carries no blocking verdict, never a reason to fail the whole scoring run.
+let registers = null;
+if (opts['by-register']) {
+  const registersConfigPath = join(root, '.studio', 'config.json');
+  if (existsSync(registersConfigPath)) {
+    try {
+      const registersConfig = JSON.parse(readFileSync(registersConfigPath, 'utf8'));
+      if (registersConfig && registersConfig.stylometry && registersConfig.stylometry.registers) {
+        registers = registersConfig.stylometry.registers;
+      }
+    } catch {
+      // malformed config.json: treated as no registers configured, not a hard failure
+    }
+  }
+}
+
 // ---- chapter discovery ---------------------------------------------------------
 
 const chapterDir = join(root, 'chapters');
@@ -196,26 +301,31 @@ for (const absPath of chapterPaths) {
 }
 
 // Zero-chapter edge case: no chapters means no drift. There is no measured vector and no
-// score here, so --explain has nothing to rank; per the judgment call recorded in
+// statistic here, so --explain has nothing to rank; per the judgment call recorded in
 // docs/reference/cli/ns-stylometry.md, it states that reason rather than staying silent,
 // matching how this branch already speaks (not silently) when --explain is absent.
 if (chapterTexts.length === 0) {
-  const driftScoreMax = (thresholds && thresholds.drift_score_max != null) ? thresholds.drift_score_max : DEFAULT_DRIFT_SCORE_MAX;
   const NO_CHAPTERS_EXPLAIN_NOTE = 'no chapters to scan; nothing to explain';
   const outJson = {
     check: 'stylometry',
     verdict: 'pass',
     detail: 'no chapters to scan',
-    driftScore: 0,
-    threshold: driftScoreMax,
+    statistic: null,
+    worstMarker: null,
+    threshold: null,
+    exceeded: false,
+    regime: null,
     status: 'pass',
     markers: {},
+    scoredWords: 0,
     explain: opts.explain
       ? {
-        budget: driftScoreMax, maxMarkerContribution: null, markerTolerance: null,
+        threshold: null, markerTolerance: null,
         perMarker: [], note: NO_CHAPTERS_EXPLAIN_NOTE,
       }
       : undefined,
+    registers: opts['by-register'] ? [] : undefined,
+    registersNote: opts['by-register'] ? NO_CHAPTERS_EXPLAIN_NOTE : undefined,
     chapters: [],
     findings: [],
     ts: new Date().toISOString(),
@@ -227,55 +337,106 @@ if (chapterTexts.length === 0) {
     if (opts.explain) {
       process.stdout.write('  ' + NO_CHAPTERS_EXPLAIN_NOTE + '\n');
     }
+    if (opts['by-register']) {
+      process.stdout.write('  ' + NO_CHAPTERS_EXPLAIN_NOTE + '\n');
+    }
   }
   process.exit(0);
 }
 
 // ---- measure and compute drift -------------------------------------------------
 
+// scoredWords: the same countWords authority measure mode already uses, summed over every
+// chapter text being scored (single chapter or the whole book) -- the word count the
+// calibration ladder is looked up at (P1).
+const scoredWords = chapterTexts.reduce((sum, text) => sum + countWords(text), 0);
+
 const measured = measureBook(chapterTexts);
-let score, perMarker, exceeded, maxMarkerContribution, markerTolerance;
+let statistic, worstMarker, threshold, exceeded, regime, perMarker, markerTolerance, deprecations;
 try {
-  ({ score, perMarker, exceeded, maxMarkerContribution, markerTolerance } =
-    computeDrift(measured, baseline, thresholds));
+  ({ statistic, worstMarker, threshold, exceeded, regime, perMarker, markerTolerance, deprecations } =
+    computeDrift(measured, baseline, thresholds, { scoredWords }));
 } catch (err) {
-  // Covers both a malformed baseline (missing .markers) and a stale
-  // marker_set_version (StaleBaselineError names nfs-capture-voice as the remedy).
+  // Covers a malformed baseline (missing .markers), a stale marker_set_version
+  // (StaleBaselineError names nfs-capture-voice as the remedy), and an incomplete v5
+  // calibration ladder (InvalidCalibrationError, same remedy).
   process.stderr.write('ns-stylometry: ' + err.message + '\n');
   process.exit(2);
 }
 
-const driftScoreMax = (thresholds && thresholds.drift_score_max != null) ? thresholds.drift_score_max : DEFAULT_DRIFT_SCORE_MAX;
+// P7 (ADR-0012 voice verdict scope): thresholds.drift_score_max is retired and read by nothing
+// here for scoring; computeDrift's own deprecations array carries the one canonical retirement
+// string when the key is present in config, surfaced here on stderr (the gate's own equivalent
+// surface is its check `detail`, once per run -- both surfaces are tested).
+for (const notice of deprecations) {
+  process.stderr.write('ns-stylometry: ' + notice + '\n');
+}
+
 const flaggedMarkers = perMarker.filter(m => m.flagged);
 
-// Exit code is determined solely by score vs threshold; gate mode is not read.
-// exit 0: score < threshold (passes), exit 1: score >= threshold (exceeded). --explain never
-// reads or changes this: it composes with the existing modes rather than replacing them.
+// Exit code is determined solely by the calibrated statistic vs its threshold; gate mode is not
+// read. exit 0: not exceeded (passes), exit 1: exceeded. --explain never reads or changes this:
+// it composes with the existing modes rather than replacing them.
 const exitCode = exceeded ? 1 : 0;
 
-// perMarker ordered by actual contribution to the score, largest first, so the marker that
-// drove the verdict is always named first -- a stable sort, so markers tied on contribution
-// keep the baseline's own declared order rather than an arbitrary one. Only built when
-// --explain is requested.
+// perMarker ordered by |z| descending, so the marker that drove the verdict is always named
+// first -- a stable sort, so markers tied on |z| keep the baseline's own declared order rather
+// than an arbitrary one. Only built when --explain is requested.
 const sortedForExplain = opts.explain
-  ? [...perMarker].sort((a, b) => b.contribution - a.contribution)
+  ? [...perMarker].sort((a, b) => Math.abs(b.z) - Math.abs(a.z))
   : null;
 
-// Build per-marker delta map for the JSON shape (S-07 section 4 stdout schema).
-// deviationPct is always the honest, uncapped value; capped records whether the
-// per-marker contribution bound (roadmap row 1.7, voice registers) was binding
-// for that marker, i.e. whether its actual contribution to driftScore was less
-// than its deviationPct.
+// Build per-marker delta map for the JSON shape. deviationPct stays the honest, signed-magnitude
+// value; z is the SIGNED standardized deviation the verdict statistic is drawn from (P1) --
+// this replaces the retired capped/contribution pair (v4) entirely, not alongside it.
 const markersObj = {};
 for (const m of perMarker) {
   markersObj[m.marker] = {
     baseline: m.baseline,
     measured: m.measured,
     deviationPct: m.deviationPct,
-    capped: m.capped,
+    z: m.z,
     flagged: m.flagged,
   };
 }
+
+// ---- passage attribution (P8, ADR-0012 voice verdict scope, Decision 4) --------
+// For the worst marker, locate the single most locally deviant 100-word window in the scored
+// text (chapterTexts concatenated in the same order measureBook already aggregates them),
+// advisory only -- this never feeds back into statistic, threshold, or exceeded above, and is
+// only computed when --explain is requested (the flag this diagnostic belongs to per P8).
+const PASSAGE_ADVISORY_PREFIX = 'advisory - a diagnostic passage location, not a blocking verdict: ';
+let passage = null;
+if (opts.explain) {
+  const scoredText = chapterTexts.join('\n\n');
+  passage = locateWorstWindow(scoredText, worstMarker, markersObj[worstMarker].baseline);
+}
+const passageNote = passage
+  ? PASSAGE_ADVISORY_PREFIX + 'the ' + passage.marker + ' marker\'s most locally deviant ' +
+    '100-word window is words ' + passage.startWord + '-' + passage.endWord
+  : null;
+
+// ---- register comparison (P8, ADR-0012 voice verdict scope, Decision 4) --------
+// Advisory only, per register configured in stylometry.registers: relative deviation of the
+// scored text's own marker vector (measured, already computed above) against that register's
+// plain measured vector. Never touches statistic/threshold/exceeded/exitCode above -- this
+// section is purely additive output, gated entirely behind --by-register.
+let registerResults = [];
+if (opts['by-register'] && registers) {
+  for (const registerName of Object.keys(registers)) {
+    const register = registers[registerName];
+    if (!register || !register.markers) continue;
+    registerResults.push({
+      register: registerName,
+      sample_count: register.sample_count != null ? register.sample_count : null,
+      note: REGISTER_ADVISORY_LABEL,
+      perMarker: compareRegister(measured, register.markers),
+    });
+  }
+}
+const NO_REGISTERS_NOTE =
+  'no stylometry.registers configured in .studio/config.json; register-aware comparison is ' +
+  'unavailable until nfs-capture-voice\'s optional register bucketing runs';
 
 // Build findings array: one entry per flagged marker.
 const findings = flaggedMarkers.map(m => ({
@@ -292,36 +453,63 @@ const verdict = exceeded ? 'block' : 'pass';
 const outJson = {
   check: 'stylometry',
   verdict,
+  // Boundary wording matches hooks/lib/gate-engine.mjs's own stylometry detail phrasing
+  // ("drift statistic N.NN {within|exceeds} threshold N.NN"), naming the worst marker and the
+  // calibrated threshold consistently across both surfaces (this task's brief).
   detail: exceeded
-    ? 'drift score ' + score.toFixed(2) + ' exceeds threshold ' + driftScoreMax
-    : 'drift score ' + score.toFixed(2) + ' is within threshold ' + driftScoreMax,
-  driftScore: score,
-  threshold: driftScoreMax,
+    ? 'drift statistic ' + statistic.toFixed(2) + ' (worst marker ' + worstMarker +
+      ') exceeds calibrated threshold ' + threshold.toFixed(2)
+    : 'drift statistic ' + statistic.toFixed(2) + ' (worst marker ' + worstMarker +
+      ') within calibrated threshold ' + threshold.toFixed(2),
+  statistic,
+  worstMarker,
+  threshold,
+  exceeded,
+  regime,
   status: exceeded ? 'block' : 'pass',
   markers: markersObj,
-  // --explain surfaces data computeDrift already computed (contribution, maxMarkerContribution,
-  // markerTolerance) but the pre-existing markers/findings shape above never carried: ordered by
-  // contribution descending, so the marker that drove the verdict is first. markerTolerance is
-  // included so the block is self-contained -- flagged is already a boolean on every entry, this
-  // is the number it was compared against, not a new signal. Present only when the flag is
-  // passed -- JSON.stringify drops an undefined-valued key, so a consumer who never asks for
-  // --explain sees byte-for-byte the same shape this CLI produced before this flag existed.
+  scoredWords,
+  // --explain surfaces data computeDrift already computed (z, markerTolerance) but the
+  // pre-existing markers/findings shape above never carried: ordered by |z| descending, so the
+  // marker that drove the verdict is first. markerTolerance is included so the block is
+  // self-contained -- flagged is already a boolean on every entry, this is the number it was
+  // compared against, not a new signal. Present only when the flag is passed -- JSON.stringify
+  // drops an undefined-valued key, so a consumer who never asks for --explain sees byte-for-byte
+  // the same shape this CLI produces without it.
   explain: opts.explain
     ? {
-      budget: driftScoreMax,
-      maxMarkerContribution,
+      threshold,
       markerTolerance,
       perMarker: sortedForExplain.map(m => ({
         marker: m.marker,
         baseline: m.baseline,
         measured: m.measured,
         deviationPct: m.deviationPct,
-        contribution: m.contribution,
-        capped: m.capped,
+        z: m.z,
         flagged: m.flagged,
       })),
+      // Passage attribution (P8): present whenever a window was located (always true here,
+      // since chapterTexts.length > 0 is already guaranteed by the zero-chapter early return
+      // above); null only in the defensive case of a scored text that strips to zero words
+      // under preprocessing (for example, chapters containing only headings).
+      passage: passage
+        ? {
+          marker: passage.marker,
+          startWord: passage.startWord,
+          endWord: passage.endWord,
+          value: passage.value,
+          note: passageNote,
+        }
+        : null,
     }
     : undefined,
+  // registers (P8): present only when --by-register is passed; an empty array plus
+  // registersNote when the flag is passed but stylometry.registers carries nothing usable --
+  // mirrors the explain.note pattern used for the zero-chapter case above. JSON.stringify drops
+  // an undefined-valued key, so a consumer who never asks for --by-register sees no new key at
+  // all, exactly like --explain.
+  registers: opts['by-register'] ? registerResults : undefined,
+  registersNote: (opts['by-register'] && registerResults.length === 0) ? NO_REGISTERS_NOTE : undefined,
   chapters: chapterFiles,
   findings,
   ts: new Date().toISOString(),
@@ -331,11 +519,11 @@ const outJson = {
 
 /**
  * Renders the full per-marker breakdown for --explain's text output: every marker's baseline,
- * measured value, honest deviation, actual contribution, whether the per-marker bound was
- * binding, and whether it crossed the per-marker tolerance band, ordered by contribution
- * descending (sortedMarkers is pre-sorted by the caller) so the driver of the score reads first.
- * This is presentation only -- every number it prints already came out of computeDrift; nothing
- * here re-derives or re-measures anything.
+ * measured value, honest (signed-magnitude) deviation, SIGNED standardized deviation (z), and
+ * whether it crossed the per-marker tolerance band, ordered by |z| descending (sortedMarkers is
+ * pre-sorted by the caller) so the marker driving the verdict statistic reads first. This is
+ * presentation only -- every number it prints already came out of computeDrift; nothing here
+ * re-derives or re-measures anything.
  *
  * The leading "* " / "  " marker restores a signal the pre-existing flagged-markers-only text
  * loop carried by construction (every line it printed was, by definition, a marker that had
@@ -348,35 +536,72 @@ const outJson = {
  * toFixed plus string concatenation, never toLocaleString or any other locale-sensitive
  * formatting, so this line is byte-identical on the Ubuntu and Windows CI legs.
  *
- * @param {object[]} sortedMarkers - perMarker records, already sorted by contribution descending
- * @param {number} maxMarkerContribution - the per-marker bound in absolute terms
+ * @param {object[]} sortedMarkers - perMarker records, already sorted by |z| descending
+ * @param {number} threshold - the calibrated threshold the verdict statistic is compared against
  * @param {number} markerTolerance - the per-marker tolerance band flagged is computed against
  * @returns {string} multi-line text, newline-terminated
  */
-function renderExplainText(sortedMarkers, maxMarkerContribution, markerTolerance) {
+function renderExplainText(sortedMarkers, threshold, markerTolerance) {
   if (sortedMarkers.length === 0) return '  nothing to explain: no markers were measured\n';
 
   const top = sortedMarkers[0];
-  const topBoundNote = top.capped
-    ? ' (bound was binding; honest deviation is ' + top.deviationPct.toFixed(2) + '%)'
-    : '';
-  let out = 'Top driver: ' + top.marker + ', contributing ' + top.contribution.toFixed(2) + topBoundNote + '\n';
-  out += '\nMarkers ranked by contribution to the score (largest first); * marks a marker whose ' +
-    'honest deviation crosses the ' + markerTolerance.toFixed(2) + '% per-marker tolerance band:\n';
+  let out = 'Worst marker: ' + top.marker + ', z=' + top.z.toFixed(4) +
+    ' (calibrated threshold ' + threshold.toFixed(2) + ')\n';
+  out += '\nMarkers ranked by |z| (largest first); * marks a marker whose honest deviation ' +
+    'crosses the ' + markerTolerance.toFixed(2) + '% per-marker tolerance band:\n';
 
   const nameWidth = Math.max(...sortedMarkers.map(m => m.marker.length));
   for (const m of sortedMarkers) {
-    const boundNote = m.capped
-      ? 'bound was binding (max ' + maxMarkerContribution.toFixed(2) + ')'
-      : 'bound not binding';
     const flagPrefix = m.flagged ? '* ' : '  ';
     out +=
       flagPrefix + m.marker.padEnd(nameWidth + 1) +
-      ' contribution ' + m.contribution.toFixed(2).padStart(6) +
+      ' z ' + m.z.toFixed(4).padStart(9) +
       '  deviation ' + (m.deviationPct.toFixed(2) + '%').padStart(8) +
       '  baseline ' + m.baseline.toFixed(4) +
-      '  measured ' + m.measured.toFixed(4) +
-      '  ' + boundNote + '\n';
+      '  measured ' + m.measured.toFixed(4) + '\n';
+  }
+  return out;
+}
+
+/**
+ * Renders the passage-attribution line for --explain's text output (P8): the worst marker's
+ * name and its most locally deviant 100-word window, as a single advisory sentence. Presentation
+ * only -- passage was already located by locateWorstWindow; nothing here re-derives it.
+ *
+ * @param {{marker: string, startWord: number, endWord: number, value: number}} passageResult
+ * @param {number} passageBaseline - the worst marker's baseline value, for context in the line
+ * @returns {string} single line, newline-terminated
+ */
+function renderPassageText(passageResult, passageBaseline) {
+  return '\nPassage attribution (' + PASSAGE_ADVISORY_PREFIX.replace(/: $/, '') + '):\n' +
+    '  the ' + passageResult.marker + ' marker\'s most locally deviant 100-word window is ' +
+    'words ' + passageResult.startWord + '-' + passageResult.endWord +
+    ' (local value ' + passageResult.value.toFixed(4) + ' vs baseline ' + passageBaseline.toFixed(4) + ')\n';
+}
+
+/**
+ * Renders the --by-register text output (P8): the VERBATIM advisory label once, in the section
+ * header, then each configured register's per-marker deviations against the scored text. When no
+ * registers are configured, renders the plain explanation instead of a table -- never silence.
+ *
+ * @param {object[]} results - registerResults, one entry per configured register
+ * @returns {string} multi-line text, newline-terminated
+ */
+function renderRegistersText(results) {
+  if (results.length === 0) {
+    return '\n' + NO_REGISTERS_NOTE + '\n';
+  }
+  let out = '\nRegister comparison (' + REGISTER_ADVISORY_LABEL + '):\n';
+  const nameWidth = Math.max(...results.flatMap(r => r.perMarker.map(m => m.marker.length)));
+  for (const r of results) {
+    out += '\n  ' + r.register + ' (sample_count ' + r.sample_count + '):\n';
+    for (const m of r.perMarker) {
+      out +=
+        '    ' + m.marker.padEnd(nameWidth + 1) +
+        ' deviation ' + (m.deviationPct.toFixed(2) + '%').padStart(8) +
+        '  baseline ' + m.baseline.toFixed(4) +
+        '  measured ' + m.measured.toFixed(4) + '\n';
+    }
   }
   return out;
 }
@@ -387,28 +612,38 @@ if (opts.json) {
   process.stdout.write(JSON.stringify(outJson, null, 2) + '\n');
 } else {
   const prefix = '[stylometry]';
-  const scoreStr = score.toFixed(2);
+  const statisticStr = statistic.toFixed(2);
   if (!exceeded) {
     process.stdout.write(
-      prefix + ' pass: drift score ' + scoreStr + ' < threshold ' + driftScoreMax + '\n'
+      prefix + ' pass: drift statistic ' + statisticStr + ' < calibrated threshold ' + threshold.toFixed(2) + '\n'
     );
     if (opts.explain) {
-      process.stdout.write(renderExplainText(sortedForExplain, maxMarkerContribution, markerTolerance));
+      process.stdout.write(renderExplainText(sortedForExplain, threshold, markerTolerance));
     }
   } else {
     process.stdout.write(
-      prefix + ' drift score ' + scoreStr + ' exceeds threshold ' + driftScoreMax + '\n'
+      prefix + ' drift statistic ' + statisticStr + ' exceeds calibrated threshold ' + threshold.toFixed(2) + '\n'
     );
     if (opts.explain) {
-      process.stdout.write(renderExplainText(sortedForExplain, maxMarkerContribution, markerTolerance));
+      process.stdout.write(renderExplainText(sortedForExplain, threshold, markerTolerance));
     } else {
       for (const m of flaggedMarkers) {
         process.stdout.write(
-          '  [' + m.marker + '] deviation ' + m.deviationPct.toFixed(2) +
+          '  [' + m.marker + '] z=' + m.z.toFixed(4) + ' deviation ' + m.deviationPct.toFixed(2) +
           '% (baseline=' + m.baseline.toFixed(4) + ' measured=' + m.measured.toFixed(4) + ')\n'
         );
       }
     }
+  }
+
+  // Composes with either branch above (pass or block) and with --json's own JSON-only rendering
+  // never running here: passage attribution and register comparison are additive text sections,
+  // never a replacement for the pass/block line or the marker table above.
+  if (opts.explain && passage) {
+    process.stdout.write(renderPassageText(passage, markersObj[worstMarker].baseline));
+  }
+  if (opts['by-register']) {
+    process.stdout.write(renderRegistersText(registerResults));
   }
 }
 

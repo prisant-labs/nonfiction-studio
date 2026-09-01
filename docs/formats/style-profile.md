@@ -26,7 +26,7 @@ The `Baseline reference` section carries three fixed fields and must not duplica
 | `captured` | string | required | RFC 3339 UTC timestamp of the voice-capture run; must agree with `config.json` `stylometry.baseline.captured` |
 | `sample_count` | integer | required | Number of voice samples used in the baseline; must agree with `config.json` `stylometry.baseline.sample_count` |
 
-`bin/ns-doctor` reports a finding if the `captured` timestamp or `sample_count` here disagrees with the corresponding value in `config.json`. Each field is checked independently: `captured` is compared only when `config.json`'s stylometry baseline itself carries a `captured` value, and likewise for `sample_count` - a baseline that has never carried one of these fields (voice-capture's current write contract sets only `markers` and `marker_set_version`) is not treated as disagreeing with a profile that does state one.
+`bin/ns-doctor` reports a finding if the `captured` timestamp or `sample_count` here disagrees with the corresponding value in `config.json`. Each field is checked independently: `captured` is compared only when `config.json`'s stylometry baseline itself carries a `captured` value, and likewise for `sample_count` - a baseline that has never carried one of these fields (the `voice-capture` write contract, `agents/voice-capture.md`, now writes both on every capture, but a baseline captured before that fix may still lack them) is not treated as disagreeing with a profile that does state one.
 
 ## Doctor validation
 
@@ -82,7 +82,7 @@ The `Baseline reference` section carries three fixed fields and must not duplica
 ## Consumed by
 
 - `voice-capture` skill: writes the initial profile at intake, populating all seven sections from the structured author interview.
-- `bin/ns-stylometry` (TSK-026 (ns-stylometry engine)): reads the numeric vector directly from `.studio/config.json`'s `stylometry.baseline.markers`, the location this file's `Baseline reference` block points to, and computes the `drift_score` stored in `progress.json`. It does not read this file itself and does not cross-check the `captured` timestamp; that cross-check is `bin/ns-doctor`'s, described under "Doctor validation" above.
+- `bin/ns-stylometry` (TSK-026 (ns-stylometry engine)): reads the numeric vector, `marker_set_version`, and calibration ladder directly from `.studio/config.json`'s `stylometry.baseline` object, the location this file's `Baseline reference` block points to, and computes the calibrated-null drift verdict (statistic, threshold, exceeded - ADR-0012, voice verdict scope, Decision 1) via `computeDrift`. It is a read-only CLI: it writes nothing to `progress.json` or anywhere else, does not read this file itself, and does not cross-check the `captured` timestamp; that cross-check is `bin/ns-doctor`'s, described under "Doctor validation" above.
 - `bin/ns-doctor` (the eleventh check in `hooks/lib/doctor-engine.mjs`'s `runChecks`): reads this file's `Baseline reference` block directly and cross-checks its `captured` and `sample_count` fields against `.studio/config.json`'s stylometry baseline, per "Doctor validation" above.
 - `drafting-partner`: reads `## Voice`, `## Diction`, `## Rhythm`, `## Do`, and `## Do not` for craft guidance when generating chapter prose.
 - `line-editor`: reads the same craft sections to calibrate line edits against the author's voice.

@@ -1,6 +1,6 @@
 ---
 title: "ns-status CLI reference"
-description: "Reference for the ns-status CLI - the deterministic engine that computes the project's chapter board and completion numbers from progress.json, config.json, and the newest gate report per chapter"
+description: "Reference for the ns-status CLI - the deterministic engine that computes the project's chapter board and completion numbers from progress.json and the newest gate report per chapter (config.json is loaded only as part of book-root discovery, so a malformed one still halts the CLI, but its content is never consulted by the board computation itself)"
 audience: "non-engineer"
 level: "beginner"
 tags: ["cli", "status", "dashboard", "progress", "gate", "drift"]
@@ -9,7 +9,7 @@ tags: ["cli", "status", "dashboard", "progress", "gate", "drift"]
 # ns-status
 
 Computes the project's chapter board and completion numbers - per-chapter status, word count,
-open claims, drift score, and gate verdict, plus whole-book totals - from committed state, and
+open claims, drift statistic, and gate verdict, plus whole-book totals - from committed state, and
 renders the result as JSON or as a human-readable Markdown board. Read-only: it writes nothing.
 Running it twice against unchanged state produces byte-identical output.
 
@@ -35,20 +35,21 @@ machine-state writes for hooks, not for a CLI a narrating skill can invoke mid-c
 | Path | Fields |
 |---|---|
 | `.studio/progress.json` | Per-chapter `slug`, `title`, `status`, `word_count`, `open_claim_count`; whole-book `totals` (`word_count`, `open_claim_count`, `chapters_final`, `chapters_total`) |
-| `.studio/config.json` | `thresholds.drift_score_max` |
-| `.studio/gate/` (directory listing, then the newest report per chapter slug) | Gate verdict and drift score per chapter |
+| `.studio/gate/` (directory listing, then the newest report per chapter slug) | Gate verdict, drift statistic, and drift threshold per chapter |
 
-**Gate verdict and drift score come only from the newest report file per chapter slug under
-`.studio/gate/`, never from `progress.json`'s per-chapter `last_gate` field, and never from
-`progress.json`'s per-chapter `drift_score` field either.** `last_gate` stays null in every
-shipped writer by design (the field is reserved for a later task); a hand-authored fixture may
-populate it for one chapter as sample content, which does not make it a real source. `drift_score`
-is a separate, hook-maintained convenience field this board never treats as authoritative. The
-newest report per slug is selected by lexicographic sort of the compact `YYYYMMDDTHHMMSSZ`
-timestamp suffix in its filename (`<slug>.<timestamp>.json`), which equals chronological order by
-construction - the same rule `hooks/lib/gate-engine.mjs`'s own report retention and
-`skills/nfs-status-dashboard/SKILL.md` both already use. A whole-book `all.<timestamp>.json` report, if
-present, annotates the totals only (`wholeBookGate`), not any per-chapter cell.
+**Gate verdict, drift statistic, and drift threshold come only from the newest report file per
+chapter slug under `.studio/gate/`, never from `progress.json`'s per-chapter `last_gate` field,
+never from `progress.json`'s per-chapter `drift_score` field, and (since ADR-0012, voice verdict
+scope) never from `.studio/config.json`'s retired `thresholds.drift_score_max` either.**
+`last_gate` stays null in every shipped writer by design (the field is reserved for a
+later task); a hand-authored fixture may populate it for one chapter as sample content, which
+does not make it a real source. `drift_score` is a separate, hook-maintained convenience field
+this board never treats as authoritative. The newest report per slug is selected by
+lexicographic sort of the compact `YYYYMMDDTHHMMSSZ` timestamp suffix in its filename
+(`<slug>.<timestamp>.json`), which equals chronological order by construction - the same rule
+`hooks/lib/gate-engine.mjs`'s own report retention and `skills/nfs-status-dashboard/SKILL.md`
+both already use. A whole-book `all.<timestamp>.json` report, if present, annotates the totals
+only (`wholeBookGate`), not any per-chapter cell.
 
 ## Invocation
 
@@ -79,31 +80,35 @@ where `<plugin-root>` is the resolved plugin installation path.
 
 | Exit code | Meaning |
 |---|---|
-| 0 | Success. There is no findings-based exit code: a highlighted row (drift above threshold, or a block verdict) is reported in the board, not signaled through the exit code, because `ns-status` reports state - it does not gate anything. |
+| 0 | Success. There is no findings-based exit code: a highlighted row (drift above ITS OWN row's threshold, or a block verdict) is reported in the board, not signaled through the exit code, because `ns-status` reports state - it does not gate anything. |
 | 2 | An argument error (an unknown flag, a flag missing its required value), no book root found walking up from the start directory, or an unreadable/malformed `.studio/progress.json` or `.studio/config.json`. Every exit-2 message is prefixed `ns-status: `. |
 
 ## Output
 
 ### Human-readable board (default)
 
-A Markdown table with columns `#`, `Title`, `Status`, `Words`, `Drift`, `Open Claims`, `Gate`, one
-row per `progress.json` chapter entry in array order, followed by a **Totals** row. A highlighted
-row (drift score above `thresholds.drift_score_max`, or a `block` gate verdict) carries a leading
-`!` in its `#` cell. A chapter with no gate report on record shows `-` in both the Drift and Gate
-cells. Below the table: the effective drift threshold and whether it is the built-in default (25)
-or a configured value, and, when `progress.json`'s totals carry a `chapters_total`, a
-chapters-remaining-to-final count.
+A Markdown table with columns `#`, `Title`, `Status`, `Words`, `Drift`, `Threshold`, `Open
+Claims`, `Gate`, one row per `progress.json` chapter entry in array order, followed by a
+**Totals** row. A highlighted row (drift statistic above THAT SAME row's own threshold, or a
+`block` gate verdict) carries a leading `!` in its `#` cell. A chapter with no gate report on
+record shows `-` in the Drift, Threshold, and Gate cells. Since ADR-0012 (voice verdict scope)
+retired `thresholds.drift_score_max`, there is no board-wide threshold to state below the table:
+each row's own Threshold cell comes from that SAME chapter's own report,
+resolved from its calibration ladder at whatever word count it measured. Below the table, when
+`progress.json`'s totals carry a `chapters_total`, a chapters-remaining-to-final count.
 
-Example, against the committed sample book:
+Example, against the committed sample book (chapter 01's `Threshold` cell reads `-` here because
+its committed report, `01-listening-before-speaking.20260810T091000Z.json`, predates the
+structured `drift` field and is deliberately kept that way - it is the fixture that proves the
+legacy prose-detail fallback described under JSON below):
 
 ```
-| # | Title | Status | Words | Drift | Open Claims | Gate |
-|---|---|---|---|---|---|---|
-| 01 | Listening Before Speaking | drafted | 528 | 10.86 | 0 | pass |
-| 02 | Finding Your Network | drafted | 527 | - | 0 | - |
-| **Totals** | | | **1055** | | **0** | **0 of 6 final** |
+| # | Title | Status | Words | Drift | Threshold | Open Claims | Gate |
+|---|---|---|---|---|---|---|---|
+| 01 | Listening Before Speaking | drafted | 528 | 10.86 | - | 0 | pass |
+| 02 | Finding Your Network | drafted | 527 | - | - | 0 | - |
+| **Totals** | | | **1055** | | | **0** | **0 of 6 final** |
 
-Drift threshold: thresholds.drift_score_max = 25 (from .studio/config.json).
 6 chapter(s) remaining to final.
 ```
 
@@ -120,6 +125,7 @@ Drift threshold: thresholds.drift_score_max = 25 (from .studio/config.json).
       "wordCount": 528,
       "openClaimCount": 0,
       "drift": 10.86,
+      "threshold": null,
       "gate": "pass",
       "reportPath": ".studio/gate/01-listening-before-speaking.20260810T091000Z.json",
       "highlighted": false
@@ -132,16 +138,22 @@ Drift threshold: thresholds.drift_score_max = 25 (from .studio/config.json).
     "chaptersTotal": 6,
     "chaptersRemaining": 6
   },
-  "wholeBookGate": null,
-  "thresholds": { "driftScoreMax": 25, "driftScoreMaxIsDefault": false }
+  "wholeBookGate": null
 }
 ```
 
 `reportPath` is always book-root-relative (for example `.studio/gate/<slug>.<timestamp>.json`),
 never an absolute filesystem path, and is `null` when the chapter has no gate report on record.
-`chaptersTotal` and `chaptersRemaining` are both `null` when `progress.json`'s totals carry no
-`chapters_total` field. This JSON shape is the source a later task points the `nfs-status-dashboard`
-skill's narration at.
+`drift` is the row's own chapter's newest report's drift statistic: it prefers the structured
+`drift.statistic` field (PF-14, ADR-0012 voice verdict scope, Decision 2) and falls back to
+parsing the legacy prose detail string for a report written before that field existed; `threshold`
+is that SAME report's `drift.threshold`, with no prose fallback (a pre-structured-field report,
+like the committed example above, reads `null` even though its prose names a number). There is
+no top-level `thresholds` object any more: `thresholds.drift_score_max` was retired by
+ADR-0012 (voice verdict scope), and no single board-wide threshold replaced it. `chaptersTotal`
+and `chaptersRemaining` are both `null` when `progress.json`'s totals carry no `chapters_total`
+field. This JSON shape is the source a later task points the `nfs-status-dashboard` skill's
+narration at.
 
 ## Determinism
 

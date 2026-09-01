@@ -12,7 +12,6 @@
     }
   },
   "thresholds": {
-    "drift_score_max": 25,
     "claim_coverage_min": 1.0,
     "stylometry_marker_tolerance": 2.0
   },
@@ -24,19 +23,91 @@
   },
   "stylometry": {
     "baseline": {
-      "captured": "2026-07-18T09:00:00Z",
-      "sample_count": 2,
-      "marker_set_version": 4,
-      "method": "word-tokenized prose from the TSK-019 golden two-chapter text (chapters/01-listening-before-speaking.md and chapters/02-finding-your-network.md as originally committed, before this fixture's own planted unsourced-claim sentence); markers and headings stripped. Re-captured under the corrected engine (roadmap row 1.7, voice registers) with type_token_ratio as a moving average over 100-token windows; this recapture also supersedes the un-reconciled TSK-019 function_word_rate and punctuation_rate this baseline previously carried (TSK-026 reconciled the same golden text for the voice-drift fixture's baseline; this recapture brings this fixture's baseline into agreement).",
       "markers": {
-        "function_word_rate": 0.4717,
-        "contraction_rate": 0.0299,
-        "first_person_rate": 0.2262,
-        "second_person_rate": 3.3937,
-        "type_token_ratio": 0.7516,
-        "avg_word_length": 5.1923,
-        "avg_sentence_length": 13.1940,
-        "punctuation_rate": 13.0090
+        "function_word_rate": 0.5079000287273772,
+        "contraction_rate": 0.10683760683760683,
+        "first_person_rate": 0.6032749209997127,
+        "second_person_rate": 2.4992818155702383,
+        "type_token_ratio": 0.7563985807214673,
+        "avg_word_length": 4.783395575983913,
+        "avg_sentence_length": 14.876068376068377,
+        "punctuation_rate": 12.81241022694628
+      },
+      "marker_set_version": 5,
+      "captured": "2026-09-01T01:04:55Z",
+      "sample_count": 3,
+      "method": "word-tokenized prose from examples/sample-book/context/samples/voice-corpus-01.md, -02.md, and -03.md (this fixture is a sample-book clone: same voice, same independent calibration corpus, disjoint from any scored chapter text); markers and headings stripped. Calibrated via ns-stylometry --calibrate (ADR-0012, voice verdict scope); the five-rung noise-scale and block-threshold ladder below is measured from that corpus, not assumed, and is shared byte-for-byte with examples/sample-book/.studio/config.json's baseline (fixtures that are sample-book clones share the parent's independent-corpus baseline rather than a self-fit one). This fixture's own planted unsourced-claim defect is unrelated to voice and does not move this baseline; regime is book (detectability AUC 0.596 at the 550-word rung, below the 0.95 bar).",
+      "calibration": {
+        "spans": [
+          550,
+          1100,
+          2200,
+          4400,
+          8800
+        ],
+        "noise_scales": {
+          "550": {
+            "function_word_rate": 3.11754605132446,
+            "contraction_rate": 58.8603086475439,
+            "first_person_rate": 73.17276246584372,
+            "second_person_rate": 32.76524777911315,
+            "type_token_ratio": 2.5608013326630097,
+            "avg_word_length": 3.573473927362101,
+            "avg_sentence_length": 8.813053924634016,
+            "punctuation_rate": 6.338755039278989
+          },
+          "1100": {
+            "function_word_rate": 2.2183281658837037,
+            "contraction_rate": 42.052978334613385,
+            "first_person_rate": 52.28817684432985,
+            "second_person_rate": 23.665118095218205,
+            "type_token_ratio": 1.7502652175001079,
+            "avg_word_length": 2.516175487172717,
+            "avg_sentence_length": 6.132813721700028,
+            "punctuation_rate": 4.568520837555613
+          },
+          "2200": {
+            "function_word_rate": 1.5352029762674821,
+            "contraction_rate": 28.21870739149179,
+            "first_person_rate": 36.05198133036098,
+            "second_person_rate": 17.19238602659111,
+            "type_token_ratio": 1.1780058995125984,
+            "avg_word_length": 1.72528825313766,
+            "avg_sentence_length": 4.051467261340372,
+            "punctuation_rate": 3.179841256794525
+          },
+          "4400": {
+            "function_word_rate": 1.0712095983822314,
+            "contraction_rate": 21.185039555738694,
+            "first_person_rate": 25.99284037521548,
+            "second_person_rate": 11.766470207628215,
+            "type_token_ratio": 0.81723403489099,
+            "avg_word_length": 1.1830253285158001,
+            "avg_sentence_length": 3.115356810751367,
+            "punctuation_rate": 2.285583270178195
+          },
+          "8800": {
+            "function_word_rate": 0.7711410313884655,
+            "contraction_rate": 15.560517460331429,
+            "first_person_rate": 17.413972670192518,
+            "second_person_rate": 8.439170128206097,
+            "type_token_ratio": 0.5982029421652095,
+            "avg_word_length": 0.8980940833767005,
+            "avg_sentence_length": 2.104714212657261,
+            "punctuation_rate": 1.5867573568103819
+          }
+        },
+        "block_thresholds": {
+          "550": 3.6715903005384867,
+          "1100": 3.5767581436798332,
+          "2200": 4.1353955867352425,
+          "4400": 4.865043719577832,
+          "8800": 5.426881035982983
+        },
+        "detectability_auc": 0.59556,
+        "regime": "book",
+        "replicates": 1000,
+        "seed": 4242
       }
     }
   },

@@ -193,7 +193,7 @@ The following is explicitly a synthetic illustration and does NOT reflect the co
 > | Check | Verdict | Detail | Next action |
 > |---|---|---|---|
 > | claim_coverage | pass | claim coverage 100%; no open markers | - |
-> | stylometry | warn | drift score 31.07 exceeds threshold 25; stylometry.drift-threshold | Review the flagged markers against the voice baseline and revise the drifted chapter. |
+> | stylometry | warn | worst chapter chapters/02-finding-your-network.md (worst marker contraction_rate): drift statistic 4.21 exceeds threshold 3.58; stylometry.drift-threshold | Review the flagged markers against the voice baseline and revise the drifted chapter. |
 > | prompt_scrub | pass | no agent scaffolding or prompt residue found | - |
 > | continuity | pass | no name consistency issues found | - |
 > | state_coherence | pass | word-count coherence pass | - |
@@ -201,7 +201,7 @@ The following is explicitly a synthetic illustration and does NOT reflect the co
 >
 > To address the stylometry warn: revise the chapter with `/nonfiction-studio:nfs-draft 02-finding-your-network`, which produces diff proposals against the existing chapter, then re-run the quality gate. A dedicated revision pass is Phase 2 scope and is not available in v1. To opt stylometry into blocking mode once the baseline is calibrated, set `gate.checks.stylometry.mode` to `block` in `.studio/config.json`.
 
-The drift score in this synthetic illustration is invented for the example, not drawn from any real `bin/ns-gate` run: running `node "<plugin-root>/bin/ns-gate" --project=. --chapter=02-finding-your-network --json` against a clean clone of the committed sample book does not reproduce it. Unlike the primary transcript above (baseline absent, four-check pass, run against a real temp clone), this warn scenario exists only to show the report shape and the wording a warn verdict uses when stylometry is included and enabled, matching the same synthetic-only pattern the block-verdict illustration below uses. The primary provenance-honest example above is the only grounded transcript in this document; treat every number in this warn section as illustrative.
+The drift statistic and threshold in this synthetic illustration are invented for the example, not drawn from any real `bin/ns-gate` run: running `node "<plugin-root>/bin/ns-gate" --project=. --chapter=02-finding-your-network --json` against a clean clone of the committed sample book does not reproduce it (the sample book's real baseline is book-regime, so a single-chapter run there reports pass-with-advice below the 2,200-word floor, never a chapter-scale block or warn - see the primary transcript above). This scenario illustrates the chapter-regime detail format instead (ADR-0012, voice verdict scope, Decision 2): the wording `hooks/lib/gate-engine.mjs` actually emits when a per-chapter verdict names its worst marker and its calibrated threshold. Unlike the primary transcript above (baseline absent, four-check pass, run against a real temp clone), this warn scenario exists only to show the report shape and the wording a warn verdict uses when stylometry is included and enabled, matching the same synthetic-only pattern the block-verdict illustration below uses. The primary provenance-honest example above is the only grounded transcript in this document; treat every number in this warn section as illustrative.
 
 ---
 

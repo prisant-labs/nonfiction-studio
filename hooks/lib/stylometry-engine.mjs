@@ -1,12 +1,16 @@
 // what-it-is:   deterministic eight-marker voice-drift engine
 // what-it-does: measures the eight-marker stylometry vector for one chapter or an aggregate
-//               book, then computes a drift score against a stored baseline. The score is an
-//               unweighted sum of per-marker deviations, each capped so no single marker can
-//               contribute more than one third of the configured drift budget (roadmap row 1.7,
-//               voice registers). type_token_ratio is a moving average over a fixed
-//               TTR_WINDOW_SIZE-token window, which makes it length-invariant; scoring against a
-//               baseline captured under a different marker_set_version fails rather than
-//               silently misreading the numbers.
+//               book, then computes a drift VERDICT against a stored baseline: the largest
+//               standardized deviation (max |z|) across the eight markers, each marker's
+//               deviation standardized against a per-span noise scale read from the baseline's
+//               own calibration ladder (ADR-0012, voice verdict scope, Decision 1 and Decision
+//               3), rather than an unweighted sum of capped deviations. The ladder is looked up
+//               by log-linear interpolation (linear in ln of the scored word count) between the
+//               calibration rungs the author's own voice corpus was measured at, clamped to the
+//               end rung's value beyond either end. type_token_ratio is a moving average over a
+//               fixed TTR_WINDOW_SIZE-token window, which makes it length-invariant; scoring
+//               against a baseline captured under a different marker_set_version, or one missing
+//               a complete calibration ladder, fails rather than silently misreading the numbers.
 // why:          the engine logic lives in a lib module so both bin/ns-stylometry (CLI) and the
 //               Stop gate hook share the same computation path per S-07 section 4
 // used-by:      bin/ns-stylometry, hooks/stop-gate.mjs
@@ -111,63 +115,6 @@ const SENTENCE_END_RE = /[.!?]+(?:\s|$)/g;
 // movingAverageTypeTokenRatio.
 const TTR_WINDOW_SIZE = 100;
 
-// Per-marker contribution bound, expressed as a divisor of the configured drift budget
-// rather than an absolute number (Correction B, roadmap row 1.7, voice registers): no
-// single marker's CONTRIBUTION to the score may exceed one third of
-// thresholds.drift_score_max, so at least three markers must deviate substantially before
-// their combined contribution can breach the gate. The bound scales with whatever budget a
-// project configures; deviationPct itself is never capped, only what it adds to score.
-const MARKER_CONTRIBUTION_DIVISOR = 3;
-
-// Default drift budget applied when thresholds.drift_score_max is absent from config.json
-// (computeDrift's own fallback, below). Recalibrated from 35 to 25 against a committed,
-// labeled scenario suite (tests/engines/fixtures/drift-scenarios/, exercised by
-// tests/engines/stylometry-calibration.test.mjs) after Correction A (the type_token_ratio
-// length-invariance fix) shrank the drift score's scale by roughly an order of magnitude
-// without a matching budget change, which let a chapter stripped of every contraction and
-// every first-person pronoun -- the canonical ghostwriting signature -- pass at 35 (score
-// 33.58) while still blocking at 25 (score 26.91).
-//
-// Two other levers were measured against the same suite. A smaller MARKER_CONTRIBUTION_
-// DIVISOR (currently 3, unchanged) does not separate the ghostwriting signature from natural
-// between-chapter voice variation AT THIS BUDGET (35, nor at 25): both are dominated by two
-// markers pinned at the per-marker bound plus a residual, and at a fixed budget the residual
-// gap between them does not narrow as the divisor changes alone. That is NOT the same as "no
-// divisor separates them" -- it does not, at a fixed budget. Separation DOES exist in the
-// joint (budget, divisor) space: honest variation's score has a hard ceiling (47.09 for one
-// golden chapter measured against the de-padded two-chapter self-fit baseline, reached once
-// the per-marker cap exceeds its largest single deviation), while the ghostwriting
-// signature's two saturated markers keep climbing linearly with the cap, so at a budget above
-// that ceiling the two curves cross. This task verified a working point (budget 50, divisor
-// 2.5) that blocks the ghostwriting signature while passing both de-padded chapters, with
-// two markers alone (40) still comfortably short of budget. It was not pursued for the
-// shipped default for three reasons: the feasible band shrinks fast as the divisor approaches
-// 3 (a few points wide near divisor 2.5, empty by divisor 2.6 in this task's own search), the
-// low end of the feasible divisor range (near 2) makes two markers alone nearly sufficient to
-// block on their own, which is the guarantee this bound exists to prevent, and any divisor
-// change ripples into every document and fixture that quotes "one third" or a divisor-derived
-// number, including examples/fixtures/voice-drift/PLANTED.md's per-marker contribution table.
-// Damping the per-marker bound by each marker's raw occurrence count was rejected because the
-// ghostwriting signature lives on the two SPARSEST markers in the vector (contraction_rate
-// and first_person_rate); any damping that shrinks toward zero as occurrence count shrinks
-// lowers exactly those two markers' contribution, moving the signature further from blocking
-// rather than closer -- the wrong direction for the one case this recalibration had to fix.
-//
-// A second, independently measured finding narrows what "25" is actually doing: at this
-// budget, the ghostwriting signature's genuine knock-on in the six markers the transformation
-// does not directly touch is about 6.05 points (measured against chapter 1's own true
-// baseline, removing the population-mismatch floor entirely) -- short of the roughly 8.33
-// points needed to block on its own. The other roughly 4.2 points that make it block come
-// from the same population-mismatch floor every chapter carries when scored against a
-// same-book self-fit baseline (10.86 points for an unchanged chapter). The calibration works
-// on this suite partly by leaning on that floor, not solely on the transformation's own
-// signal.
-//
-// This constant is the single source of truth for the shipped default:
-// hooks/lib/status-engine.mjs, hooks/lib/gate-engine.mjs, and bin/ns-stylometry all import
-// it rather than each carrying their own literal.
-export const DEFAULT_DRIFT_SCORE_MAX = 25;
-
 // Current stylometry marker-set version. Bumped whenever a marker's computation changes
 // meaning under the same key name. A baseline captured under an earlier version would be
 // silently misread as enormous drift if scored without the guard in computeDrift; a
@@ -197,7 +144,24 @@ export const DEFAULT_DRIFT_SCORE_MAX = 25;
 //           uses a non-ASCII letter, so no baseline value stored here moves; the bump is
 //           for baselines captured OUTSIDE it, where a pre-fix capture of accented prose
 //           carries different word-denominated markers than a post-fix capture would.
-export const CURRENT_MARKER_SET_VERSION = 4;
+//   4 -> 5  computeDrift's combining rule changed from an unweighted, per-marker-capped sum
+//           to the largest standardized deviation (max |z|) against a stored per-span
+//           calibration ladder (ADR-0012, voice verdict scope, Decision 1 and Decision 3).
+//           The capped sum was measured, on this implementation wave's own labeled probe, to
+//           discriminate a genuine planted ghostwriting signature from ordinary chapter-to-
+//           chapter voice variation at AUC 0.53 on real prose at chapter scale -- a coin
+//           flip. Summing every marker's (bounded) deviation dilutes whatever signal one or
+//           two markers actually carry across six that usually do not; taking the max instead
+//           concentrates the verdict on wherever the real signal lives. The eight markers
+//           keyed under baseline.markers are UNCHANGED by this bump -- no marker's own
+//           computation moved, unlike every earlier entry in this History. What changed is
+//           how a measured vector is judged: a v5 baseline carries a calibration sibling
+//           (per-span noise_scales and block_thresholds, measured from the author's own
+//           voice corpus by nfs-capture-voice) that a v4 baseline does not have, so scoring
+//           against a v4 baseline is rejected as stale rather than silently read as z scores
+//           computed against no calibration at all. The remedy is unchanged: re-run
+//           nfs-capture-voice to recapture the baseline under the corrected engine.
+export const CURRENT_MARKER_SET_VERSION = 5;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -402,6 +366,26 @@ function movingAverageTypeTokenRatio(lowerWords) {
  *   except lowerWords may be a merged array from multiple chapters)
  * @returns {object} eight-marker vector
  */
+/**
+ * Signed relative deviation in percent, (measured - baseline) / baseline * 100, with the
+ * zero-baseline rule shared by every caller that measures honest deviation against a plain
+ * measured vector: 0 when both baseline and measured are 0 for that marker, else +100 (never
+ * -100 -- there is no "negative" direction to fall away from zero). Extracted from
+ * computeDrift's own inline formula so computeDrift and compareRegister (a later, register-scale
+ * caller with no calibration ladder to standardize against) share one definition rather than two
+ * copies that could quietly drift apart.
+ *
+ * @param {number} measuredVal
+ * @param {number} baselineVal
+ * @returns {number} signed relative deviation in percent
+ */
+function signedRelativeDeviationPct(measuredVal, baselineVal) {
+  if (baselineVal === 0) {
+    return measuredVal === 0 ? 0 : 100;
+  }
+  return (measuredVal - baselineVal) / baselineVal * 100;
+}
+
 function ratiosFromCounts(counts) {
   const { totalWords, functionWordCount, contractionCount, firstPersonCount,
           secondPersonCount, totalCharLength, punctCount, sentenceCount, lowerWords } = counts;
@@ -518,64 +502,123 @@ export class StaleBaselineError extends Error {
 }
 
 /**
- * Computes the drift score and per-marker analysis by comparing a measured
- * vector against the stored baseline.
+ * Typed error for a stylometry baseline whose marker_set_version matches the engine but whose
+ * calibration object is missing, incomplete, or missing a rung's noise scale for one of the
+ * markers baseline.markers carries. computeDrift's verdict is read directly from a stored
+ * calibration ladder (never an assumed constant, per ADR-0012 voice verdict scope), so a
+ * baseline that carries markers but no usable ladder cannot be scored at all -- silently
+ * falling back to an epsilon noise scale would manufacture a z score against a null nobody
+ * measured. Callers catch InvalidCalibrationError (or check err.name) the same way they catch
+ * StaleBaselineError; the remedy is the same: re-run nfs-capture-voice, which is the only path
+ * that writes a calibration ladder into stylometry.baseline.calibration.
+ */
+export class InvalidCalibrationError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'InvalidCalibrationError';
+    this.code = 'INVALID_CALIBRATION';
+    this.exitCode = 2;
+  }
+}
+
+/**
+ * Looks up a per-span ladder value at a given scored-word count W, by log-linear interpolation
+ * (linear in ln W) between the two bracketing rungs, clamped to the nearest end rung's value
+ * when W falls beyond either end of the ladder (P1/P3: never extrapolate the sqrt law beyond
+ * the rungs -- a clamped scale beyond the top rung is deliberately larger than the true noise,
+ * which deflates z and softens detection, the affordable error mode at book scale; extrapolating
+ * measured as under-predicting the null instead, which means excess false blocks).
  *
- * Drift formula (TSK-022 report as amended by roadmap row 1.7's two corrections):
- *   deviationPct  = |measured - baseline| / baseline * 100            (honest, uncapped)
- *   contribution  = min(deviationPct, thresholds.drift_score_max / MARKER_CONTRIBUTION_DIVISOR)
- *   score         = SUM of contribution across all markers in the baseline
- * The score is an unweighted sum: every marker's (bounded) contribution counts equally;
- * "weighted" would mean some markers count for more than others, which is not this formula.
- * deviationPct is always reported honest and uncapped, so a later explain step can name the
- * real deviation and say it was capped; only the running score total is bounded, never the
- * reported per-marker deviation itself.
+ * Internal only: not exported. A scoring-time concern of this module, not the calibration
+ * module's -- calibrateBaseline (hooks/lib/stylometry-calibration.mjs) only ever measures AT
+ * the exact rung spans; interpolating and clamping between them belongs to the code that reads
+ * the ladder back, at whatever scoredWords a caller happens to be scoring.
  *
- * Each per-marker record also carries its actual contribution (the bounded amount that marker
- * added to score -- identical to deviationPct when capped is false, equal to
- * maxMarkerContribution when capped is true), and the function returns maxMarkerContribution
- * itself (the per-marker bound in absolute terms, driftScoreMax / MARKER_CONTRIBUTION_DIVISOR)
- * so a caller can render an explain view without re-deriving the bound or importing the
- * divisor, which stays a private implementation detail of this module.
+ * @param {number[]} spans - calibration.spans, ascending
+ * @param {(span: number) => number} valueAt - the rung value at one exact span
+ * @param {number} W - scored word count to look up
+ * @returns {number} the interpolated (or clamped) value at W
+ */
+function ladderLookup(spans, valueAt, W) {
+  const last = spans.length - 1;
+  if (W <= spans[0]) return valueAt(spans[0]);
+  if (W >= spans[last]) return valueAt(spans[last]);
+  for (let i = 0; i < last; i += 1) {
+    const lo = spans[i];
+    const hi = spans[i + 1];
+    if (W >= lo && W <= hi) {
+      const t = (Math.log(W) - Math.log(lo)) / (Math.log(hi) - Math.log(lo));
+      const vLo = valueAt(lo);
+      const vHi = valueAt(hi);
+      return vLo + t * (vHi - vLo);
+    }
+  }
+  // Unreachable when spans is ascending and W is a finite number, since the two clamps above
+  // already cover W outside [spans[0], spans[last]].
+  return valueAt(spans[last]);
+}
+
+/**
+ * Computes the drift verdict and per-marker analysis by comparing a measured vector against
+ * the stored baseline's calibration ladder.
  *
- * Zero-baseline rule per brief:
- *   when baseline === 0: deviationPct = 0 if measured === 0, else 100
+ * Verdict formula (P1, ADR-0012 voice verdict scope, Decision 1 and Decision 3):
+ *   relDev_m   = signed relative deviation in percent, (measured - baseline) / baseline * 100;
+ *                zero-baseline rule unchanged from the prior formula: 0 if both baseline and
+ *                measured are 0 for that marker, else +100 (never -100 -- there is no
+ *                "negative" direction to fall away from zero)
+ *   scale_m(W) = ladderLookup of marker m's noise scale (baseline.calibration.noise_scales)
+ *                at scoredWords W
+ *   z_m        = relDev_m / scale_m(W)                                  (SIGNED)
+ *   statistic  = max over markers of |z_m|                              (the verdict number)
+ *   threshold  = ladderLookup of baseline.calibration.block_thresholds at scoredWords W
+ *   exceeded   = statistic >= threshold
+ * deviationPct keeps the prior absolute-value semantics (Math.abs(relDev_m)) for the honest,
+ * uncapped per-marker deviation an explain view names; z is signed, so a caller can say whether
+ * a marker moved above or below its baseline, not just by how much.
  *
- * A marker is flagged when its deviationPct (the honest value, not the capped
- * contribution) exceeds the per-marker tolerance band (thresholds.stylometry_marker_tolerance,
- * default 2.0).
+ * A marker is flagged when its deviationPct exceeds the per-marker tolerance band
+ * (thresholds.stylometry_marker_tolerance, default 2.0) -- this advisory band is unrelated to
+ * the calibrated verdict and is kept unchanged (P7: stylometry_marker_tolerance is NOT retired).
  *
- * Stale-baseline guard: baseline.marker_set_version must equal CURRENT_MARKER_SET_VERSION.
- * A baseline object missing the field entirely is treated as version 1. A mismatch throws
- * StaleBaselineError rather than scoring a baseline whose type_token_ratio values mean
- * something different under the current engine (Correction A changed what a stored
- * type_token_ratio number means, from a flat ratio to a windowed moving average).
+ * worstMarker is the marker attaining max |z_m|; a tie is broken by Object.keys(markers) order
+ * (the first marker reaching the running maximum keeps it, since the loop below only replaces
+ * on a STRICT greater-than).
+ *
+ * Validation order (each guard below short-circuits the next):
+ *   1. baseline.markers missing                                  -> plain Error
+ *   2. baseline.marker_set_version !== CURRENT_MARKER_SET_VERSION -> StaleBaselineError
+ *      (a baseline missing the field entirely is treated as version 1)
+ *   3. baseline.calibration missing, or missing spans/noise_scales/block_thresholds/regime,
+ *      or a rung missing a noise scale or threshold, or a rung's noise_scales missing a marker
+ *      that baseline.markers carries                             -> InvalidCalibrationError
+ *      (checked for every rung up front, not just the rung(s) a particular W would look up, so
+ *      an incomplete ladder fails the same way regardless of scoredWords)
+ *   4. opts.scoredWords missing or not a positive number          -> plain Error
  *
  * @param {object} measured   - marker vector from measureBook or measureChapter
- * @param {object} baseline   - the stored stylometry.baseline object from config.json,
- *   shaped { markers: {...8 markers}, marker_set_version?: number, ...other fields }.
- *   This is NOT just the markers sub-object: marker_set_version lives alongside markers,
- *   not inside it, and computeDrift needs both to score safely.
- * @param {object} thresholds - thresholds block from config.json
- * @returns {{ score: number, perMarker: object[], exceeded: boolean, maxMarkerContribution: number,
- *   markerTolerance: number }}
- *   perMarker entries carry { marker, baseline, measured, deviationPct, contribution, capped, flagged }.
- *   markerTolerance is the per-marker tolerance band (thresholds.stylometry_marker_tolerance,
- *   default 2.0) that flagged is computed against, returned for the same reason
- *   maxMarkerContribution is: so a caller can state the number a boolean was compared against,
- *   not just the boolean itself.
+ * @param {object} baseline   - the stored stylometry.baseline object from config.json, shaped
+ *   { markers: {...8 markers}, marker_set_version, calibration: {...P2 shape...} }. This is NOT
+ *   just the markers sub-object: marker_set_version and calibration live alongside markers, not
+ *   inside it, and computeDrift needs all three to score safely.
+ * @param {object} thresholds - thresholds block from config.json (only
+ *   stylometry_marker_tolerance and drift_score_max are read; the latter only to decide whether
+ *   to emit its retirement notice, never to score)
+ * @param {{ scoredWords: number }} opts - scoredWords is the word count (countWords/measureBook's
+ *   totalWords) the calibration ladder is looked up at; required, must be a positive number
+ * @returns {{
+ *   statistic: number, worstMarker: string, threshold: number, exceeded: boolean,
+ *   regime: 'chapter'|'book', perMarker: object[], markerTolerance: number,
+ *   deprecations: string[],
+ * }}
+ *   perMarker entries carry { marker, baseline, measured, deviationPct, z, flagged }.
+ * @throws {Error} when baseline.markers is missing, or opts.scoredWords is missing or
+ *   non-positive
  * @throws {StaleBaselineError} when baseline.marker_set_version does not match
  *   CURRENT_MARKER_SET_VERSION
+ * @throws {InvalidCalibrationError} when baseline.calibration is missing or incomplete
  */
-export function computeDrift(measured, baseline, thresholds) {
-  const markerTolerance = (thresholds && thresholds.stylometry_marker_tolerance != null)
-    ? thresholds.stylometry_marker_tolerance
-    : 2.0;
-  const driftScoreMax = (thresholds && thresholds.drift_score_max != null)
-    ? thresholds.drift_score_max
-    : DEFAULT_DRIFT_SCORE_MAX;
-  const maxMarkerContribution = driftScoreMax / MARKER_CONTRIBUTION_DIVISOR;
-
+export function computeDrift(measured, baseline, thresholds, opts) {
   if (!baseline || !baseline.markers) {
     throw new Error(
       'computeDrift: baseline.markers is missing; expected the stylometry.baseline object ' +
@@ -593,36 +636,209 @@ export function computeDrift(measured, baseline, thresholds) {
     );
   }
 
+  const calibration = baseline.calibration;
+  if (
+    !calibration ||
+    !Array.isArray(calibration.spans) || calibration.spans.length === 0 ||
+    !calibration.noise_scales || !calibration.block_thresholds || !calibration.regime
+  ) {
+    throw new InvalidCalibrationError(
+      'stylometry baseline marker_set_version ' + storedVersion + ' is missing a complete ' +
+      'calibration ladder (spans, noise_scales, block_thresholds, and regime are all ' +
+      'required); run nfs-capture-voice to re-capture the baseline with a full calibration ladder'
+    );
+  }
+  const spans = calibration.spans;
+  for (const span of spans) {
+    const rung = calibration.noise_scales[String(span)];
+    if (!rung) {
+      throw new InvalidCalibrationError(
+        'stylometry baseline calibration is missing noise_scales for span ' + span + '; run ' +
+        'nfs-capture-voice to re-capture the baseline with a full calibration ladder'
+      );
+    }
+    for (const marker of Object.keys(markers)) {
+      if (!(marker in rung)) {
+        throw new InvalidCalibrationError(
+          'stylometry baseline calibration is missing a noise scale for marker "' + marker +
+          '" at span ' + span + '; run nfs-capture-voice to re-capture the baseline with a ' +
+          'full calibration ladder'
+        );
+      }
+    }
+    if (!(String(span) in calibration.block_thresholds)) {
+      throw new InvalidCalibrationError(
+        'stylometry baseline calibration is missing a block_threshold for span ' + span +
+        '; run nfs-capture-voice to re-capture the baseline with a full calibration ladder'
+      );
+    }
+  }
+
+  if (!opts || opts.scoredWords == null || !(opts.scoredWords > 0)) {
+    throw new Error(
+      'computeDrift: opts.scoredWords is required and must be a positive number (the scored ' +
+      'word count used to look up the calibration ladder)'
+    );
+  }
+  const W = opts.scoredWords;
+
+  const markerTolerance = (thresholds && thresholds.stylometry_marker_tolerance != null)
+    ? thresholds.stylometry_marker_tolerance
+    : 2.0;
+
+  const deprecations = [];
+  if (thresholds && thresholds.drift_score_max != null) {
+    deprecations.push(
+      'thresholds.drift_score_max is retired by the calibrated-null verdict and is ignored; ' +
+      'remove it from config.json (it will be an error in a future release)'
+    );
+  }
+
   const perMarker = [];
-  let score = 0;
+  let statistic = 0;
+  let worstMarker = Object.keys(markers)[0];
 
   for (const marker of Object.keys(markers)) {
     const baselineVal = markers[marker];
     const measuredVal = (measured != null && marker in measured) ? measured[marker] : 0;
 
-    let deviationPct;
-    if (baselineVal === 0) {
-      deviationPct = measuredVal === 0 ? 0 : 100;
-    } else {
-      deviationPct = Math.abs(measuredVal - baselineVal) / baselineVal * 100;
-    }
+    const relDev = signedRelativeDeviationPct(measuredVal, baselineVal);
+    const deviationPct = Math.abs(relDev);
 
-    const capped = deviationPct > maxMarkerContribution;
-    const contribution = capped ? maxMarkerContribution : deviationPct;
+    const scale = ladderLookup(spans, (span) => calibration.noise_scales[String(span)][marker], W);
+    const z = relDev / scale;
     const flagged = deviationPct > markerTolerance;
-    score += contribution;
 
     perMarker.push({
       marker,
       baseline: baselineVal,
       measured: measuredVal,
       deviationPct,
-      contribution,
-      capped,
+      z,
       flagged,
     });
+
+    if (Math.abs(z) > statistic) {
+      statistic = Math.abs(z);
+      worstMarker = marker;
+    }
   }
 
-  const exceeded = score >= driftScoreMax;
-  return { score, perMarker, exceeded, maxMarkerContribution, markerTolerance };
+  const threshold = ladderLookup(spans, (span) => calibration.block_thresholds[String(span)], W);
+  const exceeded = statistic >= threshold;
+
+  return {
+    statistic,
+    worstMarker,
+    threshold,
+    exceeded,
+    regime: calibration.regime,
+    perMarker,
+    markerTolerance,
+    deprecations,
+  };
+}
+
+/**
+ * Compares a measured marker vector against one register's plain measured vector (P8, ADR-0012
+ * voice verdict scope, Decision 4 -- registers are advisory-only, closing roadmap row 1.7,
+ * voice registers). A
+ * register carries no calibration ladder (the schema is deliberately a bare marker vector plus
+ * sample_count -- see docs/formats/style-profile.md's sibling, .studio/config.json's
+ * stylometry.registers), so unlike computeDrift there is no noise scale to standardize against
+ * and therefore no z: only the same signed relative deviation formula computeDrift uses for its
+ * own honest deviationPct (signedRelativeDeviationPct, above), per marker, with no combining rule
+ * and no verdict. This is diagnostic output only -- callers (bin/ns-stylometry's --by-register)
+ * must never derive a pass/block decision from it, and must label it advisory wherever it is
+ * shown.
+ *
+ * @param {object} measured - the scored text's marker vector (measureChapter/measureBook output)
+ * @param {object} registerMarkers - one register's markers object
+ *   (stylometry.registers.<name>.markers in config.json)
+ * @returns {{marker: string, baseline: number, measured: number, deviationPct: number}[]} one
+ *   entry per key in registerMarkers, in that object's own key order; a marker registerMarkers
+ *   carries but measured does not is read as 0, the same convention computeDrift uses
+ */
+export function compareRegister(measured, registerMarkers) {
+  const perMarker = [];
+  for (const marker of Object.keys(registerMarkers)) {
+    const baselineVal = registerMarkers[marker];
+    const measuredVal = (measured != null && marker in measured) ? measured[marker] : 0;
+    const deviationPct = Math.abs(signedRelativeDeviationPct(measuredVal, baselineVal));
+    perMarker.push({ marker, baseline: baselineVal, measured: measuredVal, deviationPct });
+  }
+  return perMarker;
+}
+
+/**
+ * Locates the single most locally deviant TTR_WINDOW_SIZE-word window for one marker, for
+ * passage attribution in --explain (roadmap row 1.7, voice registers; ADR-0012 voice verdict
+ * scope, Decision 4 -- "names markers and passages," advisory only, no blocking verdict at
+ * passage scale). Slides a fixed TTR_WINDOW_SIZE-word window one word at a time over the
+ * preprocessed, normalized text -- the same preprocessing and the same word tokenizer
+ * (WORD_RE) extractCounts already uses -- re-measuring the given marker's value inside each
+ * window's exact word span by re-deriving counts on that window's own text slice
+ * (extractCounts + ratiosFromCounts, the same two functions every other marker value in this
+ * module is computed from, not a separate approximation), and returns the window whose local
+ * value has the LARGEST absolute distance from baselineValue.
+ *
+ * Deterministic: window order is a fixed left-to-right scan starting at word index 0, ties keep
+ * the FIRST (leftmost) window reaching the running maximum (the comparison below is a strict
+ * greater-than, never greater-or-equal), and there is no randomness anywhere in this function.
+ *
+ * Word offsets returned are 1-INDEXED and inclusive (a human reading "words 151-250" counts the
+ * first word of the text as word 1, not word 0) -- startWord = the 0-indexed loop variable plus
+ * one; an off-by-one here (dropping the plus-one) shifts every reported window start left by
+ * one word while leaving the located window itself unchanged, which is exactly the mutation this
+ * task's mutation proof exercises.
+ *
+ * Text shorter than or equal to one window returns a single window spanning the whole text,
+ * matching movingAverageTypeTokenRatio's own short-text fallback (a window that is the entire
+ * text reduces to the same arithmetic as a window that is part of it).
+ *
+ * @param {string} text - raw chapter (or concatenated multi-chapter) text; preprocessing
+ *   (heading/marker stripping, quote folding) is applied exactly as extractCounts already does
+ * @param {string} marker - one of the eight marker keys (function_word_rate, contraction_rate,
+ *   first_person_rate, second_person_rate, type_token_ratio, avg_word_length,
+ *   avg_sentence_length, punctuation_rate)
+ * @param {number} baselineValue - the value the local window value is compared against (in
+ *   normal callers, the worst marker's baseline value from computeDrift's perMarker)
+ * @returns {{ marker: string, startWord: number, endWord: number, value: number,
+ *   deltaAbs: number } | null} null when the text has no word tokens at all (for example, an
+ *   empty string, or a text that strips to nothing under preprocessing -- a heading-only file)
+ */
+export function locateWorstWindow(text, marker, baselineValue) {
+  const preprocessed = preprocess(text);
+  const normalized = preprocessed.replace(/\s+/g, ' ').trim();
+
+  WORD_RE.lastIndex = 0;
+  const tokenMatches = [...normalized.matchAll(WORD_RE)];
+  const n = tokenMatches.length;
+  if (n === 0) return null;
+
+  const windowSize = Math.min(TTR_WINDOW_SIZE, n);
+  let bestStart = 0;
+  let bestValue = null;
+  let bestDelta = -Infinity;
+
+  for (let start = 0; start + windowSize <= n; start++) {
+    const first = tokenMatches[start];
+    const last = tokenMatches[start + windowSize - 1];
+    const windowText = normalized.slice(first.index, last.index + last[0].length);
+    const value = ratiosFromCounts(extractCounts(windowText))[marker];
+    const delta = Math.abs(value - baselineValue);
+    if (delta > bestDelta) {
+      bestDelta = delta;
+      bestStart = start;
+      bestValue = value;
+    }
+  }
+
+  return {
+    marker,
+    startWord: bestStart + 1,
+    endWord: bestStart + windowSize,
+    value: bestValue,
+    deltaAbs: bestDelta,
+  };
 }
