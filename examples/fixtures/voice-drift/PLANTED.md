@@ -130,8 +130,8 @@ warn, exit 0 (T07).
 - `ns-gate` in block mode exits 1, top-level verdict block, stylometry check block. In the
   fixture's own warn mode, exits 0, top-level verdict warn.
 - All other CLIs exit 0 on this fixture: claim markers resolve (`ns-claims`, 10/10, 100%
-  coverage), no continuity name-mismatches (`ns-scrub`), no doctor anomalies (`ns-doctor
-  --check`), no prompt-scrub violations (`ns-probe`).
+  coverage), no continuity name-mismatches or prompt-scrub violations (`ns-scrub`, the single
+  injection-and-continuity engine for both), no doctor anomalies (`ns-doctor --check`).
 
 ## Changed-file footprint
 

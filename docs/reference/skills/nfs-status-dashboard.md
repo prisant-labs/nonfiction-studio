@@ -132,7 +132,9 @@ The dashboard renders identically on all three surfaces per D-14 (three-surface 
 
 **Missing or empty gate directory.** Not a halt condition. `bin/ns-status` returns `null` for `drift` and `gate` on every chapter with no matching report; the skill renders "-" for both cells and Next Actions suggests running the quality gate for every such chapter.
 
-**Missing or unreadable `.studio/config.json`.** Not a halt condition: since ADR-0012 (voice verdict scope, Decision 2) retired `thresholds.drift_score_max`, `bin/ns-status`'s board computation does not read `config.json` at all.
+**Missing `.studio/config.json`.** Not a halt condition: `hooks/lib/bible.mjs` returns `config: null` when the file does not exist, and since ADR-0012 (voice verdict scope, Decision 2) retired `thresholds.drift_score_max`, `bin/ns-status`'s board computation does not read `config.json` for the threshold in any case.
+
+**Unreadable (malformed) `.studio/config.json`.** This IS a halt condition, unlike the missing case above: `hooks/lib/bible.mjs` throws `BibleError` (`CONFIG_READ_ERROR`) when `config.json` exists but fails to parse, and `bin/ns-status` exits 2 - covered by the "Any other `bin/ns-status` error" case above, which routes to `nfs-doctor`.
 
 ## Worked Example
 

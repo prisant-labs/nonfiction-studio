@@ -36,7 +36,8 @@ import {
 } from '../../hooks/lib/stylometry-engine.mjs';
 
 
-// A complete, hand-built v5 calibration object, shaped per P2 ((local working notes, not published)), used by every
+// A complete, hand-built v5 calibration object, shaped per this implementation wave's design
+// pin P2, used by every
 // synthetic computeDrift test below so none of them depend on a real .studio/config.json
 // baseline. Two rungs only (550, 2200) -- matching the brief's own worked example -- not the
 // shipped five-rung ladder; computeDrift's contract does not hardcode a rung count.

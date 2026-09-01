@@ -106,6 +106,12 @@ property of the system, not a caveat to explain away, in three parts:
    exactly why this suite evaluates the real measured rates at each span rather than fabricating
    longer text to reach one.)
 
+**Forewarning on the 8,800-word margin.** The honest rate's worst case at 8,800 words (5.3931
+vs threshold 5.4269) passes with roughly 0.6 percent headroom (ratio 0.994) -- deliberately
+thin, not a hidden defect. A future corpus recalibration or a chapter-text edit that trips this
+assertion is expected behavior given that margin, not a mystery to chase; re-derive the numbers
+from a fresh `calibrateBaseline` run rather than assuming a regression.
+
 **Honest-variance canary** (regression guard, advisory framing -- matching
 `hooks/lib/gate-engine.mjs`'s own book-regime handling, where per-chapter statistics are computed
 and carried as advice and never decide the verdict): the two real, honest sample-book chapters

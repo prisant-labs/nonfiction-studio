@@ -1,6 +1,6 @@
 ---
 title: "ns-status CLI reference"
-description: "Reference for the ns-status CLI - the deterministic engine that computes the project's chapter board and completion numbers from progress.json, config.json, and the newest gate report per chapter"
+description: "Reference for the ns-status CLI - the deterministic engine that computes the project's chapter board and completion numbers from progress.json and the newest gate report per chapter (config.json is loaded only as part of book-root discovery, so a malformed one still halts the CLI, but its content is never consulted by the board computation itself)"
 audience: "non-engineer"
 level: "beginner"
 tags: ["cli", "status", "dashboard", "progress", "gate", "drift"]
@@ -98,8 +98,9 @@ resolved from its calibration ladder at whatever word count it measured. Below t
 `progress.json`'s totals carry a `chapters_total`, a chapters-remaining-to-final count.
 
 Example, against the committed sample book (chapter 01's `Threshold` cell reads `-` here because
-its committed report predates the structured `drift` field; Task 5, ADR-0012 implementation
-wave, recaptures this fixture):
+its committed report, `01-listening-before-speaking.20260810T091000Z.json`, predates the
+structured `drift` field and is deliberately kept that way - it is the fixture that proves the
+legacy prose-detail fallback described under JSON below):
 
 ```
 | # | Title | Status | Words | Drift | Threshold | Open Claims | Gate |

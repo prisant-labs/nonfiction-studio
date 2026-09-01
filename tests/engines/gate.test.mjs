@@ -144,7 +144,7 @@ test('T01: golden book warn mode: exit 0; report written; exact schema keys; ses
     // Schema-exact per-check keys: check, verdict, detail, evidence, next -- with ONE named
     // exception (ADR-0012 voice verdict scope, Decision 2, PF-14): the stylometry entry alone
     // also carries a structured `drift` sibling to `detail`. gate-report `version` stays 2 for
-    // this addition (see (local working notes, not published)'s report-version ruling): it is additive and no
+    // this addition (this implementation wave's report-version ruling): it is additive and no
     // validator anywhere asserts the check-entry key set exhaustively except this test itself.
     for (const entry of report.checks) {
       const ck = Object.keys(entry).sort();

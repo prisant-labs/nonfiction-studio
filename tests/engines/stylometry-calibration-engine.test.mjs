@@ -50,9 +50,9 @@ const BIN = join(REPO_ROOT, 'bin', 'ns-stylometry');
 // bin/ns-stylometry fail at ESM module-link time for EVERY invocation, including --calibrate,
 // which never itself read that export -- the whole file failed to load, not just the scoring
 // path. Task 4 (which fixes bin/ns-stylometry's callers) removes that skip; their bodies needed
-// no rework at all, unchanged since Task 3: --calibrate's output shape is P2 ((local working notes, not published)) and
-// is untouched by Task 4's fix, unlike stylometry.test.mjs's four scoring-CLI tests skipped for
-// the same original reason.
+// no rework at all, unchanged since Task 3: --calibrate's output shape is this implementation
+// wave's design pin P2, and is untouched by Task 4's fix, unlike stylometry.test.mjs's four
+// scoring-CLI tests skipped for the same original reason.
 
 // ---------------------------------------------------------------------------
 // Synthetic corpora

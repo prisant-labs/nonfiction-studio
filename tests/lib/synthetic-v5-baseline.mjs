@@ -7,25 +7,29 @@
 //               content) plus a five-rung v5 calibration ladder (P2 shape) with a generous noise
 //               scale, so a later small in-test content mutation (a planted quote mismatch, an
 //               appended paragraph) still cannot push a marker's z past a reasonable threshold.
-//               regime defaults to "book": P9 (ADR-0012 implementation wave, (local working notes, not published))
-//               documents the sample book's own sparse first-person rate genuinely landing it in
-//               book regime as the intended, honest shipped-demo behavior, and every fixture this
+//               regime defaults to "book": this implementation wave's design pin P9 documents
+//               the sample book's own sparse first-person rate genuinely landing it in book
+//               regime as the intended, honest shipped-demo behavior, and every fixture this
 //               helper is used against (golden sample-book and the examples/fixtures/* siblings)
 //               carries a similarly small aggregate word count, so patched clones land the same
 //               way and their stylometry check reports pass-with-advice below the
 //               MIN_BOOK_VERDICT_WORDS floor regardless of the noise-scale margin.
-// why:          ADR-0012 implementation wave Task 4 (voice verdict scope): every committed
-//               examples/ fixture still carries a marker_set_version 4 baseline with no
-//               calibration ladder (recapturing those baselines is Task 5's job, tracked
-//               separately). Once hooks/lib/gate-engine.mjs correctly calls the v5 computeDrift,
-//               scoring against that stale baseline throws StaleBaselineError inside the
-//               stylometry check, which -- per the existing, UNCHANGED engine-error handling --
-//               forces the whole gate run's exit code to 2, even for tests whose actual subject
-//               is claim_coverage, continuity, prompt_scrub, or state_coherence, not stylometry
-//               at all. This helper patches only an ephemeral OS-temp CLONE's config.json; it
-//               never touches any file under examples/ itself, so Task 5's own fixture-recapture
-//               work is untouched. Ratified deviation outside Task 4's nominal file list -- see
-//               "Concerns for the coordinator" in (local working notes, not published).
+// why:          ADR-0012 implementation wave Task 4 (voice verdict scope): originally written
+//               when every committed examples/ fixture still carried a marker_set_version 4
+//               baseline with no calibration ladder, so scoring against it under the v5
+//               computeDrift threw StaleBaselineError inside the stylometry check, which -- per
+//               the existing, UNCHANGED engine-error handling -- forced the whole gate run's
+//               exit code to 2, even for tests whose actual subject is claim_coverage,
+//               continuity, prompt_scrub, or state_coherence, not stylometry at all. Task 5 has
+//               since recaptured every committed examples/ fixture to a full v5 baseline, so
+//               that specific failure mode no longer applies -- this helper is kept anyway for
+//               deterministic isolation: it guarantees z = 0 by construction on unchanged
+//               content, independent of whatever margin a real captured baseline's calibration
+//               ladder happens to carry (some real fixtures pass with margins as thin as 12 to
+//               17 percent, per Task 5's own report). This helper patches only an ephemeral
+//               OS-temp CLONE's config.json; it never touches any file under examples/ itself.
+//               Ratified deviation outside Task 4's nominal file list -- see this implementation
+//               wave's own Task 4 review record for "Concerns for the coordinator."
 // used-by:      tests/engines/gate.test.mjs, tests/hooks/stop-gate.test.mjs (and any sibling
 //               integration suite that spawns bin/ns-gate or hooks/stop-gate.mjs against a
 //               cloned examples/ fixture and does not itself intend to exercise stylometry)

@@ -156,6 +156,10 @@ for (const W of EXTENDED_BLOCK_SPANS) {
   });
 }
 
+// Forewarning: the tightest margin here is at 8,800 words (statistic 5.3931 vs threshold
+// 5.4269, ratio 0.994 -- roughly 0.6 percent headroom, per SCENARIOS.md). That is deliberately
+// thin, not a defect; a future corpus recalibration or a chapter-text edit that flips this
+// assertion is expected behavior given that margin, not a mystery to chase.
 test('honest rates never exceed threshold at any rung on the calibration ladder', () => {
   for (const W of baseline.calibration.spans) {
     const result = computeDrift(honestMeasured, baseline, null, { scoredWords: W });
