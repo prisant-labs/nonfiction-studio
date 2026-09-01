@@ -13,12 +13,12 @@ omitted on purpose: those two fields are written by the voice-capture agent for 
 `calibrateBaseline` itself, and this directory is a test fixture, not a book config, so it has
 nothing to capture them from.
 
-The `chapters/` subdirectory in this folder holds fixture files from an earlier version of this
-suite (frozen transformations of the golden sample book's chapter 1, built before v5 shipped). No
-test in `stylometry-calibration.test.mjs` reads them any longer -- see "2026-09-02 update" below
-for why. They are left in place, unexercised, as a historical record of the transformation
-methodology described below; nothing in the shipped product or test suite depends on their
-continued presence.
+An earlier version of this suite kept a `chapters/` subdirectory here, holding frozen
+transformations of the golden sample book's chapter 1 (built before v5 shipped). No test in
+`stylometry-calibration.test.mjs` read them any longer once the suite was re-scoped under v5 --
+see "2026-09-02 update" below for why -- and they were removed once that was confirmed: nothing in
+the shipped product or test suite depended on their continued presence. The transformation
+methodology they once illustrated is preserved as prose below.
 
 ## marker_set_version history (background, still accurate)
 
