@@ -42,7 +42,8 @@ After the author responds, branch immediately:
 
 **Samples submitted:** use the Bash tool to count the total words in the submitted text. Branch on the count:
 - **Under 2,200 words**: state the exact count returned by the tool. Explain, in one plain sentence, that the calibrated baseline needs at least 2,200 words of usable prose to measure natural same-voice variation. Request more samples before proceeding. Do not delegate to the agent. The author may paste additional text; re-count and re-assess on each addition.
-- **2,200 words or more**: state the count and continue to Step 3. Through roughly 3,000 words and beyond, add this note: "Confidence in the calibrated baseline improves with more sample text; consider re-running capture-voice after writing a few chapters to strengthen it further." Below roughly 3,000 words, the count alone is sufficient and no additional note is needed.
+- **2,200 words or more, under roughly 3,000**: state the count and continue to Step 3, adding this note: "Confidence in the calibrated baseline improves with more sample text; consider re-running capture-voice after writing a few chapters to strengthen it further."
+- **Roughly 3,000 words or more**: state the count and continue to Step 3. The count alone is sufficient and no additional note is needed.
 
 ## Step 3 - Load brief context and delegate to the voice-capture agent
 

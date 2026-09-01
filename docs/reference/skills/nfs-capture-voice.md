@@ -16,7 +16,7 @@ The `nfs-capture-voice` skill is the studio's voice-capture front door. It colle
 
 The skill handles three entry conditions:
 
-- **2,200 or more words submitted**: proceed to delegation; through roughly 3,000 words and beyond, a note that confidence improves with more sample text.
+- **2,200 or more words submitted**: proceed to delegation; from 2,200 up to roughly 3,000 words, a note that confidence improves with more sample text. At roughly 3,000 words and beyond, the count alone is sufficient.
 - **Under 2,200 words submitted**: state the exact count, explain that the calibrated baseline needs at least 2,200 words of usable prose, and request more before any computation runs.
 - **No samples at all**: offer the three-candidate bootstrap path, which the `voice-capture` agent runs and extends into a calibratable corpus (Path B of the agent's contract) per D-16 (collaborative voice bootstrap).
 
@@ -60,7 +60,7 @@ The skill runs six steps in order.
 
 1. **Existing-profile check.** Uses a Bash tool call to detect whether `context/style-profile.md` exists. If so, offers re-capture or augmentation. States the profile's purpose in plain terms in both branches.
 
-2. **Sample collection and word-count assessment.** Asks the author to paste samples. If no samples are provided, offers the bootstrap path and delegates to the agent with a Path B signal. If samples are submitted, uses a Bash tool call to count the total words and branches: under 2,200 words states the exact count, explains the calibration floor in one sentence, and requests more; 2,200 or more proceeds, with a confidence-improves-with-more note continuing through roughly 3,000 words and beyond.
+2. **Sample collection and word-count assessment.** Asks the author to paste samples. If no samples are provided, offers the bootstrap path and delegates to the agent with a Path B signal. If samples are submitted, uses a Bash tool call to count the total words and branches: under 2,200 words states the exact count, explains the calibration floor in one sentence, and requests more; 2,200 up to roughly 3,000 words proceeds with a confidence-improves-with-more note; roughly 3,000 words or more proceeds with the count alone.
 
 3. **Delegate to the voice-capture agent.** Reads `context/brief.md`, states the one-sentence calibration cost disclosure, then spawns the `voice-capture` agent (the `nfs-capture-voice -> voice-capture` chain edge) with the samples, the brief content, and the word count. The agent persists the samples under `context/samples/`, runs `bin/ns-stylometry --calibrate`, reads `markers`, `marker_set_version`, and `calibration` from stdout plus the two regime-disclosure sentences from stderr, writes `context/style-profile.md`, and writes the full baseline into `.studio/config.json`.
 

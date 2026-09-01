@@ -146,7 +146,7 @@ printf '%s\n' "<submitted-samples>" | wc -w
 ```
 Output: `2221`
 
-2,221 words clears the 2,200-word calibration floor. The count is under roughly 3,000, so the count alone is stated with no additional note.
+2,221 words clears the 2,200-word calibration floor, but stays under roughly 3,000, so the skill adds a note: "Confidence in the calibrated baseline improves with more sample text; consider re-running capture-voice after writing a few chapters to strengthen it further."
 
 **Studio (Step 3 - Load brief context and delegate):**
 
