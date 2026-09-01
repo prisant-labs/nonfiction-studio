@@ -35,6 +35,7 @@ Ask the author to paste two to five writing samples in their own prose voice, ta
 - Own prose is the primary source. Passages from admired authors are accepted as reference observations only and are not used to compute the baseline.
 - The calibrated baseline needs at least 2,200 words of usable prose to measure natural same-voice variation with any confidence; that is a floor the calibration step enforces, not a stylistic preference.
 - If the author has no writing samples of their own at all, they should say so now.
+- If some samples represent clearly different kinds of writing (a personal anecdote, a how-to passage, a reflective aside), mentioning which is which is entirely optional and does not affect the word-count assessment below. It only matters later, in Step 3, if it turns out there is enough of each kind for optional register-level diagnostics.
 
 After the author responds, branch immediately:
 
@@ -51,16 +52,20 @@ Use the Read tool on `context/brief.md` to load genre and tone context. If the f
 
 Before delegating, state one sentence of cost disclosure: calibration resamples the corpus a large, fixed number of times to measure natural same-voice variation, and this takes real time - seconds to roughly a minute, proportional to corpus size.
 
+**Register bucketing eligibility (silent unless eligible).** If the author labeled two or more sample groups while submitting in Step 2, use the Bash tool to count words in each labeled group separately. When two or more groups each reach at least 300 words, note this as an eligible register-bucketing addendum to forward to the agent. When fewer than two groups qualify - including when the author gave no labels at all - say nothing about register bucketing; continue exactly as if it had never come up. This is never a blocker: the addendum, when eligible, rides along with the delegation below and never changes what happens in the rest of this step.
+
 Spawn the `voice-capture` agent via the `nfs-capture-voice -> voice-capture` chain edge, passing:
 - All submitted samples (pasted text or the paths if already on disk), or the Path B instruction if no samples were provided
 - The content of `context/brief.md` (or a note that it is absent)
 - The word count from Step 2, or the Path B signal
+- The eligible register-label groupings identified above, when they qualify (a name plus its member samples per group); omitted entirely, with no question asked, when they do not qualify
 
 The agent handles all computation and all file writes:
 - The agent persists every sample used for calibration to `context/samples/voice-sample-NN.md` before calibrating, so the profile's `Exemplars` paths resolve
 - `bin/ns-stylometry --calibrate` computes and prints the eight-marker vector, `marker_set_version`, and the five-rung calibration ladder (ADR-0012, voice verdict scope); the agent reads all of it from stdout, plus two plain-language regime-disclosure sentences from stderr
 - The agent writes `context/style-profile.md` in the seven-section grammar (`docs/formats/style-profile.md`)
 - The agent writes the full baseline - `markers`, `marker_set_version`, `calibration`, `captured`, `sample_count`, and `method` - into `.studio/config.json` `stylometry.baseline` via read-modify-write semantics. A baseline missing any of `marker_set_version`, `calibration`, `captured`, or `sample_count` is one the drift scorer or the doctor will reject or flag.
+- When eligible register groupings were forwarded, the agent additionally measures each group and writes `stylometry.registers` as an optional addendum, strictly after the baseline write above succeeds. This never gates, delays, or replaces the baseline or profile writes; its absence changes nothing else in this skill's flow.
 
 This skill writes neither file. Do not instruct the agent to write `.studio/progress.json` or any other `.studio/` path beyond `config.json` and `context/samples/`.
 
@@ -88,7 +93,9 @@ Choose the markers that best represent this author's measured style. The goal is
 
 ## Step 6 - Close with suggestions
 
-State that the voice baseline is in place. Offer optional next steps based on project state:
+State that the voice baseline is in place. If the agent reported writing any `stylometry.registers` buckets, name them here in one plain sentence (for example, "anecdotal and instructional register vectors were also captured, for diagnostic `--by-register` comparisons only - they carry no blocking verdict"). If register bucketing did not run, say nothing about it: this is a silent skip, not a reported gap.
+
+Offer optional next steps based on project state:
 - If `context/brief.md` exists and is confirmed: suggest `nfs-outline` to build the chapter-by-chapter structure.
 - If no brief exists: suggest `nfs-interview` to complete the project brief first.
 
@@ -107,3 +114,5 @@ Neither suggestion is mandatory or sequential.
 **Mid-capture failure.** If the voice-capture agent exits without completing, no partial profile is written. The agent's no-profile-without-baseline guardrail ensures `context/style-profile.md` is not committed unless the numeric baseline is in place. The Read checks in Step 4 detect the missing or incomplete files and the skill reports the failure clearly. A clean re-run from Step 2 is always safe.
 
 **Read check failure.** If either Read check in Step 4 fails after the agent completes, state which file is missing, confirm no partial state was written, and offer a clean restart. Do not present the situation as a partial success.
+
+**Register bucketing never affects baseline success or failure.** It is an optional addendum the agent attempts only after the baseline write has already succeeded (see Step 3). Whether it ran, was skipped, or produced fewer buckets than forwarded has no bearing on Step 4's two mandatory Read checks or on whether this skill reports the capture as successful.

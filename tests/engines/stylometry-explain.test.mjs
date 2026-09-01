@@ -42,7 +42,15 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { writeSyntheticV5Baseline } from '../lib/synthetic-v5-baseline.mjs';
-import { measureChapter } from '../../hooks/lib/stylometry-engine.mjs';
+import { measureChapter, countWords } from '../../hooks/lib/stylometry-engine.mjs';
+
+// P8 (ADR-0012 voice verdict scope, Decision 4): the VERBATIM advisory label bin/ns-stylometry's
+// --by-register carries, wherever it appears. Duplicated here as a plain string (not imported)
+// because the point of this constant is to prove the CLI's actual stdout/JSON matches this exact
+// text, not to prove the CLI matches whatever the CLI itself defines.
+const REGISTER_ADVISORY_LABEL =
+  'advisory - no blocking verdict at register scale; register-sized text is far below the ' +
+  'roughly 2,200 words a blocking verdict needs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -171,6 +179,87 @@ function buildSyntheticExplainBook() {
     version: 2,
     thresholds: { stylometry_marker_tolerance: 2.0 },
     stylometry: { baseline },
+  };
+  writeFileSync(join(dir, '.studio', 'config.json'), JSON.stringify(config, null, 2), 'utf8');
+  return dir;
+}
+
+// Same book-root shape as buildSyntheticExplainBook, plus stylometry.registers (P8): two plain
+// measured vectors, no calibration ladder, no marker_set_version -- the schema registers are
+// deliberately scoped to. Used by the --by-register test group below; kept separate from
+// buildSyntheticExplainBook rather than parameterizing it, so a change to one fixture's shape
+// cannot silently ripple into the other's already-passing test group.
+function buildSyntheticRegisterBook() {
+  const dir = mkdtempSync(join(tmpdir(), 'ns-stylometry-registers-synth-'));
+  mkdirSync(join(dir, '.studio'), { recursive: true });
+  mkdirSync(join(dir, 'context'), { recursive: true });
+  mkdirSync(join(dir, 'chapters'), { recursive: true });
+  writeFileSync(join(dir, '.studio', 'meta.json'), JSON.stringify({ schema_version: 2 }, null, 2), 'utf8');
+  writeFileSync(join(dir, 'chapters', '01-drifted.md'), DRIFTED_TEXT, 'utf8');
+
+  const baseline = {
+    markers: measureChapter(BASE_TEXT),
+    marker_set_version: 5,
+    captured: '2026-08-30T00:00:00Z',
+    sample_count: 1,
+    calibration: {
+      spans: [550, 2200],
+      noise_scales: { '550': explainScales(1.0), '2200': explainScales(1.0) },
+      block_thresholds: { '550': 3.0, '2200': 3.0 },
+      detectability_auc: 0.98,
+      regime: 'chapter',
+      replicates: 300,
+      seed: 4242,
+    },
+  };
+  const config = {
+    version: 2,
+    thresholds: { stylometry_marker_tolerance: 2.0 },
+    stylometry: {
+      baseline,
+      registers: {
+        anecdotal: { markers: measureChapter(BASE_TEXT), sample_count: 1 },
+        instructional: { markers: measureChapter(DRIFTED_TEXT), sample_count: 1 },
+      },
+    },
+  };
+  writeFileSync(join(dir, '.studio', 'config.json'), JSON.stringify(config, null, 2), 'utf8');
+  return dir;
+}
+
+// A PASSING book root (self-scored: the chapter IS the baseline's own source text, so every
+// marker's z is 0 and the statistic never reaches the threshold) with NO stylometry.registers key
+// at all. Needed because P8's own AC wording ("no registers configured -> plain explanation, exit
+// 0") names the passing case specifically; buildSyntheticExplainBook's DRIFTED_TEXT chapter always
+// blocks (exit 1), and cloneFixture(GOLDEN_SRC) now HAS registers (the sample book ships them as
+// of this task), so neither existing fixture can exercise "no registers, exit 0" literally.
+function buildSyntheticPassingBookNoRegisters() {
+  const dir = mkdtempSync(join(tmpdir(), 'ns-stylometry-passing-noregisters-synth-'));
+  mkdirSync(join(dir, '.studio'), { recursive: true });
+  mkdirSync(join(dir, 'context'), { recursive: true });
+  mkdirSync(join(dir, 'chapters'), { recursive: true });
+  writeFileSync(join(dir, '.studio', 'meta.json'), JSON.stringify({ schema_version: 2 }, null, 2), 'utf8');
+  writeFileSync(join(dir, 'chapters', '01-base.md'), BASE_TEXT, 'utf8');
+
+  const baseline = {
+    markers: measureChapter(BASE_TEXT),
+    marker_set_version: 5,
+    captured: '2026-08-30T00:00:00Z',
+    sample_count: 1,
+    calibration: {
+      spans: [550, 2200],
+      noise_scales: { '550': explainScales(1.0), '2200': explainScales(1.0) },
+      block_thresholds: { '550': 3.0, '2200': 3.0 },
+      detectability_auc: 0.98,
+      regime: 'chapter',
+      replicates: 300,
+      seed: 4242,
+    },
+  };
+  const config = {
+    version: 2,
+    thresholds: { stylometry_marker_tolerance: 2.0 },
+    stylometry: { baseline }, // no registers key
   };
   writeFileSync(join(dir, '.studio', 'config.json'), JSON.stringify(config, null, 2), 'utf8');
   return dir;
@@ -547,6 +636,256 @@ test('--explain (text): determinism still holds after the flagged-signal fix (by
 
     assert.strictEqual(result1.stdout, result2.stdout,
       'explain text output must still be byte-identical across two runs after the flagged-signal fix');
+  } finally {
+    cleanupClone(dir);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Passage attribution (P8, ADR-0012 voice verdict scope, Decision 4): --explain names the
+// worst marker's most locally deviant 100-word window as advisory prose. The window-position
+// arithmetic itself is proven against a hand-constructed text with a KNOWN answer in
+// tests/engines/stylometry.test.mjs (locateWorstWindow); these CLI-level tests only prove the
+// flag renders that helper's output correctly and composes with the rest of the CLI.
+// ---------------------------------------------------------------------------
+
+test('--explain --json: explain.passage names the worst marker and a valid 1-indexed word-offset range', () => {
+  const dir = buildSyntheticExplainBook();
+  try {
+    const result = run(['--all', '--json', '--explain'], dir);
+    assert.strictEqual(result.status, 1, 'stderr: ' + result.stderr);
+
+    const out = JSON.parse(result.stdout);
+    assert.ok(out.explain.passage, 'explain.passage must be present');
+    assert.strictEqual(out.explain.passage.marker, out.worstMarker,
+      'passage attribution must be for the worst marker, the same one the verdict names');
+    assert.strictEqual(typeof out.explain.passage.startWord, 'number');
+    assert.strictEqual(typeof out.explain.passage.endWord, 'number');
+    assert.ok(out.explain.passage.startWord >= 1, 'word offsets are 1-indexed');
+    assert.ok(out.explain.passage.endWord >= out.explain.passage.startWord);
+    assert.strictEqual(typeof out.explain.passage.note, 'string');
+    assert.ok(out.explain.passage.note.startsWith('advisory'),
+      'passage note must be labeled advisory; got: ' + out.explain.passage.note);
+
+    // DRIFTED_TEXT is 104 words (countWords), just over the 100-word window -- so this is NOT
+    // the short-text whole-span fallback (that only applies at n <= 100). driftedText()
+    // substitutes every first-person pronoun everywhere in the text (a uniform, whole-text
+    // transform, not a localized one), so local first_person_rate reads 0 in EVERY possible
+    // 100-word window: the delta from baseline is identical at every position, and
+    // locateWorstWindow's documented tie-break (strict greater-than only, so ties keep the
+    // FIRST/leftmost window reaching the running maximum) resolves to window start 0. That
+    // pins startWord=1 and, with windowSize = min(100, 104) = 100, endWord=100 -- hand-derived
+    // from the fixture's own construction, not a value read back from the code under test.
+    const scoredWordCount = countWords(DRIFTED_TEXT);
+    assert.strictEqual(scoredWordCount, 104, 'sanity: this fixture text must be 104 words');
+    assert.strictEqual(out.explain.passage.startWord, 1);
+    assert.strictEqual(out.explain.passage.endWord, 100);
+  } finally {
+    cleanupClone(dir);
+  }
+});
+
+test('--explain (text): passage attribution names the worst marker and a word-offset range', () => {
+  const dir = buildSyntheticExplainBook();
+  try {
+    const result = run(['--all', '--explain'], dir);
+    assert.strictEqual(result.status, 1, 'stderr: ' + result.stderr);
+
+    assert.ok(/Passage attribution/.test(result.stdout), 'got:\n' + result.stdout);
+    assert.ok(/first_person_rate/.test(result.stdout),
+      'passage line must name the worst marker; got:\n' + result.stdout);
+    assert.ok(/words \d+-\d+/.test(result.stdout),
+      'passage line must state a word-offset range; got:\n' + result.stdout);
+  } finally {
+    cleanupClone(dir);
+  }
+});
+
+test('--explain writes nothing to disk, still true with passage attribution added', () => {
+  const clone = cloneFixture(GOLDEN_SRC, 'passage-readonly');
+  try {
+    const before = snapshot(clone);
+    const result = run(['--all', '--explain', '--json'], clone);
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.ok(out.explain.passage !== undefined, 'explain.passage key must be present');
+    const after = snapshot(clone);
+    assert.strictEqual(after, before, '--explain must not create, delete, or modify any file');
+  } finally {
+    cleanupClone(clone);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// --by-register (P8, ADR-0012 voice verdict scope, Decision 4): advisory-only per-register
+// comparison, VERBATIM advisory label, never changes the exit code, composes with --explain,
+// --json, and the plain scoring modes.
+// ---------------------------------------------------------------------------
+
+test('--by-register --json: registers array carries the VERBATIM advisory label and per-marker deviations for every configured register', () => {
+  const dir = buildSyntheticRegisterBook();
+  try {
+    const result = run(['--all', '--json', '--by-register'], dir);
+    assert.strictEqual(result.status, 1, 'stderr: ' + result.stderr);
+
+    const out = JSON.parse(result.stdout);
+    assert.ok(Array.isArray(out.registers), 'JSON must carry a registers array when --by-register is passed');
+    assert.strictEqual(out.registers.length, 2);
+
+    const names = out.registers.map(r => r.register).sort();
+    assert.deepStrictEqual(names, ['anecdotal', 'instructional']);
+
+    for (const r of out.registers) {
+      assert.strictEqual(r.note, REGISTER_ADVISORY_LABEL,
+        'the advisory label must be VERBATIM per P8; got: ' + r.note);
+      assert.strictEqual(typeof r.sample_count, 'number');
+      assert.ok(Array.isArray(r.perMarker));
+      assert.strictEqual(r.perMarker.length, 8, 'every register entry must cover all 8 markers');
+      for (const m of r.perMarker) {
+        assert.strictEqual(typeof m.marker, 'string');
+        assert.strictEqual(typeof m.baseline, 'number');
+        assert.strictEqual(typeof m.measured, 'number');
+        assert.strictEqual(typeof m.deviationPct, 'number');
+        assert.strictEqual(m.z, undefined,
+          'register comparison must carry no z field; no calibration ladder exists at register scale');
+      }
+    }
+  } finally {
+    cleanupClone(dir);
+  }
+});
+
+test('--by-register (text): section header carries the VERBATIM advisory label and lists every configured register', () => {
+  const dir = buildSyntheticRegisterBook();
+  try {
+    const result = run(['--all', '--by-register'], dir);
+    assert.strictEqual(result.status, 1, 'stderr: ' + result.stderr);
+
+    assert.ok(result.stdout.includes(REGISTER_ADVISORY_LABEL),
+      'text output must carry the VERBATIM advisory label; got:\n' + result.stdout);
+    assert.ok(result.stdout.includes('anecdotal'), 'got:\n' + result.stdout);
+    assert.ok(result.stdout.includes('instructional'), 'got:\n' + result.stdout);
+  } finally {
+    cleanupClone(dir);
+  }
+});
+
+test('--by-register composes with --explain: both sections render in one run', () => {
+  const dir = buildSyntheticRegisterBook();
+  try {
+    const result = run(['--all', '--explain', '--by-register'], dir);
+    assert.strictEqual(result.status, 1, 'stderr: ' + result.stderr);
+    assert.ok(/Worst marker/.test(result.stdout), 'explain section must still render; got:\n' + result.stdout);
+    assert.ok(/Passage attribution/.test(result.stdout), 'got:\n' + result.stdout);
+    assert.ok(/Register comparison/.test(result.stdout), 'got:\n' + result.stdout);
+  } finally {
+    cleanupClone(dir);
+  }
+});
+
+test('--by-register does not change the exit code: golden book (pass)', () => {
+  const clone = cloneFixture(GOLDEN_SRC, 'byregister-parity-pass');
+  try {
+    const without = run(['--all'], clone);
+    const withFlag = run(['--all', '--by-register'], clone);
+    assert.strictEqual(without.status, 0, 'stderr: ' + without.stderr);
+    assert.strictEqual(withFlag.status, without.status,
+      '--by-register must not change the exit code; without=' + without.status +
+      ' with=' + withFlag.status + '; stderr: ' + withFlag.stderr);
+  } finally {
+    cleanupClone(clone);
+  }
+});
+
+test('--by-register does not change the exit code: synthetic block book with registers configured', () => {
+  const dir = buildSyntheticRegisterBook();
+  try {
+    const without = run(['--all'], dir);
+    const withFlag = run(['--all', '--by-register'], dir);
+    assert.strictEqual(without.status, 1, 'stderr: ' + without.stderr);
+    assert.strictEqual(withFlag.status, without.status,
+      '--by-register must not change the exit code; without=' + without.status +
+      ' with=' + withFlag.status + '; stderr: ' + withFlag.stderr);
+  } finally {
+    cleanupClone(dir);
+  }
+});
+
+test('--by-register with no registers configured (block-side): plain explanation (not silence), exit code unchanged, JSON registers is an empty array with a note', () => {
+  const dir = buildSyntheticExplainBook(); // no stylometry.registers in this fixture's config
+  try {
+    const without = run(['--all'], dir);
+    const textResult = run(['--all', '--by-register'], dir);
+    assert.strictEqual(textResult.status, without.status,
+      '--by-register must not change the exit code when no registers are configured');
+    assert.ok(!textResult.stdout.includes('Register comparison ('),
+      'no registers configured means no register table; got:\n' + textResult.stdout);
+    assert.ok(/no stylometry\.registers configured/.test(textResult.stdout),
+      'a plain explanation must be stated, not silence; got:\n' + textResult.stdout);
+
+    const jsonResult = run(['--all', '--by-register', '--json'], dir);
+    assert.strictEqual(jsonResult.status, without.status);
+    const out = JSON.parse(jsonResult.stdout);
+    assert.deepStrictEqual(out.registers, []);
+    assert.strictEqual(typeof out.registersNote, 'string');
+    assert.ok(out.registersNote.length > 0);
+  } finally {
+    cleanupClone(dir);
+  }
+});
+
+// P8's own AC wording names this exact combination: "no registers configured -> plain
+// explanation, exit 0." The test above only ever exercises the exit-1 (block) side; this one
+// pins the literal exit-0 (pass) case, on a fixture that is self-scored (z=0 everywhere) and
+// carries no stylometry.registers key at all.
+test('--by-register with no registers configured (pass-side, AC-literal): plain explanation at exit 0', () => {
+  const dir = buildSyntheticPassingBookNoRegisters();
+  try {
+    const without = run(['--all'], dir);
+    assert.strictEqual(without.status, 0, 'sanity: this fixture must pass; stderr: ' + without.stderr);
+
+    const textResult = run(['--all', '--by-register'], dir);
+    assert.strictEqual(textResult.status, 0,
+      '--by-register must not change the exit code; the underlying verdict is pass (0)');
+    assert.ok(!textResult.stdout.includes('Register comparison ('),
+      'no registers configured means no register table; got:\n' + textResult.stdout);
+    assert.ok(/no stylometry\.registers configured/.test(textResult.stdout),
+      'a plain explanation must be stated, not silence; got:\n' + textResult.stdout);
+
+    const jsonResult = run(['--all', '--by-register', '--json'], dir);
+    assert.strictEqual(jsonResult.status, 0);
+    const out = JSON.parse(jsonResult.stdout);
+    assert.strictEqual(out.exceeded, false);
+    assert.deepStrictEqual(out.registers, []);
+    assert.strictEqual(typeof out.registersNote, 'string');
+    assert.ok(out.registersNote.length > 0);
+  } finally {
+    cleanupClone(dir);
+  }
+});
+
+test('--json without --by-register carries no registers key at all', () => {
+  const clone = cloneFixture(GOLDEN_SRC, 'no-byregister-key');
+  try {
+    const result = run(['--chapter=01-listening-before-speaking', '--json'], clone);
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(out, 'registers'), false,
+      'a consumer that never passes --by-register must see no registers key at all');
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(out, 'registersNote'), false);
+  } finally {
+    cleanupClone(clone);
+  }
+});
+
+test('--by-register writes nothing to disk', () => {
+  const dir = buildSyntheticRegisterBook();
+  try {
+    const before = snapshot(dir);
+    const result = run(['--all', '--by-register', '--json'], dir);
+    assert.strictEqual(result.status, 1, 'stderr: ' + result.stderr);
+    const after = snapshot(dir);
+    assert.strictEqual(after, before, '--by-register must not create, delete, or modify any file');
   } finally {
     cleanupClone(dir);
   }

@@ -366,6 +366,26 @@ function movingAverageTypeTokenRatio(lowerWords) {
  *   except lowerWords may be a merged array from multiple chapters)
  * @returns {object} eight-marker vector
  */
+/**
+ * Signed relative deviation in percent, (measured - baseline) / baseline * 100, with the
+ * zero-baseline rule shared by every caller that measures honest deviation against a plain
+ * measured vector: 0 when both baseline and measured are 0 for that marker, else +100 (never
+ * -100 -- there is no "negative" direction to fall away from zero). Extracted from
+ * computeDrift's own inline formula so computeDrift and compareRegister (a later, register-scale
+ * caller with no calibration ladder to standardize against) share one definition rather than two
+ * copies that could quietly drift apart.
+ *
+ * @param {number} measuredVal
+ * @param {number} baselineVal
+ * @returns {number} signed relative deviation in percent
+ */
+function signedRelativeDeviationPct(measuredVal, baselineVal) {
+  if (baselineVal === 0) {
+    return measuredVal === 0 ? 0 : 100;
+  }
+  return (measuredVal - baselineVal) / baselineVal * 100;
+}
+
 function ratiosFromCounts(counts) {
   const { totalWords, functionWordCount, contractionCount, firstPersonCount,
           secondPersonCount, totalCharLength, punctCount, sentenceCount, lowerWords } = counts;
@@ -682,12 +702,7 @@ export function computeDrift(measured, baseline, thresholds, opts) {
     const baselineVal = markers[marker];
     const measuredVal = (measured != null && marker in measured) ? measured[marker] : 0;
 
-    let relDev;
-    if (baselineVal === 0) {
-      relDev = measuredVal === 0 ? 0 : 100;
-    } else {
-      relDev = (measuredVal - baselineVal) / baselineVal * 100;
-    }
+    const relDev = signedRelativeDeviationPct(measuredVal, baselineVal);
     const deviationPct = Math.abs(relDev);
 
     const scale = ladderLookup(spans, (span) => calibration.noise_scales[String(span)][marker], W);
@@ -721,5 +736,109 @@ export function computeDrift(measured, baseline, thresholds, opts) {
     perMarker,
     markerTolerance,
     deprecations,
+  };
+}
+
+/**
+ * Compares a measured marker vector against one register's plain measured vector (P8, ADR-0012
+ * voice verdict scope, Decision 4 -- registers are advisory-only, closing roadmap row 1.7,
+ * voice registers). A
+ * register carries no calibration ladder (the schema is deliberately a bare marker vector plus
+ * sample_count -- see docs/formats/style-profile.md's sibling, .studio/config.json's
+ * stylometry.registers), so unlike computeDrift there is no noise scale to standardize against
+ * and therefore no z: only the same signed relative deviation formula computeDrift uses for its
+ * own honest deviationPct (signedRelativeDeviationPct, above), per marker, with no combining rule
+ * and no verdict. This is diagnostic output only -- callers (bin/ns-stylometry's --by-register)
+ * must never derive a pass/block decision from it, and must label it advisory wherever it is
+ * shown.
+ *
+ * @param {object} measured - the scored text's marker vector (measureChapter/measureBook output)
+ * @param {object} registerMarkers - one register's markers object
+ *   (stylometry.registers.<name>.markers in config.json)
+ * @returns {{marker: string, baseline: number, measured: number, deviationPct: number}[]} one
+ *   entry per key in registerMarkers, in that object's own key order; a marker registerMarkers
+ *   carries but measured does not is read as 0, the same convention computeDrift uses
+ */
+export function compareRegister(measured, registerMarkers) {
+  const perMarker = [];
+  for (const marker of Object.keys(registerMarkers)) {
+    const baselineVal = registerMarkers[marker];
+    const measuredVal = (measured != null && marker in measured) ? measured[marker] : 0;
+    const deviationPct = Math.abs(signedRelativeDeviationPct(measuredVal, baselineVal));
+    perMarker.push({ marker, baseline: baselineVal, measured: measuredVal, deviationPct });
+  }
+  return perMarker;
+}
+
+/**
+ * Locates the single most locally deviant TTR_WINDOW_SIZE-word window for one marker, for
+ * passage attribution in --explain (roadmap row 1.7, voice registers; ADR-0012 voice verdict
+ * scope, Decision 4 -- "names markers and passages," advisory only, no blocking verdict at
+ * passage scale). Slides a fixed TTR_WINDOW_SIZE-word window one word at a time over the
+ * preprocessed, normalized text -- the same preprocessing and the same word tokenizer
+ * (WORD_RE) extractCounts already uses -- re-measuring the given marker's value inside each
+ * window's exact word span by re-deriving counts on that window's own text slice
+ * (extractCounts + ratiosFromCounts, the same two functions every other marker value in this
+ * module is computed from, not a separate approximation), and returns the window whose local
+ * value has the LARGEST absolute distance from baselineValue.
+ *
+ * Deterministic: window order is a fixed left-to-right scan starting at word index 0, ties keep
+ * the FIRST (leftmost) window reaching the running maximum (the comparison below is a strict
+ * greater-than, never greater-or-equal), and there is no randomness anywhere in this function.
+ *
+ * Word offsets returned are 1-INDEXED and inclusive (a human reading "words 151-250" counts the
+ * first word of the text as word 1, not word 0) -- startWord = the 0-indexed loop variable plus
+ * one; an off-by-one here (dropping the plus-one) shifts every reported window start left by
+ * one word while leaving the located window itself unchanged, which is exactly the mutation this
+ * task's mutation proof exercises.
+ *
+ * Text shorter than or equal to one window returns a single window spanning the whole text,
+ * matching movingAverageTypeTokenRatio's own short-text fallback (a window that is the entire
+ * text reduces to the same arithmetic as a window that is part of it).
+ *
+ * @param {string} text - raw chapter (or concatenated multi-chapter) text; preprocessing
+ *   (heading/marker stripping, quote folding) is applied exactly as extractCounts already does
+ * @param {string} marker - one of the eight marker keys (function_word_rate, contraction_rate,
+ *   first_person_rate, second_person_rate, type_token_ratio, avg_word_length,
+ *   avg_sentence_length, punctuation_rate)
+ * @param {number} baselineValue - the value the local window value is compared against (in
+ *   normal callers, the worst marker's baseline value from computeDrift's perMarker)
+ * @returns {{ marker: string, startWord: number, endWord: number, value: number,
+ *   deltaAbs: number } | null} null when the text has no word tokens at all (for example, an
+ *   empty string, or a text that strips to nothing under preprocessing -- a heading-only file)
+ */
+export function locateWorstWindow(text, marker, baselineValue) {
+  const preprocessed = preprocess(text);
+  const normalized = preprocessed.replace(/\s+/g, ' ').trim();
+
+  WORD_RE.lastIndex = 0;
+  const tokenMatches = [...normalized.matchAll(WORD_RE)];
+  const n = tokenMatches.length;
+  if (n === 0) return null;
+
+  const windowSize = Math.min(TTR_WINDOW_SIZE, n);
+  let bestStart = 0;
+  let bestValue = null;
+  let bestDelta = -Infinity;
+
+  for (let start = 0; start + windowSize <= n; start++) {
+    const first = tokenMatches[start];
+    const last = tokenMatches[start + windowSize - 1];
+    const windowText = normalized.slice(first.index, last.index + last[0].length);
+    const value = ratiosFromCounts(extractCounts(windowText))[marker];
+    const delta = Math.abs(value - baselineValue);
+    if (delta > bestDelta) {
+      bestDelta = delta;
+      bestStart = start;
+      bestValue = value;
+    }
+  }
+
+  return {
+    marker,
+    startWord: bestStart + 1,
+    endWord: bestStart + windowSize,
+    value: bestValue,
+    deltaAbs: bestDelta,
   };
 }

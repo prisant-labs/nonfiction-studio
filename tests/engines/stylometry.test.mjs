@@ -32,7 +32,7 @@ import { writeSyntheticV5Baseline } from '../lib/synthetic-v5-baseline.mjs';
 
 import {
   measureChapter, measureBook, computeDrift, countWords, CURRENT_MARKER_SET_VERSION,
-  StaleBaselineError, InvalidCalibrationError,
+  StaleBaselineError, InvalidCalibrationError, locateWorstWindow, compareRegister,
 } from '../../hooks/lib/stylometry-engine.mjs';
 
 
@@ -1356,4 +1356,115 @@ test('word tokenization: CONTRACTION_RE stays ASCII-only, unaffected by the WORD
     'a possessive whose stem ends in a non-ASCII letter must not be counted as a ' +
     'contraction; if this fails, CONTRACTION_RE has been widened to match non-ASCII ' +
     'letters, which is a deliberate decision this test exists to force, not an accident');
+});
+
+// ---------------------------------------------------------------------------
+// locateWorstWindow (roadmap row 1.7, voice registers; ADR-0012 voice verdict scope,
+// Decision 4 -- advisory-only passage attribution for --explain). A pure, deterministic
+// helper: slides a fixed 100-word window one word at a time over the (preprocessed,
+// normalized) text, re-measuring the given marker's LOCAL value inside each window's exact
+// word span, and returns the window whose local value is furthest (by absolute distance)
+// from a caller-supplied baseline value. No RNG anywhere.
+//
+// CONSTRUCTED_TEXT below is built so the answer is known by construction, not asserted
+// blind: 150 filler words ("team", first_person_rate contribution zero), then EXACTLY 100
+// words that are all first-person pronouns ("I"), then 150 more filler words. Word tokens
+// 1-150 are filler, 151-250 are the all-"I" block, 251-400 are filler again. Because the
+// window is exactly 100 words wide, the ONE window that aligns exactly with the all-"I"
+// block (start word 151) has local first_person_rate = 100 (every one of its 100 words is
+// first-person); every other window position mixes in at least one filler word, which can
+// only pull the local rate below 100. So the window of maximum |local - baseline| (baseline
+// 0 here) is uniquely and unambiguously word range 151-250 -- hand-verifiable arithmetic,
+// not a value read back from the function under test.
+// ---------------------------------------------------------------------------
+
+const WINDOW_FILLER_COUNT = 150;
+const WINDOW_DEVIANT_COUNT = 100;
+
+function buildWindowLocatorText() {
+  const filler = Array(WINDOW_FILLER_COUNT).fill('team').join(' ');
+  const deviant = Array(WINDOW_DEVIANT_COUNT).fill('I').join(' ');
+  return filler + '. ' + deviant + '. ' + filler + '.';
+}
+
+test('locateWorstWindow: locates the exact known deviant 100-word window in a constructed text (known by construction)', () => {
+  const text = buildWindowLocatorText();
+  const result = locateWorstWindow(text, 'first_person_rate', 0);
+
+  assert.ok(result, 'locateWorstWindow must return a result for non-empty text');
+  assert.equal(result.marker, 'first_person_rate');
+  assert.equal(result.startWord, 151, 'the deviant window must start at word 151 (1-indexed)');
+  assert.equal(result.endWord, 250, 'the deviant window must end at word 250 (a 100-word window)');
+  assert.equal(result.value, 100, 'the deviant window is entirely first-person pronouns: local rate 100');
+  assert.equal(result.deltaAbs, 100, 'deltaAbs against a baseline of 0 must equal the local value itself');
+});
+
+test('locateWorstWindow: deterministic -- byte-identical result across two calls on the same input', () => {
+  const text = buildWindowLocatorText();
+  const r1 = locateWorstWindow(text, 'first_person_rate', 0);
+  const r2 = locateWorstWindow(text, 'first_person_rate', 0);
+  assert.deepEqual(r1, r2);
+});
+
+test('locateWorstWindow: text shorter than or equal to one window returns a single window spanning the whole text', () => {
+  const shortText = 'I went to the market and I bought bread and I came home again.';
+  const n = countWords(shortText);
+  assert.ok(n <= 100, 'sanity: this fixture text must be short text (<=100 words) for this case');
+  const result = locateWorstWindow(shortText, 'first_person_rate', 0);
+  assert.equal(result.startWord, 1);
+  assert.equal(result.endWord, n);
+});
+
+test('locateWorstWindow: empty text returns null (nothing to locate)', () => {
+  assert.equal(locateWorstWindow('', 'first_person_rate', 0), null);
+  assert.equal(locateWorstWindow('# only a heading', 'first_person_rate', 0), null,
+    'a heading-only text strips to nothing under the same preprocessing extractCounts uses');
+});
+
+test('locateWorstWindow: worst-window value is real for a marker not defined by a per-word count (contraction_rate, sentence-denominated)', () => {
+  // contraction_rate's denominator is sentences, not words, and a window can start or end
+  // mid-sentence -- this test only proves the helper does not crash or return NaN/undefined
+  // for a marker whose ratio is not word-denominated, not that the window position is exactly
+  // one thing (unlike the word-denominated markers above, a hand-computable single answer
+  // does not exist for this marker under an arbitrary word-boundary slice).
+  const text = buildWindowLocatorText();
+  const result = locateWorstWindow(text, 'contraction_rate', 0);
+  assert.ok(result);
+  assert.equal(typeof result.value, 'number');
+  assert.ok(!Number.isNaN(result.value));
+});
+
+// ---------------------------------------------------------------------------
+// compareRegister (P8, ADR-0012 voice verdict scope, Decision 4: registers carry a plain
+// measured vector, no calibration ladder, so there is no z here -- only the same signed
+// relative deviation formula computeDrift uses for its own honest deviationPct, per marker,
+// with no combining rule and no verdict).
+// ---------------------------------------------------------------------------
+
+test('compareRegister: per-marker deviationPct against a plain register vector, no z field', () => {
+  const measured = { function_word_rate: 0.55, first_person_rate: 2.0 };
+  const register = { function_word_rate: 0.50, first_person_rate: 0.0 };
+  const result = compareRegister(measured, register);
+
+  assert.equal(result.length, 2);
+  const fw = result.find(m => m.marker === 'function_word_rate');
+  assert.equal(fw.baseline, 0.50);
+  assert.equal(fw.measured, 0.55);
+  assert.ok(Math.abs(fw.deviationPct - 10) < 1e-9, 'got ' + fw.deviationPct);
+  assert.equal(fw.z, undefined, 'compareRegister must not report a z; no calibration exists at register scale');
+
+  const fp = result.find(m => m.marker === 'first_person_rate');
+  assert.equal(fp.deviationPct, 100,
+    'zero-baseline rule: nonzero measured against zero baseline is a 100% deviation, never -100');
+});
+
+test('compareRegister: zero baseline and zero measured is 0 deviation, not the +100 zero-baseline branch', () => {
+  const result = compareRegister({ x: 0 }, { x: 0 });
+  assert.equal(result[0].deviationPct, 0);
+});
+
+test('compareRegister: measured missing a marker the register carries reads as 0, matching computeDrift\'s own convention', () => {
+  const result = compareRegister({}, { first_person_rate: 2.0 });
+  assert.equal(result[0].measured, 0);
+  assert.equal(result[0].deviationPct, 100);
 });

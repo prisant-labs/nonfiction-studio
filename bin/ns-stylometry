@@ -6,7 +6,7 @@
 // why:          the CLI is the public surface; all logic lives in stylometry-engine.mjs so hooks
 //               and CI share the same computation path per S-07 section 4
 // usage:        ns-stylometry [--chapter=<slug>|--all] [--baseline=<path>] [--measure=<path>[,<path>...]]
-//               [--calibrate=<path>[,<path>...]] [--project=<dir>] [--json] [--explain]
+//               [--calibrate=<path>[,<path>...]] [--project=<dir>] [--json] [--explain] [--by-register]
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
@@ -14,8 +14,16 @@ import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
 import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
 import {
   measureChapter, measureBook, computeDrift, countWords, CURRENT_MARKER_SET_VERSION,
+  compareRegister, locateWorstWindow,
 } from '../hooks/lib/stylometry-engine.mjs';
 import { calibrateBaseline } from '../hooks/lib/stylometry-calibration.mjs';
+
+// P8 (ADR-0012 voice verdict scope, Decision 4): the VERBATIM advisory label every --by-register
+// output carries, wherever it appears (text mode header, every JSON registers[] entry's `note`).
+// One string constant, not a phrase re-typed at each call site, so it cannot drift between them.
+const REGISTER_ADVISORY_LABEL =
+  'advisory - no blocking verdict at register scale; register-sized text is far below the ' +
+  'roughly 2,200 words a blocking verdict needs';
 
 // ---- arg parsing ---------------------------------------------------------------
 
@@ -26,6 +34,7 @@ try {
     { name: 'measure', type: 'list' },
     { name: 'calibrate', type: 'list' },
     { name: 'explain', type: 'boolean' },
+    { name: 'by-register', type: 'boolean' },
   ]);
 } catch (err) {
   if (err.name === 'ArgsError') {
@@ -230,6 +239,27 @@ if (opts.baseline) {
   thresholds = config.thresholds || null;
 }
 
+// ---- registers discovery (P8, ADR-0012 voice verdict scope, Decision 4 -- advisory only) -------
+// Read independently of which baseline branch above ran (an explicit --baseline override reads a
+// baseline from elsewhere, but stylometry.registers, when it exists, still lives in this project's
+// own .studio/config.json). Any read or parse failure here is treated the same as "no registers
+// configured" -- advisory output degrading quietly is the correct failure mode for a feature that
+// carries no blocking verdict, never a reason to fail the whole scoring run.
+let registers = null;
+if (opts['by-register']) {
+  const registersConfigPath = join(root, '.studio', 'config.json');
+  if (existsSync(registersConfigPath)) {
+    try {
+      const registersConfig = JSON.parse(readFileSync(registersConfigPath, 'utf8'));
+      if (registersConfig && registersConfig.stylometry && registersConfig.stylometry.registers) {
+        registers = registersConfig.stylometry.registers;
+      }
+    } catch {
+      // malformed config.json: treated as no registers configured, not a hard failure
+    }
+  }
+}
+
 // ---- chapter discovery ---------------------------------------------------------
 
 const chapterDir = join(root, 'chapters');
@@ -294,6 +324,8 @@ if (chapterTexts.length === 0) {
         perMarker: [], note: NO_CHAPTERS_EXPLAIN_NOTE,
       }
       : undefined,
+    registers: opts['by-register'] ? [] : undefined,
+    registersNote: opts['by-register'] ? NO_CHAPTERS_EXPLAIN_NOTE : undefined,
     chapters: [],
     findings: [],
     ts: new Date().toISOString(),
@@ -303,6 +335,9 @@ if (chapterTexts.length === 0) {
   } else {
     process.stdout.write('[stylometry] pass: no chapters to scan\n');
     if (opts.explain) {
+      process.stdout.write('  ' + NO_CHAPTERS_EXPLAIN_NOTE + '\n');
+    }
+    if (opts['by-register']) {
       process.stdout.write('  ' + NO_CHAPTERS_EXPLAIN_NOTE + '\n');
     }
   }
@@ -365,6 +400,44 @@ for (const m of perMarker) {
   };
 }
 
+// ---- passage attribution (P8, ADR-0012 voice verdict scope, Decision 4) --------
+// For the worst marker, locate the single most locally deviant 100-word window in the scored
+// text (chapterTexts concatenated in the same order measureBook already aggregates them),
+// advisory only -- this never feeds back into statistic, threshold, or exceeded above, and is
+// only computed when --explain is requested (the flag this diagnostic belongs to per P8).
+const PASSAGE_ADVISORY_PREFIX = 'advisory - a diagnostic passage location, not a blocking verdict: ';
+let passage = null;
+if (opts.explain) {
+  const scoredText = chapterTexts.join('\n\n');
+  passage = locateWorstWindow(scoredText, worstMarker, markersObj[worstMarker].baseline);
+}
+const passageNote = passage
+  ? PASSAGE_ADVISORY_PREFIX + 'the ' + passage.marker + ' marker\'s most locally deviant ' +
+    '100-word window is words ' + passage.startWord + '-' + passage.endWord
+  : null;
+
+// ---- register comparison (P8, ADR-0012 voice verdict scope, Decision 4) --------
+// Advisory only, per register configured in stylometry.registers: relative deviation of the
+// scored text's own marker vector (measured, already computed above) against that register's
+// plain measured vector. Never touches statistic/threshold/exceeded/exitCode above -- this
+// section is purely additive output, gated entirely behind --by-register.
+let registerResults = [];
+if (opts['by-register'] && registers) {
+  for (const registerName of Object.keys(registers)) {
+    const register = registers[registerName];
+    if (!register || !register.markers) continue;
+    registerResults.push({
+      register: registerName,
+      sample_count: register.sample_count != null ? register.sample_count : null,
+      note: REGISTER_ADVISORY_LABEL,
+      perMarker: compareRegister(measured, register.markers),
+    });
+  }
+}
+const NO_REGISTERS_NOTE =
+  'no stylometry.registers configured in .studio/config.json; register-aware comparison is ' +
+  'unavailable until nfs-capture-voice\'s optional register bucketing runs';
+
 // Build findings array: one entry per flagged marker.
 const findings = flaggedMarkers.map(m => ({
   file: null,
@@ -415,8 +488,28 @@ const outJson = {
         z: m.z,
         flagged: m.flagged,
       })),
+      // Passage attribution (P8): present whenever a window was located (always true here,
+      // since chapterTexts.length > 0 is already guaranteed by the zero-chapter early return
+      // above); null only in the defensive case of a scored text that strips to zero words
+      // under preprocessing (for example, chapters containing only headings).
+      passage: passage
+        ? {
+          marker: passage.marker,
+          startWord: passage.startWord,
+          endWord: passage.endWord,
+          value: passage.value,
+          note: passageNote,
+        }
+        : null,
     }
     : undefined,
+  // registers (P8): present only when --by-register is passed; an empty array plus
+  // registersNote when the flag is passed but stylometry.registers carries nothing usable --
+  // mirrors the explain.note pattern used for the zero-chapter case above. JSON.stringify drops
+  // an undefined-valued key, so a consumer who never asks for --by-register sees no new key at
+  // all, exactly like --explain.
+  registers: opts['by-register'] ? registerResults : undefined,
+  registersNote: (opts['by-register'] && registerResults.length === 0) ? NO_REGISTERS_NOTE : undefined,
   chapters: chapterFiles,
   findings,
   ts: new Date().toISOString(),
@@ -470,6 +563,49 @@ function renderExplainText(sortedMarkers, threshold, markerTolerance) {
   return out;
 }
 
+/**
+ * Renders the passage-attribution line for --explain's text output (P8): the worst marker's
+ * name and its most locally deviant 100-word window, as a single advisory sentence. Presentation
+ * only -- passage was already located by locateWorstWindow; nothing here re-derives it.
+ *
+ * @param {{marker: string, startWord: number, endWord: number, value: number}} passageResult
+ * @param {number} passageBaseline - the worst marker's baseline value, for context in the line
+ * @returns {string} single line, newline-terminated
+ */
+function renderPassageText(passageResult, passageBaseline) {
+  return '\nPassage attribution (' + PASSAGE_ADVISORY_PREFIX.replace(/: $/, '') + '):\n' +
+    '  the ' + passageResult.marker + ' marker\'s most locally deviant 100-word window is ' +
+    'words ' + passageResult.startWord + '-' + passageResult.endWord +
+    ' (local value ' + passageResult.value.toFixed(4) + ' vs baseline ' + passageBaseline.toFixed(4) + ')\n';
+}
+
+/**
+ * Renders the --by-register text output (P8): the VERBATIM advisory label once, in the section
+ * header, then each configured register's per-marker deviations against the scored text. When no
+ * registers are configured, renders the plain explanation instead of a table -- never silence.
+ *
+ * @param {object[]} results - registerResults, one entry per configured register
+ * @returns {string} multi-line text, newline-terminated
+ */
+function renderRegistersText(results) {
+  if (results.length === 0) {
+    return '\n' + NO_REGISTERS_NOTE + '\n';
+  }
+  let out = '\nRegister comparison (' + REGISTER_ADVISORY_LABEL + '):\n';
+  const nameWidth = Math.max(...results.flatMap(r => r.perMarker.map(m => m.marker.length)));
+  for (const r of results) {
+    out += '\n  ' + r.register + ' (sample_count ' + r.sample_count + '):\n';
+    for (const m of r.perMarker) {
+      out +=
+        '    ' + m.marker.padEnd(nameWidth + 1) +
+        ' deviation ' + (m.deviationPct.toFixed(2) + '%').padStart(8) +
+        '  baseline ' + m.baseline.toFixed(4) +
+        '  measured ' + m.measured.toFixed(4) + '\n';
+    }
+  }
+  return out;
+}
+
 // ---- emit ----------------------------------------------------------------------
 
 if (opts.json) {
@@ -498,6 +634,16 @@ if (opts.json) {
         );
       }
     }
+  }
+
+  // Composes with either branch above (pass or block) and with --json's own JSON-only rendering
+  // never running here: passage attribution and register comparison are additive text sections,
+  // never a replacement for the pass/block line or the marker table above.
+  if (opts.explain && passage) {
+    process.stdout.write(renderPassageText(passage, markersObj[worstMarker].baseline));
+  }
+  if (opts['by-register']) {
+    process.stdout.write(renderRegistersText(registerResults));
   }
 }
 

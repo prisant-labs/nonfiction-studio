@@ -109,6 +109,47 @@
         "replicates": 1000,
         "seed": 4242
       }
+    },
+    "registers": {
+      "anecdotal": {
+        "markers": {
+          "function_word_rate": 0.49227202472952086,
+          "contraction_rate": 0.09302325581395349,
+          "first_person_rate": 1.1591962905718702,
+          "second_person_rate": 0.9273570324574961,
+          "type_token_ratio": 0.7780167364016745,
+          "avg_word_length": 4.846213292117465,
+          "avg_sentence_length": 15.046511627906977,
+          "punctuation_rate": 12.982998454404946
+        },
+        "sample_count": 1
+      },
+      "instructional": {
+        "markers": {
+          "function_word_rate": 0.5341409691629956,
+          "contraction_rate": 0.14754098360655737,
+          "first_person_rate": 0.22026431718061676,
+          "second_person_rate": 8.259911894273127,
+          "type_token_ratio": 0.7413102595797302,
+          "avg_word_length": 4.545154185022026,
+          "avg_sentence_length": 14.885245901639344,
+          "punctuation_rate": 12.444933920704845
+        },
+        "sample_count": 1
+      },
+      "reflective": {
+        "markers": {
+          "function_word_rate": 0.5050820953870211,
+          "contraction_rate": 0.09195402298850575,
+          "first_person_rate": 0.3127443315089914,
+          "second_person_rate": 0,
+          "type_token_ratio": 0.7413305084745733,
+          "avg_word_length": 4.888975762314308,
+          "avg_sentence_length": 14.701149425287356,
+          "punctuation_rate": 12.900703674745895
+        },
+        "sample_count": 1
+      }
     }
   },
   "models": {

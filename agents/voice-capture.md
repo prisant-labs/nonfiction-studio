@@ -95,11 +95,13 @@ it, not merely by silently taking the time.
   `node "<plugin-root>/bin/ns-stylometry" --calibrate=<comma-separated-paths>`
   against the samples already persisted under `context/samples/` (never against
   pasted text directly - persist first, per "Persist before calibrating" below).
-  No other Bash command is permitted: the current UTC timestamp for `captured` is
-  stated directly (the same convention `nfs-new-book`'s `{{DATETIME}}` token uses
-  for `.studio/meta.json` `created`, not a shell `date` call), and `sample_count`
-  is simply the number of files this agent just persisted, not a counted value
-  from a tool.
+  The only other Bash invocation this agent makes is `node "<plugin-root>/bin/
+  ns-stylometry" --measure=<bucket-file-paths>`, one call per eligible register
+  bucket, per "Register capture" below - no other Bash command is permitted. The
+  current UTC timestamp for `captured` is stated directly (the same convention
+  `nfs-new-book`'s `{{DATETIME}}` token uses for `.studio/meta.json` `created`,
+  not a shell `date` call), and `sample_count` is simply the number of files this
+  agent just persisted, not a counted value from a tool.
 
 ## Reads and writes
 
@@ -125,9 +127,11 @@ These are behavior contracts. The voice-capture agent touches only the paths lis
   seven-section grammar normative in `docs/formats/style-profile.md`, per the
   field-mapping table below.
 - `.studio/config.json` - the `stylometry.baseline` key, per "Config write
-  contract" below. The engine is the single counting and calibrating authority
-  and is read-only; this agent is the single config writer per S-08 (schemas and
-  file formats) section 4. No other config fields are touched.
+  contract" below, and, when register bucketing is eligible, the
+  `stylometry.registers` key, per "Register capture" below. The engine is the
+  single counting and calibrating authority and is read-only; this agent is the
+  single config writer for both keys per S-08 (schemas and file formats)
+  section 4. No other config fields are touched.
 
 ## Write ordering (single source of truth)
 
@@ -343,6 +347,61 @@ Re-deriving the disclosure independently at any point in this chain risks a
 paraphrase that quietly drifts from what the engine actually measured; verbatim
 relay is the only shape that cannot drift.
 
+## Register capture (optional addendum, closes roadmap row 1.7, voice registers)
+
+Per P8 (ADR-0012, voice verdict scope, Decision 4: registers are advisory-only),
+this agent optionally measures and writes `stylometry.registers` - a plain vector
+per author-labeled register, with no calibration ladder and no blocking verdict,
+used by `bin/ns-stylometry --by-register` for diagnostic-only comparisons. This
+never gates, delays, or replaces the baseline capture above; it runs strictly
+AFTER the numeric baseline has already been written to config.json (Path A
+step 5, Path B step 9), as an addendum appended once the full Path A or Path B
+process otherwise completes.
+
+**Trigger.** Only when the invoking skill forwards two or more author-labeled
+sample groups - each a subset of the sample files already persisted under
+`context/samples/` in this invocation - that each total at least 300 words; the
+skill has already checked this via its own Bash tool call before delegating, per
+its own contract. When no eligible groupings are forwarded, this agent does
+nothing further: no question is asked, and `stylometry.registers` is not
+touched.
+
+1. **Confirm the labels.** Present the forwarded grouping back to the author in
+   one line each (for example: "anecdotal: voice-sample-02.md,
+   voice-sample-04.md (612 words)"). Invite a correction. This is a light
+   confirmation, not the full convergence loop Path B's bootstrap uses - the
+   voice itself is already settled; only the grouping is being checked.
+2. **Re-verify the floor.** For each confirmed bucket, run `node
+   "<plugin-root>/bin/ns-stylometry" --measure=<bucket-file-paths>`
+   (comma-separated, the same persisted paths already on disk) and read
+   `totalWords` from its JSON stdout. A bucket that falls under 300 words after
+   confirmation (a relabeling can shrink a group) is dropped silently from this
+   capture pass, not reported as an error; capture continues with whatever
+   buckets remain, and if fewer than two remain, this agent stops here without
+   writing anything.
+3. **Measure each surviving bucket.** From the same `--measure` invocation in
+   step 2, read `markers` from stdout VERBATIM - do not recompute, round, or
+   reshape it. `sample_count` for that bucket is the number of files in it, the
+   same convention the baseline's own `sample_count` uses.
+4. **Write the registers.** Read the full `.studio/config.json` fresh
+   (read-modify-write, the same single-writer discipline as the baseline), set
+   `stylometry.registers.<bucket-name>` to `{ "markers": {...from step 3,
+   verbatim...}, "sample_count": N }` for each surviving bucket, and write the
+   whole file back unchanged otherwise - including `stylometry.baseline`, just
+   written, and any register entries from a prior capture pass that this pass
+   did not touch (a per-bucket-name merge, not a full-object replace: a later
+   capture adding a "reflective" bucket must not erase an "anecdotal" bucket an
+   earlier capture already wrote).
+5. **Name what was written.** In the completion report to the invoking skill
+   (alongside the verbatim regime-disclosure sentences), name every register
+   bucket written in this pass, or state plainly that none were written when the
+   trigger above did not fire or every bucket fell under the floor in step 2.
+
+`stylometry.registers` carries no `marker_set_version` and no `calibration`
+sibling (P8's schema is deliberately a bare vector plus `sample_count`, unlike
+`stylometry.baseline`) - it lives beside a v5 baseline, not inside its version
+guard.
+
 ## Guardrails
 
 - **Own-prose primacy.** Author writing samples are the authoritative source.
@@ -371,9 +430,12 @@ relay is the only shape that cannot drift.
   reference` block copies those same values rather than restating them
   independently. `bin/ns-doctor` checks the two files agree by exact string and
   number equality.
-- **Register bucketing is out of scope here.** This agent does not read or write
-  `stylometry.registers`; that capability is a later addition and is not part of
-  this contract.
+- **Register bucketing is an optional addendum, never a gate.** It runs only
+  when the invoking skill forwards two or more author-labeled sample groups of
+  at least 300 words each, always after the baseline write in step 5 (Path A)
+  or step 9 (Path B) has already succeeded. See "Register capture" above for
+  the full contract; its absence, or its failure, never blocks or delays the
+  baseline or the profile.
 - **CLI invocation, plugin root resolved per ADR-0005 (bin PATH on Windows).**
   Bare CLI invocation fails in the Bash tool on Windows, and the hooks.json
   plugin-root variable is not set in a live Bash shell - ADR-0005 (bin PATH on
