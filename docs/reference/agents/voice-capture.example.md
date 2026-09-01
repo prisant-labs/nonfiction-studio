@@ -1,6 +1,6 @@
 ---
 title: "voice-capture worked example"
-description: "Condensed transcript of a voice-capture session for The Quiet Network - shows brief reading, CLI invocation, draft profile, and confirm-before-commit"
+description: "Condensed transcript of a voice-capture session for The Quiet Network - shows brief reading, sample persistence, the ns-stylometry --calibrate invocation, draft profile, and confirm-before-commit"
 audience: "non-engineer"
 level: "beginner"
 tags: ["agent", "intake", "voice", "example"]
@@ -10,10 +10,14 @@ tags: ["agent", "intake", "voice", "example"]
 
 This is a condensed transcript of a `voice-capture` session for the sample book
 "The Quiet Network" (see `examples/sample-book/`). It follows Path A (writing
-samples available), showing the brief reading, the `bin/ns-stylometry --measure`
-invocation, the draft profile excerpt, and the confirm-before-commit step. It
-honors the contracts specified in S-01 (intake and context agents) and D-08
-(hybrid voice scoring).
+samples available), showing the brief reading, persisting the samples under
+`context/samples/`, the `bin/ns-stylometry --calibrate` invocation, the draft
+profile excerpt, and the confirm-before-commit step. It honors the contracts
+specified in S-01 (intake and context agents), D-08 (hybrid voice scoring), and
+ADR-0012 (voice verdict scope, Decision 3: capture calibrates, not just
+measures). The `--calibrate` output shown below is a real run against
+`examples/sample-book/context/samples/`'s four shipped files, reproducible by
+running the same command.
 
 ---
 
@@ -34,7 +38,10 @@ analyzed here.
 <!-- END DRAFT section-6 -->
 ```
 
-The author's sample is saved at `context/samples/voice-sample-01.md`.
+The author's samples are the four files shipped at
+`examples/sample-book/context/samples/`: `voice-sample-01.md` plus
+`voice-corpus-01.md` through `-03.md`, 3,664 words total (a real, calibratable
+corpus, well above the roughly 2,200-word floor).
 
 ---
 
@@ -49,58 +56,104 @@ The author's sample is saved at `context/samples/voice-sample-01.md`.
 > present tense; trade non-fiction register pitched at an informed friend. You
 > listed "unlock," "leverage," and "guru-speak" as terms to avoid.
 >
-> I see a writing sample at `context/samples/voice-sample-01.md`. Reading it now.
+> You've pasted four writing samples totaling 3,664 words. Persisting them under
+> `context/samples/` before calibrating.
 
-The agent reads `context/samples/voice-sample-01.md` and observes: short to
-medium sentence length, predominantly second person ("You probably already know..."),
-present tense throughout, plain Anglo-Saxon diction, no jargon, one-sentence
-paragraphs used for emphasis, direct address as the dominant opener pattern.
+The agent writes each sample to `context/samples/voice-sample-01.md` through
+`voice-sample-04.md` (samples already on disk at the exact target path are used
+as-is, not duplicated). It observes, across the four: short to medium sentence
+length, predominantly second person ("You probably already know..."), present
+tense throughout, plain Anglo-Saxon diction, no jargon, one-sentence paragraphs
+used for emphasis, direct address as the dominant opener pattern.
 
 **voice-capture:**
 
-> Resolving the plugin root, then running the stylometry engine to compute the
-> baseline vector.
+> Resolving the plugin root, then running the stylometry engine to calibrate the
+> baseline. Calibration resamples the corpus a large, fixed number of times to
+> measure natural same-voice variation; this run takes a few seconds to about a
+> minute.
 
 The agent resolves the plugin root (the `nonfiction-studio` entry in
 `~/.claude/settings.json`; per ADR-0005 (bin PATH on Windows), the hooks.json
 plugin-root variable is not available in a live Bash shell) and invokes:
 
 ```
-node "<plugin-root>/bin/ns-stylometry" --measure=context/samples/voice-sample-01.md
+node "<plugin-root>/bin/ns-stylometry" --calibrate=context/samples/voice-sample-01.md,context/samples/voice-sample-02.md,context/samples/voice-sample-03.md,context/samples/voice-sample-04.md
 ```
 
-The engine prints to stdout:
+The engine prints to stdout (noise_scales and block_thresholds abbreviated to
+the 550- and 2200-word rungs here for readability; all five rungs in
+`spans` are present in a real run):
 
 ```json
 {
   "markers": {
-    "function_word_rate": 0.4612,
-    "contraction_rate": 0.0182,
-    "first_person_rate": 1.8367,
-    "second_person_rate": 5.7143,
-    "type_token_ratio": 0.6735,
-    "avg_word_length": 4.8980,
-    "avg_sentence_length": 11.0000,
-    "punctuation_rate": 11.4286
+    "function_word_rate": 0.5101,
+    "contraction_rate": 0.0996,
+    "first_person_rate": 0.6823,
+    "second_person_rate": 2.5655,
+    "type_token_ratio": 0.7548,
+    "avg_word_length": 4.7762,
+    "avg_sentence_length": 14.5976,
+    "punctuation_rate": 12.9367
   },
-  "marker_set_version": 4,
-  "files": ["context/samples/voice-sample-01.md"],
-  "totalWords": 98
+  "marker_set_version": 5,
+  "calibration": {
+    "spans": [550, 1100, 2200, 4400, 8800],
+    "noise_scales": {
+      "550": { "...the eight markers...": 0.0 },
+      "2200": { "...the eight markers...": 0.0 }
+    },
+    "block_thresholds": {
+      "550": 3.5927, "1100": 3.478, "2200": 4.0954, "4400": 4.7934, "8800": 5.9052
+    },
+    "detectability_auc": 0.525817,
+    "regime": "book",
+    "replicates": 1000,
+    "seed": 4242
+  },
+  "files": ["context/samples/voice-sample-01.md", "..."],
+  "totalWords": 3664
 }
 ```
 
-The agent reads both the `markers` object AND the `marker_set_version` number
-from stdout and writes them into `.studio/config.json` at
-`stylometry.baseline.markers` and `stylometry.baseline.marker_set_version`
-using read-modify-write (all other config fields are preserved untouched).
-Writing `markers` alone, without `marker_set_version`, would leave a baseline
-the drift scorer refuses to score against.
+and to stderr:
+
+```
+ns-stylometry: regime = book. Detectability AUC 0.526 at the 550-word rung falls
+short of the 0.95 bar, so only a book-scale aggregate verdict is supportable.
+```
+
+The agent reads `markers`, `marker_set_version`, and `calibration` from stdout
+VERBATIM, keeps the stderr sentence verbatim for its completion report, states
+the current UTC time as `captured` (`2026-07-18T10:00:00Z` in this example), and
+writes `.studio/config.json` at `stylometry.baseline` via read-modify-write (all
+other config fields are preserved untouched):
+
+```json
+{
+  "markers": { "...verbatim from stdout...": 0.0 },
+  "marker_set_version": 5,
+  "captured": "2026-07-18T10:00:00Z",
+  "sample_count": 4,
+  "method": "calibrated from four author samples totaling 3664 words",
+  "calibration": { "...verbatim from stdout...": {} }
+}
+```
+
+Writing `markers` and `marker_set_version` without `calibration` - or either of
+`captured`/`sample_count` - would leave a baseline the drift scorer refuses to
+score against, or the doctor flags as incomplete.
 
 **voice-capture:**
 
-> Baseline vector written to `.studio/config.json`. Drafting the voice profile now.
+> Baseline calibrated and written to `.studio/config.json`. This corpus supports
+> a book-scale verdict only (detectability AUC 0.526 at the 550-word rung falls
+> short of the 0.95 bar for a per-chapter verdict) - drift will be scored on the
+> whole book's prose, not chapter by chapter. Drafting the voice profile now.
 
-The agent drafts `context/style-profile.md`:
+The agent drafts `context/style-profile.md`, copying `captured` and
+`sample_count` from what was just written to config rather than restating them:
 
 ```markdown
 # Style profile
@@ -119,7 +172,7 @@ The agent drafts `context/style-profile.md`:
   a plain verb phrase works.
 
 ## Rhythm
-- sentence length: short to medium; mean approximately 11 words; occasional
+- sentence length: short to medium; mean approximately 14.6 words; occasional
   one-sentence paragraphs for punch and emphasis.
 - paragraph length: two to four sentences for expository passages; single
   sentence permitted for closing emphasis.
@@ -141,12 +194,14 @@ The agent drafts `context/style-profile.md`:
 
 ## Exemplars
 - context/samples/voice-sample-01.md
+- context/samples/voice-sample-02.md
+- context/samples/voice-sample-03.md
+- context/samples/voice-sample-04.md
 
 ## Baseline reference
 - vector: .studio/config.json -> stylometry.baseline.markers
 - captured: 2026-07-18T10:00:00Z
-- sample_count: 1
-- bootstrapped: false
+- sample_count: 4
 ```
 
 **voice-capture:**
@@ -166,10 +221,10 @@ The agent writes the confirmed `context/style-profile.md` with `bootstrapped: fa
 
 **voice-capture:**
 
-> Profile committed. The stylometric baseline is set; the gate can score drift
-> from the next chapter forward. Want to build the outline with `structure-architect`,
-> start drafting with `drafting-partner`, or sharpen the thesis with
-> `thesis-architect`?
+> Profile committed. The calibrated baseline is set - this book scores drift at
+> book scale, not per chapter, for the reason stated above. Want to build the
+> outline with `structure-architect`, start drafting with `drafting-partner`, or
+> sharpen the thesis with `thesis-architect`?
 
 ---
 
@@ -178,20 +233,32 @@ The agent writes the confirmed `context/style-profile.md` with `bootstrapped: fa
 - **Brief read first.** The agent reads `context/brief.md` section 6 before asking
   any questions, so intake preferences (tone, POV, tense, register, banned terms)
   flow into the profile without the author having to repeat them.
-- **Engine is the counting authority.** The agent resolves the plugin root,
-  then invokes `node "<plugin-root>/bin/ns-stylometry" --measure=...` via the
-  Bash tool; it reads the printed markers from stdout and writes them into
-  `.studio/config.json`. The engine computes; the agent writes.
-- **Config write uses read-modify-write.** Only `stylometry.baseline.markers`
-  and `stylometry.baseline.marker_set_version` are changed; all other config
-  fields (gate modes, thresholds, model overrides) are preserved.
-- **No profile without a baseline.** The vector is written to `.studio/config.json`
-  before the profile draft is presented. A confirmed profile always pairs with a
-  numeric baseline.
+- **Samples are persisted before calibrating.** All four samples are written to
+  `context/samples/voice-sample-NN.md` before `--calibrate` runs, so the engine
+  reads real files and the profile's `Exemplars` paths resolve.
+- **Engine is the counting and calibrating authority.** The agent resolves the
+  plugin root, then invokes `node "<plugin-root>/bin/ns-stylometry"
+  --calibrate=...` via the Bash tool; it reads `markers`, `marker_set_version`,
+  and `calibration` from stdout verbatim, and the two regime-disclosure sentences
+  from stderr verbatim. The engine computes and calibrates; the agent writes and
+  relays.
+- **Config write carries the full baseline.** `markers`, `marker_set_version`,
+  and `calibration` come verbatim from stdout; `captured` and `sample_count` are
+  the two fields the agent adds. All other config fields (gate modes, thresholds,
+  model overrides) are preserved via read-modify-write.
+- **Single source for agreement fields.** The profile's `Baseline reference`
+  `captured` and `sample_count` are copied from what was just written to config,
+  not independently restated - the two files cannot silently disagree.
+- **No profile without a full calibrated baseline.** The baseline is written to
+  `.studio/config.json` before the profile draft is presented. A confirmed
+  profile always pairs with `markers`, `marker_set_version`, and `calibration`.
+- **Regime disclosure relayed verbatim.** The agent states the assigned regime
+  (book, in this run) and its reason exactly as the engine's stderr stated it,
+  both when reporting the baseline and again after commit.
 - **Confirm before commit.** `context/style-profile.md` is not written until the
   author explicitly confirms. The author's correction (adding a banned tic) is
   incorporated first.
-- **Own-prose primacy.** The sample used is the author's own blog excerpt, not an
+- **Own-prose primacy.** The samples used are the author's own writing, not an
   admired author's passage. Any emulation reference is described as reference only.
 - **Bootstrapped flag is false.** Because own prose formed the baseline, the profile
   records `bootstrapped: false`.

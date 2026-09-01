@@ -26,7 +26,7 @@ The `Baseline reference` section carries three fixed fields and must not duplica
 | `captured` | string | required | RFC 3339 UTC timestamp of the voice-capture run; must agree with `config.json` `stylometry.baseline.captured` |
 | `sample_count` | integer | required | Number of voice samples used in the baseline; must agree with `config.json` `stylometry.baseline.sample_count` |
 
-`bin/ns-doctor` reports a finding if the `captured` timestamp or `sample_count` here disagrees with the corresponding value in `config.json`. Each field is checked independently: `captured` is compared only when `config.json`'s stylometry baseline itself carries a `captured` value, and likewise for `sample_count` - a baseline that has never carried one of these fields (voice-capture's current write contract sets only `markers` and `marker_set_version`) is not treated as disagreeing with a profile that does state one.
+`bin/ns-doctor` reports a finding if the `captured` timestamp or `sample_count` here disagrees with the corresponding value in `config.json`. Each field is checked independently: `captured` is compared only when `config.json`'s stylometry baseline itself carries a `captured` value, and likewise for `sample_count` - a baseline that has never carried one of these fields (the `voice-capture` write contract, `agents/voice-capture.md`, now writes both on every capture, but a baseline captured before that fix may still lack them) is not treated as disagreeing with a profile that does state one.
 
 ## Doctor validation
 
