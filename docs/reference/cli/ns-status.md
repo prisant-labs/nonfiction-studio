@@ -40,8 +40,8 @@ machine-state writes for hooks, not for a CLI a narrating skill can invoke mid-c
 **Gate verdict, drift statistic, and drift threshold come only from the newest report file per
 chapter slug under `.studio/gate/`, never from `progress.json`'s per-chapter `last_gate` field,
 never from `progress.json`'s per-chapter `drift_score` field, and (since ADR-0012, voice verdict
-scope, Decision 2) never from `.studio/config.json`'s retired `thresholds.drift_score_max`
-either.** `last_gate` stays null in every shipped writer by design (the field is reserved for a
+scope) never from `.studio/config.json`'s retired `thresholds.drift_score_max` either.**
+`last_gate` stays null in every shipped writer by design (the field is reserved for a
 later task); a hand-authored fixture may populate it for one chapter as sample content, which
 does not make it a real source. `drift_score` is a separate, hook-maintained convenience field
 this board never treats as authoritative. The newest report per slug is selected by
@@ -91,9 +91,9 @@ A Markdown table with columns `#`, `Title`, `Status`, `Words`, `Drift`, `Thresho
 Claims`, `Gate`, one row per `progress.json` chapter entry in array order, followed by a
 **Totals** row. A highlighted row (drift statistic above THAT SAME row's own threshold, or a
 `block` gate verdict) carries a leading `!` in its `#` cell. A chapter with no gate report on
-record shows `-` in the Drift, Threshold, and Gate cells. Since ADR-0012 (voice verdict scope,
-Decision 2) retired `thresholds.drift_score_max`, there is no board-wide threshold to state
-below the table: each row's own Threshold cell comes from that SAME chapter's own report,
+record shows `-` in the Drift, Threshold, and Gate cells. Since ADR-0012 (voice verdict scope)
+retired `thresholds.drift_score_max`, there is no board-wide threshold to state below the table:
+each row's own Threshold cell comes from that SAME chapter's own report,
 resolved from its calibration ladder at whatever word count it measured. Below the table, when
 `progress.json`'s totals carry a `chapters_total`, a chapters-remaining-to-final count.
 
@@ -149,8 +149,8 @@ never an absolute filesystem path, and is `null` when the chapter has no gate re
 parsing the legacy prose detail string for a report written before that field existed; `threshold`
 is that SAME report's `drift.threshold`, with no prose fallback (a pre-structured-field report,
 like the committed example above, reads `null` even though its prose names a number). There is
-no top-level `thresholds` object any more: `thresholds.drift_score_max` was retired by ADR-0012
-(voice verdict scope, Decision 2), and no single board-wide threshold replaced it. `chaptersTotal`
+no top-level `thresholds` object any more: `thresholds.drift_score_max` was retired by
+ADR-0012 (voice verdict scope), and no single board-wide threshold replaced it. `chaptersTotal`
 and `chaptersRemaining` are both `null` when `progress.json`'s totals carry no `chapters_total`
 field. This JSON shape is the source a later task points the `nfs-status-dashboard` skill's
 narration at.

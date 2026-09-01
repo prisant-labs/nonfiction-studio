@@ -437,11 +437,12 @@ directly. See the [ns-gate CLI reference](./ns-gate.md) for that policy.
 
 ## Deprecation: `thresholds.drift_score_max`
 
-Retired by the calibrated-null verdict (ADR-0012 voice verdict scope, Decision 3) and read by
-nothing for scoring - the threshold now comes entirely from the baseline's own calibration
-ladder. A config that still carries the key is readable but ignored for one release: when
-`computeDrift` sees it, it appends one canonical string to a `deprecations` array, which both
-surfaces print once per run (verified live):
+Retired by ADR-0012 (voice verdict scope), which replaced the capped-sum rule and, with it,
+retired the ADR-0011 (tranche 2 decisions) drift budget - and read by nothing for scoring: the
+threshold now comes entirely from the baseline's own calibration ladder. A config that still
+carries the key is readable but ignored for one release: when `computeDrift` sees it, it appends
+one canonical string to a `deprecations` array, which both surfaces print once per run
+(verified live):
 
 ```
 ns-stylometry: thresholds.drift_score_max is retired by the calibrated-null verdict and is ignored; remove it from config.json (it will be an error in a future release)

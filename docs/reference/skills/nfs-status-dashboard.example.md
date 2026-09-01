@@ -127,7 +127,7 @@ Totals row from the JSON's `totals` object: Words = `1055`, Open Claims = `0`, C
 
 - **The highlight decision is read, not computed.** Both chapters carry `"highlighted": false` in the JSON. The skill applies the `!` prefix by reading that field directly; it never compares a chapter's drift statistic against its own threshold itself. See the synthetic illustration below for what a `highlighted: true` entry looks like and how the skill presents it.
 
-- **The effective threshold is per-row and read, not assumed.** Since ADR-0012 (voice verdict scope, Decision 2) retired `thresholds.drift_score_max`, there is no single board-wide threshold: each chapter's Threshold cell comes from that SAME chapter's own newest gate report. Chapter 01's report here predates the structured `drift` field, so its `threshold` reads `null` (see "Note on `threshold: null`" above); the skill body reads whatever value or `null` the JSON already carries and never computes one.
+- **The effective threshold is per-row and read, not assumed.** Since ADR-0012 (voice verdict scope) retired `thresholds.drift_score_max`, there is no single board-wide threshold: each chapter's Threshold cell comes from that SAME chapter's own newest gate report. Chapter 01's report here predates the structured `drift` field, so its `threshold` reads `null` (see "Note on `threshold: null`" above); the skill body reads whatever value or `null` the JSON already carries and never computes one.
 
 - **`last-gate.json` is never read by the CLI or the skill.** It is present in `.studio/gate/` (see Setup above) but matches neither the per-chapter dot-form pattern nor the whole-book pattern `bin/ns-status` recognizes, so it plays no part in this output.
 

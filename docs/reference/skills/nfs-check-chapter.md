@@ -86,9 +86,9 @@ The mapping mirrors the Stop hook's exit-code semantics (hooks/stop-gate.mjs) bu
 
 ## Baseline Pre-Check and Degradation
 
-The `bin/ns-gate` engine exits 2 when `stylometry.baseline.markers` is absent from `.studio/config.json`, or when `stylometry.baseline.marker_set_version` does not match the engine's current marker set version (a `StaleBaselineError`, the state of every baseline captured before that field existed), while the stylometry check is enabled. Rather than surfacing an exit 2 error, the skill pre-checks the style profile and both parts of the config baseline before invoking the gate.
+The `bin/ns-gate` engine exits 2 when `stylometry.baseline.markers` is absent from `.studio/config.json`, when `stylometry.baseline.marker_set_version` does not match the engine's current marker set version (a `StaleBaselineError`, the state of every baseline captured before that field existed), or when `stylometry.baseline.calibration` is absent or incomplete - missing `spans`, `noise_scales`, `block_thresholds`, or `regime` - while the stylometry check is enabled. Rather than surfacing an exit 2 error, the skill pre-checks the style profile and all three parts of the config baseline before invoking the gate.
 
-When any of these is missing or stale:
+When any of these is missing, stale, or incomplete:
 - The skill sets `--check=claims,scrub,continuity-quick,coherence` on the gate invocation
 - The stylometry check is excluded from this run
 - The skill warns the author explicitly: "Voice drift check skipped: [reason]. Run `/nonfiction-studio:nfs-capture-voice` to enable voice drift detection."

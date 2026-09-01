@@ -81,7 +81,7 @@ Parse stdout as the board JSON. Build a Markdown table with columns `#`, `Title`
 
 Add a totals row from the JSON's `totals` object: Words = `totals.wordCount`, Open Claims = `totals.openClaimCount`, and a "Chapters final" cell reading `totals.chaptersFinal` followed by `of <totals.chaptersTotal> final` when `chaptersTotal` is not `null`, or just `<totals.chaptersFinal> final` when it is. When the JSON's top-level `wholeBookGate` is not `null`, append `(whole-book gate: <wholeBookGate>)` to the totals row.
 
-Below the table, there is no board-wide drift-threshold footer line: each row already carries its own Threshold cell (there is no longer a single config-sourced number to state once - ADR-0012, voice verdict scope, Decision 2, retired `thresholds.drift_score_max`). When `totals.chaptersRemaining` is not `null`, add a line: "`<totals.chaptersRemaining>` chapter(s) remaining to final."
+Below the table, there is no board-wide drift-threshold footer line: each row already carries its own Threshold cell (there is no longer a single config-sourced number to state once - ADR-0012 (voice verdict scope) retired `thresholds.drift_score_max`). When `totals.chaptersRemaining` is not `null`, add a line: "`<totals.chaptersRemaining>` chapter(s) remaining to final."
 
 If no entry in `chapters` has `highlighted: true`, state "No rows flagged." after the footer. Otherwise, state that rows are marked with a leading `!` because `bin/ns-status` flagged them (drift above that same row's own calibrated threshold, or a block gate verdict).
 
@@ -124,6 +124,6 @@ If no entry in `chapters` has `highlighted: true`, state "No rows flagged." afte
 
 **Missing or empty gate directory.** Not a halt condition: `bin/ns-status` itself returns `null` for `drift` and `gate` on every chapter with no matching report, which Step 3 renders as "-". Next actions suggests running the quality gate for every such chapter.
 
-**Missing `.studio/config.json`.** Not a halt condition: `hooks/lib/bible.mjs` returns `config: null` when the file does not exist, and since ADR-0012 (voice verdict scope, Decision 2) retired `thresholds.drift_score_max`, `bin/ns-status`'s board computation does not read `config.json` for the threshold in any case - each chapter's Threshold cell comes from that SAME chapter's own newest gate report, independent of `config.json`.
+**Missing `.studio/config.json`.** Not a halt condition: `hooks/lib/bible.mjs` returns `config: null` when the file does not exist, and since ADR-0012 (voice verdict scope) retired `thresholds.drift_score_max`, `bin/ns-status`'s board computation does not read `config.json` for the threshold in any case - each chapter's Threshold cell comes from that SAME chapter's own newest gate report, independent of `config.json`.
 
 **Unreadable (malformed) `.studio/config.json`.** This IS a halt condition, unlike the missing case above: `hooks/lib/bible.mjs` throws `BibleError` (`CONFIG_READ_ERROR`) when `config.json` exists but fails to parse, and `bin/ns-status` exits 2 - handled by the "Any other `bin/ns-status` error" case above, which routes to `nfs-doctor`.
