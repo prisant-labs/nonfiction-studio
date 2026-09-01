@@ -94,7 +94,7 @@ When any of these is missing or stale:
 - The skill warns the author explicitly: "Voice drift check skipped: [reason]. Run `/nonfiction-studio:nfs-capture-voice` to enable voice drift detection."
 - The gate still runs the four remaining checks and produces a valid report
 
-The baseline must be established via `/nonfiction-studio:nfs-capture-voice`, which runs `bin/ns-stylometry --measure` and writes the marker vector to `.studio/config.json`.
+The baseline must be established via `/nonfiction-studio:nfs-capture-voice`, which runs `bin/ns-stylometry --calibrate` and writes the full v5 baseline (`markers`, `marker_set_version`, `calibration`, `captured`, `sample_count`, and `method`) to `.studio/config.json`.
 
 ## Chapter Resolution from Progress.json
 
@@ -140,7 +140,7 @@ The top-level `verdict` is the most severe check verdict subject to the D-03 coe
 - `thesis_alignment.mode: block` is coerced to `warn` (judgment checks cannot block in v1)
 - When `gate.mode` is `warn` (the default), the top-level verdict is capped at `warn` even if per-check entries carry `block`; per-check entries keep their actual verdict so authors see what would block once they opt in
 
-Reports are retained and pruned to the last 10 per chapter slug by `bin/ns-gate`. `bin/ns-status` reads the timestamp in the most recent report file name per slug to derive the drift score and gate verdict in its JSON output; `nfs-status-dashboard` narrates that JSON rather than reading report files itself.
+Reports are retained and pruned to the last 10 per chapter slug by `bin/ns-gate`. `bin/ns-status` reads the timestamp in the most recent report file name per slug to derive the drift statistic and gate verdict in its JSON output; `nfs-status-dashboard` narrates that JSON rather than reading report files itself.
 
 ## Failure Behavior
 

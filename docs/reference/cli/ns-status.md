@@ -9,7 +9,7 @@ tags: ["cli", "status", "dashboard", "progress", "gate", "drift"]
 # ns-status
 
 Computes the project's chapter board and completion numbers - per-chapter status, word count,
-open claims, drift score, and gate verdict, plus whole-book totals - from committed state, and
+open claims, drift statistic, and gate verdict, plus whole-book totals - from committed state, and
 renders the result as JSON or as a human-readable Markdown board. Read-only: it writes nothing.
 Running it twice against unchanged state produces byte-identical output.
 

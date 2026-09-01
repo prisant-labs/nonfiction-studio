@@ -54,11 +54,11 @@ The skill runs nine steps:
 1. **Resolve the plugin root.** The same three-tier lookup every skill in this plugin uses, needed here to locate both `examples/sample-book` and `bin/ns-gate`.
 2. **Copy the sample book to a disposable location.** Chooses a destination (temp directory by default, or the author's supplied folder), appends a timestamp for a fresh collision-free name, and copies with `fs.cpSync`, mirroring the temp-clone pattern in `scripts/test-fixtures.mjs`. States plainly where the copy is and that the shipped example is untouched.
 3. **Opt the copy into block mode.** Edits the copy's `.studio/config.json` top-level `gate.mode` from `warn` to `block`, explaining why: the shipped default only warns, and this is the same setting any author can choose for their own project.
-4. **Run the gate and watch it pass.** A full, unscoped `ns-gate` run against the copy, in block mode, with nothing planted yet; presents a genuine pass with real margins.
+4. **Run the gate and watch it pass.** A full, unscoped `ns-gate` run against the copy, in block mode, with nothing planted yet; presents a genuine pass, including the stylometry check's honest advice-only reporting at the sample book's word count.
 5. **Plant a realistic defect.** Appends a line drawn from the prompt-scrub check's own fixed phrase lexicon to a chapter in the copy, representing a plausible leftover from an AI-assisted drafting pass.
 6. **Run the gate again and watch it block.** A `ns-gate` run scoped to the chapter and check just planted (`--check=scrub`), keeping the demonstration focused on the one problem introduced; presents the block verdict, exit code 1, and the named reason.
 7. **Fix it.** Removes exactly the planted lines, restoring the chapter to its original content.
-8. **Run the gate one more time and watch it pass again.** The same full, unscoped run as step 4; confirms recovery and that the margins match.
+8. **Run the gate one more time and watch it pass again.** The same full, unscoped run as step 4; confirms recovery and that the stylometry line reads exactly as it did in step 4.
 9. **Close.** Recaps what the gate's seven checks cover, restates that the copy is disposable and the shipped example was never touched, and points to a next step.
 
 ## Why Block Mode

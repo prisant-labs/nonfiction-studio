@@ -4,7 +4,8 @@
 
 This fixture demonstrates the CHAPTER-REGIME tier of ADR-0012 (voice verdict scope) Decision 2,
 complementing `examples/sample-book`'s book-regime demonstration. The two fixtures together prove
-both branches of the gate's two-tier regime dispatch (P6, `hooks/lib/gate-engine.mjs`):
+both branches of the gate's two-tier regime dispatch (ADR-0012, voice verdict scope,
+Decision 2 -- `hooks/lib/gate-engine.mjs`):
 
 - `examples/sample-book` -- a sparse, book-scale voice (calibration regime: book) -- proves the
   aggregate-only, floor-gated path.
@@ -112,9 +113,10 @@ worst chapter chapters/02-finding-your-network.md (worst marker first_person_rat
 statistic 13.62 exceeds threshold 3.52; stylometry.drift-threshold
 ```
 
-Top-level verdict: block, exit 1. Chapter regime has no book-scale word floor (P6,
-`MIN_BOOK_VERDICT_WORDS` applies only to the book-regime path); each chapter is scored and judged
-on its own against `MIN_SCORABLE_CHAPTER_WORDS` (50), which both chapters clear comfortably. The
+Top-level verdict: block, exit 1. Chapter regime has no book-scale word floor (ADR-0012, voice
+verdict scope, Decision 2; `MIN_BOOK_VERDICT_WORDS` applies only to the book-regime path); each
+chapter is scored and judged on its own against `MIN_SCORABLE_CHAPTER_WORDS` (50), which both
+chapters clear comfortably. The
 gate's `drift.per_chapter` field carries both chapters' individual statistics: chapter 1's 2.40
 never approaches its own 3.50 threshold, so the worst-chapter ranking (by statistic/threshold
 ratio, not raw statistic) correctly names chapter 2.
@@ -151,8 +153,9 @@ This fixture differs from a hypothetical undrifted version of itself in these lo
    new author; Exemplars point at the three new corpus files; Baseline reference `captured` and
    `sample_count` agree with `.studio/config.json`.
 5. **`context/brief.md`** -- section 6 (Voice) rewritten to match; unrelated sections unchanged.
-6. **`.studio/config.json`** -- `thresholds.drift_score_max` removed (P7, ADR-0012 retirement);
-   `stylometry.baseline` replaced wholesale with the real, measured v5 baseline (markers +
+6. **`.studio/config.json`** -- `thresholds.drift_score_max` removed (ADR-0012 voice verdict
+   scope, Decision 3 retirement); `stylometry.baseline` replaced wholesale with the real,
+   measured v5 baseline (markers +
    `marker_set_version: 5` + a full five-rung `calibration` ladder, `captured`, `sample_count: 3`,
    `method`) from `ns-stylometry --calibrate` over the three corpus files. `gate.checks.stylometry
    .mode` stays `warn` (the fixture's own default); mode toggles have no effect on `ns-stylometry`

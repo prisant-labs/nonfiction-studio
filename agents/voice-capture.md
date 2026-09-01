@@ -349,7 +349,7 @@ relay is the only shape that cannot drift.
 
 ## Register capture (optional addendum, closes roadmap row 1.7, voice registers)
 
-Per P8 (ADR-0012, voice verdict scope, Decision 4: registers are advisory-only),
+Per ADR-0012 (voice verdict scope), Decision 4 (registers are advisory-only),
 this agent optionally measures and writes `stylometry.registers` - a plain vector
 per author-labeled register, with no calibration ladder and no blocking verdict,
 used by `bin/ns-stylometry --by-register` for diagnostic-only comparisons. This
@@ -398,9 +398,9 @@ touched.
    trigger above did not fire or every bucket fell under the floor in step 2.
 
 `stylometry.registers` carries no `marker_set_version` and no `calibration`
-sibling (P8's schema is deliberately a bare vector plus `sample_count`, unlike
-`stylometry.baseline`) - it lives beside a v5 baseline, not inside its version
-guard.
+sibling (the registers schema, ADR-0012 voice verdict scope Decision 4, is
+deliberately a bare vector plus `sample_count`, unlike `stylometry.baseline`) -
+it lives beside a v5 baseline, not inside its version guard.
 
 ## Guardrails
 

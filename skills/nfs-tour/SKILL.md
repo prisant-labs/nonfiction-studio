@@ -2,7 +2,7 @@
 name: nfs-tour
 user-invocable: true
 argument-hint: "[destination folder]"
-description: "Runs a guided walkthrough of the bundled sample book in a disposable copy per OPP-D17 (five-minute first win): shows the quality gate pass with real margins, plants a realistic AI-residue defect, shows the gate block with a named reason, then fixes it and shows the gate pass again, all without touching the shipped example or requiring a project. Use when the author wants to see what the quality gate actually catches before starting their own book, asks for a demo or a tour, or is new to the plugin and wants proof before committing to the intake interview."
+description: "Runs a guided walkthrough of the bundled sample book in a disposable copy per OPP-D17 (five-minute first win): shows the quality gate pass, including the stylometry check honestly reporting advice-only below the book-scale verdict floor rather than inventing a margin, plants a realistic AI-residue defect, shows the gate block with a named reason, then fixes it and shows the gate pass again, all without touching the shipped example or requiring a project. Use when the author wants to see what the quality gate actually catches before starting their own book, asks for a demo or a tour, or is new to the plugin and wants proof before committing to the intake interview."
 when_to_use: "Use when the author asks for a tour, demo, or walkthrough of the plugin, wants to see the quality gate catch a real problem before trusting it, or is newly installed and was pointed here from nfs-quick-scan or the README quickstart. Do not invoke inside an existing book project as a substitute for nfs-check-chapter; this skill only ever operates on a disposable copy of the bundled sample book, never the author's own project."
 ---
 
@@ -87,7 +87,7 @@ Use the Bash tool for the full gate, no chapter or check scoping:
 node "<plugin-root>/bin/ns-gate" --project="<tour-dir>"
 ```
 
-Present the result as a genuine pass, in block mode, with real margins: report the top-level verdict and each check's one-line detail (claim coverage, quote fidelity, stylometry drift score against its threshold, prompt scrub, continuity, state coherence, session write flag). Call out the stylometry line specifically, since "passes with a real margin" is a verified property of this book, not an aspiration: both chapters pass their own individual stylometry check, not merely the combined book average.
+Present the result as a genuine pass, in block mode: report the top-level verdict and each check's one-line detail (claim coverage, quote fidelity, stylometry, prompt scrub, continuity, state coherence, session write flag). Call out the stylometry line specifically and read it verbatim: the sample book's two chapters total 1,055 scored words, below the 2,200-word floor a supportable book-scale verdict needs, so the check reports "book-scale verdict only: ... reporting for advice only, never blocking below the floor" rather than a pass with a margin it cannot support. This is the stronger demonstration, not a weaker one: the gate says out loud that its own measured detectability cannot support a chapter-scale verdict on this book, instead of printing a number that would look precise but rest on too little text. The report's structured `drift` field does carry a `per_chapter` array with each chapter's own statistic and worst marker, but those are advisory only - there is no per-chapter threshold and no per-chapter pass or fail on this screen; the verdict is aggregate-or-nothing at book scale.
 
 ---
 
@@ -129,7 +129,7 @@ Use the Bash tool for the full gate again, same invocation as Step 4:
 node "<plugin-root>/bin/ns-gate" --project="<tour-dir>"
 ```
 
-Present the result as a pass again, confirming recovery: the block is gone because the specific problem that caused it is gone, and the margins match Step 4's numbers because the chapter is back to its original content.
+Present the result as a pass again, confirming recovery: the block is gone because the specific problem that caused it is gone, and the stylometry line reads exactly as it did in Step 4 because the chapter is back to its original content.
 
 ---
 

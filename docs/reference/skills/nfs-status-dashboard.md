@@ -1,6 +1,6 @@
 ---
 title: "nfs-status-dashboard skill reference"
-description: "Reference for the nfs-status-dashboard skill - the read-only project overview that fronts bin/ns-status in a single Bash call and renders the per-chapter status, word count, drift score, open claims, and gate verdict directly from its JSON output; writes nothing"
+description: "Reference for the nfs-status-dashboard skill - the read-only project overview that fronts bin/ns-status in a single Bash call and renders the per-chapter status, word count, drift statistic, open claims, and gate verdict directly from its JSON output; writes nothing"
 audience: "non-engineer"
 level: "beginner"
 tags: ["skill", "status", "dashboard", "progress", "overview", "gate"]
@@ -12,7 +12,7 @@ The `nfs-status-dashboard` skill renders a read-only per-chapter project overvie
 
 ## Purpose
 
-`nfs-status-dashboard` gives the author an at-a-glance view of their book's state: how far each chapter has progressed, how many words have been written, whether drift or coverage issues have been flagged by a gate run, and which chapters still need a gate run. The skill resolves the plugin root, invokes `bin/ns-status --json`, and renders the result: every status value, word count, open-claim count, drift score, gate verdict, threshold value, and highlight decision in the rendered table is read directly from a field the CLI has already computed. The skill performs no arithmetic, parses no number out of prose, and compares nothing against a threshold itself.
+`nfs-status-dashboard` gives the author an at-a-glance view of their book's state: how far each chapter has progressed, how many words have been written, whether drift or coverage issues have been flagged by a gate run, and which chapters still need a gate run. The skill resolves the plugin root, invokes `bin/ns-status --json`, and renders the result: every status value, word count, open-claim count, drift statistic, gate verdict, threshold value, and highlight decision in the rendered table is read directly from a field the CLI has already computed. The skill performs no arithmetic, parses no number out of prose, and compares nothing against a threshold itself.
 
 **Column sourcing.** Every cell comes directly from `bin/ns-status`'s JSON output. The CLI itself reads `.studio/progress.json` for status, word count, and open claims (hook-maintained truth per TSK-050b (progress entry ownership)); and lists `.studio/gate/` for the newest dot-form gate report per chapter slug to supply drift statistic, drift threshold, and gate verdict (filenames `<slug>.<YYYYMMDDTHHMMSSZ>.json`; newest identified by lexicographic sort of the timestamp suffix). Since ADR-0012 (voice verdict scope, Decision 2) retired `thresholds.drift_score_max`, `.studio/config.json` is not read for this at all: each chapter's own threshold comes from that SAME chapter's newest report, not a single board-wide config value. A chapter with no gate report on record shows "-" in the Drift, Threshold, and Gate cells. Whole-book `all.<YYYYMMDDTHHMMSSZ>.json` reports annotate the totals row only, not per-chapter cells. The `progress.last_gate` and `progress.drift_score` per-chapter fields are never treated as authoritative; see the [ns-status CLI reference](../cli/ns-status.md) for the full derivation.
 

@@ -142,4 +142,4 @@ floor the check reports pass-with-advice and never blocks, regardless of the agg
 
 - `bin/ns-gate` (TSK-029 (ns-gate orchestrator)): writes one report per gate run; updates `progress.json` `last_gate.report`; prunes to the last 10 reports per chapter slug. Does NOT write `.studio/gate/last-gate.json` (see the Stop hook, below).
 - `Stop` gate hook (TSK-034 (stop-gate hook)): invokes `bin/ns-gate` at session end, reads the resulting report to determine whether to block the session, and is the sole writer of `.studio/gate/last-gate.json` (a verbatim copy of that same `bin/ns-gate` run's stdout).
-- `bin/ns-status` (via `hooks/lib/status-engine.mjs`): reads the newest report per chapter slug to populate the drift score and gate verdict fields in its JSON board. The `nfs-status-dashboard` skill never reads a report file itself; it narrates that JSON output directly.
+- `bin/ns-status` (via `hooks/lib/status-engine.mjs`): reads the newest report per chapter slug to populate the drift statistic and gate verdict fields in its JSON board. The `nfs-status-dashboard` skill never reads a report file itself; it narrates that JSON output directly.

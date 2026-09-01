@@ -102,7 +102,11 @@ If `stylometry.baseline.markers` is present and non-null, also check `stylometry
 
 > Voice drift check skipped: the stored baseline in `.studio/config.json` was captured under an earlier version of the stylometry engine (`stylometry.baseline.marker_set_version` is missing or does not match the engine's current version). Run `/nonfiction-studio:nfs-capture-voice` to re-capture the baseline with the corrected engine and enable voice drift detection.
 
-Only when `stylometry.baseline.markers` is present and non-null AND `marker_set_version` matches the engine's current version, run the full gate. Set no check subset (all five checks will be included by ns-gate's default).
+If `stylometry.baseline.markers` is present and non-null AND `marker_set_version` matches, also check `stylometry.baseline.calibration` in that same read. A v5 baseline must carry a complete `calibration` object: `spans`, `noise_scales`, `block_thresholds`, and `regime` all present. An incomplete one is what `ns-gate` will reject. Route this the same as the two cases above: set the check subset to `claims,scrub,continuity-quick,coherence` and present:
+
+> Voice drift check skipped: the stored baseline in `.studio/config.json` is missing calibration data (`stylometry.baseline.calibration` is absent or incomplete). Run `/nonfiction-studio:nfs-capture-voice` to re-capture the baseline with a full calibration ladder and enable voice drift detection.
+
+Only when `stylometry.baseline.markers` is present and non-null, `marker_set_version` matches the engine's current version, AND `calibration` is complete, run the full gate. Set no check subset (all five checks will be included by ns-gate's default).
 
 ---
 
@@ -197,6 +201,6 @@ If stdout also contains output (partial JSON or other text), include it verbatim
 
 **No argument and no progress.json.** Step 2 halts and asks the author which chapter to gate. No gate invocation until the author replies with a chapter.
 
-**Voice baseline absent or stale.** Step 3 sets the degraded check subset and warns about the skipped voice drift check, whether the baseline is missing entirely or its `marker_set_version` is absent or does not match the engine's current version. The gate still runs; neither condition is a halt condition. The four remaining checks run normally.
+**Voice baseline absent, stale, or incomplete.** Step 3 sets the degraded check subset and warns about the skipped voice drift check, whether the baseline is missing entirely, its `marker_set_version` is absent or does not match the engine's current version, or its `calibration` object is absent or incomplete. The gate still runs; none of these three conditions is a halt condition. The four remaining checks run normally.
 
 **Exit 2 from ns-gate.** Step 5 presents the error from stderr and halts. Never treated as a pass, warn, or block verdict. Re-run after diagnosing with `nfs-doctor`.

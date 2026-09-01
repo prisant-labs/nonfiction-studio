@@ -96,7 +96,7 @@ or use the same `node` plus full-path form.
 | `--project=<dir>` | string | Override the book root to `<dir>`. Ignored by `--measure` and `--calibrate`, which never touch a book root. |
 | `--json` | boolean | Emit the full drift report as JSON to stdout (scoring mode only; `--measure` and `--calibrate` always emit JSON regardless of this flag). |
 | `--explain` | boolean | Render every marker's baseline, measured value, honest deviation, and signed `z`, ordered by `\|z\|` descending, plus passage attribution for the worst marker (see `--explain` output, below). Composes with both the human-readable and `--json` modes rather than replacing either one; never changes the exit code; writes nothing to disk. |
-| `--by-register` | boolean | Advisory-only comparison of the scored text against every register configured in `stylometry.registers` (P8, ADR-0012 voice verdict scope, Decision 4; closes roadmap row 1.7, voice registers). Never changes the exit code. See `--by-register` output, below. |
+| `--by-register` | boolean | Advisory-only comparison of the scored text against every register configured in `stylometry.registers` (ADR-0012 voice verdict scope, Decision 4; closes roadmap row 1.7, voice registers). Never changes the exit code. See `--by-register` output, below. |
 
 ## Exit taxonomy
 
@@ -178,7 +178,7 @@ independent of the verdict); it is not the same signal as which marker attained 
 because its honest percent deviation still crosses the 2 percent band even though its
 standardized deviation is small.
 
-**Passage attribution** (P8, ADR-0012 voice verdict scope, Decision 4 - roadmap row 1.7's
+**Passage attribution** (ADR-0012 voice verdict scope, Decision 4 - roadmap row 1.7's
 "names markers and passages"): for the worst marker only, a fixed 100-token window is slid one
 word at a time over the scored text, and the window whose local marker value deviates most from
 baseline is reported by its 1-indexed, inclusive word-offset range. Deterministic (a strict
@@ -228,7 +228,7 @@ matching how this CLI already speaks in the same branch without the flag:
 
 ### `--by-register` output
 
-Advisory only (P8, ADR-0012 voice verdict scope, Decision 4): never changes the exit code, and
+Advisory only (ADR-0012 voice verdict scope, Decision 4): never changes the exit code, and
 carries the VERBATIM label `advisory - no blocking verdict at register scale; register-sized
 text is far below the roughly 2,200 words a blocking verdict needs` wherever it appears (the
 text-mode header and every JSON `registers[]` entry's `note`), so a reader can never mistake a
@@ -348,7 +348,7 @@ exit 1 with a different message naming that specific gap - calibration resamples
 punctuated sentences, so at least one is required.
 
 **Regime disclosure.** Calibration also decides which verdict scale the resulting baseline can
-support (P4, ADR-0012 voice verdict scope): the shortest rung's calibrated statistic, scored
+support (ADR-0012 voice verdict scope, Decision 2): the shortest rung's calibrated statistic, scored
 against a synthesized ghostwritten positive class (the `ghostwriteTransform` in
 `hooks/lib/stylometry-calibration.mjs` - contractions expanded, first- and second-person
 pronouns converted to third-person plural; documented caveat: only this one drift type has been
