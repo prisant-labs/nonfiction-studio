@@ -525,7 +525,7 @@ export function runGate(root, opts = {}) {
           // Chapter regime: each chapter is scored, and judged, on its own.
           const perChapter = [];
           const skipped = [];
-          let worst = null; // { file, statistic, worstMarker, threshold, exceeded }
+          let worst = null; // { file, statistic, worstMarker, threshold, ratio }
           const exceedingFiles = [];
 
           for (const c of chapters) {
@@ -537,11 +537,21 @@ export function runGate(root, opts = {}) {
             const r = computeDrift(measureChapter(c.text), baseline, thresholds, { scoredWords: words });
             perChapter.push({ file: c.file, statistic: r.statistic, worst_marker: r.worstMarker });
             if (r.exceeded) exceedingFiles.push(c.file);
-            // "Worst" chapter is the one attaining the largest raw statistic (mirrors
-            // computeDrift's own worstMarker selection over markers), independent of whether
-            // it happens to be the chapter that exceeded -- informative on a pass too.
-            if (!worst || r.statistic > worst.statistic) {
-              worst = { file: c.file, statistic: r.statistic, worstMarker: r.worstMarker, threshold: r.threshold };
+            // "Worst" chapter is ranked by statistic/threshold RATIO, not raw statistic:
+            // thresholds are resolved per chapter from the calibration ladder (log-linear on
+            // that chapter's own scoredWords), so a shorter chapter can carry a materially
+            // different threshold than a longer one. A raw-statistic argmax can then pick a
+            // chapter that never exceeded ITS OWN threshold over one that did, and even print a
+            // self-contradictory "statistic < threshold" sentence on the exceeds branch. Ranking
+            // by ratio means "worst" always means "furthest past (or closest to) its own
+            // threshold" -- honest under per-span thresholds, and it guarantees the exceeds
+            // branch names an actually-exceeding chapter (review round 1, Finding 2).
+            const ratio = r.statistic / r.threshold;
+            if (!worst || ratio > worst.ratio) {
+              worst = {
+                file: c.file, statistic: r.statistic, worstMarker: r.worstMarker,
+                threshold: r.threshold, ratio,
+              };
             }
           }
 
@@ -554,13 +564,15 @@ export function runGate(root, opts = {}) {
             next = null;
           } else if (!anyExceeded) {
             detail =
-              'worst chapter ' + worst.file + ': drift statistic ' + worst.statistic.toFixed(2) +
+              'worst chapter ' + worst.file + ' (worst marker ' + worst.worstMarker +
+              '): drift statistic ' + worst.statistic.toFixed(2) +
               ' within threshold ' + worst.threshold.toFixed(2);
             evidence = [];
             next = null;
           } else {
             detail =
-              'worst chapter ' + worst.file + ': drift statistic ' + worst.statistic.toFixed(2) +
+              'worst chapter ' + worst.file + ' (worst marker ' + worst.worstMarker +
+              '): drift statistic ' + worst.statistic.toFixed(2) +
               ' exceeds threshold ' + worst.threshold.toFixed(2) +
               '; stylometry.drift-threshold';
             evidence = exceedingFiles;

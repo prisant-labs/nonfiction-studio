@@ -1120,6 +1120,99 @@ test('P6 chapter regime: exactly one chapter exceeds -> block verdict, evidence 
   }
 });
 
+// ---- Chapter regime: "worst" is ranked by threshold ratio, not raw statistic -------------
+//
+// Review round 1, Finding 2 (latent correctness bug): thresholds are resolved PER CHAPTER from
+// the calibration ladder (log-linear on that chapter's own scoredWords), so a shorter chapter
+// can carry a materially different threshold than a longer one. A raw-statistic argmax can then
+// pick a chapter that never exceeded its OWN threshold over one that did -- masked until now
+// because every other fixture in this file uses IDENTICAL thresholds across rungs.
+//
+// This fixture gives contraction_rate a tight, span-invariant noise scale (2.0) so it always
+// dominates the statistic (other markers get a generous 50.0, as in topologyScales), but makes
+// the two rungs' block_thresholds genuinely different (60.0 at 250 words, 10.0 at 3000 words):
+//   - chapterA: EVERY contraction expanded (relDev -100%), SHORT (240 words, clamps to the
+//     250-word rung) -> statistic 50.0, threshold 60.0 -> does NOT exceed.
+//   - chapterB: only "don't"/"isn't"/"won't" expanded (a smaller relDev, ~-28.57%), LONG (3,720
+//     words, clamps to the 3000-word rung) -> statistic ~14.29, threshold 10.0 -> DOES exceed.
+// Raw-statistic argmax picks chapterA (50.0 > 14.29) -- a non-exceeding chapter -- as "worst",
+// which would print a self-contradictory "statistic < threshold" sentence on the exceeds branch
+// and point drift.worst_chapter/worst_marker at the wrong chapter. Ranking by statistic/
+// threshold ratio (chapterA: 50/60 = 0.83; chapterB: 14.29/10 = 1.43) correctly picks chapterB.
+
+function partialExpandContractions(text) {
+  return text
+    .replace(/don't/gi, 'do not').replace(/isn't/gi, 'is not').replace(/won't/gi, 'will not');
+}
+
+function buildRatioCalibration() {
+  return {
+    spans: [250, 3000],
+    noise_scales: { '250': topologyScales(2.0), '3000': topologyScales(2.0) },
+    block_thresholds: { '250': 60.0, '3000': 10.0 },
+    detectability_auc: 0.98,
+    regime: 'chapter',
+    replicates: 300,
+    seed: 4242,
+  };
+}
+
+function buildRatioBaseline(markers) {
+  return {
+    markers,
+    marker_set_version: 5,
+    captured: '2026-08-30T00:00:00Z',
+    sample_count: 1,
+    calibration: buildRatioCalibration(),
+  };
+}
+
+test('P6 chapter regime: worst-chapter selection ranks by statistic/threshold ratio, so a lower-statistic chapter that exceeds its own threshold is chosen over a higher-statistic chapter that does not; detail names the worst chapter and its marker', () => {
+  const cleanText = repeatedProse(4);
+  const baseline = buildRatioBaseline(measureChapter(cleanText));
+
+  const chapterAText = expandContractions(cleanText); // 240 words -> clamps to the 250 rung
+  const chapterBText = partialExpandContractions(SENTENCE_BLOCK).repeat(60); // 3,720 words -> clamps to the 3000 rung
+
+  const dir = makeTopologyBook(baseline, [chapterAText, chapterBText]);
+  try {
+    const entry = runTopologyGate(dir);
+
+    assert.strictEqual(entry.drift.per_chapter.length, 2, 'both chapters must be scored');
+    const [statA, statB] = entry.drift.per_chapter.map(c => c.statistic);
+    assert.ok(statA > statB,
+      'fixture precondition: chapter A (index 0) must carry the HIGHER raw statistic; got A=' +
+      statA + ' B=' + statB);
+
+    // Verdict and evidence: only chapterB (the actual exceeder) drives the block.
+    assert.strictEqual(entry.verdict, 'block',
+      'chapterB exceeds its own (lower) threshold; verdict must be block; got: ' + entry.verdict);
+    assert.deepStrictEqual(entry.evidence, ['chapters/02-chapter.md'],
+      'evidence must name only chapterB, the actual exceeder; got: ' + JSON.stringify(entry.evidence));
+
+    // The bug under test: worst_chapter must be the EXCEEDING chapter (B), not the
+    // higher-raw-statistic one (A).
+    assert.strictEqual(entry.drift.worst_chapter, 'chapters/02-chapter.md',
+      'worst_chapter must be ranked by statistic/threshold ratio, not raw statistic; got: ' +
+      entry.drift.worst_chapter);
+    assert.strictEqual(entry.drift.worst_marker, 'contraction_rate');
+    assert.strictEqual(entry.drift.statistic, statB, 'drift.statistic must be chapterB\'s own statistic');
+    assert.strictEqual(entry.drift.threshold, 10.0, 'drift.threshold must be chapterB\'s own (lower) threshold');
+
+    // Finding 1: the exceeds-branch detail must name the worst chapter, its worst marker, its
+    // statistic, and the threshold -- and the numbers must be internally consistent (no
+    // "statistic < threshold" on an exceeds sentence).
+    assert.ok(entry.detail.includes('chapters/02-chapter.md'),
+      'detail must name the worst (exceeding) chapter; got: ' + entry.detail);
+    assert.ok(entry.detail.includes('contraction_rate'),
+      'detail must name the worst marker; got: ' + entry.detail);
+    assert.match(entry.detail, /exceeds threshold \d+(?:\.\d+)?; stylometry\.drift-threshold$/,
+      'detail must carry an internally-consistent exceeds sentence; got: ' + entry.detail);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // ---- Chapter regime: stub-chapter skip rule -----------------------------------------------
 
 test('P6 chapter regime: a stub chapter (under 50 words) is skipped, listed in drift.skipped, and never crashes or drives the verdict', () => {
@@ -1135,6 +1228,12 @@ test('P6 chapter regime: a stub chapter (under 50 words) is skipped, listed in d
     assert.match(entry.drift.skipped[0].reason, /below 50 scorable words/);
     assert.strictEqual(entry.drift.per_chapter.length, 1, 'the stub must not appear in per_chapter');
     assert.strictEqual(entry.drift.worst_chapter, 'chapters/01-chapter.md');
+    // Review round 1, Finding 1: the pass-branch detail must also name the worst marker (every
+    // marker ties at z=0 here; ties break to Object.keys(markers)[0], the first ratiosFromCounts
+    // key, function_word_rate -- see stylometry-engine.mjs's worstMarker tie-break comment).
+    assert.strictEqual(entry.drift.worst_marker, 'function_word_rate');
+    assert.ok(entry.detail.includes('function_word_rate'),
+      'pass-branch detail must name the worst marker; got: ' + entry.detail);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -119,7 +119,7 @@ floor the check reports pass-with-advice and never blocks, regardless of the agg
     {
       "check": "stylometry",
       "verdict": "warn",
-      "detail": "worst chapter chapters/03-the-signal.md: drift statistic 4.12 exceeds threshold 3.87; stylometry.drift-threshold",
+      "detail": "worst chapter chapters/03-the-signal.md (worst marker contraction_rate): drift statistic 4.12 exceeds threshold 3.87; stylometry.drift-threshold",
       "evidence": ["chapters/03-the-signal.md"],
       "next": "Review the flagged markers against the voice baseline and revise the drifted chapter.",
       "drift": {
