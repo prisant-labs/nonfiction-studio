@@ -44,12 +44,14 @@ verbatim plus two agent-supplied fields, into config. Voice capture has no
 opinion about whether the captured voice is good: it observes, describes, and
 records.
 
-**Calibration is computational, not just measurement.** Unlike the retired
-`--measure` mode, `--calibrate` resamples the corpus a large, fixed number of
-times per span to measure natural same-voice variation and the regime (chapter
-vs. book scale) a verdict can honestly support. This takes real wall-clock time -
-seconds to roughly a minute, proportional to corpus size - and the agent states
-that once, before invoking it, not merely by silently taking the time.
+**Calibration is computational, not just measurement.** Unlike the plain
+`--measure` mode this agent previously used (still live and used elsewhere, for
+example `nfs-quick-scan`, but no longer invoked by this agent), `--calibrate`
+resamples the corpus a large, fixed number of times per span to measure natural
+same-voice variation and the regime (chapter vs. book scale) a verdict can
+honestly support. This takes real wall-clock time - seconds to roughly a minute,
+proportional to corpus size - and the agent states that once, before invoking
+it, not merely by silently taking the time.
 
 ## When to invoke
 
@@ -253,16 +255,17 @@ by the time Exemplars is drafted.
    disclosure if not already given and the verbatim capture of both stdout and
    the two stderr regime-disclosure sentences.
 
-9. **Write the numeric baseline.** As Path A step 5, plus a `bootstrapped: true`
-   marker (see "Config write contract" below).
+9. **Write the numeric baseline.** Exactly as Path A step 5 - the same fields,
+   with no `bootstrapped` marker: `bootstrapped` is a profile-only field (see the
+   field-mapping table above) and never touches `.studio/config.json`.
 
 10. **Draft, review, and commit.** Draft `context/style-profile.md` with the
-    seven-section grammar. In `Baseline reference`, add a fourth line -
-    `bootstrapped: true` - and a recommendation that the author replace this
-    baseline with their own prose once available, for a higher-confidence
-    calibration. Present to the author, incorporate feedback, and commit with
-    `bootstrapped: true`. Report the two verbatim regime-disclosure sentences to
-    the invoking skill.
+    seven-section grammar, including the `bootstrapped: true` bullet defined once
+    in the field-mapping table above, plus a recommendation that the author
+    replace this baseline with their own prose once available, for a
+    higher-confidence calibration. Present to the author, incorporate feedback,
+    and commit with `bootstrapped: true`. Report the two verbatim
+    regime-disclosure sentences to the invoking skill.
 
 ## Style-profile field-mapping table
 
@@ -290,7 +293,7 @@ what the agent observes; it changes where each observation is written.
 | `## Baseline reference` | `vector` | Literal string `.studio/config.json -> stylometry.baseline.markers` |
 | | `captured` | Copied from the `captured` value just written to config (Write ordering, above) |
 | | `sample_count` | Copied from the `sample_count` value just written to config |
-| | `bootstrapped` (extra bullet, Path B only) | `true`, plus the own-prose recommendation |
+| | `bootstrapped` | `false` on Path A, `true` on Path B - a profile-only field, always written, with no config-level counterpart; Path B additionally states the own-prose replacement recommendation |
 
 The profile does not express an opinion about whether the captured voice is good.
 It observes and describes. Evaluative judgment belongs to the author.

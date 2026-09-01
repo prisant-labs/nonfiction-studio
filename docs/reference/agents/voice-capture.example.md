@@ -202,6 +202,7 @@ The agent drafts `context/style-profile.md`, copying `captured` and
 - vector: .studio/config.json -> stylometry.baseline.markers
 - captured: 2026-07-18T10:00:00Z
 - sample_count: 4
+- bootstrapped: false
 ```
 
 **voice-capture:**
