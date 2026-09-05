@@ -107,7 +107,8 @@ test('mutation proof: a core paragraph that diverges from the other five (not ju
     const target = join(root, 'skills', 'nfs-interview', 'SKILL.md');
     const original = readFileSync(target, 'utf8');
     // Reorder two clauses within the shared paragraph -- still contains every sentinel
-    // substring, but the extracted core no longer matches the other five skills byte for byte.
+    // substring, but the extracted core no longer matches the other five dispatching skills
+    // byte for byte.
     const mutated = original.replace(
       'Hold that starting count per file.',
       'Hold that starting count per file, and note it down.'

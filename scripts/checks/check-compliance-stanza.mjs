@@ -14,8 +14,9 @@
 //                 2. the extracted core contains three fixed sentinel substrings (the six-field
 //                    shape reference, the never-double-append sentence, and the stale-record-does-
 //                    not-suppress clause) -- independent of the cross-skill comparison below, so a
-//                    mutation that edits all six skills identically (degrading the rule while
-//                    keeping them mutually equal) is still caught, not just a single-skill outlier;
+//                    mutation that edits all six dispatching skills identically (degrading the
+//                    rule while keeping them mutually equal) is still caught, not just a
+//                    single-skill outlier;
 //                 3. every extracted core is byte-identical to the first one found (skills sorted
 //                    alphabetically by directory name) -- the shared-core acceptance criterion.
 //               Per-flow record templates (the JSON block(s) after the "**Record template" marker)
