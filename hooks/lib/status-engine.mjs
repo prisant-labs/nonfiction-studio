@@ -7,7 +7,7 @@
 //               list a directory, parse filenames, open reports, and read numbers out of prose
 //               by eye (nothing asserted correctness the same way twice under that approach); it
 //               invokes bin/ns-status and renders this module's JSON output directly, following
-//               the same CLI-over-engine-module pattern the other seven CLIs already use
+//               the same CLI-over-engine-module pattern the other eight CLIs already use
 //               (ADR-0009 (apparatus CLI), growth-policy criterion 1: correctness here is a
 //               byte-for-byte, machine-checkable property a failing test can be written against
 //               before the feature exists)

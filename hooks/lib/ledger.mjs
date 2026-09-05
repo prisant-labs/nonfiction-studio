@@ -5,7 +5,9 @@
 // why:          the grammar docs are law; one shared parser eliminates drift between ns-claims,
 //               ns-doctor, and the fact-checker agent; unknown fields round-trip untouched per S-08 Rule 2
 // used-by:      imported by bin/ns-claims, bin/ns-notes, and by hooks/lib/claims-engine.mjs,
-//               hooks/lib/doctor-engine.mjs, hooks/lib/gate-engine.mjs, hooks/lib/orientation.mjs
+//               hooks/lib/doctor-engine.mjs, hooks/lib/gate-engine.mjs, hooks/lib/orientation.mjs,
+//               hooks/lib/overlap-engine.mjs (parseEvidenceLog, for corpus discovery over
+//               research/evidence-log.md's verbatim fields)
 
 // --- resolvedStatuses -----------------------------------------------------------
 // Corrected coverage rule (adjudicated 2026-07-18, TSK-015 ledger grammar review):

@@ -23,7 +23,7 @@ Most AI writing tools generate plausible prose and leave the verification to you
   <img src="https://img.shields.io/badge/tier-universal%20(Bronze)-CD7F32?style=flat-square" alt="Conformance tier: universal (Bronze)">
   <a href="#the-catalog"><img src="https://img.shields.io/badge/skills-14-brightgreen?style=flat-square" alt="14 skills"></a>
   <a href="#subagents"><img src="https://img.shields.io/badge/subagents-8-brightgreen?style=flat-square" alt="Subagents: 8"></a>
-  <a href="#command-line-engines"><img src="https://img.shields.io/badge/CLIs-8-brightgreen?style=flat-square" alt="8 CLIs"></a>
+  <a href="#command-line-engines"><img src="https://img.shields.io/badge/CLIs-9-brightgreen?style=flat-square" alt="9 CLIs"></a>
   <a href="https://agentskills.io/specification"><img src="https://img.shields.io/badge/spec-agentskills.io-orange?style=flat-square" alt="Agent Skills Spec"></a>
 </p>
 
@@ -173,7 +173,7 @@ A verdict is `pass`, `warn`, or `block`, and a block names the check and the fin
 
 ## The catalog
 
-**14 skills, 8 subagents, and 8 CLIs**, plus hooks on six events. Every component has a reference page under `docs/reference/`, indexed from [docs/README.md](docs/README.md), and most ship a worked example alongside it.
+**14 skills, 8 subagents, and 9 CLIs**, plus hooks on six events. Every component has a reference page under `docs/reference/`, indexed from [docs/README.md](docs/README.md), and most ship a worked example alongside it.
 
 ### Skills
 
@@ -238,6 +238,7 @@ The deterministic spine. Each is a thin shell over an engine in `hooks/lib/`, so
 | [`ns-statusline`](docs/reference/cli/ns-statusline.md) | A zero-token status view for the Claude Code status line. |
 | [`ns-doctor`](docs/reference/cli/ns-doctor.md) | Read-only bible integrity check across structure, schemas, and state. |
 | [`ns-notes`](docs/reference/cli/ns-notes.md) | Generates endnotes, bibliography, and index candidates from the ledger. |
+| [`ns-overlap`](docs/reference/cli/ns-overlap.md) | Detects n-gram overlap between chapter prose and your own research packets, verbatim excerpts, and prior work. |
 
 ### Hooks
 
@@ -294,7 +295,7 @@ If you try Nonfiction Studio in Cowork, treat it as "should work" rather than "p
 |---|---|
 | **Current version** | `0.1.0` (source of truth: [`library.json`](library.json)) |
 | **Status** | Pre-release; Phase 1 complete, later phases in progress |
-| **Components** | 14 skills, 8 subagents, 8 CLIs, hooks on six events |
+| **Components** | 14 skills, 8 subagents, 9 CLIs, hooks on six events |
 | **Conformance** | `universal` (Bronze) at Standard 0.12 |
 | **Agent targets** | Claude Code (Cowork pending verification; chat is skills-only) |
 | **Runtime** | Node 22.12 or later; one runtime dependency (a YAML parser) |

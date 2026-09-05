@@ -124,3 +124,4 @@ bidirectionality property per Q-01 section 1.2.
 ## See also
 
 - [ns-gate CLI reference](./ns-gate.md) - orchestrator that calls ns-scrub internally
+- [ns-overlap CLI reference](./ns-overlap.md) - follows this CLI's anatomy (parseArgs, exit taxonomy, `--json`/human modes)
