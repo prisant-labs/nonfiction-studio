@@ -1823,7 +1823,7 @@ test('Task 8 (p) fail-open: an unreadable agents/_chain-permitted.yaml produces 
   );
 });
 
-test('Task 8 (q) fail-open: corrupt settings file produces silence for what would otherwise warn', () => {
+test('Task 8 (q) fail-open ruling 1: a WHOLE-FILE-unparseable settings file produces silence for what would otherwise warn', () => {
   const dir = makeTmpDir('t8-q-corrupt-settings');
   writeRoutingSettings(dir, '---\nrouting_enforce: [unterminated\n---\nHouse notes.\n');
   const result = runHook(makeDispatchEvent(dir, { subagentType: 'nonfiction-studio:line-editor', model: 'opus' }));
@@ -1831,7 +1831,75 @@ test('Task 8 (q) fail-open: corrupt settings file produces silence for what woul
   assert.equal(result.status, 0, 'exit code is 0');
   assert.equal(
     result.stdout.trim(), '',
-    'corrupt settings fails open to total silence, not the "warn" default'
+    'a whole-file parse failure fails open to total silence, not the "warn" default'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Fix round 2 (settings-silencing ruling, revising the original "any warning
+// silences" interpretation): a live-review finding proved that interpretation
+// let an explicitly configured routing_enforce: block go silently dark
+// whenever ANY unrelated settings key was also invalid in the same file - an
+// explicit block control silently failing open is worse than the narrower
+// fail-open behavior it replaces. The revised ruling, keyed off loadSettings'
+// new droppedKeys array (hooks/lib/settings.mjs):
+//   1. Whole-file failure (settings came back empty with a warning, droppedKeys
+//      empty): stays silent - unchanged from before this fix, see (q) above.
+//   2. routing_enforce ITSELF was dropped as invalid (droppedKeys includes
+//      "routing_enforce"): stays silent - author intent unknown, do not guess.
+//   3. routing_enforce parsed VALID, or is absent entirely from an otherwise
+//      valid file (droppedKeys does NOT include "routing_enforce"): a warning
+//      about a DIFFERENT key must not silence the branch - the valid value
+//      (or the "warn" default) governs.
+// ---------------------------------------------------------------------------
+
+test('Task 8 (q2) fail-open ruling 2: routing_enforce ITSELF dropped as invalid stays silent (author intent unknown)', () => {
+  const dir = makeTmpDir('t8-q2-routing-enforce-itself-dropped');
+  writeRoutingSettings(dir, '---\nrouting_enforce: loud\n---\nHouse notes.\n');
+  const result = runHook(makeDispatchEvent(dir, { subagentType: 'nonfiction-studio:line-editor', model: 'opus' }));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'routing_enforce itself failing validation and being dropped fails open to silence'
+  );
+});
+
+test('Task 8 (q3) ruling 3, the reviewer\'s exact live-reproduced scenario: an unrelated invalid key (gate_mode: bogus) must NOT silence a VALID routing_enforce: block - emitDeny fires', () => {
+  const dir = makeTmpDir('t8-q3-unrelated-key-must-not-silence-block');
+  writeRoutingSettings(dir, '---\ngate_mode: bogus\nrouting_enforce: block\n---\nHouse notes.\n');
+  const result = runHook(makeDispatchEvent(dir, { subagentType: 'nonfiction-studio:line-editor', model: 'opus' }));
+
+  assert.equal(result.status, 0, 'exit code is 0 (deny travels in JSON, not exit code)');
+  let out;
+  assert.doesNotThrow(
+    () => { out = JSON.parse(result.stdout.trim()); },
+    'stdout is valid JSON (deny) - NOT empty; the pre-fix bug produced empty stdout here, silently going dark'
+  );
+  const hso = out.hookSpecificOutput;
+  assert.equal(
+    hso.permissionDecision, 'deny',
+    'an unrelated dropped key (gate_mode) must not silence an explicitly configured, validly-parsed routing_enforce: block'
+  );
+  assert.equal(
+    hso.permissionDecisionReason,
+    'Routing: line-editor declares model sonnet (D-18 in-plugin model routing); this dispatch requests opus.',
+    'deny reason is the ordinary model-mismatch sentence, proving the block control fired normally'
+  );
+});
+
+test('Task 8 (q4) ruling 3, warn mode variant: an unrelated invalid key (gate_mode: bogus) must not silence the default warn behavior either', () => {
+  const dir = makeTmpDir('t8-q4-unrelated-key-must-not-silence-warn');
+  writeRoutingSettings(dir, '---\ngate_mode: bogus\n---\nHouse notes.\n');
+  const result = runHook(makeDispatchEvent(dir, { subagentType: 'nonfiction-studio:line-editor', model: 'opus' }));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON (warn), not silenced');
+  assert.equal(
+    out.hookSpecificOutput.additionalContext,
+    'Routing: line-editor declares model sonnet (D-18 in-plugin model routing); this dispatch requests opus.',
+    'an unrelated dropped key does not suppress the default warn behavior (routing_enforce absent, but not itself invalid)'
   );
 });
 

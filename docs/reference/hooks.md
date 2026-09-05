@@ -134,11 +134,24 @@ Both checks share one mode, read from the per-project settings file's
 ### Fail-open
 
 Every read this branch performs can fail without ever producing a false warning or a
-false deny: a missing `agents/<slug>.md` file, frontmatter that is not valid YAML, an
-unreadable or unparseable `agents/_chain-permitted.yaml`, and a corrupt settings file
-(any settings-file warning, not only one naming `routing_enforce` itself) each produce
-total silence. Frontmatter and chain-contract reads are cached for the lifetime of one
-hook process.
+false deny: a missing `agents/<slug>.md` file, frontmatter that is not valid YAML, and
+an unreadable or unparseable `agents/_chain-permitted.yaml` each produce total
+silence. Frontmatter and chain-contract reads are cached for the lifetime of one hook
+process.
+
+A settings-file problem is narrower, and deliberately so: `hooks/lib/settings.mjs`
+names, in a `droppedKeys` array, exactly which known key (if any) was individually
+dropped for failing its own validation, separately from its one-sentence `warning`.
+This branch silences itself only when the whole settings file failed to parse at all
+(a warning with an empty `droppedKeys` - `routing_enforce`'s real value is genuinely
+unknown), or when `routing_enforce` itself is the dropped key (author intent for that
+one key is unknown). A warning naming a *different* key - `gate_mode: bogus` sitting
+beside a perfectly valid `routing_enforce: block`, say - does not silence this branch;
+the valid `routing_enforce` value governs exactly as if the sibling key were absent. A
+broader "any settings warning silences the branch" rule was tried first and rejected:
+it let an explicitly configured `routing_enforce: block` go silently dark whenever any
+unrelated key in the same file was also invalid, which is worse than the narrower
+fail-open behavior above.
 
 ## See also
 

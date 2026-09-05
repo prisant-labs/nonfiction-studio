@@ -92,16 +92,23 @@ function loadYamlParse() {
 /**
  * Validates the P2 schema keys on a parsed frontmatter object. Unknown keys are copied through
  * unvalidated (preserved and ignored, per P1). A known key with the wrong type/value is dropped
- * individually -- one warning sentence per dropped key -- and every valid key (known or unknown)
- * survives.
+ * individually -- one warning sentence per dropped key, and the key name recorded in droppedKeys
+ * -- and every valid key (known or unknown) survives.
+ *
+ * droppedKeys (Wave 1 exit Task 8 fix round 2) exists so a caller with more than one settings
+ * key in play -- the PreToolUse dispatch-routing branch is the first such caller -- can tell "the
+ * key I care about was itself invalid and dropped" apart from "some OTHER key was invalid, but
+ * mine parsed fine (or was simply absent)". A single shared `warning` string cannot make that
+ * distinction; droppedKeys can, by name.
  *
  * @param {object} data - parsed YAML frontmatter (already confirmed to be a plain object)
  * @param {string} path - absolute settings file path, named in each warning sentence
- * @returns {{ settings: object, warnings: string[] }}
+ * @returns {{ settings: object, warnings: string[], droppedKeys: string[] }}
  */
 function validateKnownKeys(data, path) {
   const settings = {};
   const warnings = [];
+  const droppedKeys = [];
   for (const key of Object.keys(data)) {
     const schema = KEY_SCHEMA[key];
     if (!schema) {
@@ -111,6 +118,7 @@ function validateKnownKeys(data, path) {
     if (schema.valid(data[key])) {
       settings[key] = data[key];
     } else {
+      droppedKeys.push(key);
       warnings.push(
         singleLine(
           'Settings file at ' + path + ': "' + key + '" ' + schema.describe +
@@ -119,16 +127,21 @@ function validateKnownKeys(data, path) {
       );
     }
   }
-  return { settings, warnings };
+  return { settings, warnings, droppedKeys };
 }
 
 /**
- * Reads and parses one confirmed-present settings file. Every failure path (unreadable file,
- * missing frontmatter fence, invalid YAML, non-object frontmatter, unavailable yaml parser)
- * returns EMPTY settings plus a one-sentence warning naming the file -- never a thrown error.
+ * Reads and parses one confirmed-present settings file. Every WHOLE-FILE failure path (unreadable
+ * file, missing frontmatter fence, invalid YAML, non-object frontmatter, unavailable yaml parser)
+ * returns EMPTY settings plus a one-sentence warning naming the file, and an EMPTY droppedKeys --
+ * never a thrown error, and never a per-key attribution when the whole file is the casualty, not
+ * any one key. A per-KEY failure (the file parsed fine; one or more known keys individually failed
+ * their own schema) instead returns the surviving settings, the joined warning sentence(s), AND a
+ * non-empty droppedKeys naming exactly which keys were dropped -- see validateKnownKeys' own
+ * comment for why this distinction exists and who reads it.
  *
  * @param {string} path - absolute path to an existing .claude/nonfiction-studio.local.md
- * @returns {{ settings: object, body: string, warning: string|null, path: string }}
+ * @returns {{ settings: object, body: string, warning: string|null, path: string, droppedKeys: string[] }}
  */
 function parseSettingsFile(path) {
   let text;
@@ -140,6 +153,7 @@ function parseSettingsFile(path) {
       body: '',
       warning: 'Settings file at ' + path + ' could not be read (' + err.message + '); using defaults.',
       path,
+      droppedKeys: [],
     };
   }
 
@@ -152,6 +166,7 @@ function parseSettingsFile(path) {
         'Settings file at ' + path +
         ' is missing YAML frontmatter (a --- fenced block at the top of the file); using defaults.',
       path,
+      droppedKeys: [],
     };
   }
 
@@ -164,6 +179,7 @@ function parseSettingsFile(path) {
         'Settings file at ' + path + ' could not be parsed: the yaml parser is unavailable (' +
         (yamlError ? yamlError.message : 'unknown error') + '); using defaults.',
       path,
+      droppedKeys: [],
     };
   }
 
@@ -179,6 +195,7 @@ function parseSettingsFile(path) {
       body: m[2],
       warning: 'Settings file at ' + path + ' has invalid YAML frontmatter (' + singleLine(err.message) + '); using defaults.',
       path,
+      droppedKeys: [],
     };
   }
 
@@ -189,7 +206,7 @@ function parseSettingsFile(path) {
   // string, a number, a YAML list) still warns, since that is an authored mistake, not an
   // intentionally empty file.
   if (data === null) {
-    return { settings: {}, body: m[2], warning: null, path };
+    return { settings: {}, body: m[2], warning: null, path, droppedKeys: [] };
   }
 
   if (typeof data !== 'object' || Array.isArray(data)) {
@@ -198,15 +215,17 @@ function parseSettingsFile(path) {
       body: m[2],
       warning: 'Settings file at ' + path + ' frontmatter is not a key/value map; using defaults.',
       path,
+      droppedKeys: [],
     };
   }
 
-  const { settings, warnings } = validateKnownKeys(data, path);
+  const { settings, warnings, droppedKeys } = validateKnownKeys(data, path);
   return {
     settings,
     body: m[2],
     warning: warnings.length > 0 ? warnings.join(' ') : null,
     path,
+    droppedKeys,
   };
 }
 
@@ -214,11 +233,15 @@ function parseSettingsFile(path) {
  * Locates and reads the per-project studio settings file, walking UP from startDir the same way
  * findBookRoot (hooks/lib/bible.mjs) walks up looking for the book root: the first ancestor
  * directory (including startDir itself) containing .claude/nonfiction-studio.local.md wins.
- * Absent anywhere in the ancestor chain is silent success -- empty settings, no warning, per P1
- * (a settings file is optional; its absence is normal, not an error).
+ * Absent anywhere in the ancestor chain is silent success -- empty settings, no warning, empty
+ * droppedKeys, per P1 (a settings file is optional; its absence is normal, not an error).
+ *
+ * droppedKeys (Wave 1 exit Task 8 fix round 2, additive to this function's pre-existing contract)
+ * names every KNOWN key that was present but individually dropped for failing its own schema --
+ * empty when nothing was dropped, including every whole-file failure path (see parseSettingsFile).
  *
  * @param {string} startDir - directory to start walking up from
- * @returns {{ settings: object, body: string, warning: string|null, path: string|null }}
+ * @returns {{ settings: object, body: string, warning: string|null, path: string|null, droppedKeys: string[] }}
  */
 export function loadSettings(startDir) {
   let current = resolve(startDir);
@@ -234,5 +257,5 @@ export function loadSettings(startDir) {
     current = parent;
   }
 
-  return { settings: {}, body: '', warning: null, path: null };
+  return { settings: {}, body: '', warning: null, path: null, droppedKeys: [] };
 }

@@ -247,6 +247,55 @@ test('loadSettings: routing_enforce wrong type/enum is dropped with a warning', 
   }
 });
 
+test('loadSettings: droppedKeys names exactly the key(s) individually dropped for a wrong-type/enum value', () => {
+  const root = makeTempRoot();
+  try {
+    writeSettingsFile(root, '---\nrouting_enforce: loud\n---\n');
+    const result = loadSettings(root);
+    assert.deepStrictEqual(result.droppedKeys, ['routing_enforce']);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('loadSettings: droppedKeys stays empty for every whole-file failure path, even though warning is set (Task 8 fix round 2: distinguishes "the whole file failed" from "one known key failed")', () => {
+  const root = makeTempRoot();
+  try {
+    // Invalid YAML (whole-file failure): warning is set, but no SPECIFIC key was ever
+    // individually validated and dropped -- the parse never got that far.
+    writeSettingsFile(root, '---\nrouting_enforce: [\n---\n');
+    const result = loadSettings(root);
+    assert.ok(result.warning, 'precondition: a warning is set for this whole-file failure');
+    assert.deepStrictEqual(result.droppedKeys, [], 'droppedKeys is empty: nothing was individually attributed');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('loadSettings: an unrelated invalid key (gate_mode) is dropped and named in droppedKeys, while a VALID routing_enforce survives untouched (the exact scenario Task 8 fix round 2 exists for)', () => {
+  const root = makeTempRoot();
+  try {
+    writeSettingsFile(root, '---\ngate_mode: bogus\nrouting_enforce: block\n---\n');
+    const result = loadSettings(root);
+    assert.strictEqual(result.settings.gate_mode, undefined, 'gate_mode is dropped');
+    assert.strictEqual(result.settings.routing_enforce, 'block', 'routing_enforce survives, untouched by the sibling drop');
+    assert.deepStrictEqual(result.droppedKeys, ['gate_mode'], 'droppedKeys names only the key that actually failed');
+    assert.ok(result.warning && result.warning.includes('gate_mode'), 'the warning still names gate_mode (unchanged behavior)');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('loadSettings: no settings file at all -> droppedKeys is an empty array, not undefined', () => {
+  const root = makeTempRoot();
+  try {
+    const result = loadSettings(root);
+    assert.deepStrictEqual(result.droppedKeys, []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('loadSettings: output_style wrong type (not a string) is dropped with a warning', () => {
   const root = makeTempRoot();
   try {

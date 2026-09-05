@@ -353,14 +353,33 @@ if (isMain) {
   // surface). Matching both costs nothing and removes a version-pin risk.
   //
   // FAIL-OPEN on every internal error: a missing agent file, unparseable
-  // frontmatter, an unreadable agents/_chain-permitted.yaml, or corrupt
-  // settings each produce silence below, by construction (readAgentModel and
-  // readChainPermitted return a null/error shape the two message functions
-  // treat as "cannot judge, stay silent") - never a warn and never a deny.
-  // The try/catch is a second, belt-and-suspenders layer for anything
-  // unforeseen. The happy allow path (no mismatch, no undeclared edge, or
-  // routing_enforce: off) adds NO stdout output, preserving the empty-stdout
-  // allow contract this whole hook depends on.
+  // frontmatter, an unreadable agents/_chain-permitted.yaml, or a settings
+  // read that leaves routing_enforce itself unknown each produce silence
+  // below, by construction (readAgentModel and readChainPermitted return a
+  // null/error shape the two message functions treat as "cannot judge, stay
+  // silent") - never a warn and never a deny. The try/catch is a second,
+  // belt-and-suspenders layer for anything unforeseen. The happy allow path
+  // (no mismatch, no undeclared edge, or routing_enforce: off) adds NO
+  // stdout output, preserving the empty-stdout allow contract this whole
+  // hook depends on.
+  //
+  // Settings-failure ruling (Task 8 fix round 2, revising this branch's
+  // original "any settings warning silences" interpretation): a live review
+  // proved that interpretation let an explicitly configured
+  // routing_enforce: block go silently dark whenever ANY unrelated settings
+  // key was also invalid in the same file - a false silence worse than the
+  // narrower fail-open behavior it replaces. loadSettings' droppedKeys array
+  // (hooks/lib/settings.mjs) names exactly which known key, if any, was
+  // individually dropped, distinguishing three cases:
+  //   1. Whole-file failure (a warning, but droppedKeys is empty - the parse
+  //      never got far enough to attribute a drop to any one key): stay
+  //      silent, routing_enforce's real value is genuinely unknown.
+  //   2. routing_enforce ITSELF is in droppedKeys: stay silent, author
+  //      intent for this key is unknown - do not guess.
+  //   3. routing_enforce parsed VALID, or is simply absent from an
+  //      otherwise-valid file (not in droppedKeys either way): proceed. A
+  //      warning about a DIFFERENT key must not silence this branch - the
+  //      valid value (or the "warn" default when absent) governs.
   // =========================================================================
   if (toolName === 'Agent' || toolName === 'Task') {
     try {
@@ -375,15 +394,20 @@ if (isMain) {
         process.exit(0);
       }
 
-      // routing_enforce mode. ANY settings warning - not just one naming
-      // routing_enforce itself - is treated as corrupt settings and produces
-      // total silence: a dispatch decision must never be made against a
-      // settings read already known to be unreliable. Absent settings (no
-      // warning, no file found anywhere in the ancestor chain) is the normal
-      // case and defaults to "warn".
+      // routing_enforce mode. See the settings-failure ruling in the block
+      // comment above: silence only when the whole file failed (a warning
+      // with an empty droppedKeys) or when routing_enforce itself is named
+      // in droppedKeys; a warning about any OTHER key never silences this
+      // branch. Absent settings entirely (no file found anywhere in the
+      // ancestor chain: no warning, empty droppedKeys) is the normal case
+      // and defaults to "warn".
       const routingSettings = loadSettings(cwd);
+      const droppedSettingsKeys = Array.isArray(routingSettings.droppedKeys) ? routingSettings.droppedKeys : [];
       if (routingSettings.warning) {
-        process.exit(0);
+        const wholeFileFailed = droppedSettingsKeys.length === 0;
+        if (wholeFileFailed || droppedSettingsKeys.includes('routing_enforce')) {
+          process.exit(0);
+        }
       }
       const routingMode = routingSettings.settings.routing_enforce || 'warn';
       if (routingMode === 'off') {
