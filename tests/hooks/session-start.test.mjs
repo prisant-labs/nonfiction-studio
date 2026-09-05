@@ -433,3 +433,165 @@ test('(f) NS_HOOK_TRACE set: exactly one trace line written with correct event n
   assert.ok(typeof trace.script === 'string', 'trace record carries the script path');
   assert.ok(typeof trace.stdinRaw === 'string', 'trace record carries stdinRaw');
 });
+
+// ---------------------------------------------------------------------------
+// Wave 1 exit Task 4: zero-friction first session (initialUserMessage, reloadSkills)
+// ---------------------------------------------------------------------------
+//
+// Platform placement per the Task 1 probe: both fields are read from
+// hookSpecificOutput.* only - top-level placement is silently ignored by the platform.
+// initialUserMessage fires ONLY when NO_BOOK_ROOT fires AND the directory is truly empty
+// (no entries beyond the allowlist: .claude, .git, .gitignore, .DS_Store, Thumbs.db).
+// NO_BOOK_ROOT alone is not sufficient - it fires in every non-book directory, including an
+// unrelated repo with the plugin installed at user scope, and hijacking the first turn there
+// would be a regression (case (o) below is that regression guard).
+
+test('(m) truly-empty scratch dir: initialUserMessage is emitted, additionalContext prose survives', () => {
+  const tmpDir = makeTmpDir('truly-empty-initmsg');
+  const result = runHook(tmpDir);
+  assert.equal(result.status, 0, 'exit code is 0');
+
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout parses as JSON');
+  const hso = out.hookSpecificOutput;
+
+  assert.equal(
+    hso.initialUserMessage,
+    '/nonfiction-studio:nfs-start',
+    'initialUserMessage names the studio front door, nested under hookSpecificOutput'
+  );
+  assert.ok(hso.additionalContext.includes('No book project'), 'additionalContext prose survives (first sentence)');
+  assert.ok(hso.additionalContext.includes('nfs-new-book'), 'additionalContext prose survives (second sentence)');
+});
+
+test('(n) dir containing only allowlisted entries (.git, .claude, .gitignore): still counts as truly empty', () => {
+  const tmpDir = makeTmpDir('allowlist-only');
+  mkdirSync(join(tmpDir, '.git'));
+  mkdirSync(join(tmpDir, '.claude'));
+  writeFileSync(join(tmpDir, '.gitignore'), '', 'utf8');
+
+  const result = runHook(tmpDir);
+  assert.equal(result.status, 0, 'exit code is 0');
+
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout parses as JSON');
+  const hso = out.hookSpecificOutput;
+
+  assert.equal(
+    hso.initialUserMessage,
+    '/nonfiction-studio:nfs-start',
+    'allowlisted-only entries still count as truly empty'
+  );
+  assert.ok(hso.additionalContext.includes('No book project'), 'additionalContext prose survives');
+});
+
+test('(o) non-empty non-book dir (unrelated-repo regression guard): no initialUserMessage, additionalContext prose survives', () => {
+  const tmpDir = makeTmpDir('non-empty-non-book');
+  writeFileSync(join(tmpDir, 'README.md'), '# Some unrelated repo\n', 'utf8');
+
+  const result = runHook(tmpDir);
+  assert.equal(result.status, 0, 'exit code is 0');
+
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout parses as JSON');
+  const hso = out.hookSpecificOutput;
+
+  assert.equal(
+    hso.initialUserMessage,
+    undefined,
+    'initialUserMessage is absent for a non-empty non-book directory (NO_BOOK_ROOT alone is not sufficient)'
+  );
+  assert.ok(hso.additionalContext.includes('No book project'), 'additionalContext prose survives (first sentence)');
+  assert.ok(hso.additionalContext.includes('nfs-new-book'), 'additionalContext prose survives (second sentence)');
+});
+
+test('(p) corrupt meta.json branch: no initialUserMessage, truthful message still present', () => {
+  const cloneDir = cloneSampleBook('corrupt-meta-initmsg');
+  writeFileSync(join(cloneDir, '.studio', 'meta.json'), 'not valid json {{', 'utf8');
+
+  const result = runHook(cloneDir);
+  assert.equal(result.status, 0, 'exit code is 0');
+
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout parses as JSON');
+  const hso = out.hookSpecificOutput;
+
+  assert.equal(hso.initialUserMessage, undefined, 'initialUserMessage is absent on the corrupt-bible branch');
+  assert.ok(hso.additionalContext.includes('meta.json'), 'additionalContext prose survives (names the real problem)');
+});
+
+test('(q) normal-book branch (golden fixture): no initialUserMessage is emitted [mutation-proof: emitting initialUserMessage on the normal-book branch turns this test red]', () => {
+  const result = runHook(SAMPLE_BOOK);
+  assert.equal(result.status, 0, 'exit code is 0');
+
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout parses as JSON');
+  const hso = out.hookSpecificOutput;
+
+  assert.equal(hso.initialUserMessage, undefined, 'initialUserMessage is absent on the normal-book branch');
+  assert.ok(
+    hso.additionalContext.includes('Building a personal learning network is a deliberate'),
+    'orientation block prose survives'
+  );
+});
+
+test('(r) book-context skill present: reloadSkills is true on the normal-book branch', () => {
+  const cloneDir = cloneSampleBook('book-context-present');
+  const skillDir = join(cloneDir, '.claude', 'skills', 'book-context');
+  mkdirSync(skillDir, { recursive: true });
+  writeFileSync(
+    join(skillDir, 'SKILL.md'),
+    '---\nname: book-context\nuser-invocable: true\ndescription: "test"\n---\n\nBody.\n',
+    'utf8'
+  );
+
+  const result = runHook(cloneDir);
+  assert.equal(result.status, 0, 'exit code is 0');
+
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout parses as JSON');
+  assert.equal(
+    out.hookSpecificOutput.reloadSkills,
+    true,
+    'reloadSkills is true when .claude/skills/book-context/SKILL.md exists'
+  );
+  assert.ok(
+    out.hookSpecificOutput.additionalContext.includes('Building a personal learning network is a deliberate'),
+    'orientation block prose survives'
+  );
+});
+
+test('(s) book-context skill absent: reloadSkills is absent on the normal-book branch (golden fixture has no such file)', () => {
+  const result = runHook(SAMPLE_BOOK);
+  assert.equal(result.status, 0, 'exit code is 0');
+
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout parses as JSON');
+  assert.equal(out.hookSpecificOutput.reloadSkills, undefined, 'reloadSkills is absent when no book-context skill exists');
+});
+
+test('(t) unreadable .claude/skills (a file in place of the directory): fail-open -- normal orientation output still yields, no throw, no reloadSkills', () => {
+  const cloneDir = cloneSampleBook('book-context-unreadable');
+  // A file where the skills directory should be: existsSync-style checks alone would just
+  // silently return false, so this instead forces a genuine throw (ENOTDIR) inside the new
+  // reloadSkills-existence check, proving the fail-open wrapper actually catches something
+  // rather than merely never being exercised.
+  mkdirSync(join(cloneDir, '.claude'), { recursive: true });
+  writeFileSync(join(cloneDir, '.claude', 'skills'), 'not a directory', 'utf8');
+
+  const result = runHook(cloneDir);
+  assert.equal(result.status, 0, 'exit code is 0 even when .claude/skills is unreadable as a directory');
+
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout still parses as JSON');
+  const ctx = out.hookSpecificOutput.additionalContext;
+  assert.ok(
+    ctx.includes('Building a personal learning network is a deliberate'),
+    'the orientation block still comes through (fail-open)'
+  );
+  assert.equal(
+    out.hookSpecificOutput.reloadSkills,
+    undefined,
+    'reloadSkills is absent when the existence check could not complete'
+  );
+});

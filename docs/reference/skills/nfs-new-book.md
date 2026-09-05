@@ -41,6 +41,10 @@ Alternate entry points:
 | Output style answer (`manuscript`, `review`, or decline) | Interactive prompt, once per project | No (skipped in non-interactive contexts and on chat's activation path; see "Output style offer" below) |
 | Studio settings file (existing `output_style` value, if any) | `.claude/nonfiction-studio.local.md`, checked before the offer | No |
 | Studio settings example template | `templates/nonfiction-studio.local.example.md` in the plugin root, used to stamp the settings file when absent | Yes, only if the offer needs to create the settings file |
+| Book-context generation consent (yes/no) | Interactive prompt, once per project | No (skipped in non-interactive contexts) |
+| Book-context skill file (existence check) | `.claude/skills/book-context/SKILL.md`, checked before the offer | No |
+| Bible content for book-context assembly | `context/brief.md` (thesis), `context/style-profile.md` (style rules), `structure/outline.md` (chapter map) | No (graceful "not yet recorded" notes when empty) |
+| Open-claims count | `bin/ns-claims --all --json` in the plugin root | No (graceful "not yet countable" note if it cannot run) |
 
 ## Outputs
 
@@ -87,6 +91,14 @@ The flat bible tree is at the project root. The plugin's scaffold and all engine
 | `.claude/settings.local.json` | The offer's answer is `manuscript` or `review` | Merge-written `outputStyle` key (namespaced, e.g. `nonfiction-studio:Manuscript`); every other existing key is preserved |
 | `.claude/nonfiction-studio.local.md` | Any answer that is actually recorded (consent or decline) | `output_style` key set to `manuscript`, `review`, or `declined`; created from `templates/nonfiction-studio.local.example.md` if it did not already exist |
 
+### Book-context skill (generated only on consent, once per project)
+
+| File | Written when | Contents |
+|---|---|---|
+| `.claude/skills/book-context/SKILL.md` | The author consents in an interactive session and the file does not already exist | A project-committed, user-invocable skill assembling the thesis one-liner (`context/brief.md`), the top style rules (`context/style-profile.md`), the chapter map (`structure/outline.md`), and the open-claims count (`bin/ns-claims`), each naming its source path |
+
+This file is committed into the author's project tree, not the plugin installation. See "Book-context skill generation" below.
+
 ## Placeholder fills
 
 Two token formats are used. The format depends on the file type.
@@ -116,6 +128,20 @@ After the bible tree and `.studio/` state files are stamped, `nfs-new-book` offe
 
 **Chat has no settings-write path for `outputStyle`.** On the chat surface, the skill states the `/config` command as the way to activate a style yourself, then records `output_style: declined` (disclosed in that same message) since no style was actually activated through this flow.
 
+## Book-context skill generation
+
+Immediately after the output style offer, `nfs-new-book` offers to generate a project-committed `book-context` skill: a quick-reference assembled from the project bible - the thesis one-liner (`context/brief.md`), up to three top style rules (`context/style-profile.md`), the chapter map (`structure/outline.md`), and the open-claims count (`bin/ns-claims`), each naming the source it was read from. It runs on the same invocation shapes as the output style offer (a fresh NEWINIT and both REINIT sub-branches), never activates without an explicit yes, and never repeats once the file exists.
+
+**Fires once.** Before offering, the skill checks whether `.claude/skills/book-context/SKILL.md` already exists. If it does, the offer is skipped silently for that project - it does not re-ask on a later run. **On REINIT, the offer repeats only if the file is absent.**
+
+**Consent is never assumed.** The offer states plainly what a yes commits - project-tree content, at a named path - before asking, and states that the generated skill becomes usable starting the author's next Claude Code session, not the current one: a skill file written during a session is not available to the Skill tool until that session restarts or resumes, a confirmed Claude Code platform behavior. Resuming the current session (rather than starting a fresh one) re-runs the same startup sequence and is a working way to make it live sooner. Declining generates nothing.
+
+**Non-interactive sessions skip the offer entirely** and state that they are doing so; defaulting to yes is never done, since committing content into the project tree needs actual consent.
+
+**Refusing any file write leaves the offer open.** Whether the refusal is a declined conversational answer or a denied Write-tool permission prompt, no skill file is written. A later `nfs-new-book` run against the same project finds the file still absent and legitimately re-offers.
+
+**Content degrades gracefully, never blocks.** On a fresh project the bible is mostly empty (the thesis and style profile are unfilled placeholders immediately after scaffolding, and the outline has no chapters yet). Each of the four assembled items notes plainly when its source has nothing to report yet (for example, "Not yet recorded - run `nfs-interview`") rather than failing the whole step.
+
 ## Guardrails
 
 **Never overwrites.** If a book project layout already exists (.studio/ or context/brief.md found), the skill runs a Bash scan of all 24 expected scaffold paths and reports the exact set of missing files. It then offers (or in headless mode, automatically proceeds) to re-stamp only those missing files. No existing file is ever read or replaced in a re-init run.
@@ -137,6 +163,10 @@ After the bible tree and `.studio/` state files are stamped, `nfs-new-book` offe
 **Output style offer: `.claude/settings.local.json` is not valid JSON.** The skill halts the offer step only, writing nothing; the outcome is not recorded, so the offer remains open for a later run. Scaffolding itself has already completed by this point and is not affected.
 
 **Output style offer: a file write is refused.** No `output_style` outcome is recorded, whether the refusal is a declined conversational answer or a denied Write/Edit tool permission prompt. A later run - including a REINIT run - finds no recorded value and legitimately re-offers the styles.
+
+**Book-context generation: a read or write error.** The skill stops immediately, names the exact path and operation that failed, and does not write a partial skill file.
+
+**Book-context generation: a file write is refused.** No skill file is written, whether the refusal is a declined conversational answer or a denied Write-tool permission prompt. A later run against the same project finds the file still absent and legitimately re-offers.
 
 ## Natural next step
 

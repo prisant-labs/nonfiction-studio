@@ -351,6 +351,8 @@ Optional online research (DOI and URL lookups) uses Claude's own WebSearch and W
 
 The fact-checker keeps a small cache of verified claims at `.claude/agent-memory/nonfiction-studio-fact-checker/` inside your project folder, so it does not re-verify the same claim against the same source twice. It stores claim and source verification outcomes only, never your unpublished manuscript text wholesale. Delete that directory any time to clear it; it simply rebuilds as you keep working.
 
+`nfs-new-book` can generate a `book-context` skill at `.claude/skills/book-context/SKILL.md`, committed into your project tree: your thesis one-liner, top style rules, chapter map, and open-claims count, each naming the file it was read from. It is generated only on an explicit yes; declining, or answering in a non-interactive session, writes nothing. Delete the file any time to remove it; a later `nfs-new-book` run then offers to regenerate it.
+
 Everything lives in your project folder and on your own machine. Nothing is sent anywhere beyond your own Claude session. See [docs/privacy.md](docs/privacy.md) for the fuller note, including the AI-use log and chapter snapshots.
 
 <div align="right">(<a href="#readme-top">back to top</a>)</div>

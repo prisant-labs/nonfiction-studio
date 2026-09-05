@@ -58,6 +58,10 @@ production/back-matter.md     created
 .studio/logs/.gitkeep          created
 ```
 
+> Skipping the output style offer in this non-interactive session; no output style was set. Run `/nonfiction-studio:nfs-new-book` again from an interactive session to see the offer, or set a style directly with `/config`.
+>
+> Skipping the book-context skill generation in this non-interactive session; no skill was generated. Run `/nonfiction-studio:nfs-new-book` again from an interactive session to be asked.
+>
 > Book project "The Quiet Ledger" has been initialized. The bible tree and .studio/ state files are ready.
 >
 > The next step is nfs-interview. Invoke it with `/nonfiction-studio:nfs-interview` to conduct the structured intake interview and build your project brief. The interview typically takes 45-90 minutes and produces a confirmed context/brief.md.
@@ -108,6 +112,10 @@ Note: `created` is an RFC 3339 UTC timestamp (`{{DATETIME}}`), not a calendar da
 > All 24 expected scaffold files are present. No files were written.
 >
 > Run /nonfiction-studio:nfs-interview to continue setting up your project.
+>
+> Skipping the output style offer in this non-interactive session; no output style was set. Run `/nonfiction-studio:nfs-new-book` again from an interactive session to see the offer, or set a style directly with `/config`.
+>
+> Skipping the book-context skill generation in this non-interactive session; no skill was generated. Run `/nonfiction-studio:nfs-new-book` again from an interactive session to be asked.
 
 ---
 
@@ -119,3 +127,4 @@ Note: `created` is an RFC 3339 UTC timestamp (`{{DATETIME}}`), not a calendar da
 - `progress.json` has `"version": 2`, `"chapters": []`, and all zero counters.
 - The second invocation runs a Bash scan and reports the result honestly. When all files are present it states so; when files are missing it lists exactly which ones.
 - `.studio/` is at the bible root alongside `context/` and `chapters/`, not in a nested subdirectory.
+- Both once-per-project offers (the output style offer and the book-context skill generation step) state plainly that they are skipped in a non-interactive session rather than guessing at consent; neither writes any file in that case, on either the first run or the re-init run.
