@@ -9,7 +9,7 @@ tags: ["cli", "gate", "orchestrator", "quality", "stop"]
 # ns-gate
 
 Orchestrates all quality-gate checks (claim coverage, quote fidelity, prompt scrub,
-stylometry drift, state coherence, continuity, thesis alignment, and session write flag)
+stylometry drift, state coherence, continuity, overlap, thesis alignment, and session write flag)
 and writes a timestamped gate report under `.studio/gate/`. Exits according to the gate
 mode in `.studio/config.json`: 0 in warn mode; 0 or 1 in block mode depending on which
 checks are configured to block; 2 on operational error.
@@ -22,13 +22,15 @@ session and by `scripts/test-fixtures.mjs` in CI. It delegates to the shared eng
 functions from `hooks/lib/gate-engine.mjs` so the hook and the CLI share one implementation.
 
 The gate's deterministic checks (claim coverage, quote fidelity, prompt scrub, state
-coherence, continuity) always run. The judgment check (thesis alignment) always runs but
+coherence, continuity, overlap) always run. The judgment check (thesis alignment) always runs but
 can only emit warn, never block, in v1 per D-03. The quote-fidelity check (D-03 (layered
 Stop gate)) can likewise only emit warn, never block, until the quote normalization and
 adjudication policy ships (roadmap row 1.5); a configured
 `block` mode is structurally coerced to `warn`, the same mechanism D-03 uses for thesis
-alignment. Per-check mode overrides in config.json control whether a warn or block verdict
-is returned when any other check fires.
+alignment. The overlap check (Wave 1 exit Task 7) is different: it is fully deterministic and is
+NOT structurally coerced, so it can reach `block` once an author opts in on both the top-level
+`gate.mode` and its own `mode`. Per-check mode overrides in config.json control whether a warn or
+block verdict is returned when any other check fires.
 
 ## Invocation
 
@@ -54,14 +56,14 @@ or use the same `node` plus full-path form.
 
 | Flag | Type | Description |
 |---|---|---|
-| `--check=<checks>` | string (comma-separated) | Run only the named checks. Valid flag values: `claims`, `quotes`, `stylometry`, `scrub`, `continuity-quick`, `coherence`. See the flag-to-report mapping table below. |
+| `--check=<checks>` | string (comma-separated) | Run only the named checks. Valid flag values: `claims`, `quotes`, `stylometry`, `scrub`, `continuity-quick`, `coherence`, `overlap`. See the flag-to-report mapping table below. |
 | `--chapter=<slug>` | string | Limit chapter-scoped checks to `chapters/<slug>.md`. |
 | `--project=<dir>` | string | Override the book root to `<dir>`. If omitted, walks up from the current directory looking for `.studio/meta.json`. |
 | `--json` | boolean | Emit the full gate report as JSON to stdout. |
 
 ### --check flag values
 
-The `--check` flag accepts CLI flag names, not REPORT check names. The six valid flag values and their corresponding report check names are:
+The `--check` flag accepts CLI flag names, not REPORT check names. The seven valid flag values and their corresponding report check names are:
 
 | `--check` value | Report check name |
 |---|---|
@@ -71,6 +73,7 @@ The `--check` flag accepts CLI flag names, not REPORT check names. The six valid
 | `scrub` | `prompt_scrub` |
 | `continuity-quick` | `continuity` |
 | `coherence` | `state_coherence` |
+| `overlap` | `overlap` |
 
 `session_write_flag` is always evaluated and is not selectable via `--check` (it is not a flag).
 `thesis_alignment` is the judgment layer and is never a gate check; it is not a valid `--check` value.
@@ -80,7 +83,7 @@ The `--check` flag accepts CLI flag names, not REPORT check names. The six valid
 | Exit code | Meaning |
 |---|---|
 | 0 | Pass - all checks passed, or all fired checks are in warn mode |
-| 1 | One or more block-mode checks fired; the block verdict survives whenever top-level `gate.mode` is anything other than `warn` (D-03 (layered Stop gate) Invariant 2 caps every verdict to `warn` only when `gate.mode` is `warn`, regardless of any individual check's own mode - see `hooks/lib/gate-engine.mjs:625`) |
+| 1 | One or more block-mode checks fired; the block verdict survives whenever top-level `gate.mode` is anything other than `warn` (D-03 (layered Stop gate) Invariant 2 caps every verdict to `warn` only when `gate.mode` is `warn`, regardless of any individual check's own mode - see `hooks/lib/gate-engine.mjs:895`) |
 | 2 | Argument error, missing book root, or engine failure |
 
 ## Gate checks and default modes (Phase 1)
@@ -90,7 +93,7 @@ override modes via their own `.studio/config.json`. Whether a block-mode check's
 verdict actually stops the session depends on top-level `gate.mode`: every verdict is
 capped to `warn` only when top-level `gate.mode` is `warn`, the shipped default; a block
 verdict survives when top-level `gate.mode` is anything else (D-03 (layered Stop gate)
-Invariant 2, `hooks/lib/gate-engine.mjs:625`).
+Invariant 2, `hooks/lib/gate-engine.mjs:895`).
 
 | Check | Default mode | Blocks when mode=`block` and top-level `gate.mode` is not `warn`? |
 |---|---|---|
@@ -99,6 +102,7 @@ Invariant 2, `hooks/lib/gate-engine.mjs:625`).
 | `prompt_scrub` | block | Yes |
 | `stylometry` | warn | No (warn only) |
 | `continuity` | warn | No (warn only) |
+| `overlap` | warn | Yes (fully deterministic; NOT structurally coerced - opts in like any other deterministic check, roadmap OPP-D10 (local overlap check)) |
 | `thesis_alignment` | warn | No (judgment check; v1 never blocks) |
 | `state_coherence` | warn | No (warn only in Phase 1) |
 | `session_write_flag` | block | Yes |
@@ -112,13 +116,14 @@ Real run against the shipped sample book (`node "<plugin-root>/bin/ns-gate"
 aggregate below the 2,200-word floor):
 
 ```
-[ns-gate] verdict: pass (report: .studio/gate/01-listening-before-speaking.20260901T044929Z.json)
+[ns-gate] verdict: pass (report: .studio/gate/01-listening-before-speaking.20260905T102434Z.json)
   [claim_coverage] pass: claim coverage 100%; no open markers
   [quote_fidelity] pass: 0 quote anchor(s) checked; all match verbatim excerpts exactly
   [stylometry] pass: book-scale verdict only: 528 scored word(s) is below the 2200-word floor a supportable book-scale verdict needs; reporting for advice only, never blocking below the floor
   [prompt_scrub] pass: no agent scaffolding or prompt residue found
   [continuity] pass: no name consistency issues found
   [state_coherence] pass: word-count coherence pass; no mismatch between chapters and progress.json
+  [overlap] pass: no overlap findings against the local research corpus (2 corpus text(s) checked)
   [session_write_flag] skip: no chapter writes detected in this session; gate.no-write
 ```
 
@@ -180,9 +185,11 @@ ns-gate --check=claims,scrub
 ## Relationship to other CLIs
 
 `ns-gate` calls the same engine functions used in the Stop hook sequence: `gate-engine.mjs`
-imports `checkWordCountCoherence` from `doctor-engine.mjs` and calls `scrub`, `computeDrift`,
+imports `checkWordCountCoherence` from `doctor-engine.mjs`, calls `scrub`, `computeDrift`,
 `computeCoverage`, and (OPP-D03 (quote fidelity and source packets))
-`scanQuoteAnchors`/`computeQuoteFindings` from their respective engines. `hooks/stop-gate.mjs`
+`scanQuoteAnchors`/`computeQuoteFindings` from their respective engines, and (Wave 1 exit Task 7)
+`findOverlaps`/`discoverCorpora` from `overlap-engine.mjs` - the identical functions `bin/ns-overlap`
+calls, so the CLI and the gate check can never compute overlap differently. `hooks/stop-gate.mjs`
 does NOT import `gate-engine.mjs` or call `runGate` directly: it spawns `bin/ns-gate` as a
 subprocess and reads the JSON it prints to stdout, exactly as a human or CI invocation would.
 CI likewise invokes `bin/ns-gate` directly to exercise the same path via the public CLI
@@ -192,6 +199,7 @@ reach it only through that CLI boundary.
 ## See also
 
 - [ns-claims CLI reference](./ns-claims.md) - claim-coverage engine called by ns-gate
+- [ns-overlap CLI reference](./ns-overlap.md) - overlap-detection engine called by ns-gate
 - [ns-scrub CLI reference](./ns-scrub.md) - injection and continuity engine called by ns-gate
 - [ns-stylometry CLI reference](./ns-stylometry.md) - drift engine called by ns-gate
 - [ns-doctor CLI reference](./ns-doctor.md) - coherence check shared with ns-gate

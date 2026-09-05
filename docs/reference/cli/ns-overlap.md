@@ -156,3 +156,4 @@ later work.
 
 - [ns-claims CLI reference](./ns-claims.md) - the quote-fidelity check ns-overlap's exclusion rule reuses
 - [ns-scrub CLI reference](./ns-scrub.md) - the CLI anatomy (parseArgs, exit taxonomy, `--json`/human modes) ns-overlap follows
+- [ns-gate CLI reference](./ns-gate.md) - the seventh configurable gate check (Wave 1 exit Task 7) calls this engine's `findOverlaps`/`discoverCorpora` directly

@@ -1,6 +1,6 @@
 // what-it-is:   the ns-gate orchestrator engine
-// what-it-does: composes the four deterministic engines (claims, stylometry,
-//               scrub/injection, scrub/continuity) plus the session-write flag check
+// what-it-does: composes the deterministic engines (claims, stylometry, scrub/injection,
+//               scrub/continuity, state coherence, overlap) plus the session-write flag check
 //               into a single policy verdict; loads and coerces the gate config per D-03;
 //               returns a structured gate report matching S-08 section 11 exactly, plus the
 //               stylometry entry's `drift` sibling per ADR-0012 (PF-14 structured drift field);
@@ -36,6 +36,9 @@ import { checkWordCountCoherence } from './doctor-engine.mjs';
 // Wave 1 exit Task 2 (settings engine): per-project studio settings overlay. loadGateConfig is
 // the single choke point -- settings are read here and nowhere else in the gate path.
 import { loadSettings } from './settings.mjs';
+// Wave 1 exit Task 7 (overlap gate check): shares the identical corpus-discovery and
+// span-matching computation bin/ns-overlap uses, per overlap-engine.mjs's own used-by contract.
+import { findOverlaps, discoverCorpora, DEFAULT_MIN_WORDS } from './overlap-engine.mjs';
 
 // Check registry: CLI flag -> report check name
 // 'claims'           -> 'claim_coverage'  -> computeCoverage
@@ -52,6 +55,12 @@ import { loadSettings } from './settings.mjs';
 // 'continuity-quick' -> 'continuity'      -> scrub(chapters, 'continuity')
 // 'coherence'        -> 'state_coherence' -> checkWordCountCoherence(root)
 //   [TSK-029b (state-coherence gate check) 2026-07-18 per OQ-13 (gate coherence check) decision]
+// 'overlap'          -> 'overlap'         -> findOverlaps(chapters, discoverCorpora(root), { minWords })
+//   [Wave 1 exit Task 7 (overlap gate check): local n-gram overlap against the author's own
+//    research corpus (hooks/lib/overlap-engine.mjs); warn-mode by default. UNLIKE quote_fidelity
+//    and thesis_alignment, this check is NOT structurally coerced -- it is fully deterministic,
+//    so D-03 lets it block once an author opts in on both the top-level gate.mode AND this
+//    check's own mode (the double opt-in also required of every other deterministic check).]
 // 'session_write_flag' is always evaluated (not in --check list)
 export const CHECK_REGISTRY = [
   { flag: 'claims',           reportName: 'claim_coverage' },
@@ -60,6 +69,7 @@ export const CHECK_REGISTRY = [
   { flag: 'scrub',            reportName: 'prompt_scrub' },
   { flag: 'continuity-quick', reportName: 'continuity' },
   { flag: 'coherence',        reportName: 'state_coherence' },
+  { flag: 'overlap',          reportName: 'overlap' },
 ];
 
 // All valid --check flag values
@@ -113,6 +123,11 @@ export const DEFAULT_GATE = {
     //  default mode is warn because out-of-session edits produce benign mismatches until the
     //  PostToolBatch hook refreshes progress.json; authors opt it to block per normal D-03 opt-in.]
     state_coherence:    { enabled: true, mode: 'warn' },
+    // [Wave 1 exit Task 7 (overlap gate check): default mode is warn, same as the other
+    //  deterministic content checks above -- and, unlike quote_fidelity just above and
+    //  thesis_alignment just below, NOT structurally coerced back to warn in loadGateConfig: an
+    //  author can opt this one all the way to block via the normal D-03 double opt-in.]
+    overlap:            { enabled: true, mode: 'warn' },
     thesis_alignment:   { enabled: true, mode: 'warn' },
     session_write_flag: { enabled: true, mode: 'block' },
   },
@@ -768,6 +783,72 @@ export function runGate(root, opts = {}) {
             .map(f => f.path);
           evidence.push('.studio/progress.json');
           next = 'Run ns-doctor to diagnose the word-count incoherence and update progress.json.';
+        }
+
+        checkEntries.push(makeEntry(reportName, verdict, detail, evidence, next));
+      } catch (err) {
+        checkEntries.push(makeEntry(reportName, 'skip', 'engine error: ' + err.message, [], null));
+        hasEngineError = true;
+      }
+    }
+  }
+
+  // ---- OVERLAP (local n-gram overlap against the author's own research corpus) ----
+  // [Wave 1 exit Task 7 (overlap gate check): shares hooks/lib/overlap-engine.mjs's
+  //  findOverlaps/discoverCorpora with bin/ns-overlap, per that module's own used-by contract, so
+  //  the CLI and this check can never compute overlap differently. The corpus (research/packets/
+  //  *.md, verbatim evidence-log fields, and context/prior-work/*.md when present) is discovered
+  //  from the whole book root regardless of --chapter scoping, matching bin/ns-overlap's own
+  //  behavior: an author's corpus does not shrink just because one chapter is being gated.]
+  if (requestedReportNames.has('overlap')) {
+    const reportName = 'overlap';
+    const overlapConfig = gate.checks[reportName];
+
+    if (!overlapConfig || overlapConfig.enabled === false) {
+      checkEntries.push(makeEntry(reportName, 'skip', 'check disabled in config', [], null));
+    } else if ((overlapConfig.mode || 'warn') === 'off') {
+      checkEntries.push(makeEntry(reportName, 'skip', 'check mode is off in config', [], null));
+    } else if (chapters.length === 0) {
+      checkEntries.push(makeEntry(reportName, 'pass', 'no chapters to scan; overlap.pass', [], null));
+    } else {
+      try {
+        const corpora = discoverCorpora(root);
+        // thresholds.overlap_min_words reaches the engine through loadGateConfig's own
+        // thresholds object (settings-overridable per Wave 1 exit Task 2); default 15
+        // (DEFAULT_MIN_WORDS, the engine's own constant) when absent.
+        const minWords = typeof thresholds.overlap_min_words === 'number'
+          ? thresholds.overlap_min_words
+          : DEFAULT_MIN_WORDS;
+        const { findings, excluded } = findOverlaps(chapters, corpora, { minWords });
+        const hasFindings = findings.length > 0;
+        const verdict = deriveVerdict(overlapConfig, hasFindings);
+
+        let detail, evidence, next;
+        if (!hasFindings) {
+          detail = 'no overlap findings against the local research corpus (' + corpora.length + ' corpus text(s) checked)';
+          if (excluded > 0) {
+            detail += '; ' + excluded + ' span(s) excluded as properly quoted';
+          }
+          evidence = [];
+          next = null;
+        } else {
+          // "Worst" finding is the longest merged span. findOverlaps already sorts its
+          // findings by chapter, then source, then chapterSpan.start for determinism, so a
+          // stable linear scan for the max `words` value keeps the tie-break deterministic too.
+          let worst = findings[0];
+          for (const f of findings) {
+            if (f.words > worst.words) worst = f;
+          }
+          detail =
+            findings.length + ' overlap finding(s); worst: ' + worst.chapter + ' <- ' + worst.source +
+            ' (' + worst.words + ' word(s)); overlap.unlicensed-lift';
+          if (excluded > 0) {
+            detail += '; ' + excluded + ' span(s) excluded as properly quoted';
+          }
+          // evidence: the offending chapter files (not file+line -- findOverlaps reports token
+          // offsets, not source line numbers), deduplicated and already in chapter-sorted order.
+          evidence = Array.from(new Set(findings.map(f => f.chapter)));
+          next = 'Quote and cite the source verbatim, or rewrite the passage in your own words, to resolve each flagged overlap.';
         }
 
         checkEntries.push(makeEntry(reportName, verdict, detail, evidence, next));

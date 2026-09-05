@@ -1550,3 +1550,226 @@ test('P7: thresholds.drift_score_max present -> the retirement notice is appende
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ============================================================================
+// Wave 1 exit Task 7 (overlap gate check): the seventh configurable gate check, warn-mode
+// default. Uses the Task 6 overlap fixture book (tests/engines/fixtures/overlap/), which carries
+// no .studio/config.json of its own, so loadGateConfig falls all the way back to DEFAULT_GATE
+// (overlap enabled, mode warn) and DEFAULT_MIN_WORDS (15) unless a test plants its own config.
+// makeTempClone's writeSyntheticV5Baseline no-ops silently on a clone with no config.json to
+// patch (tests/lib/synthetic-v5-baseline.mjs's own documented no-chapters/no-config no-op), so
+// it is safe to reuse here even though every test below requests --check=overlap only.
+// ============================================================================
+
+const OVERLAP_FIXTURE = join(__dirname, 'fixtures', 'overlap');
+
+test('Wave 1 exit Task 7: overlap warns on the whole book (planted lifts in chapters 01 and 04), naming the worst finding by chapter, source, and word count', () => {
+  const tmp = makeTempClone(OVERLAP_FIXTURE);
+  try {
+    const result = spawnGate(tmp, ['--check=overlap', '--json']);
+    assert.strictEqual(result.status, 0, 'warn-mode default must exit 0; stderr: ' + result.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    const entry = report.checks.find(c => c.check === 'overlap');
+    assert.ok(entry, 'overlap entry must be present');
+    assert.strictEqual(entry.verdict, 'warn', 'overlap must warn by default on the planted lifts; got: ' + entry.verdict);
+    assert.strictEqual(report.verdict, 'warn', 'top-level verdict must be warn');
+
+    // detail names the worst finding: chapter, source, word count (the two 30-word findings in
+    // chapter 01 tie; the evidence-log source sorts first alphabetically, matching findOverlaps'
+    // own deterministic chapter/source/start ordering).
+    assert.ok(
+      entry.detail.includes('chapters/01-packet-lift.md'),
+      'detail must name the worst chapter; got: ' + entry.detail
+    );
+    assert.ok(
+      entry.detail.includes('research/evidence-log.md#EV-0001'),
+      'detail must name the worst finding\'s source; got: ' + entry.detail
+    );
+    assert.ok(entry.detail.includes('30 word'), 'detail must name the worst finding\'s word count; got: ' + entry.detail);
+    assert.ok(entry.detail.includes('overlap.unlicensed-lift'), 'detail must carry the overlap signal token; got: ' + entry.detail);
+
+    // evidence: offending chapter files only (no line anchors -- findOverlaps has no line info),
+    // both lifted chapters named, the clean and properly-quoted chapters absent.
+    assert.deepStrictEqual(
+      entry.evidence.sort(),
+      ['chapters/01-packet-lift.md', 'chapters/04-priorwork-lift.md'],
+      'evidence must list exactly the offending chapter files; got: ' + JSON.stringify(entry.evidence)
+    );
+
+    // next says quote-it, cite-it, or rewrite-it (the OPP resolution verbs)
+    assert.ok(entry.next && /quote/i.test(entry.next) && /cite/i.test(entry.next) && /rewrite/i.test(entry.next),
+      'next must recommend quoting, citing, or rewriting; got: ' + entry.next);
+
+    // NO structural sibling field: the drift field stays stylometry-only.
+    assert.deepStrictEqual(
+      Object.keys(entry).sort(), ['check', 'detail', 'evidence', 'next', 'verdict'],
+      'overlap entry must carry exactly the standard five keys; got: ' + JSON.stringify(Object.keys(entry))
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('Wave 1 exit Task 7: overlap passes when scoped to the properly quoted-and-anchored chapter (excluded, not flagged)', () => {
+  const tmp = makeTempClone(OVERLAP_FIXTURE);
+  try {
+    const result = spawnGate(tmp, ['--check=overlap', '--chapter=02-quoted-lift', '--json']);
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    const report = readLatestReport(tmp, '02-quoted-lift');
+    const entry = report.checks.find(c => c.check === 'overlap');
+    assert.strictEqual(entry.verdict, 'pass', 'a properly quoted-and-anchored lift must not flag; detail: ' + entry.detail);
+    assert.ok(entry.detail.includes('excluded as properly quoted'), 'detail must report the exclusion; got: ' + entry.detail);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('Wave 1 exit Task 7: overlap passes when scoped to the clean chapter', () => {
+  const tmp = makeTempClone(OVERLAP_FIXTURE);
+  try {
+    const result = spawnGate(tmp, ['--check=overlap', '--chapter=03-clean', '--json']);
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    const report = readLatestReport(tmp, '03-clean');
+    const entry = report.checks.find(c => c.check === 'overlap');
+    assert.strictEqual(entry.verdict, 'pass', 'a clean chapter must pass; detail: ' + entry.detail);
+    assert.deepStrictEqual(entry.evidence, [], 'a passing overlap check carries no evidence');
+    assert.strictEqual(entry.next, null, 'a passing overlap check carries no next action');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('Wave 1 exit Task 7: overlap warns when scoped to the unquoted packet-lift chapter alone', () => {
+  const tmp = makeTempClone(OVERLAP_FIXTURE);
+  try {
+    const result = spawnGate(tmp, ['--check=overlap', '--chapter=01-packet-lift', '--json']);
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    const report = readLatestReport(tmp, '01-packet-lift');
+    const entry = report.checks.find(c => c.check === 'overlap');
+    assert.strictEqual(entry.verdict, 'warn', 'an unquoted lift must warn; detail: ' + entry.detail);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('Wave 1 exit Task 7: thresholds.overlap_min_words raises the floor above a real finding, suppressing it', () => {
+  const tmp = makeTempClone(OVERLAP_FIXTURE);
+  try {
+    const configPath = join(tmp, '.studio', 'config.json');
+    mkdirSync(join(tmp, '.studio'), { recursive: true });
+    // No committed config.json for this fixture -- write a minimal one naming only the
+    // threshold override, so DEFAULT_GATE still supplies every check's default mode.
+    writeFileSync(configPath, JSON.stringify({ version: 2, thresholds: { overlap_min_words: 31 } }, null, 2), 'utf8');
+
+    const result = spawnGate(tmp, ['--check=overlap', '--chapter=01-packet-lift', '--json']);
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    const report = readLatestReport(tmp, '01-packet-lift');
+    const entry = report.checks.find(c => c.check === 'overlap');
+    assert.strictEqual(
+      entry.verdict, 'pass',
+      'raising overlap_min_words to 31 must suppress the 30-word planted finding; detail: ' + entry.detail
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('Wave 1 exit Task 7: settings thresholds.overlap_min_words reaches the engine the same way config thresholds do', () => {
+  const tmp = makeTempClone(OVERLAP_FIXTURE);
+  try {
+    writeSettingsFile(tmp, ['---', 'thresholds:', '  overlap_min_words: 31', '---'].join('\n'));
+
+    const result = spawnGate(tmp, ['--check=overlap', '--chapter=01-packet-lift', '--json']);
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    const report = readLatestReport(tmp, '01-packet-lift');
+    const entry = report.checks.find(c => c.check === 'overlap');
+    assert.strictEqual(
+      entry.verdict, 'pass',
+      'a settings-supplied overlap_min_words must reach the engine identically to a config one; detail: ' + entry.detail
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('Wave 1 exit Task 7: double opt-in (settings gate_mode: block AND gate.checks.overlap.mode: block) blocks; overlap is NOT structurally coerced', () => {
+  const tmp = makeTempClone(OVERLAP_FIXTURE);
+  try {
+    const configPath = join(tmp, '.studio', 'config.json');
+    mkdirSync(join(tmp, '.studio'), { recursive: true });
+    writeFileSync(
+      configPath,
+      JSON.stringify({ version: 2, gate: { checks: { overlap: { enabled: true, mode: 'block' } } } }, null, 2),
+      'utf8'
+    );
+    writeSettingsFile(tmp, ['---', 'gate_mode: block', '---'].join('\n'));
+
+    const result = spawnGate(tmp, ['--check=overlap', '--json']);
+    assert.strictEqual(result.status, 1, 'double opt-in must block (exit 1); stderr: ' + result.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    const entry = report.checks.find(c => c.check === 'overlap');
+    assert.strictEqual(entry.verdict, 'block', 'overlap must reach block under the double opt-in; detail: ' + entry.detail);
+    assert.strictEqual(report.verdict, 'block', 'top-level verdict must be block');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('Wave 1 exit Task 7: gate.checks.overlap.enabled: false skips the check', () => {
+  const tmp = makeTempClone(OVERLAP_FIXTURE);
+  try {
+    const configPath = join(tmp, '.studio', 'config.json');
+    mkdirSync(join(tmp, '.studio'), { recursive: true });
+    writeFileSync(
+      configPath,
+      JSON.stringify({ version: 2, gate: { checks: { overlap: { enabled: false, mode: 'warn' } } } }, null, 2),
+      'utf8'
+    );
+
+    const result = spawnGate(tmp, ['--check=overlap', '--json']);
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    const report = readLatestReport(tmp, 'all');
+    const entry = report.checks.find(c => c.check === 'overlap');
+    assert.strictEqual(entry.verdict, 'skip', 'disabled overlap must skip; got: ' + entry.verdict);
+    assert.strictEqual(entry.detail, 'check disabled in config');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('Wave 1 exit Task 7: gate.checks.overlap.mode: off skips the check even though it is enabled', () => {
+  const tmp = makeTempClone(OVERLAP_FIXTURE);
+  try {
+    const configPath = join(tmp, '.studio', 'config.json');
+    mkdirSync(join(tmp, '.studio'), { recursive: true });
+    writeFileSync(
+      configPath,
+      JSON.stringify({ version: 2, gate: { checks: { overlap: { enabled: true, mode: 'off' } } } }, null, 2),
+      'utf8'
+    );
+
+    const result = spawnGate(tmp, ['--check=overlap', '--json']);
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    const report = readLatestReport(tmp, 'all');
+    const entry = report.checks.find(c => c.check === 'overlap');
+    assert.strictEqual(entry.verdict, 'skip', 'mode:off overlap must skip; got: ' + entry.verdict);
+    assert.strictEqual(entry.detail, 'check mode is off in config');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('Wave 1 exit Task 7: sample-book gate run: overlap verdict pass (zero false positives at the gate)', () => {
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    const result = spawnGate(tmp, ['--check=overlap', '--json']);
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    const report = readLatestReport(tmp, 'all');
+    const entry = report.checks.find(c => c.check === 'overlap');
+    assert.strictEqual(entry.verdict, 'pass', 'sample book must show zero false positives; detail: ' + entry.detail);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});

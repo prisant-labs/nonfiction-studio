@@ -106,7 +106,7 @@ If `stylometry.baseline.markers` is present and non-null AND `marker_set_version
 
 > Voice drift check skipped: the stored baseline in `.studio/config.json` is missing calibration data (`stylometry.baseline.calibration` is absent or incomplete). Run `/nonfiction-studio:nfs-capture-voice` to re-capture the baseline with a full calibration ladder and enable voice drift detection.
 
-Only when `stylometry.baseline.markers` is present and non-null, `marker_set_version` matches the engine's current version, AND `calibration` is complete, run the full gate. Set no check subset (all five checks will be included by ns-gate's default).
+Only when `stylometry.baseline.markers` is present and non-null, `marker_set_version` matches the engine's current version, AND `calibration` is complete, run the full gate. Set no check subset (all seven checks - claim coverage, quote fidelity, voice drift, prompt scrub, continuity, state coherence, and overlap - will be included by ns-gate's default).
 
 ---
 

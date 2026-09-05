@@ -276,8 +276,14 @@ test('(c) golden clone + flag: gate runs, empty stdout (pass), last-gate byte-id
 // gate report even though `bin/ns-gate` (invoked directly, with no --check flag) always
 // included it. Asserted against the real hook and the real gate-engine registry, not a
 // mock: this fails RED if either list is ever hand-edited out of sync with the other again.
+//
+// Wave 1 exit Task 7 (overlap gate check) extends this same test with a second hardcoded,
+// non-self-referential assertion for 'overlap', the seventh registered check: checkNames.
+// includes('overlap') names the literal string, so it fails RED if CHECK_REGISTRY's 'overlap'
+// entry is ever removed (unlike the loop below, which derives its own expectation from the same
+// registry the hook reads and so cannot detect a missing entry, only a drifted SECOND list).
 // ---------------------------------------------------------------------------
-test('(c2) Stop-hook-driven gate report includes quote_fidelity (the Stop hook derives its check list from gate-engine.mjs, not a second hardcoded list)', async () => {
+test('(c2) Stop-hook-driven gate report includes quote_fidelity and overlap (the Stop hook derives its check list from gate-engine.mjs, not a second hardcoded list)', async () => {
   const book = cloneSampleBook('c2-quote-fidelity');
   setFlag(book);
 
@@ -292,6 +298,10 @@ test('(c2) Stop-hook-driven gate report includes quote_fidelity (the Stop hook d
   assert.ok(
     checkNames.includes('quote_fidelity'),
     'Stop-hook-driven report checks include quote_fidelity; got: ' + checkNames.join(', ')
+  );
+  assert.ok(
+    checkNames.includes('overlap'),
+    'Stop-hook-driven report checks include overlap, the seventh registered check; got: ' + checkNames.join(', ')
   );
 
   // Cross-check against the gate engine's own registry rather than a second hand
