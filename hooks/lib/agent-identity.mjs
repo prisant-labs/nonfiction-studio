@@ -51,6 +51,25 @@ export const PLUGIN_NAMESPACE = 'nonfiction-studio';
 const NAMESPACE_PREFIX = PLUGIN_NAMESPACE + ':';
 
 // ---------------------------------------------------------------------------
+// stripPluginNamespace(value): the single home for the namespace-prefix
+// check both resolveActiveAgent (below, keyed off event.agent_type) and the
+// Task 8 dispatch-routing guard (hooks/pre-tool-use.mjs, keyed off
+// tool_input.subagent_type) rely on. Returns the plugin agent slug (the part
+// after "nonfiction-studio:") when value is a string beginning with the
+// namespace prefix; returns null in every other case: not a string, empty,
+// an unnamespaced type such as "general-purpose", a foreign plugin's
+// namespaced value, or a namespaced value with an empty slug. Factored out
+// so the two call sites cannot drift on this check the way the module
+// header comment warns against.
+// ---------------------------------------------------------------------------
+export function stripPluginNamespace(value) {
+  const s = typeof value === 'string' ? value : '';
+  if (!s || !s.startsWith(NAMESPACE_PREFIX)) return null;
+  const slug = s.slice(NAMESPACE_PREFIX.length);
+  return slug || null;
+}
+
+// ---------------------------------------------------------------------------
 // resolveActiveAgent(event): ENFORCEMENT-facing resolution.
 // Returns the plugin agent slug (the part after "nonfiction-studio:") when
 // event.agent_type is a string beginning with the namespace prefix; returns
@@ -62,9 +81,7 @@ const NAMESPACE_PREFIX = PLUGIN_NAMESPACE + ':';
 // ---------------------------------------------------------------------------
 export function resolveActiveAgent(event) {
   const agentType = event && typeof event.agent_type === 'string' ? event.agent_type : '';
-  if (!agentType || !agentType.startsWith(NAMESPACE_PREFIX)) return null;
-  const slug = agentType.slice(NAMESPACE_PREFIX.length);
-  return slug || null;
+  return stripPluginNamespace(agentType);
 }
 
 // ---------------------------------------------------------------------------

@@ -5,24 +5,35 @@
 //               (d) injects an additionalContext caution for destructive Bash/PowerShell patterns,
 //               (e) enforces the per-agent write-scope constraint (F-AG-01) and the web research
 //               gate (F-AG-02) using shared identity resolution from hooks/lib/agent-identity.mjs,
-//               now LIVE per ADR-0007 (agent identity resolution) and the 2026-08-09 platform probe.
+//               now LIVE per ADR-0007 (agent identity resolution) and the 2026-08-09 platform probe,
+//               (f) enforces model-tier and chain-edge routing at Agent/Task dispatch (Task 8),
+//               warn-only by default, deny behind the routing_enforce settings opt-in, using
+//               hooks/lib/routing.mjs (D-18 in-plugin model routing; agents/_chain-permitted.yaml).
 //
 // stdin:  platform PreToolUse event (snake_case: session_id, transcript_path, cwd, prompt_id,
 //         permission_mode, effort, hook_event_name, tool_name, tool_input, tool_use_id,
 //         and agent_id/agent_type when a plugin or generic subagent fired the call)
 //         - field names verified live by TSK-030 (hooks.json Phase 1 wiring); agent_id/agent_type
-//         verified live by the 2026-08-09 probe; see ADR-0007 (agent identity resolution)
+//         verified live by the 2026-08-09 probe; see ADR-0007 (agent identity resolution).
+//         Agent/Task dispatch fields (tool_input.subagent_type, tool_input.model) verified live by
+//         the 2026-09-04 platform probe's dispatch-payload findings.
 // stdout: EMPTY for the allow path (platform treats empty stdout as allow per the convention
 //         confirmed at TSK-030); JSON deny envelope when a guard fires;
-//         JSON additionalContext envelope for Bash/PowerShell destructive-pattern cautions.
+//         JSON additionalContext envelope for Bash/PowerShell destructive-pattern cautions and for
+//         a routing warning (model-tier mismatch or an undeclared chain edge) at dispatch.
 //
 // NS_HOOK_TRACE: when set, appends one trace line (event, own path, raw stdin) to the named file
 //                before any other logic; inert when unset (preserved from TSK-030 stub convention)
+// NS_AGENTS_DIR: test-only override consumed by hooks/lib/routing.mjs, redirecting the dispatch
+//                routing readers at a fixture agents/ directory instead of this plugin's own
+//                shipped one; inert when unset (see that module's own header comment).
 //
 // Failure modes:
 //   - Path guard and web gate violations: FAIL-CLOSED (emit deny JSON, exit 0) per D-13 (security posture)
 //   - Snapshot and session-write flag errors: FAIL-OPEN (append to .studio/logs/errors.jsonl, allow)
 //   - Malformed stdin: FAIL-OPEN (exit 0, empty stdout; cannot identify a write)
+//   - Dispatch routing errors (missing agent file, unparseable frontmatter, unreadable
+//     agents/_chain-permitted.yaml, corrupt settings): FAIL-OPEN (silence; never a warn, never a deny)
 
 import {
   readFileSync,
@@ -42,8 +53,16 @@ import {
   resolveActiveAgent,
   checkAgentWriteConstraint,
   isWebGatedAgent,
-  foldForCompare
+  foldForCompare,
+  stripPluginNamespace
 } from './lib/agent-identity.mjs';
+import { loadSettings } from './lib/settings.mjs';
+import {
+  readAgentModel,
+  readChainPermitted,
+  modelMismatchMessage,
+  chainEdgeMessage
+} from './lib/routing.mjs';
 
 // Re-exported so existing callers importing foldForCompare from this file
 // (e.g. tests/hooks/pre-tool-use.test.mjs) are unaffected by the move to
@@ -315,6 +334,104 @@ if (isMain) {
   // WRITE_TOOLS is declared ahead of book-root detection: the corrupt-config
   // discrimination below (F-HK-01) needs it to decide fail-closed vs silent exit.
   const WRITE_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit']);
+
+  // =========================================================================
+  // AGENT DISPATCH ROUTING (Task 8): model-tier and chain-edge enforcement at
+  // dispatch, warn-only by default, deny behind the routing_enforce settings
+  // opt-in (hooks/lib/settings.mjs, Wave 1 exit Task 2). Runs BEFORE book-root
+  // detection and the write-tools guard below: this branch reads
+  // agents/<slug>.md and agents/_chain-permitted.yaml from the PLUGIN's own
+  // directory tree (hooks/lib/routing.mjs resolves that path from its own
+  // module location, per the platform's `node ${CLAUDE_PLUGIN_ROOT}/hooks/...`
+  // invocation convention) - an entirely different root from the book/bible
+  // root findBookRoot resolves below - so it must not depend on a book
+  // project existing or its .studio/config.json being valid.
+  //
+  // tool_name match: the 2026-09-04 platform probe's dispatch findings
+  // captured "Agent" live, three times; the installed binary's own
+  // attribution helper also still checks "Task" (a prior or parallel
+  // surface). Matching both costs nothing and removes a version-pin risk.
+  //
+  // FAIL-OPEN on every internal error: a missing agent file, unparseable
+  // frontmatter, an unreadable agents/_chain-permitted.yaml, or corrupt
+  // settings each produce silence below, by construction (readAgentModel and
+  // readChainPermitted return a null/error shape the two message functions
+  // treat as "cannot judge, stay silent") - never a warn and never a deny.
+  // The try/catch is a second, belt-and-suspenders layer for anything
+  // unforeseen. The happy allow path (no mismatch, no undeclared edge, or
+  // routing_enforce: off) adds NO stdout output, preserving the empty-stdout
+  // allow contract this whole hook depends on.
+  // =========================================================================
+  if (toolName === 'Agent' || toolName === 'Task') {
+    try {
+      // Namespace guard (no false denies under ambiguity, matching the
+      // F-AG-01 identity posture): only THIS plugin's own agents are judged.
+      // An unnamespaced subagent_type (a built-in like "general-purpose") or
+      // a foreign plugin's namespaced agent exits silently with zero output
+      // - it never reaches the model or chain checks below.
+      const subagentType = typeof toolInput.subagent_type === 'string' ? toolInput.subagent_type : '';
+      const targetSlug = stripPluginNamespace(subagentType);
+      if (!targetSlug) {
+        process.exit(0);
+      }
+
+      // routing_enforce mode. ANY settings warning - not just one naming
+      // routing_enforce itself - is treated as corrupt settings and produces
+      // total silence: a dispatch decision must never be made against a
+      // settings read already known to be unreliable. Absent settings (no
+      // warning, no file found anywhere in the ancestor chain) is the normal
+      // case and defaults to "warn".
+      const routingSettings = loadSettings(cwd);
+      if (routingSettings.warning) {
+        process.exit(0);
+      }
+      const routingMode = routingSettings.settings.routing_enforce || 'warn';
+      if (routingMode === 'off') {
+        process.exit(0);
+      }
+
+      const routingMessages = [];
+
+      // Model rule (D-18 in-plugin model routing).
+      const requestedModel = typeof toolInput.model === 'string' ? toolInput.model : '';
+      const { model: declaredModel } = readAgentModel(targetSlug);
+      const modelWarning = modelMismatchMessage(targetSlug, declaredModel, requestedModel);
+      if (modelWarning) routingMessages.push(modelWarning);
+
+      // Chain rule: only when the DISPATCHING context is itself a plugin
+      // agent (resolveActiveAgent(event) non-null). A main-session dispatch
+      // (null active agent) never chain-warns.
+      const dispatcherSlug = resolveActiveAgent(event);
+      if (dispatcherSlug) {
+        const { contract } = readChainPermitted();
+        const chainWarning = chainEdgeMessage(dispatcherSlug, targetSlug, contract);
+        if (chainWarning) routingMessages.push(chainWarning);
+      }
+
+      if (routingMessages.length === 0) {
+        process.exit(0);
+      }
+
+      const routingReason = routingMessages.join(' ');
+      if (routingMode === 'block') {
+        emitDeny(routingReason);
+      }
+      process.stdout.write(
+        JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            additionalContext: routingReason
+          }
+        }) + '\n'
+      );
+      process.exit(0);
+    } catch {
+      // Any unexpected internal error anywhere in the routing branch: fail
+      // open, exactly like malformed stdin and every other guard's failure
+      // mode. Silence, not a crash and not a false deny.
+      process.exit(0);
+    }
+  }
 
   // -------------------------------------------------------------------------
   // Book root detection. Captures the root, its config, and any lookup error

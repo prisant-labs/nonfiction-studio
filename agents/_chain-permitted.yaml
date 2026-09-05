@@ -9,6 +9,18 @@
 # suppressed in that profile. Enforcement of those edges is pending TSK-055 (Tier A
 # check scripts). See X-02 (task catalog) TSK-044 acceptance note, dated 2026-07-19.
 #
+# Wave 1 exit Task 8: this file is now ALSO a runtime contract, not lint-time only.
+# hooks/pre-tool-use.mjs (via hooks/lib/routing.mjs) reads it at Agent/Task dispatch
+# time to check the agent-to-agent edge below (drafting-partner -> research-librarian)
+# whenever the dispatching context is itself a plugin agent: an edge this file does
+# not list warns, naming both agents, unless routing_enforce is set to "off" in the
+# per-project settings file, or to "block" to deny instead of warn. A missing or
+# unparseable copy of this file fails that runtime check open (silence), the same
+# fail-open posture the lint-time check does not need but the hook does. The
+# agent-to-skill and skill-to-agent edges below are not read at runtime - only the
+# agent-to-agent edge shape is, since Agent/Task dispatch is the only event this hook
+# observes; skill invocation carries no equivalent PreToolUse signal.
+#
 # Every edge is derived from a spec sentence; the per-edge comment cites the source.
 # No Phase 2 or Phase 3 agents appear here (developmental-editor, voice-guardian,
 # continuity-checker, citation-manager, comps-analyst, compliance-auditor, etc.).
