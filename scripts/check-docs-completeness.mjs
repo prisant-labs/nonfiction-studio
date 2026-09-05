@@ -31,9 +31,10 @@ const DOCS_CLI = join(REPO_ROOT, 'docs', 'reference', 'cli');
 // decision and the standing growth-policy test for any future CLI; ns-status is the eighth, the
 // deterministic project chapter board, which passes that same ADR-0009 growth-policy criterion
 // 1 - correctness here is a byte-for-byte property a failing test can be written against
-// before the feature exists).
+// before the feature exists; ns-overlap is the ninth, the local research-overlap detector, see
+// docs/adr/ADR-0013-wave-1-exit-surfaces.md, Decision 5, for the growth-policy answer).
 // Excludes spike/probe scripts and .cmd Windows shims.
-const SHIPPED_CLIS = ['ns-claims', 'ns-doctor', 'ns-gate', 'ns-notes', 'ns-scrub', 'ns-status', 'ns-statusline', 'ns-stylometry'];
+const SHIPPED_CLIS = ['ns-claims', 'ns-doctor', 'ns-gate', 'ns-notes', 'ns-overlap', 'ns-scrub', 'ns-status', 'ns-statusline', 'ns-stylometry'];
 
 // ---------------------------------------------------------------------------
 // Helpers

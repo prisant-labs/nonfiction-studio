@@ -116,7 +116,7 @@ Nonfiction Studio is a Claude Code plugin that runs a structured authoring workf
 - **A team of specialist subagents.** An interviewer that captures the brief, a thesis architect, a structure architect, a voice-capture agent, a research librarian, a drafting partner, an adversarial fact-checker, and a line editor. Each has a bounded role and a defined moment it is invoked.
 - **A plain-Markdown project bible.** Your book's state lives in ordinary files in your own folder: `context/`, `structure/`, `chapters/`, `research/`, `production/`. No database, no proprietary format, no lock-in. You can read, diff, and version-control every one of them.
 - **Deterministic engines behind every measurement.** Voice drift, claim coverage, quote fidelity, and state coherence are computed by Node programs you can run yourself, not judged by a model. The same engine that scores your chapter scores it identically tomorrow.
-- **A quality gate that runs before anything counts as done.** Six checks, a named verdict, and a written report. It fires automatically as a Stop hook where hooks are available, and it is a command you can run by hand anywhere.
+- **A quality gate that runs before anything counts as done.** Seven checks, a named verdict, and a written report. It fires automatically as a Stop hook where hooks are available, and it is a command you can run by hand anywhere.
 
 ## What makes it different
 
@@ -154,7 +154,7 @@ flowchart LR
     class A human;
 ```
 
-**The gate runs six checks**, each producing its own verdict rather than a single opaque score:
+**The gate runs seven checks**, each producing its own verdict rather than a single opaque score:
 
 | Check | What it asks |
 |---|---|
@@ -164,6 +164,7 @@ flowchart LR
 | `prompt_scrub` | Is there residue of AI instruction or scaffolding left in the manuscript? |
 | `continuity` | Do the facts, names, and commitments hold across chapters? |
 | `state_coherence` | Do the recorded word counts and project state agree with what is actually on disk? |
+| `overlap` | Does chapter prose overlap, unattributed, with the author's own research packets, verbatim quotes, or prior work? |
 
 A verdict is `pass`, `warn`, or `block`, and a block names the check and the finding. The report is written into your project, so the next run, the status board, and you are all reading the same artifact. See [docs/formats/gate-report.md](docs/formats/gate-report.md) for the report format.
 
@@ -249,9 +250,13 @@ Optional, off by default, and never imposed - `nfs-new-book` offers both once pe
 | `manuscript` | Prose-first drafting responses: no unrequested bullet summaries, no code fences around chapter prose, quoted passages instead of diffs for line edits, claim-marker discipline preserved throughout. |
 | `review` | Terse, verdict-first, tabular responses for gate, status, and diagnostic work. |
 
+### Settings
+
+An optional, per-project `.claude/nonfiction-studio.local.md` tunes gate strictness, threshold values, dispatch-routing enforcement, and the output-style record above, without touching the shared, version-controlled `.studio/config.json`. Absent, it changes nothing; corrupt, it warns once and falls back to every default, never breaking a session or silently disabling a check. See [Settings file format](docs/formats/settings.md) for the schema and precedence rules, including the one invariant it cannot override: a settings file can raise gate strictness but can never un-coerce a judgment check back to blocking.
+
 ### Hooks
 
-Hooks on six events keep the studio honest without you asking: `SessionStart` restores context, `PreToolUse` guards write scope and the web-research gate, `PostToolUse` wraps every fetched result in an untrusted-content envelope before Claude reads it, `PostToolBatch` maintains chapter state and automatic demotion, `Stop` runs the quality gate, and `PreCompact` preserves what matters across a context boundary.
+Hooks on six events keep the studio honest without you asking: `SessionStart` restores context and, in a truly empty directory or a project with a freshly generated skill, opens the right next step unprompted; `PreToolUse` guards write scope, the web-research gate, and agent-dispatch routing (model-tier and chain-edge enforcement); `PostToolUse` wraps every fetched result in an untrusted-content envelope before Claude reads it; `PostToolBatch` maintains chapter state and automatic demotion; `Stop` runs the quality gate; and `PreCompact` preserves what matters across a context boundary.
 
 <div align="right">(<a href="#readme-top">back to top</a>)</div>
 

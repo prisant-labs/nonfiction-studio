@@ -135,7 +135,7 @@ Present the result as a pass again, confirming recovery: the block is gone becau
 
 ## Step 9 - Close
 
-Summarize in a few lines what the gate's seven checks cover (claim coverage, quote fidelity, prompt scrub, stylometry drift, continuity, state coherence, session write flag), and that a block is informative rather than annoying: it names the exact line and the exact reason, the way Step 6 just did, rather than issuing a vague warning.
+Summarize in a few lines what the gate's seven configurable checks cover (claim coverage, quote fidelity, prompt scrub, stylometry drift, continuity, state coherence, and overlap against the author's own research corpus), plus the always-on session-write-flag check that runs regardless of configuration, and that a block is informative rather than annoying: it names the exact line and the exact reason, the way Step 6 just did, rather than issuing a vague warning.
 
 Restate that `<tour-dir>` is disposable and can be deleted any time, and that the shipped `examples/sample-book` was never opened for writing during this walkthrough.
 
