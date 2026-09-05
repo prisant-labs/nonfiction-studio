@@ -71,7 +71,7 @@ Then:
 
 ### Step 1b - If the output is NEWINIT
 
-Continue with Steps 2-7 below.
+Continue with Steps 2-8 below.
 
 ---
 
@@ -254,7 +254,7 @@ Then follow the "Recording the outcome" procedure below with `output_style: manu
 **Recording the outcome (studio settings file).** This procedure writes exactly one thing - the `output_style` key in `.claude/nonfiction-studio.local.md` - never anything else in that file, and never touches the body content below its frontmatter fence.
 
 - `HAS_SETTINGS` (the file already exists, confirmed with no `output_style` key set, above): use the Edit tool to add `output_style: <value>` to the existing YAML frontmatter block, leaving every other key and the body untouched.
-- `NO_SETTINGS` (the file does not exist): if PLUGIN_ROOT was not already resolved earlier in this run (this is the case on the SCAN_DONE sub-branch of Step 1a, which reaches Step 7 without ever running Step 4), perform Step 4's plugin-root resolution now. Use the Read tool on `PLUGIN_ROOT/templates/nonfiction-studio.local.example.md`, then use the Write tool to create `.claude/nonfiction-studio.local.md` from that template's content with only the `output_style` example line uncommented and set to `<value>`; every other commented-out example key is left exactly as the template ships it. This file creation was already disclosed, in the same interaction, by whichever branch above led here (the chat redirect message, or the "Saying no records..." / "Saying yes to one writes..." sentences of the interactive offer) - no separate prompt is asked here.
+- `NO_SETTINGS` (the file does not exist): if PLUGIN_ROOT was not already resolved earlier in this run (this is the case on the SCAN_DONE sub-branch of Step 1a, which reaches Step 7 without ever running Step 4), perform Step 4's plugin-root resolution now. Use the Read tool on `PLUGIN_ROOT/templates/nonfiction-studio.local.example.md`, then use the Write tool to create `.claude/nonfiction-studio.local.md` from ONLY the template's fenced YAML frontmatter block (the opening `---` line through the closing `---` line, inclusive) with the `output_style` example line uncommented and set to `<value>`; every other commented-out example key is left exactly as the template ships it. Stop at the closing `---` fence - write nothing after it. The template's `## House notes` section and its example bullets below that fence are illustrative prose for an author to write for themselves, not standing instructions to stamp into every project by default; `hooks/session-start.mjs` emits the house-notes pointer whenever the body is non-empty, so copying that section here would silently arm it with boilerplate the author never wrote. This file creation was already disclosed, in the same interaction, by whichever branch above led here (the chat redirect message, or the "Saying no records..." / "Saying yes to one writes..." sentences of the interactive offer) - no separate prompt is asked here.
 
 The Write or Edit tool's own permission prompt still applies to this write, same as any file write. If it is denied, no outcome is recorded: state plainly that no output style outcome was recorded, and that this offer will run again the next time `/nonfiction-studio:nfs-new-book` runs against this project.
 

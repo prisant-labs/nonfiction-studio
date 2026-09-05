@@ -1,6 +1,6 @@
 # AI Use Log Format
 
-**Purpose.** This is the normative grammar for `.studio/ai-use-log.jsonl`, the append-only compliance ledger defined in S-08 (schemas and file formats) section 5 and D-10 (compliance layer). The `PostToolBatch` hook appends records; the `SubagentStop` hook (Phase 2, not yet shipped) will append records once built; the `disclosure-report` and `publish-readiness` skills (Phase 2, not yet shipped) read the file. Every field name, value constraint, and structural rule below is authoritative. A parser author must be able to implement a conformant reader without consulting any other document.
+**Purpose.** This is the normative grammar for `.studio/ai-use-log.jsonl`, the append-only compliance ledger defined in S-08 (schemas and file formats) section 5 and D-10 (compliance layer). The `PostToolBatch` hook appends records; the six agent-dispatching skills (`nfs-capture-voice`, `nfs-draft`, `nfs-fact-check`, `nfs-interview`, `nfs-outline`, `nfs-research`) also append records under the verify-then-append rule (see Placement and append rules, below); the `SubagentStop` hook (Phase 2, not yet shipped) will append records once built. `ns-doctor` reads the file to report AI-use-log coverage; the `disclosure-report` and `publish-readiness` skills (Phase 2, not yet shipped) will also read it. Every field name, value constraint, and structural rule below is authoritative. A parser author must be able to implement a conformant reader without consulting any other document.
 
 ## Record structure
 
