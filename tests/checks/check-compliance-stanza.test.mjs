@@ -11,9 +11,10 @@
 //                     frontmatter `chain:` list, not a hardcoded name list, so an invented seventh
 //                     skill with a `chain:` entry and no stanza is still caught, and a skill with
 //                     no `chain:` at all is correctly ignored.
-// why:          Task 5 (chat compliance parity) acceptance criteria: exit 0 on the six-skill tree;
-//               exit 1 naming the file when any of the six lacks the core or a seventh dispatching
-//               skill appears without it; mutation proof named in the task report.
+// why:          chat compliance parity acceptance criteria: exit 0 on the six-skill tree; exit 1
+//               naming the file when any of the six lacks the core or a seventh dispatching skill
+//               appears without it; a named mutation proof (see the two "mutation proof:" tests
+//               below).
 // runner:       node --test "tests/checks/*.test.mjs"
 
 import { test, after } from 'node:test';
