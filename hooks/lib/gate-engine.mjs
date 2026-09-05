@@ -33,6 +33,9 @@ import { parseEvidenceLog } from './ledger.mjs';
 //  reuses the exported checkWordCountCoherence from doctor-engine.mjs; one implementation,
 //  two callers (runChecks and the gate). No word-count comparison logic is duplicated here.]
 import { checkWordCountCoherence } from './doctor-engine.mjs';
+// Wave 1 exit Task 2 (settings engine): per-project studio settings overlay. loadGateConfig is
+// the single choke point -- settings are read here and nowhere else in the gate path.
+import { loadSettings } from './settings.mjs';
 
 // Check registry: CLI flag -> report check name
 // 'claims'           -> 'claim_coverage'  -> computeCoverage
@@ -87,8 +90,12 @@ const MIN_SCORABLE_CHAPTER_WORDS = 50;
 // check reports pass-with-advice instead of blocking.
 const MIN_BOOK_VERDICT_WORDS = 2200;
 
-// Default gate config per S-08 section 4 sample
-const DEFAULT_GATE = {
+// Default gate config per S-08 section 4 sample. Exported so tests/engines/gate.test.mjs's
+// template-parity test (PF-28) can assert both shipped config templates' gate.checks key sets
+// deeply equal Object.keys(DEFAULT_GATE.checks) without a second, hand-maintained copy of this
+// list drifting out of sync the way templates/config-defaults.json and
+// templates/book-scaffold/.studio/config.json already had (Wave 1 exit Task 2).
+export const DEFAULT_GATE = {
   mode: 'warn',
   checks: {
     claim_coverage:     { enabled: true, mode: 'block' },
@@ -111,16 +118,26 @@ const DEFAULT_GATE = {
 };
 
 /**
- * Loads the gate config from .studio/config.json and applies the two D-03 invariants.
+ * Loads the gate config from .studio/config.json, overlays per-project studio settings
+ * (Wave 1 exit Task 2), and applies the two D-03 invariants.
+ *
+ * Layering order (single choke point): DEFAULT_GATE <- .studio/config.json gate/thresholds <-
+ * settings mappings (gate_mode -> gate.mode; thresholds -> shallow merge) <- structural
+ * coercions (unchanged). Settings can raise gate.mode to "block" but can never promote
+ * thesis_alignment or quote_fidelity out of their coerced "warn" mode, because the coercion
+ * blocks inspect gate.checks, which the settings overlay never writes to.
  *
  * Missing gate block -> defaults from DEFAULT_GATE.
  * D-03 Invariant 1: thesis_alignment.mode "block" is coerced to "warn"; notice to stderr.
  * D-03 Invariant 2 is applied at verdict time (top-level capping is in runGate).
  * Unknown check names and threshold keys are preserved per S-08 Rule 2.
+ * A corrupt or absent settings file is fail-open: loadSettings never throws, and a warning
+ * (if any) is returned as settingsWarning rather than printed here -- callers (bin/ns-gate,
+ * hooks/stop-gate.mjs) are responsible for printing it to stderr per Task 2's design pin.
  *
  * @param {string}   root      - absolute book root path
  * @param {Function} [stderrFn] - optional stderr write function; defaults to process.stderr.write
- * @returns {{ gate: object, thresholds: object, coercionNotice: string|null }}
+ * @returns {{ gate: object, thresholds: object, coercionNotice: string|null, settingsWarning: string|null }}
  */
 export function loadGateConfig(root, stderrFn) {
   const stderr = stderrFn || (s => process.stderr.write(s));
@@ -133,7 +150,7 @@ export function loadGateConfig(root, stderrFn) {
 
   // If gate block is absent, use defaults
   const rawGate = (rawConfig && rawConfig.gate) ? rawConfig.gate : DEFAULT_GATE;
-  const thresholds = (rawConfig && rawConfig.thresholds) ? rawConfig.thresholds : {};
+  const thresholds = Object.assign({}, (rawConfig && rawConfig.thresholds) ? rawConfig.thresholds : {});
 
   // Build effective gate config preserving unknown fields (S-08 Rule 2)
   const gate = {
@@ -155,6 +172,30 @@ export function loadGateConfig(root, stderrFn) {
     if (!gate.checks[name]) {
       gate.checks[name] = Object.assign({}, rawChecks[name]);
     }
+  }
+
+  // ---- Settings overlay (Wave 1 exit Task 2, P1/P2) ---------------------------------------
+  // Single choke point: settings are read HERE, and applied BEFORE the two structural
+  // coercion blocks immediately below, so that a settings file can raise the top-level
+  // gate.mode to "block" but can never promote thesis_alignment or quote_fidelity out of
+  // their structurally-coerced "warn" mode -- the coercion blocks re-derive their verdict
+  // from gate.checks itself, which this overlay never writes to (P2's settings schema has
+  // no per-check mode key; gate_mode maps only to the top-level gate.mode field config.json's
+  // own gate.mode already occupies). loadSettings never throws (fail-open by construction);
+  // a corrupt or absent settings file yields empty settings here, changing nothing.
+  const { settings, warning: settingsWarning } = loadSettings(root);
+
+  // gate_mode (P2): overrides config.json's gate.mode. Already enum-validated by
+  // loadSettings -- off|warn|block or absent -- so no re-validation is needed here.
+  if (settings.gate_mode) {
+    gate.mode = settings.gate_mode;
+  }
+
+  // thresholds (P2): shallow per-key merge OVER config thresholds -- settings wins on a key
+  // collision, and any config key settings does not name passes through unchanged. Already
+  // type-validated by loadSettings (a plain object or absent), so no re-validation here.
+  if (settings.thresholds) {
+    Object.assign(thresholds, settings.thresholds);
   }
 
   // D-03 Invariant 1: judgment check thesis_alignment must never block in v1
@@ -181,7 +222,7 @@ export function loadGateConfig(root, stderrFn) {
     coercionNotice = (coercionNotice || '') + quoteCoercionNotice;
   }
 
-  return { gate, thresholds, coercionNotice };
+  return { gate, thresholds, coercionNotice, settingsWarning };
 }
 
 /**
@@ -269,17 +310,17 @@ function deriveVerdict(checkConfig, hasFindings) {
  * @param {string[]|null} [opts.checkSubset]  - check flag names to run (null = all four)
  * @param {string|null}   [opts.chapterSlug]  - single chapter slug or null for all
  * @param {Function}      [opts.stderrFn]     - optional stderr override
- * @returns {{ exitCode: 0|1|2, report: object|null, coercionNotice: string|null }}
+ * @returns {{ exitCode: 0|1|2, report: object|null, coercionNotice: string|null, settingsWarning: string|null }}
  */
 export function runGate(root, opts = {}) {
   const { checkSubset, chapterSlug, stderrFn } = opts;
 
-  // Load config; D-03 Invariant 1 applied here
-  let gate, thresholds, coercionNotice;
+  // Load config; D-03 Invariant 1 and the settings overlay (Wave 1 exit Task 2) are applied here
+  let gate, thresholds, coercionNotice, settingsWarning;
   try {
-    ({ gate, thresholds, coercionNotice } = loadGateConfig(root, stderrFn));
+    ({ gate, thresholds, coercionNotice, settingsWarning } = loadGateConfig(root, stderrFn));
   } catch (err) {
-    return { exitCode: 2, report: null, coercionNotice: null };
+    return { exitCode: 2, report: null, coercionNotice: null, settingsWarning: null };
   }
 
   // Determine which report-level check names to include
@@ -299,7 +340,7 @@ export function runGate(root, opts = {}) {
   try {
     chapters = loadChapters(root, chapterSlug);
   } catch (err) {
-    return { exitCode: 2, report: null, coercionNotice };
+    return { exitCode: 2, report: null, coercionNotice, settingsWarning };
   }
 
   // Read the full config once for stylometry baseline (needed when chapters exist)
@@ -796,7 +837,7 @@ export function runGate(root, opts = {}) {
     checks: checkEntries,
   };
 
-  return { exitCode, report, coercionNotice };
+  return { exitCode, report, coercionNotice, settingsWarning };
 }
 
 /**

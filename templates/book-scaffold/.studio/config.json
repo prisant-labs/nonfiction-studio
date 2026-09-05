@@ -4,6 +4,7 @@
     "mode": "warn",
     "checks": {
       "claim_coverage":     { "enabled": true,  "mode": "block" },
+      "quote_fidelity":     { "enabled": true,  "mode": "warn" },
       "prompt_scrub":       { "enabled": true,  "mode": "block" },
       "stylometry":         { "enabled": true,  "mode": "warn" },
       "continuity":         { "enabled": true,  "mode": "warn" },

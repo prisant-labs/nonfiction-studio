@@ -700,6 +700,28 @@ export function runChecks(root) {
             'The doctor does not rewrite your config; this is an informational report only.'
         });
       }
+
+      // ---- 9b. Config coercion notice (quote_fidelity mode block) -----------
+      // Symmetric to the thesis_alignment notice above: same READ-ONLY semantics (the doctor
+      // reports, never rewrites config.json), same structural guarantee this mirrors --
+      // roadmap row 1.5 (quote fidelity and source packets), not D-03 -- quote_fidelity cannot
+      // block until the quote normalization and adjudication policy ships. bin/ns-gate performs
+      // the actual coercion at gate time (hooks/lib/gate-engine.mjs).
+      if (
+        config.gate &&
+        config.gate.checks &&
+        config.gate.checks.quote_fidelity &&
+        config.gate.checks.quote_fidelity.mode === 'block'
+      ) {
+        notices.push({
+          type: 'config-coercion.quote-fidelity',
+          path: '.studio/config.json#gate.checks.quote_fidelity.mode',
+          message:
+            '[roadmap row 1.5 notice] quote_fidelity mode "block" will be coerced to "warn" at gate time ' +
+            'per roadmap row 1.5 (quote fidelity requires the normalization and adjudication policy, not yet shipped). ' +
+            'The doctor does not rewrite your config; this is an informational report only.'
+        });
+      }
     }
   }
 

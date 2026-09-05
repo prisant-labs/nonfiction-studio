@@ -186,6 +186,18 @@ const gateResult = spawnSync(
 
 const gateExitCode = gateResult.status;
 
+// Settings reader warning (Wave 1 exit Task 2): forward, don't recompute. This hook reads NO
+// config.json and resolves NO check modes of its own (see the header comment above); ns-gate
+// already printed one "ns-gate: settings warning: ..." line to ITS OWN stderr per invocation
+// when loadSettings warned, so the subprocess's captured stderr is the source of truth. Forward
+// each such line verbatim to this hook's own stderr, on every exit-code branch (a settings
+// warning must surface regardless of whether the gate itself passed, warned, or blocked).
+for (const line of (gateResult.stderr || '').split('\n')) {
+  if (line.startsWith('ns-gate: settings warning: ')) {
+    process.stderr.write(line + '\n');
+  }
+}
+
 // Parse the gate report from stdout.
 // A spawn error (gateResult.error set) or unparseable stdout is treated as exit 2.
 let report = null;

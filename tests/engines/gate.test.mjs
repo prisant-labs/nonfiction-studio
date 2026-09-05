@@ -34,7 +34,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import { writeSyntheticV5Baseline } from '../lib/synthetic-v5-baseline.mjs';
-import { runGate } from '../../hooks/lib/gate-engine.mjs';
+import { runGate, DEFAULT_GATE, loadGateConfig } from '../../hooks/lib/gate-engine.mjs';
 import { measureChapter } from '../../hooks/lib/stylometry-engine.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -120,6 +120,14 @@ function readLatestReport(tmpDir, slug) {
     .sort();
   if (files.length === 0) throw new Error('No gate report found for slug: ' + slug);
   return JSON.parse(readFileSync(join(gateDir, files[files.length - 1]), 'utf8'));
+}
+
+/** Writes .claude/nonfiction-studio.local.md under tmpDir with the given raw text content
+ * (Wave 1 exit Task 2: per-project studio settings file). */
+function writeSettingsFile(tmpDir, text) {
+  const settingsDir = join(tmpDir, '.claude');
+  mkdirSync(settingsDir, { recursive: true });
+  writeFileSync(join(settingsDir, 'nonfiction-studio.local.md'), text, 'utf8');
 }
 
 // ---- T01: golden book warn defaults -------------------------------------------
@@ -959,6 +967,178 @@ test('T18b: --check=claims, (trailing comma, one real item) still runs the named
     assert.ok(names.includes('claim_coverage'), 'claim_coverage must be present');
   } finally {
     rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ============================================================================
+// Wave 1 exit Task 2 (settings engine): template parity (PF-28) + settings overlay
+// ============================================================================
+
+const TEMPLATES = join(__dirname, '..', '..', 'templates');
+
+// ---- PF-28: template parity against DEFAULT_GATE.checks -----------------------
+
+test('PF-28 template parity: templates/config-defaults.json gate.checks key set deeply equals Object.keys(DEFAULT_GATE.checks)', () => {
+  const configDefaults = JSON.parse(readFileSync(join(TEMPLATES, 'config-defaults.json'), 'utf8'));
+  const actual = Object.keys(configDefaults.gate.checks).sort();
+  const expected = Object.keys(DEFAULT_GATE.checks).sort();
+  assert.deepStrictEqual(
+    actual, expected,
+    'templates/config-defaults.json gate.checks keys must match DEFAULT_GATE.checks exactly; got: ' +
+    JSON.stringify(actual) + '; expected: ' + JSON.stringify(expected)
+  );
+});
+
+test('PF-28 template parity: templates/book-scaffold/.studio/config.json gate.checks key set deeply equals Object.keys(DEFAULT_GATE.checks)', () => {
+  const scaffoldConfig = JSON.parse(
+    readFileSync(join(TEMPLATES, 'book-scaffold', '.studio', 'config.json'), 'utf8')
+  );
+  const actual = Object.keys(scaffoldConfig.gate.checks).sort();
+  const expected = Object.keys(DEFAULT_GATE.checks).sort();
+  assert.deepStrictEqual(
+    actual, expected,
+    'templates/book-scaffold/.studio/config.json gate.checks keys must match DEFAULT_GATE.checks exactly; got: ' +
+    JSON.stringify(actual) + '; expected: ' + JSON.stringify(expected)
+  );
+});
+
+// ---- settings gate_mode override: raises exit code without promoting a coerced check -----
+
+// Uses the ai-injection fixture UNMODIFIED (same fixture T06/T07 already prove the "before"
+// half of this comparison with: T07 shows the raw fixture's own gate.mode "warn" caps the real
+// prompt_scrub finding to a top-level "warn" verdict, exit 0). This test additionally plants
+// quote_fidelity.mode=block in config.json (an already-coerced check, alongside prompt_scrub's
+// own real, unrelated finding) and, on the settings side, both the one lever P2 actually exposes
+// (gate_mode) and an inert nested "gate: {checks: {quote_fidelity: {mode: block}}}" shape that
+// loadGateConfig never reads (P2's settings schema has no per-check key) -- covering "every
+// merge layer that exists" per the acceptance criteria, not only the one the schema documents.
+test('Wave 1 exit Task 2: settings gate_mode: block flips a real finding from capped-warn to exit 1, while quote_fidelity stays coerced through every layer (config block + settings gate_mode + an inert nested settings shape)', () => {
+  const tmp = makeTempClone(join(EXAMPLES, 'fixtures', 'ai-injection'));
+  try {
+    // Plant a REAL quote-fidelity mismatch (reusing the same helper T20/T21 use against GOLDEN):
+    // without an actual finding, quote_fidelity trivially reports "pass" regardless of mode, and
+    // the coercion-holds assertion below would prove nothing.
+    plantQuoteMismatch(tmp);
+
+    const configPath = join(tmp, '.studio', 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.gate.checks.quote_fidelity = { enabled: true, mode: 'block' };
+    writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+
+    // Before settings: gate.mode is "warn" (the fixture's own default), so D-03 Invariant 2
+    // caps the real prompt_scrub block finding to a top-level "warn" verdict -- exit 0.
+    const before = spawnGate(tmp, ['--json']);
+    assert.strictEqual(before.status, 0,
+      'before settings: capped to warn, exit 0; stderr: ' + before.stderr);
+    const beforeReport = readLatestReport(tmp, 'all');
+    assert.strictEqual(beforeReport.verdict, 'warn', 'before settings: top-level verdict is warn');
+
+    writeSettingsFile(tmp, [
+      '---',
+      'gate_mode: block',
+      'gate:',
+      '  checks:',
+      '    quote_fidelity:',
+      '      mode: block',
+      '---',
+      '',
+    ].join('\n'));
+
+    const after = spawnGate(tmp, ['--json']);
+    assert.strictEqual(after.status, 1,
+      'settings gate_mode: block must flip the same real finding to exit 1; stderr: ' + after.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    assert.strictEqual(report.verdict, 'block', 'top-level verdict must be block once settings raises gate.mode');
+
+    const scrubEntry = report.checks.find(c => c.check === 'prompt_scrub');
+    assert.strictEqual(scrubEntry.verdict, 'block', 'prompt_scrub (the real, non-coerced finding) drives the block');
+
+    const qfEntry = report.checks.find(c => c.check === 'quote_fidelity');
+    assert.strictEqual(
+      qfEntry.verdict, 'warn',
+      'quote_fidelity must stay coerced to warn even under config block + settings gate_mode: block + ' +
+      'an inert nested settings shape; got: ' + qfEntry.verdict
+    );
+
+    assert.ok(
+      after.stderr.includes('quote_fidelity') && after.stderr.includes('coerced'),
+      'stderr must still carry the quote_fidelity structural coercion notice; got: ' + after.stderr
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---- settings thresholds: shallow merge, settings wins on collision -----------------------
+
+test('Wave 1 exit Task 2: settings thresholds shallow-merges over config thresholds -- settings wins on a colliding key, a settings-only key is added, a config-only key survives untouched', () => {
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    // GOLDEN's own .studio/config.json thresholds: { claim_coverage_min: 1.0, stylometry_marker_tolerance: 2.0 }
+    writeSettingsFile(tmp, [
+      '---',
+      'thresholds:',
+      '  stylometry_marker_tolerance: 9.5',
+      '  overlap_min_words: 15',
+      '---',
+    ].join('\n'));
+
+    const { thresholds } = loadGateConfig(tmp);
+    assert.strictEqual(thresholds.stylometry_marker_tolerance, 9.5, 'settings must win on a colliding key');
+    assert.strictEqual(thresholds.overlap_min_words, 15, 'a settings-only key must be added');
+    assert.strictEqual(
+      thresholds.claim_coverage_min, 1.0,
+      'a config-only key not named in settings must pass through unchanged'
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---- corrupt settings vs. absent settings: identical gate behavior, warning-only difference
+
+test('Wave 1 exit Task 2: corrupt settings never changes gate behavior vs. no settings -- identical reports (ts aside), warning appears on stderr only for the corrupt run', () => {
+  const tmpAbsent = makeTempClone(GOLDEN);
+  const tmpCorrupt = makeTempClone(GOLDEN);
+  try {
+    writeSettingsFile(tmpCorrupt, '---\ngate_mode: [off, warn\n---\n'); // invalid YAML
+
+    const resultAbsent = spawnGate(tmpAbsent, ['--json']);
+    const resultCorrupt = spawnGate(tmpCorrupt, ['--json']);
+
+    assert.strictEqual(
+      resultAbsent.status, resultCorrupt.status,
+      'exit codes must be identical; absent stderr: ' + resultAbsent.stderr + ' corrupt stderr: ' + resultCorrupt.stderr
+    );
+
+    const stripTs = r => {
+      const clone = JSON.parse(JSON.stringify(r));
+      delete clone.ts;
+      return clone;
+    };
+    const reportAbsent = readLatestReport(tmpAbsent, 'all');
+    const reportCorrupt = readLatestReport(tmpCorrupt, 'all');
+    assert.deepStrictEqual(
+      stripTs(reportCorrupt), stripTs(reportAbsent),
+      'corrupt settings must produce an IDENTICAL report (ts aside) to no settings at all'
+    );
+
+    assert.ok(
+      !resultAbsent.stderr.includes('settings warning'),
+      'no settings file: no settings warning on stderr; got: ' + resultAbsent.stderr
+    );
+    assert.ok(
+      resultCorrupt.stderr.includes('settings warning'),
+      'corrupt settings file: a settings warning must appear on stderr; got: ' + resultCorrupt.stderr
+    );
+    assert.ok(
+      resultCorrupt.stderr.includes(join(tmpCorrupt, '.claude', 'nonfiction-studio.local.md')),
+      'the warning must name the corrupt settings file path; got: ' + resultCorrupt.stderr
+    );
+  } finally {
+    rmSync(tmpAbsent, { recursive: true, force: true });
+    rmSync(tmpCorrupt, { recursive: true, force: true });
   }
 });
 

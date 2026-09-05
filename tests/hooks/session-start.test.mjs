@@ -333,6 +333,76 @@ test('(h) corrupt config.json: exit 0, truthful one-line message, no sessionTitl
 });
 
 // ---------------------------------------------------------------------------
+// Wave 1 exit Task 2: house-notes pointer line
+// ---------------------------------------------------------------------------
+
+const HOUSE_NOTES_LINE =
+  'House notes: .claude/nonfiction-studio.local.md carries standing author instructions; ' +
+  'read and honor them.';
+
+function writeSettingsFile(dir, text) {
+  const settingsDir = join(dir, '.claude');
+  mkdirSync(settingsDir, { recursive: true });
+  writeFileSync(join(settingsDir, 'nonfiction-studio.local.md'), text, 'utf8');
+}
+
+test('(i) settings file with a non-empty body: the house-notes pointer line is appended', () => {
+  const cloneDir = cloneSampleBook('house-notes-present');
+  writeSettingsFile(cloneDir, '---\ngate_mode: warn\n---\nAlways cite page numbers.\n');
+
+  const result = runHook(cloneDir);
+  assert.equal(result.status, 0, 'exit code is 0');
+
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); });
+  const ctx = out.hookSpecificOutput.additionalContext;
+  assert.ok(ctx.includes(HOUSE_NOTES_LINE), 'orientation block includes the house-notes pointer line');
+});
+
+test('(j) no settings file: the house-notes pointer line is absent', () => {
+  const cloneDir = cloneSampleBook('house-notes-absent');
+
+  const result = runHook(cloneDir);
+  assert.equal(result.status, 0, 'exit code is 0');
+
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); });
+  const ctx = out.hookSpecificOutput.additionalContext;
+  assert.ok(!ctx.includes(HOUSE_NOTES_LINE), 'no pointer line when no settings file exists');
+});
+
+test('(k) settings file present but body is empty (frontmatter only): the pointer line is absent', () => {
+  const cloneDir = cloneSampleBook('house-notes-empty-body');
+  writeSettingsFile(cloneDir, '---\ngate_mode: warn\n---\n');
+
+  const result = runHook(cloneDir);
+  assert.equal(result.status, 0, 'exit code is 0');
+
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); });
+  const ctx = out.hookSpecificOutput.additionalContext;
+  assert.ok(!ctx.includes(HOUSE_NOTES_LINE), 'no pointer line when the settings body is empty');
+});
+
+test('(l) unreadable settings path (a directory in place of the file): fail-open -- orientation block still emitted, no pointer line, no throw', () => {
+  const cloneDir = cloneSampleBook('house-notes-unreadable');
+  // A directory where the settings file should be: existsSync is true, readFileSync throws.
+  mkdirSync(join(cloneDir, '.claude', 'nonfiction-studio.local.md'), { recursive: true });
+
+  const result = runHook(cloneDir);
+  assert.equal(result.status, 0, 'exit code is 0 even when the settings path is unreadable');
+
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout still parses as JSON');
+  const ctx = out.hookSpecificOutput.additionalContext;
+  assert.ok(
+    ctx.includes('Building a personal learning network is a deliberate'),
+    'the rest of the orientation block still comes through (fail-open)'
+  );
+  assert.ok(!ctx.includes(HOUSE_NOTES_LINE), 'no pointer line when the settings file could not be read');
+});
+
+// ---------------------------------------------------------------------------
 // Case (f): NS_HOOK_TRACE unset vs set
 // ---------------------------------------------------------------------------
 test('(f) NS_HOOK_TRACE unset: no trace file written', () => {

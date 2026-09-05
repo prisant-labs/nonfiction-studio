@@ -304,6 +304,58 @@ test('config-coercion fixture: CLI exits 0 and prints coercion notice', () => {
   );
 });
 
+// ---------------------------------------------------------------------------
+// Wave 1 exit Task 2: quote_fidelity coercion notice, symmetric to thesis_alignment's
+// ---------------------------------------------------------------------------
+
+test('config-coercion fixture + quote_fidelity block: runChecks returns a notice symmetric to thesis_alignment\'s, zero findings', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'ns-doctor-quote-coercion-'));
+  try {
+    cpSync(join(FIXTURES, 'config-coercion'), tempDir, { recursive: true });
+    const configPath = join(tempDir, '.studio', 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.gate.checks.quote_fidelity = { enabled: true, mode: 'block' };
+    writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+
+    const { findings, notices } = runChecks(tempDir);
+    const coercedFindings = findings.filter(f => f.type === 'config-coercion.quote-fidelity');
+    assert.equal(coercedFindings.length, 0, 'coercion must NOT add a finding (it is a notice; exit 0)');
+    const coercedNotices = notices.filter(n => n.type === 'config-coercion.quote-fidelity');
+    assert.ok(coercedNotices.length > 0, 'coercion must produce a notice');
+    assert.ok(
+      coercedNotices[0].message.includes('roadmap row 1.5'),
+      'notice references roadmap row 1.5 (not D-03; quote_fidelity is a structural guarantee, not a judgment-check invariant)'
+    );
+    assert.ok(
+      coercedNotices[0].message.includes('quote_fidelity') || coercedNotices[0].path.includes('quote_fidelity'),
+      'notice identifies quote_fidelity'
+    );
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('config-coercion fixture + quote_fidelity block: CLI exits 0 and prints the coercion notice', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'ns-doctor-quote-coercion-cli-'));
+  try {
+    cpSync(join(FIXTURES, 'config-coercion'), tempDir, { recursive: true });
+    const configPath = join(tempDir, '.studio', 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.gate.checks.quote_fidelity = { enabled: true, mode: 'block' };
+    writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+
+    const r = spawnDoctor(['--report', '--project=' + tempDir]);
+    assert.equal(r.status, 0,
+      'exit 0: coercion is a report not a failure. stdout: ' + r.stdout + ' stderr: ' + r.stderr);
+    assert.ok(
+      r.stdout.includes('quote_fidelity') && (r.stdout.includes('coercion') || r.stdout.includes('NOTICE')),
+      'output includes the quote_fidelity coercion notice: ' + r.stdout
+    );
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 // Q-01 2.5 cross-check documentation: coercion exits 0, no contradiction with Q-01 table.
 // Q-01 section 2.5 has six rows, none is config-coercion. S-08 section 13 acceptance signal 6
 // says ns-gate (not ns-doctor) is the coercer at gate time. The doctor reports informally.

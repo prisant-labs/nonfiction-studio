@@ -20,10 +20,20 @@
 // NS_HOOK_TRACE: when set, appends one trace line (event, own path, raw stdin) to the named file
 //                before any other logic; inert when unset (preserved from TSK-030 stub convention)
 
-import { readFileSync, appendFileSync } from 'node:fs';
+import { readFileSync, appendFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findBookRoot } from './lib/bible.mjs';
 import { buildOrientation } from './lib/orientation.mjs';
+import { loadSettings } from './lib/settings.mjs';
+
+// House-notes pointer line (Wave 1 exit Task 2): emitted after the five-element orientation
+// block, exactly once, only when the resolved settings file carries a non-empty Markdown body.
+// loadSettings never throws (fail-open by construction), but the call is still wrapped below so
+// an unforeseen error here can never suppress the orientation block itself.
+const HOUSE_NOTES_LINE =
+  'House notes: .claude/nonfiction-studio.local.md carries standing author instructions; ' +
+  'read and honor them.';
 
 // ---------------------------------------------------------------------------
 // Drain stdin first - the platform delivers event JSON here on every invocation.
@@ -115,13 +125,43 @@ if (!bookRoot) {
 const { block, bookTitle } = buildOrientation(bookRoot, meta, 'SessionStart');
 
 // ---------------------------------------------------------------------------
+// House-notes pointer line (Wave 1 exit Task 2): appended after the five-element block, only
+// when the resolved settings file's Markdown body is non-empty. Fail-open: any error here is
+// logged and swallowed so it can never suppress the orientation block already assembled above.
+// ---------------------------------------------------------------------------
+let finalBlock = block;
+try {
+  const { body } = loadSettings(bookRoot);
+  if (body && body.trim().length > 0) {
+    finalBlock = block ? block + '\n' + HOUSE_NOTES_LINE : HOUSE_NOTES_LINE;
+  }
+} catch (err) {
+  try {
+    const logsDir = join(bookRoot, '.studio', 'logs');
+    mkdirSync(logsDir, { recursive: true });
+    appendFileSync(
+      join(logsDir, 'errors.jsonl'),
+      JSON.stringify({
+        ts: new Date().toISOString(),
+        hook: 'SessionStart',
+        msg: 'house-notes settings read failed',
+        err: String(err)
+      }) + '\n',
+      'utf8'
+    );
+  } catch {
+    // Cannot write the error log; nothing further to do.
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Compose and emit output JSON (PF-10 verified surface: additionalContext + sessionTitle).
 // Nothing else may appear on stdout.
 // ---------------------------------------------------------------------------
 const output = {
   hookSpecificOutput: {
     hookEventName: 'SessionStart',
-    additionalContext: block
+    additionalContext: finalBlock
   }
 };
 
