@@ -9,9 +9,10 @@ tags: ["cli", "doctor", "integrity", "schema", "coherence"]
 # ns-doctor
 
 Validates the book project's bible structure, schema versions, EV/SRC grammar, orphan
-references, word-count coherence, snapshot naming, config shape, and style-profile
-structure and baseline consistency. Exits 0 when the bible is clean; exits 1 when findings
-are present; exits 2 on schema migration required or operational error.
+references, word-count coherence, snapshot naming, config shape, style-profile
+structure and baseline consistency, and ai-use-log chapter coverage. Exits 0 when the
+bible is clean; exits 1 when findings are present; exits 2 on schema migration required
+or operational error.
 
 ## Purpose
 
@@ -59,12 +60,12 @@ or use the same `node` plus full-path form.
 | Exit code | Meaning |
 |---|---|
 | 0 | Pass - bible is valid, no findings |
-| 1 | One or more findings (structure, schema, grammar, coherence, or naming violations) |
+| 1 | One or more findings (structure, schema, grammar, coherence, naming, or malformed ai-use-log line violations) |
 | 2 | Migration required (schema_version mismatch), argument error, or operational failure |
 
 ## Check inventory
 
-`ns-doctor` runs eleven checks in order:
+`ns-doctor` runs twelve checks in order:
 
 1. **Bible structure** - all scaffold-mandated paths are present (progress.json, config.json, evidence-log.md, etc.)
 2. **progress.json schema** - validated against `templates/book-scaffold/.studio/progress.schema.json`; missing or wrong-typed required fields are named findings
@@ -77,6 +78,7 @@ or use the same `node` plus full-path form.
 9. **Config coercion notice** - informational report when thesis_alignment is set to block (D-03 coerces it to warn at gate time); never affects exit code
 10. **Snapshot naming** - `.studio/snapshots/` files must match `<slug>.<YYYYMMDDTHHMMSSZ>.md`
 11. **Style profile structure** - `context/style-profile.md` (F-CI-08, voice quality unchecked, deterministic half): a pre-capture stub (no `# Style profile` heading) is a NOTICE unless `config.json` already carries a stylometry baseline, in which case it is a finding; once populated, the seven required sections (`## Voice`, `## Diction`, `## Rhythm`, `## Do`, `## Do not`, `## Exemplars`, `## Baseline reference`) must be present and in order, the `Baseline reference` block's `vector`, `captured`, and `sample_count` fields must be present, `captured` and `sample_count` must agree with `config.json`'s stylometry baseline when one exists, and every `Exemplars` path must resolve relative to the book root
+12. **ai-use-log coverage** - `.studio/ai-use-log.jsonl` (Task 5, Wave 1 exit: chat compliance parity), parsed tolerantly (blank lines are fine; a non-blank line that fails to parse as JSON is a named finding, naming its line number - the one place this checker does not silently discard a partial line the way other readers do). Per `chapters/*.md` file: a filesystem mtime newer than the newest record whose `targets` array names it, or no covering record at all, is an "uncovered writing window" NOTICE (never a finding). The report always states the coverage fraction: `ai-use-log covers N of M chapters with writes`, where `M` is chapters on disk and `N` is chapters with at least one covering record by presence, independent of mtime. A fresh git checkout stamps every file's mtime to checkout time, which postdates any committed log record, so the uncovered-writing-window notice can legitimately fire even on a fully, currently-covered book.
 
 ## Output
 
@@ -125,4 +127,5 @@ invokes `ns-doctor` interactively and formats its output for author consumption.
 ## See also
 
 - [ns-gate CLI reference](./ns-gate.md) - orchestrator that includes the doctor's coherence check
+- [ai-use-log.jsonl format reference](../../formats/ai-use-log.md) - the compliance-log grammar the ai-use-log coverage check (12) reads
 - [nfs-doctor skill reference](../skills/nfs-doctor.md) - user-facing skill that invokes ns-doctor

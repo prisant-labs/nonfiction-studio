@@ -51,6 +51,8 @@ The output is a binary token:
 
 A chapter argument is required. Do not proceed without a resolved slug pointing to an existing chapter file.
 
+Once the slug is resolved, take the ai-use-log.jsonl count snapshot described in Step 6's Compliance append section for `chapters/<slug>.md` and `research/evidence-log.md`, before this flow's first write.
+
 ---
 
 ## Step 2 - Resolve the plugin root
@@ -138,7 +140,25 @@ If any file is missing, report the gap, name the last successful step, and offer
 
 ---
 
-## Step 6 - Report three counts from the agent's per-chapter report
+## Step 6 - Compliance append and report three counts from the agent's per-chapter report
+
+### Compliance append (verify-then-append)
+
+This flow's writes may already be logged automatically by a hook on this surface; this skill never assumes which surfaces do or do not fire that hook, and it never assumes the flow is running on any particular surface. Before this flow's first write, read `.studio/ai-use-log.jsonl` and count how many records currently target each file this flow is about to write (the file's path appearing in that record's `targets` array). Hold that starting count per file. After this flow's writes complete, re-read `.studio/ai-use-log.jsonl` and count the records targeting each of those files again. For each file: if the count increased between the two reads, a hook already appended a record for this write on this surface, and this skill appends nothing further for that file. If the count did not increase, append the flow's record or records for that file to `.studio/ai-use-log.jsonl`, per the record template below, using the six-field shape in `docs/formats/ai-use-log.md` (S-08 section 5): `ts`, `agent`, `surface`, `scope`, `targets`, `summary` - with `surface` set honestly to the surface this flow is actually running on. A record already sitting in the log before this flow started, from an earlier session, does not by itself suppress the append; only a count increase observed between this flow's own two reads does. This skill never appends twice for the same write.
+
+**Record template for this flow.** Up to two records, one per file the `fact-checker` agent touched and that needed the append (per the count-delta check above):
+
+For the chapter marker edits:
+```json
+{"ts":"<RFC 3339 UTC>","agent":"fact-checker","surface":"<actual surface>","scope":"assisted","targets":["chapters/<slug>.md"],"summary":"Updated claim markers in <slug> per the verification pass."}
+```
+
+For the evidence-ledger status transitions:
+```json
+{"ts":"<RFC 3339 UTC>","agent":"fact-checker","surface":"<actual surface>","scope":"mechanical","targets":["research/evidence-log.md"],"summary":"Advanced EV entry statuses for <slug> per the verification pass."}
+```
+
+`surface` is `claude-code`, `cowork`, or `chat` per `docs/formats/ai-use-log.md` - whichever this flow is actually running on. On CLI and Cowork the PostToolBatch hook normally covers `chapters/<slug>.md` already (it watches Edit calls into `chapters/`), so the count-delta check above typically finds no append needed for that file there; `research/evidence-log.md` is outside the hook's watch on every surface, so this skill's own append is typically the only record for that file.
 
 Format and present the three counts from the agent's per-chapter report at `.studio/fact-check-reports/<NN>-report.md`:
 

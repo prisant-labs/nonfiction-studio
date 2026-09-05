@@ -10,7 +10,7 @@ tags: ["skill", "doctor", "integrity", "schema", "orphan", "example"]
 
 This is a condensed transcript of a `nfs-doctor report` session over the committed two-chapter sample book "The Quiet Network" (see `examples/sample-book/`). The example follows the flow specified in S-06 3.11 (skills and invocation surface) and the adjudications recorded in TSK-054 (doctor skill).
 
-**Session provenance note.** This example is grounded in a live `report` run executed 2026-08-28 against the committed `examples/sample-book/` baseline (re-run to add the style-profile structure check, F-CI-08 (voice quality unchecked, deterministic half); the JSON output is unchanged byte-for-byte from the prior 2026-07-19 run: `examples/sample-book/context/style-profile.md` carried a stale `captured` timestamp against its own `config.json` before this branch, and was reconciled to agree with it as part of the same change that added the style-profile structure check, so the fixture was already clean by the time this check could run against it). The command, run after resolving the plugin root per Step 2 below, was `node "<plugin-root>/bin/ns-doctor" --project=examples/sample-book --report --json`; it exited 0 with `status: valid` and no findings. The JSON output is quoted verbatim. In a real book project the skill would run as `node "<plugin-root>/bin/ns-doctor" --project=. --report --json` from the book root; this is equivalent. The committed sample-book fixture is never modified by a doctor run; the engine is read-only per its READ-ONLY COVENANT.
+**Session provenance note.** This example was re-run 2026-09-05 against the committed `examples/sample-book/` baseline to add the ai-use-log coverage check (Task 5, Wave 1 exit: chat compliance parity). The `findings` array is unchanged (still empty: `.studio/ai-use-log.jsonl` is well-formed); the `notices` array gained three entries this check adds. Those three notices are a property of any real checkout, not a fixture defect: git stamps every file's mtime at checkout time, which postdates every committed `ai-use-log.jsonl` record, so both committed chapters read as "uncovered writing windows" even though both are covered by presence (see the coverage-fraction notice, `2 of 2`). The command, run after resolving the plugin root per Step 2 below, was `node "<plugin-root>/bin/ns-doctor" --project=examples/sample-book --report --json`; it exited 0 with `status: valid` and no findings. The JSON output is quoted verbatim. In a real book project the skill would run as `node "<plugin-root>/bin/ns-doctor" --project=. --report --json` from the book root; this is equivalent. The committed sample-book fixture is never modified by a doctor run; the engine is read-only per its READ-ONLY COVENANT.
 
 Any scenario showing exit 1 findings is explicitly labeled as a synthetic illustration and does not reflect the committed fixture or the live run output.
 
@@ -52,18 +52,40 @@ node "<plugin-root>/bin/ns-doctor" --project=. --report --json
   "schemaVersion": "2",
   "status": "valid",
   "findings": [],
-  "notices": [],
+  "notices": [
+    {
+      "type": "ai-use-log.uncovered-writing-window",
+      "path": "chapters/01-listening-before-speaking.md",
+      "message": "uncovered writing window: chapters/01-listening-before-speaking.md was modified after its newest covering record in .studio/ai-use-log.jsonl; the most recent edit may not be reflected in the compliance ledger"
+    },
+    {
+      "type": "ai-use-log.uncovered-writing-window",
+      "path": "chapters/02-finding-your-network.md",
+      "message": "uncovered writing window: chapters/02-finding-your-network.md was modified after its newest covering record in .studio/ai-use-log.jsonl; the most recent edit may not be reflected in the compliance ledger"
+    },
+    {
+      "type": "ai-use-log.coverage-fraction",
+      "path": ".studio/ai-use-log.jsonl",
+      "message": "ai-use-log covers 2 of 2 chapters with writes"
+    }
+  ],
   "migrationAvailable": false
 }
 ```
 
-Doctor exit code: 0. Parse stdout as JSON report. `status: valid`, zero findings.
+Doctor exit code: 0. Parse stdout as JSON report. `status: valid`, zero findings, three notices (all from the new ai-use-log coverage check).
 
 **Studio (Step 4 - Present the result, exit 0):**
 
 > Doctor verdict: PASS. Bible integrity check complete; no issues found.
 >
-> Schema version: 2. Checks run: bible structure, progress.json schema, meta.json and config.json shape, EV grammar, SRC grammar, orphan claim markers, orphan SRC references, word-count coherence, config-coercion notice, snapshot naming, style profile structure.
+> Schema version: 2. Checks run: bible structure, progress.json schema, meta.json and config.json shape, EV grammar, SRC grammar, orphan claim markers, orphan SRC references, word-count coherence, config-coercion notice, snapshot naming, style profile structure, ai-use-log coverage.
+>
+> Notice (informational, does not affect this verdict): uncovered writing window: chapters/01-listening-before-speaking.md was modified after its newest covering record in .studio/ai-use-log.jsonl; the most recent edit may not be reflected in the compliance ledger
+>
+> Notice (informational, does not affect this verdict): uncovered writing window: chapters/02-finding-your-network.md was modified after its newest covering record in .studio/ai-use-log.jsonl; the most recent edit may not be reflected in the compliance ledger
+>
+> Notice (informational, does not affect this verdict): ai-use-log covers 2 of 2 chapters with writes
 >
 > The doctor wrote no files. All reads were against the committed bible tree.
 
@@ -75,11 +97,11 @@ Doctor exit code: 0. Parse stdout as JSON report. `status: valid`, zero findings
 
 - **ONE Bash call invokes the engine.** After resolving the plugin root in Step 2, the skill issued a single Bash call: `node "<plugin-root>/bin/ns-doctor" --project=. --report --json`. No individual calls to `bin/ns-claims`, `bin/ns-stylometry`, or `bin/ns-scrub` are made by the skill; the doctor engine runs its full check inventory internally via `runChecks`.
 
-- **Exit 0 maps to a presented verdict, never silent.** The skill parsed stdout as JSON, confirmed `status: valid` and zero findings, and presented the full clean-pass message naming all eleven checks. A pass verdict is never silently swallowed.
+- **Exit 0 maps to a presented verdict, never silent.** The skill parsed stdout as JSON, confirmed `status: valid` and zero findings, and presented the full clean-pass message naming all twelve checks. A pass verdict is never silently swallowed.
 
 - **The skill writes nothing in `report` mode, shown throughout this transcript.** No file was created, modified, or appended at any step. `bin/ns-doctor` and its engine are read-only without exception, in every mode. The skill itself has exactly one write path anywhere in the plugin: the `install-statusline` mode (not shown in this transcript), which writes `~/.claude/settings.json` and only that file, and only after the author answers an explicit yes to a stated consent prompt. See the [nfs-doctor skill reference](./nfs-doctor.md#install-statusline-mode) for that mode.
 
-- **Notices would appear here if present.** The `notices` array is empty in this run. If `config.json` had `gate.checks.thesis_alignment.mode: "block"`, the engine would emit a `config-coercion.thesis-alignment` notice (informational, does not affect the exit code or verdict) and the skill would present it after the pass verdict.
+- **Notices are presented after the pass verdict, and never affect it.** This run's `notices` array carries three entries, all from the ai-use-log coverage check (check 12): two `ai-use-log.uncovered-writing-window` notices (one per committed chapter - a property of any real checkout, since git stamps chapter mtimes at checkout time, which postdates every committed log record) and one `ai-use-log.coverage-fraction` notice (`ai-use-log covers 2 of 2 chapters with writes` - both chapters do have at least one covering record, by presence; the uncovered-window notices are about recency, not presence). All three are presented after the pass verdict and none affects `status: valid` or the exit code. If `config.json` had `gate.checks.thesis_alignment.mode: "block"`, the engine would additionally emit a `config-coercion.thesis-alignment` notice the same way.
 
 ---
 

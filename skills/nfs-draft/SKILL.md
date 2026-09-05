@@ -2,7 +2,7 @@
 name: nfs-draft
 user-invocable: true
 argument-hint: "<chapter: slug or number>"
-description: "Produces a voice-matched, evidence-grounded chapter draft using drafting-partner and line-editor. Resolves the chapter argument against structure/chapter-list.md, checks EV entries and alerts on an empty ledger, delegates new-chapter writing or diff proposals to drafting-partner, passes the accepted output to line-editor for proposal-only polish, confirms the chapter file via a Read check, and on chat appends compliance records that the PostToolBatch hook writes automatically on CLI and Cowork. Use when the author says 'write chapter 3,' 'draft this chapter,' or wants to keep going on a chapter already in progress."
+description: "Produces a voice-matched, evidence-grounded chapter draft using drafting-partner and line-editor. Resolves the chapter argument against structure/chapter-list.md, checks EV entries and alerts on an empty ledger, delegates new-chapter writing or diff proposals to drafting-partner, passes the accepted output to line-editor for proposal-only polish, confirms the chapter file via a Read check, and appends compliance records to .studio/ai-use-log.jsonl on any surface where a hook has not already logged the write. Use when the author says 'write chapter 3,' 'draft this chapter,' or wants to keep going on a chapter already in progress."
 when_to_use: "Use when the author says 'write chapter N,' or studio routes here from Path 2. Do not invoke when the chapter argument is missing (the skill halts if the chapter is not found in structure/chapter-list.md), or for unrelated queries."
 chain:
   - drafting-partner
@@ -45,6 +45,8 @@ Use the Read tool on `structure/chapter-list.md` to load the slug registry. Reso
 - **No match:** halt with a clear error. State: "Chapter `[supplied value]` was not found in the chapter registry. Check `structure/chapter-list.md` for the valid slugs." List the available slugs.
 
 A chapter argument is required. Do not proceed without a resolved slug. Do not infer a chapter from conversation context.
+
+Once the slug is resolved, take the ai-use-log.jsonl count snapshot described in Step 6's Compliance append section for `chapters/<slug>.md`, before this flow's first write.
 
 ---
 
@@ -119,24 +121,28 @@ Use the Read tool on `chapters/<slug>.md` to confirm the file is present and non
 - If the file is missing or empty: report the gap, name the last successful step, and offer to re-run from Step 4.
 - If the file is present: continue.
 
-**Chat compliance append (on chat only).** The PostToolBatch hook appends `.studio/ai-use-log.jsonl` records automatically on CLI and Cowork. On the chat surface no hooks fire; the skill performs this append. On chat, append records to `.studio/ai-use-log.jsonl` using the S-08 section 5 shape, one per agent that touched `chapters/<slug>.md`:
+### Compliance append (verify-then-append)
+
+This flow's writes may already be logged automatically by a hook on this surface; this skill never assumes which surfaces do or do not fire that hook, and it never assumes the flow is running on any particular surface. Before this flow's first write, read `.studio/ai-use-log.jsonl` and count how many records currently target each file this flow is about to write (the file's path appearing in that record's `targets` array). Hold that starting count per file. After this flow's writes complete, re-read `.studio/ai-use-log.jsonl` and count the records targeting each of those files again. For each file: if the count increased between the two reads, a hook already appended a record for this write on this surface, and this skill appends nothing further for that file. If the count did not increase, append the flow's record or records for that file to `.studio/ai-use-log.jsonl`, per the record template below, using the six-field shape in `docs/formats/ai-use-log.md` (S-08 section 5): `ts`, `agent`, `surface`, `scope`, `targets`, `summary` - with `surface` set honestly to the surface this flow is actually running on. A record already sitting in the log before this flow started, from an earlier session, does not by itself suppress the append; only a count increase observed between this flow's own two reads does. This skill never appends twice for the same write.
+
+**Record template for this flow.** One record per agent that touched `chapters/<slug>.md` and needed the append (per the count-delta check above):
 
 For a new chapter (drafting-partner wrote the file):
 ```json
-{"ts":"<RFC 3339 UTC>","agent":"drafting-partner","surface":"chat","scope":"generated","targets":["chapters/<slug>.md"],"summary":"Drafted <slug> with claim anchors from the evidence ledger."}
+{"ts":"<RFC 3339 UTC>","agent":"drafting-partner","surface":"<actual surface>","scope":"generated","targets":["chapters/<slug>.md"],"summary":"Drafted <slug> with claim anchors from the evidence ledger."}
 ```
 
 For an existing chapter revised via diff proposals:
 ```json
-{"ts":"<RFC 3339 UTC>","agent":"drafting-partner","surface":"chat","scope":"assisted","targets":["chapters/<slug>.md"],"summary":"Revised <slug> via diff proposals accepted by the author."}
+{"ts":"<RFC 3339 UTC>","agent":"drafting-partner","surface":"<actual surface>","scope":"assisted","targets":["chapters/<slug>.md"],"summary":"Revised <slug> via diff proposals accepted by the author."}
 ```
 
 For a line-editor pass where the author accepted at least one proposal:
 ```json
-{"ts":"<RFC 3339 UTC>","agent":"line-editor","surface":"chat","scope":"assisted","targets":["chapters/<slug>.md"],"summary":"Applied sentence-level polish proposals to <slug>."}
+{"ts":"<RFC 3339 UTC>","agent":"line-editor","surface":"<actual surface>","scope":"assisted","targets":["chapters/<slug>.md"],"summary":"Applied sentence-level polish proposals to <slug>."}
 ```
 
-Do not append these records on CLI or Cowork. The PostToolBatch hook owns the log on those surfaces; double-append corrupts the compliance ledger. Omit the line-editor record when the author accepted no proposals.
+`surface` is `claude-code`, `cowork`, or `chat` per `docs/formats/ai-use-log.md` - whichever this flow is actually running on. On CLI and Cowork the PostToolBatch hook normally covers `chapters/<slug>.md` already, so the count-delta check above typically finds no append needed there; on chat it typically does. Omit the line-editor record when the author accepted no proposals.
 
 **Quality gate prompt (all surfaces).** On all surfaces, close with an explicit prompt:
 

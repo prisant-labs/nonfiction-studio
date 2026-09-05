@@ -123,14 +123,21 @@ jobs:
       - name: Component count claims
         run: node scripts/checks/check-component-counts.mjs
 
-      # Live step 15: engine, lib, hook, and schema unit test suites (no API key required).
+      # Live step 15: chat-compliance stanza parity checker (Task 5, Wave 1 exit) - derives the
+      # agent-dispatching skill set from each skill's own frontmatter `chain:` list (never a
+      # hardcoded name list) and asserts the shared verify-then-append compliance-stanza core is
+      # present and byte-identical across every one of them.
+      - name: Compliance stanza parity
+        run: node scripts/checks/check-compliance-stanza.mjs
+
+      # Live step 16: engine, lib, hook, and schema unit test suites (no API key required).
       - name: Engine unit tests
         run: node scripts/test-engines.mjs
 
-      # Live step 16: bidirectional fixture matrix with temp-clone discipline.
+      # Live step 17: bidirectional fixture matrix with temp-clone discipline.
       - name: Fixture tests
         run: node scripts/test-fixtures.mjs
 
-      # Live step 17: sample book integrity - verifies resolution through marker-to-ledger-to-SRC chains.
+      # Live step 18: sample book integrity - verifies resolution through marker-to-ledger-to-SRC chains.
       - name: Sample book integrity
         run: node scripts/verify-sample-book.mjs

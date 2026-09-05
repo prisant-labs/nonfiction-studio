@@ -29,6 +29,8 @@ Branch on the output:
 
 In both cases, state in plain terms what the voice profile does: it is the numeric baseline the drift scorer uses to detect when a chapter has moved away from the author's natural style. It is a description of how the author writes, not a prescriptive set of rules. Authors can edit the written do and do-not rules directly in `context/style-profile.md` at any time.
 
+Before this flow's first write (Step 3's delegation), take the ai-use-log.jsonl count snapshot described in Step 6's Compliance append section for `context/style-profile.md` and `.studio/config.json`.
+
 ## Step 2 - Collect samples and assess word count (mandatory Bash tool call after submission)
 
 Ask the author to paste two to five writing samples in their own prose voice, targeting a combined total of at least 2,200 words. Note these three points to the author:
@@ -91,7 +93,19 @@ State the specific numeric values and say what they characterize. Examples of th
 
 Choose the markers that best represent this author's measured style. The goal is concrete evidence that the profile is grounded in the author's own prose.
 
-## Step 6 - Close with suggestions
+## Step 6 - Compliance append and close with suggestions
+
+### Compliance append (verify-then-append)
+
+This flow's writes may already be logged automatically by a hook on this surface; this skill never assumes which surfaces do or do not fire that hook, and it never assumes the flow is running on any particular surface. Before this flow's first write, read `.studio/ai-use-log.jsonl` and count how many records currently target each file this flow is about to write (the file's path appearing in that record's `targets` array). Hold that starting count per file. After this flow's writes complete, re-read `.studio/ai-use-log.jsonl` and count the records targeting each of those files again. For each file: if the count increased between the two reads, a hook already appended a record for this write on this surface, and this skill appends nothing further for that file. If the count did not increase, append the flow's record or records for that file to `.studio/ai-use-log.jsonl`, per the record template below, using the six-field shape in `docs/formats/ai-use-log.md` (S-08 section 5): `ts`, `agent`, `surface`, `scope`, `targets`, `summary` - with `surface` set honestly to the surface this flow is actually running on. A record already sitting in the log before this flow started, from an earlier session, does not by itself suppress the append; only a count increase observed between this flow's own two reads does. This skill never appends twice for the same write.
+
+**Record template for this flow.** One record covering both files the `voice-capture` agent wrote (per the count-delta check above):
+
+```json
+{"ts":"<RFC 3339 UTC>","agent":"voice-capture","surface":"<actual surface>","scope":"mechanical","targets":["context/style-profile.md",".studio/config.json"],"summary":"Captured the author's stylometric voice baseline into the style profile and config.json."}
+```
+
+`surface` is `claude-code`, `cowork`, or `chat` per `docs/formats/ai-use-log.md` - whichever this flow is actually running on. Neither `context/style-profile.md` nor `.studio/config.json` is watched by the PostToolBatch hook (it watches only `chapters/`), so the count-delta check above finds no prior coverage on any surface and this skill appends the record every time.
 
 State that the voice baseline is in place. If the agent reported writing any `stylometry.registers` buckets, name them here in one plain sentence (for example, "anecdotal and instructional register vectors were also captured, for diagnostic `--by-register` comparisons only - they carry no blocking verdict"). If register bucketing did not run, say nothing about it: this is a silent skip, not a reported gap.
 

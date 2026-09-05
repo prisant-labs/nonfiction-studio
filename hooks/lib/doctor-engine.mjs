@@ -18,7 +18,7 @@
 // Proof: grep -n "writeFileSync\|renameSync\|mkdirSync\|appendFileSync\|writeFile"
 //        hooks/lib/doctor-engine.mjs  (should produce zero matches)
 
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -524,6 +524,128 @@ function checkStyleProfile(root, config, findings, notices) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// ai-use-log coverage and uncovered-writing-window check (check 12, Task 5 of the
+// Wave 1 exit wave: chat compliance parity). Parses .studio/ai-use-log.jsonl
+// tolerantly: blank lines are skipped, never a finding; a non-blank line that
+// fails JSON.parse IS a finding naming its 1-based line number. This is
+// deliberately stricter than a runtime reader's "a partial final line from an
+// interrupted write is discarded" tolerance (docs/formats/ai-use-log.md) --
+// ns-doctor's job here is to surface log corruption to the author, not to read
+// through it silently; see that doc's ns-doctor reader entry for the same note.
+//
+// For each chapters/*.md file on disk, compares its filesystem mtime against the
+// newest record whose `targets` array names it (parsed from the record's `ts`
+// field). A chapter with no covering record at all, or whose mtime is strictly
+// newer than its newest covering record, is an "uncovered writing window" --
+// reported as a NOTICE (never a finding; never affects exit code). A fresh git
+// checkout stamps every file's mtime to checkout time, which postdates every
+// committed log record, so this notice can fire even on an otherwise-clean,
+// fully-covered book; that is expected, not a bug (see the roadmap/ADR note this
+// check's own P5 design pin calls out).
+//
+// The coverage-fraction notice is always printed, independent of mtime: "ai-use-log
+// covers N of M chapters with writes", where M is chapters on disk and N is the
+// count of those with at least one covering record (by presence, not recency).
+// ---------------------------------------------------------------------------
+
+const AI_USE_LOG_REL_PATH = '.studio/ai-use-log.jsonl';
+
+function checkAiUseLogCoverage(root, findings, notices) {
+  const chaptersDir = join(root, 'chapters');
+  let chapterFiles = [];
+  if (existsSync(chaptersDir)) {
+    try {
+      chapterFiles = readdirSync(chaptersDir)
+        .filter((f) => f.endsWith('.md'))
+        .sort();
+    } catch {
+      chapterFiles = [];
+    }
+  }
+
+  // Map: "chapters/<file>.md" -> newest covering record's ts, as epoch ms (-Infinity = none yet).
+  const newestCoveringTs = new Map();
+  for (const f of chapterFiles) newestCoveringTs.set('chapters/' + f, -Infinity);
+
+  const logPath = join(root, '.studio', 'ai-use-log.jsonl');
+  if (existsSync(logPath)) {
+    let logText = null;
+    try {
+      logText = readFileSync(logPath, 'utf8');
+    } catch {
+      logText = null;
+    }
+    if (logText !== null) {
+      const lines = logText.split(/\r?\n/);
+      for (let i = 0; i < lines.length; i++) {
+        const raw = lines[i];
+        if (raw.trim() === '') continue; // blank lines (including the trailing-newline artifact) are tolerated
+
+        let record;
+        try {
+          record = JSON.parse(raw);
+        } catch {
+          findings.push({
+            type: 'ai-use-log.malformed-line',
+            path: AI_USE_LOG_REL_PATH + ':' + (i + 1),
+            message: AI_USE_LOG_REL_PATH + ' line ' + (i + 1) + ' is not valid JSON: "' + raw + '"'
+          });
+          continue;
+        }
+
+        if (!record || typeof record !== 'object' || Array.isArray(record) || !Array.isArray(record.targets)) {
+          continue; // valid JSON but not a usable record shape; not this check's job to grade grammar
+        }
+        const tsMs = typeof record.ts === 'string' ? Date.parse(record.ts) : NaN;
+        if (Number.isNaN(tsMs)) continue;
+
+        for (const target of record.targets) {
+          if (typeof target !== 'string') continue;
+          const normalized = target.split('\\').join('/');
+          if (!newestCoveringTs.has(normalized)) continue; // not a chapter file on disk today
+          if (tsMs > newestCoveringTs.get(normalized)) {
+            newestCoveringTs.set(normalized, tsMs);
+          }
+        }
+      }
+    }
+  }
+
+  let covered = 0;
+  for (const f of chapterFiles) {
+    const rel = 'chapters/' + f;
+    const newestTs = newestCoveringTs.get(rel);
+    const hasAnyRecord = newestTs !== -Infinity;
+    if (hasAnyRecord) covered++;
+
+    let mtimeMs;
+    try {
+      mtimeMs = statSync(join(chaptersDir, f)).mtimeMs;
+    } catch {
+      continue; // file vanished between readdir and stat; skip rather than crash
+    }
+
+    const isUncovered = !hasAnyRecord || mtimeMs > newestTs;
+    if (isUncovered) {
+      notices.push({
+        type: 'ai-use-log.uncovered-writing-window',
+        path: rel,
+        message: hasAnyRecord
+          ? 'uncovered writing window: ' + rel + ' was modified after its newest covering record in ' +
+            AI_USE_LOG_REL_PATH + '; the most recent edit may not be reflected in the compliance ledger'
+          : 'uncovered writing window: ' + rel + ' has no covering record in ' + AI_USE_LOG_REL_PATH + ' at all'
+      });
+    }
+  }
+
+  notices.push({
+    type: 'ai-use-log.coverage-fraction',
+    path: AI_USE_LOG_REL_PATH,
+    message: 'ai-use-log covers ' + covered + ' of ' + chapterFiles.length + ' chapters with writes'
+  });
+}
+
 /**
  * Runs all checks in the TSK-028 check inventory against the given bible root.
  *
@@ -549,6 +671,13 @@ function checkStyleProfile(root, config, findings, notices) {
  *      unless config.json already carries a stylometry baseline (then it is a finding); the
  *      Baseline reference block's three required fields; captured/sample_count agreement with
  *      config.json's stylometry baseline when one exists; and Exemplars path resolution.
+ *  12. ai-use-log coverage and uncovered writing windows (Task 5, Wave 1 exit: chat compliance
+ *      parity): .studio/ai-use-log.jsonl is parsed tolerantly (blank lines ok; a malformed
+ *      non-blank line is a finding naming its line number); a chapter file whose mtime is newer
+ *      than its newest covering record (or that has no covering record at all) is an "uncovered
+ *      writing window" NOTICE; the report always prints the coverage-fraction NOTICE "ai-use-log
+ *      covers N of M chapters with writes" (M = chapters on disk, N = chapters with at least one
+ *      covering record, independent of mtime).
  *
  * @param {string} root - absolute path to the bible root
  * @returns {{ findings: object[], notices: object[] }}
@@ -907,6 +1036,9 @@ export function runChecks(root) {
 
   // ---- 11. Style profile structure and baseline consistency ---------------
   checkStyleProfile(root, config, findings, notices);
+
+  // ---- 12. ai-use-log coverage and uncovered writing windows ---------------
+  checkAiUseLogCoverage(root, findings, notices);
 
   return { findings, notices };
 }

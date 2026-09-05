@@ -38,6 +38,8 @@ The output is a binary token:
 
 Do not proceed past Step 1 in chapter-scoped mode on `NO_OUTLINE`. Do not infer evidence requirements from conversation context.
 
+Before this flow's first write, take the ai-use-log.jsonl count snapshot described in Step 5's Compliance append section for `research/evidence-log.md`, `research/sources.md`, and `research/open-questions.md`.
+
 ## Step 2 - Chapter argument resolution (chapter argument supplied only)
 
 Use the Read tool on `structure/chapter-list.md` to load the slug registry.
@@ -81,7 +83,19 @@ The `research-librarian` agent:
 
 The skill writes no ledger files. The `research-librarian` agent is the sole writer of `research/evidence-log.md`, `research/sources.md`, and `research/open-questions.md` in this flow. Ledger writes are append-only; if the session ends early, all entries written so far are valid and durable, and a re-run starts from the current ledger state.
 
-## Step 5 - Report from the agent's session output
+## Step 5 - Compliance append and report from the agent's session output
+
+### Compliance append (verify-then-append)
+
+This flow's writes may already be logged automatically by a hook on this surface; this skill never assumes which surfaces do or do not fire that hook, and it never assumes the flow is running on any particular surface. Before this flow's first write, read `.studio/ai-use-log.jsonl` and count how many records currently target each file this flow is about to write (the file's path appearing in that record's `targets` array). Hold that starting count per file. After this flow's writes complete, re-read `.studio/ai-use-log.jsonl` and count the records targeting each of those files again. For each file: if the count increased between the two reads, a hook already appended a record for this write on this surface, and this skill appends nothing further for that file. If the count did not increase, append the flow's record or records for that file to `.studio/ai-use-log.jsonl`, per the record template below, using the six-field shape in `docs/formats/ai-use-log.md` (S-08 section 5): `ts`, `agent`, `surface`, `scope`, `targets`, `summary` - with `surface` set honestly to the surface this flow is actually running on. A record already sitting in the log before this flow started, from an earlier session, does not by itself suppress the append; only a count increase observed between this flow's own two reads does. This skill never appends twice for the same write.
+
+**Record template for this flow.** One record covering the ledger files `research-librarian` touched in this session (per the count-delta check above):
+
+```json
+{"ts":"<RFC 3339 UTC>","agent":"research-librarian","surface":"<actual surface>","scope":"mechanical","targets":["research/sources.md","research/evidence-log.md","research/open-questions.md"],"summary":"Registered new source and evidence entries and updated open-question status for this session's scope."}
+```
+
+`surface` is `claude-code`, `cowork`, or `chat` per `docs/formats/ai-use-log.md` - whichever this flow is actually running on. None of these files is watched by the PostToolBatch hook (it watches only `chapters/`), so the count-delta check above finds no prior coverage on any surface and this skill appends the record every time.
 
 Use the Read tool on `research/open-questions.md` to count the items for the scope that are not marked `Status: resolved`, per the entry grammar in `docs/formats/open-questions.md`.
 

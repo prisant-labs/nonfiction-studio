@@ -17,7 +17,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, mkdtempSync, cpSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, cpSync, rmSync, writeFileSync, utimesSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -841,6 +841,182 @@ test('style profile: an empty config baseline object ({}) counts as no baseline;
     assert.equal(r.status, 0,
       'exit stays 0 on a pre-capture stub with an empty (field-less) baseline object; ' +
       'stdout: ' + r.stdout + ' stderr: ' + r.stderr);
+  } finally {
+    removeTempClone(dir);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Check 12: ai-use-log coverage and uncovered writing windows (Task 5, Wave 1
+// exit: chat compliance parity). Pins the golden sample-book's real behavior
+// (fresh-checkout mtime property per the design pin: every committed chapter's
+// filesystem mtime, on any real checkout of this repo, postdates its ai-use-log
+// records, so both chapters read as uncovered writing windows even though both
+// are covered by presence) and exercises the count-delta and malformed-line
+// contracts against a fully controlled temp fixture.
+// ---------------------------------------------------------------------------
+
+test('check 12, golden sample-book: coverage fraction is pinned at 2 of 2, with exactly two uncovered-writing-window notices (fresh-checkout mtime property)', () => {
+  const root = join(EXAMPLES, 'sample-book');
+  const { findings, notices } = runChecks(root);
+
+  const fractionNotices = notices.filter(n => n.type === 'ai-use-log.coverage-fraction');
+  assert.equal(fractionNotices.length, 1, 'expected exactly one coverage-fraction notice');
+  assert.equal(fractionNotices[0].message, 'ai-use-log covers 2 of 2 chapters with writes',
+    'both sample-book chapters have at least one covering record, by presence; got: ' + fractionNotices[0].message);
+
+  const uncoveredNotices = notices.filter(n => n.type === 'ai-use-log.uncovered-writing-window');
+  assert.equal(uncoveredNotices.length, 2,
+    'both sample-book chapters read as uncovered writing windows on any real checkout, because ' +
+    'git stamps their mtime at checkout time, which postdates every committed ai-use-log record ' +
+    '(the fresh-checkout mtime property); got: ' + JSON.stringify(uncoveredNotices));
+
+  assert.equal(findings.length, 0, 'check 12 must never add a finding for a well-formed log; got: ' + JSON.stringify(findings));
+
+  const r = spawnDoctor(['--report', '--project=' + root]);
+  assert.equal(r.status, 0, 'exit stays 0: coverage/uncovered-window reporting is notice-only; stdout: ' + r.stdout);
+  assert.ok(r.stdout.includes('ai-use-log covers 2 of 2 chapters with writes'),
+    'CLI output includes the exact coverage-fraction line: ' + r.stdout);
+});
+
+// ---------------------------------------------------------------------------
+// Controlled three-chapter fixture: one covered (record present, mtime before
+// the record), one uncovered-despite-a-record (record present, mtime after),
+// one recordless (no record at all). mtimes are set explicitly via utimesSync
+// so the scenario never depends on real-world checkout timing.
+// ---------------------------------------------------------------------------
+
+const COVERED_TS = '2020-01-01T00:00:00Z';
+const COVERED_MTIME = new Date('2019-12-31T00:00:00Z'); // before COVERED_TS: covered, no notice
+const STALE_TS = '2020-02-01T00:00:00Z';
+const STALE_MTIME = new Date('2020-03-01T00:00:00Z'); // after STALE_TS: uncovered despite a record
+const RECORDLESS_MTIME = new Date('2020-01-15T00:00:00Z'); // no record targets this file at all
+
+function makeCoverageFixture() {
+  const dir = makeTempSampleBookClone();
+
+  // A third, recordless chapter (marker-free, so checks 6/8 have nothing to say about it).
+  const recordlessPath = join(dir, 'chapters', '03-recordless.md');
+  writeFileSync(recordlessPath, '# Recordless\n\nA chapter with no ai-use-log coverage at all.\n', 'utf8');
+
+  // Fully custom ai-use-log.jsonl: line 1 covers chapter 01 (covered), line 2 is blank
+  // (tolerated), line 3 is malformed (a named finding), line 4 covers chapter 02 on the
+  // chat surface (chat-parity proof: a chat-surface record counts identically to any other).
+  const logLines = [
+    JSON.stringify({
+      ts: COVERED_TS, agent: 'drafting-partner', surface: 'claude-code', scope: 'generated',
+      targets: ['chapters/01-listening-before-speaking.md'], summary: 'Drafted chapter 01.'
+    }),
+    '',
+    '{ this is not valid JSON',
+    JSON.stringify({
+      ts: STALE_TS, agent: 'drafting-partner', surface: 'chat', scope: 'generated',
+      targets: ['chapters/02-finding-your-network.md'], summary: 'Drafted chapter 02 on chat.'
+    }),
+    '',
+  ];
+  writeFileSync(join(dir, '.studio', 'ai-use-log.jsonl'), logLines.join('\n'), 'utf8');
+
+  utimesSync(join(dir, 'chapters', '01-listening-before-speaking.md'), COVERED_MTIME, COVERED_MTIME);
+  utimesSync(join(dir, 'chapters', '02-finding-your-network.md'), STALE_MTIME, STALE_MTIME);
+  utimesSync(recordlessPath, RECORDLESS_MTIME, RECORDLESS_MTIME);
+
+  return dir;
+}
+
+test('check 12: a chapter whose mtime predates its covering record has NO uncovered-writing-window notice (the mtime-comparison mutation anchor)', () => {
+  const dir = makeCoverageFixture();
+  try {
+    const { notices } = runChecks(dir);
+    const uncoveredForCovered = notices.filter(
+      n => n.type === 'ai-use-log.uncovered-writing-window' && n.path === 'chapters/01-listening-before-speaking.md'
+    );
+    assert.equal(uncoveredForCovered.length, 0,
+      'chapter 01 (mtime before its covering record) must carry NO uncovered-writing-window notice; ' +
+      'got: ' + JSON.stringify(uncoveredForCovered) +
+      ' -- flipping the mtime comparison (> to <) in checkAiUseLogCoverage makes this assertion fail');
+  } finally {
+    removeTempClone(dir);
+  }
+});
+
+test('check 12: a chapter whose mtime postdates its covering record IS an uncovered-writing-window notice, even though it has a covering record (chat surface counts identically)', () => {
+  const dir = makeCoverageFixture();
+  try {
+    const { notices } = runChecks(dir);
+    const uncoveredForStale = notices.filter(
+      n => n.type === 'ai-use-log.uncovered-writing-window' && n.path === 'chapters/02-finding-your-network.md'
+    );
+    assert.equal(uncoveredForStale.length, 1,
+      'chapter 02 (mtime after its own chat-surface covering record) must carry the notice; ' +
+      'got: ' + JSON.stringify(uncoveredForStale));
+  } finally {
+    removeTempClone(dir);
+  }
+});
+
+test('check 12: a chapter with no covering record at all is an uncovered-writing-window notice', () => {
+  const dir = makeCoverageFixture();
+  try {
+    const { notices } = runChecks(dir);
+    const uncoveredForRecordless = notices.filter(
+      n => n.type === 'ai-use-log.uncovered-writing-window' && n.path === 'chapters/03-recordless.md'
+    );
+    assert.equal(uncoveredForRecordless.length, 1,
+      'the recordless chapter must carry the notice; got: ' + JSON.stringify(uncoveredForRecordless));
+    assert.ok(uncoveredForRecordless[0].message.includes('no covering record'),
+      'message distinguishes "no record at all" from "stale record": ' + uncoveredForRecordless[0].message);
+  } finally {
+    removeTempClone(dir);
+  }
+});
+
+test('check 12: coverage fraction on the three-chapter fixture is hand-computable (2 of 3: chat-surface record counts toward N identically to any other)', () => {
+  const dir = makeCoverageFixture();
+  try {
+    const { notices } = runChecks(dir);
+    const fractionNotices = notices.filter(n => n.type === 'ai-use-log.coverage-fraction');
+    assert.equal(fractionNotices.length, 1, 'expected exactly one coverage-fraction notice');
+    assert.equal(fractionNotices[0].message, 'ai-use-log covers 2 of 3 chapters with writes',
+      'N=2 (chapters 01 and 02 each have at least one covering record, chapter 02\'s arriving on the ' +
+      'chat surface), M=3 (three chapter files on disk); got: ' + fractionNotices[0].message);
+  } finally {
+    removeTempClone(dir);
+  }
+});
+
+test('check 12: a malformed (non-blank, non-JSON) line is a finding naming its 1-based line number; the blank line beside it is not', () => {
+  const dir = makeCoverageFixture();
+  try {
+    const { findings } = runChecks(dir);
+    const malformed = findings.filter(f => f.type === 'ai-use-log.malformed-line');
+    assert.equal(malformed.length, 1, 'expected exactly one malformed-line finding; got: ' + JSON.stringify(findings));
+    assert.equal(malformed[0].path, '.studio/ai-use-log.jsonl:3', 'finding names line 3 (1-based)');
+    assert.ok(malformed[0].message.includes('line 3'), 'message also names line 3 in prose: ' + malformed[0].message);
+
+    const r = spawnDoctor(['--report', '--project=' + dir]);
+    assert.equal(r.status, 1, 'a malformed line is a genuine finding: exit must be 1');
+    assert.ok(r.stdout.includes('.studio/ai-use-log.jsonl:3'), 'CLI output names the malformed line: ' + r.stdout);
+  } finally {
+    removeTempClone(dir);
+  }
+});
+
+test('check 12: an empty (zero-byte) ai-use-log.jsonl produces no malformed-line finding and every chapter reads recordless', () => {
+  const dir = makeTempSampleBookClone();
+  try {
+    writeFileSync(join(dir, '.studio', 'ai-use-log.jsonl'), '', 'utf8');
+
+    const { findings, notices } = runChecks(dir);
+    const malformed = findings.filter(f => f.type === 'ai-use-log.malformed-line');
+    assert.equal(malformed.length, 0, 'a zero-byte log is empty, not malformed; got: ' + JSON.stringify(malformed));
+
+    const fractionNotices = notices.filter(n => n.type === 'ai-use-log.coverage-fraction');
+    assert.equal(fractionNotices[0].message, 'ai-use-log covers 0 of 2 chapters with writes',
+      'with no records at all, N is 0; got: ' + fractionNotices[0].message);
+
+    const uncovered = notices.filter(n => n.type === 'ai-use-log.uncovered-writing-window');
+    assert.equal(uncovered.length, 2, 'both chapters read as uncovered writing windows with an empty log');
   } finally {
     removeTempClone(dir);
   }
