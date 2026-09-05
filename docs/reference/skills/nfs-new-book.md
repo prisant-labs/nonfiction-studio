@@ -38,6 +38,9 @@ Alternate entry points:
 | Scaffold template | `templates/book-scaffold/` in the plugin root | Yes (auto-located) |
 | Project-init template | `templates/project-init.guided.md` or `templates/project-init.blank.md` in the plugin root | Yes (auto-located) |
 | Config defaults | `templates/config-defaults.json` in the plugin root | Yes (auto-located) |
+| Output style answer (`manuscript`, `review`, or decline) | Interactive prompt, once per project | No (skipped in non-interactive contexts and on chat's activation path; see "Output style offer" below) |
+| Studio settings file (existing `output_style` value, if any) | `.claude/nonfiction-studio.local.md`, checked before the offer | No |
+| Studio settings example template | `templates/nonfiction-studio.local.example.md` in the plugin root, used to stamp the settings file when absent | Yes, only if the offer needs to create the settings file |
 
 ## Outputs
 
@@ -77,6 +80,13 @@ The flat bible tree is at the project root. The plugin's scaffold and all engine
 | `.studio/gate/` | Gate reports directory (empty at init) |
 | `.studio/logs/` | Diagnostic logs directory (empty at init) |
 
+### Output style records (offer outcome only, not always written)
+
+| File | Written when | Contents |
+|---|---|---|
+| `.claude/settings.local.json` | The offer's answer is `manuscript` or `review` | Merge-written `outputStyle` key (namespaced, e.g. `nonfiction-studio:Manuscript`); every other existing key is preserved |
+| `.claude/nonfiction-studio.local.md` | Any answer that is actually recorded (consent or decline) | `output_style` key set to `manuscript`, `review`, or `declined`; created from `templates/nonfiction-studio.local.example.md` if it did not already exist |
+
 ## Placeholder fills
 
 Two token formats are used. The format depends on the file type.
@@ -89,6 +99,22 @@ Two token formats are used. The format depends on the file type.
 | `{{PLUGIN_VERSION}}` | Semver string (`0.1.0`) | `meta.json` (`plugin_version_at_creation`) |
 
 No `{{` placeholder tokens remain in any written file after init completes.
+
+## Output style offer
+
+After the bible tree and `.studio/` state files are stamped, `nfs-new-book` offers the two output styles Nonfiction Studio ships - `manuscript` and `review` - once per project. This runs on every invocation shape: a fresh NEWINIT, a REINIT that re-stamps missing scaffold files, and even a REINIT against a project that is already fully scaffolded - the last of these is the reachable path for a legitimate re-offer on a project whose earlier offer outcome was never actually recorded. See [Output styles](../output-styles.md) for what each style changes.
+
+**Fires once.** Before offering, the skill checks the project's studio settings file, `.claude/nonfiction-studio.local.md`, for an existing `output_style` value (`manuscript`, `review`, or `declined`). If one is already recorded, the offer is skipped silently for that project - it does not re-ask on a later run.
+
+**On consent.** The skill states exactly what will be written - the namespaced `outputStyle` value (`nonfiction-studio:Manuscript` or `nonfiction-studio:Review`) into `.claude/settings.local.json`, created or merged while preserving every other key already there - before asking, the same consent shape as the `nfs-doctor` skill's `install-statusline` mode. On an explicit choice, it performs that merge-write, then records the outcome in the studio settings file.
+
+**On decline.** The skill records `output_style: declined` in `.claude/nonfiction-studio.local.md`, stamping that file from `templates/nonfiction-studio.local.example.md` with only the `output_style` key set if the file does not already exist. This file creation is disclosed in the same offer message, before it happens - never a separate, later prompt.
+
+**Refusing any file write leaves the offer open.** Whether the refusal is a declined conversational answer or a denied Write/Edit tool permission prompt on the underlying file operation, no outcome is recorded when a write does not go through. A later `nfs-new-book` run against the same project - including a REINIT run that re-stamps missing scaffold files - finds no recorded value and legitimately re-offers the styles.
+
+**Non-interactive sessions skip the offer entirely** and state that they are doing so, rather than guessing at consent for a settings write.
+
+**Chat has no settings-write path for `outputStyle`.** On the chat surface, the skill states the `/config` command as the way to activate a style yourself, then records `output_style: declined` (disclosed in that same message) since no style was actually activated through this flow.
 
 ## Guardrails
 
@@ -107,6 +133,10 @@ No `{{` placeholder tokens remain in any written file after init completes.
 **Read or write error.** On any file operation failure the skill stops immediately, names the exact path and operation that failed, and does not continue writing remaining files.
 
 **Missing template.** If a template file is not readable after the plugin root is confirmed, the skill halts and names the exact template path, then asks the author to verify the plugin installation.
+
+**Output style offer: `.claude/settings.local.json` is not valid JSON.** The skill halts the offer step only, writing nothing; the outcome is not recorded, so the offer remains open for a later run. Scaffolding itself has already completed by this point and is not affected.
+
+**Output style offer: a file write is refused.** No `output_style` outcome is recorded, whether the refusal is a declined conversational answer or a denied Write/Edit tool permission prompt. A later run - including a REINIT run - finds no recorded value and legitimately re-offers the styles.
 
 ## Natural next step
 

@@ -173,7 +173,7 @@ A verdict is `pass`, `warn`, or `block`, and a block names the check and the fin
 
 ## The catalog
 
-**14 skills, 8 subagents, and 9 CLIs**, plus hooks on six events. Every component has a reference page under `docs/reference/`, indexed from [docs/README.md](docs/README.md), and most ship a worked example alongside it.
+**14 skills, 8 subagents, 9 CLIs, and 2 output styles**, plus hooks on six events. Every component has a reference page under `docs/reference/`, indexed from [docs/README.md](docs/README.md), and most ship a worked example alongside it.
 
 ### Skills
 
@@ -240,6 +240,15 @@ The deterministic spine. Each is a thin shell over an engine in `hooks/lib/`, so
 | [`ns-notes`](docs/reference/cli/ns-notes.md) | Generates endnotes, bibliography, and index candidates from the ledger. |
 | [`ns-overlap`](docs/reference/cli/ns-overlap.md) | Detects n-gram overlap between chapter prose and your own research packets, verbatim excerpts, and prior work. |
 
+### Output styles
+
+Optional, off by default, and never imposed - `nfs-new-book` offers both once per project; you can also pick one yourself at any time with the built-in `/config` command. Either style changes only how Claude's replies are shaped; nothing on disk changes. See [Output styles](docs/reference/output-styles.md) for activation and deactivation.
+
+| Style | What it changes |
+|---|---|
+| `manuscript` | Prose-first drafting responses: no unrequested bullet summaries, no code fences around chapter prose, quoted passages instead of diffs for line edits, claim-marker discipline preserved throughout. |
+| `review` | Terse, verdict-first, tabular responses for gate, status, and diagnostic work. |
+
 ### Hooks
 
 Hooks on six events keep the studio honest without you asking: `SessionStart` restores context, `PreToolUse` guards write scope and the web-research gate, `PostToolUse` wraps every fetched result in an untrusted-content envelope before Claude reads it, `PostToolBatch` maintains chapter state and automatic demotion, `Stop` runs the quality gate, and `PreCompact` preserves what matters across a context boundary.
@@ -295,7 +304,7 @@ If you try Nonfiction Studio in Cowork, treat it as "should work" rather than "p
 |---|---|
 | **Current version** | `0.1.0` (source of truth: [`library.json`](library.json)) |
 | **Status** | Pre-release; Phase 1 complete, later phases in progress |
-| **Components** | 14 skills, 8 subagents, 9 CLIs, hooks on six events |
+| **Components** | 14 skills, 8 subagents, 9 CLIs, 2 output styles, hooks on six events |
 | **Conformance** | `universal` (Bronze) at Standard 0.12 |
 | **Agent targets** | Claude Code (Cowork pending verification; chat is skills-only) |
 | **Runtime** | Node 22.12 or later; one runtime dependency (a YAML parser) |

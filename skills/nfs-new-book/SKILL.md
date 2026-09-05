@@ -14,6 +14,9 @@ Skill inputs read:
 - `templates/project-init.blank.md` (blank setup template)
 - `templates/config-defaults.json` (config defaults)
 - `.claude-plugin/plugin.json` (plugin version, read at Step 6, never hardcoded)
+- `.claude/nonfiction-studio.local.md` (Step 7's own gate check and outcome record; the project's optional studio settings file)
+- `templates/nonfiction-studio.local.example.md` (Step 7 stamp source when the studio settings file does not yet exist)
+- `.claude/settings.local.json` (Step 7, read before a consented merge-write of the `outputStyle` key)
 
 ## Step 1 - Run the existence check (mandatory first tool call)
 
@@ -47,17 +50,19 @@ done
 printf "SCAN_DONE\n"
 ```
 
-**If the output is only `SCAN_DONE` (no MISSING lines):** Output this verbatim and STOP. Do not write any files or continue to any further step:
+**If the output is only `SCAN_DONE` (no MISSING lines):** Output this verbatim. Do not stamp, read, or write any bible or `.studio/` file in this branch:
 
-> Warning: This directory already contains a book project. All 24 expected scaffold files are present. No files were written. Run /nonfiction-studio:nfs-interview to continue setting up your project.
+> Warning: This directory already contains a book project. All 24 expected scaffold files are present. No bible or `.studio/` files were written. Run /nonfiction-studio:nfs-interview to continue setting up your project.
+
+Then run the output style offer (Step 7) and STOP. This is the one reachable path for a legitimate re-offer against a fully-scaffolded existing project: Step 7 self-gates on an already-recorded `output_style` value and on non-interactive context, so it adds a write here only when no outcome has ever been recorded for this project and the author actually consents or declines in this interaction.
 
 **If the output contains one or more `MISSING:` lines:** The lines name the paths not yet on disk. Report the exact delta:
 
 > Warning: This directory already contains a book project. The following scaffold files are missing: [list each MISSING path from the tool output, one per line]. Re-stamping only the missing files.
 
 Then:
-- **Non-interactive context (headless -p session):** State "Proceeding automatically in non-interactive context." Then resolve the plugin root (Step 4, plugin root resolution), stamp the missing files (Step 5, scaffold stamping), and fill state placeholders (Step 6, state files) below, but write ONLY the paths that appeared in the MISSING list. Do not read or write any other file. For `context/project-init.md` if it is in the missing list, use blank mode. After writing, report which files were stamped and STOP.
-- **Interactive context:** Ask "May I stamp only these missing files? (yes/no)" and wait for author confirmation before writing anything. On confirmation, resolve the plugin root (Step 4, plugin root resolution), confirm the working directory if Step 4b applies, stamp the missing files (Step 5, scaffold stamping), and fill state placeholders (Step 6, state files), writing ONLY the missing paths. After writing, report which files were stamped and STOP.
+- **Non-interactive context (headless -p session):** State "Proceeding automatically in non-interactive context." Then resolve the plugin root (Step 4, plugin root resolution), stamp the missing files (Step 5, scaffold stamping), and fill state placeholders (Step 6, state files) below, but write ONLY the paths that appeared in the MISSING list. Do not read or write any other file. For `context/project-init.md` if it is in the missing list, use blank mode. After writing, report which files were stamped, then run the output style offer (Step 7 - its own non-interactive branch applies here, since this whole branch is non-interactive), and STOP.
+- **Interactive context:** Ask "May I stamp only these missing files? (yes/no)" and wait for author confirmation before writing anything. On confirmation, resolve the plugin root (Step 4, plugin root resolution), confirm the working directory if Step 4b applies, stamp the missing files (Step 5, scaffold stamping), and fill state placeholders (Step 6, state files), writing ONLY the missing paths. After writing, report which files were stamped, then run the output style offer (Step 7 - this is the reachable path for a legitimate re-offer on a REINIT run whose earlier offer outcome was never recorded), and STOP.
 
 **Note on .studio/meta.json:** If .studio/meta.json is in the missing list, first acquire the book title (from the argument, or by asking the author; in non-interactive contexts reuse the title recorded in context/brief.md if present, otherwise report that the title is required) before filling its placeholders.
 
@@ -199,7 +204,56 @@ Note: `updated` uses `{{DATETIME}}` (RFC 3339 UTC), not `{{DATE}}` (YYYY-MM-DD).
 
 On any Read or Write error: stop immediately. Name the exact path that failed and the operation attempted. Do not write any additional state files.
 
-## Step 7 - Report success
+## Step 7 - Output style offer (once per project)
+
+Nonfiction Studio ships two optional output styles as plugin components: `manuscript` (prose-first drafting responses - no unrequested bullet summaries, no code fences around manuscript prose, quoted passages instead of diffs for line edits, claim-marker discipline preserved throughout) and `review` (terse, verdict-first, tabular responses for gate and status work). This offer presents them once per project. It never activates a style without an explicit answer, and it never re-asks once an outcome has actually been recorded.
+
+**Non-interactive context (headless `-p` session).** There is nobody present to answer a three-way choice, and a style is never activated by assumption. State: "Skipping the output style offer in this non-interactive session; no output style was set. Run `/nonfiction-studio:nfs-new-book` again from an interactive session to see the offer, or set a style directly with `/config`." Do not read or write any file for this step. Continue to Step 8.
+
+**Gate check (chat and interactive CLI/Cowork alike - both branches below share this precondition).** Use the Bash tool to check whether the studio settings file already exists:
+```
+test -f .claude/nonfiction-studio.local.md && echo HAS_SETTINGS || echo NO_SETTINGS
+```
+- `HAS_SETTINGS`: use the Read tool on `.claude/nonfiction-studio.local.md` and parse its YAML frontmatter (the same fenced-block shape `hooks/lib/settings.mjs` reads; this step never assumes the file is well-formed). If an `output_style` key is present with any value (`manuscript`, `review`, or `declined`), the offer has already run for this project on ANY surface: state that fact, naming the recorded value, make no further reads or writes for this step, and continue to Step 8 - this is what makes the offer fire once per project regardless of which surface later runs `nfs-new-book` again. If the frontmatter fails to parse (malformed YAML, or no fenced block at all), treat this the same as no `output_style` key set - continue below - but skip the Edit-tool path in "Recording the outcome" below when the moment comes; instead name the parse problem to the author and ask before touching the file at all.
+- `NO_SETTINGS`, or `HAS_SETTINGS` with no `output_style` key set: no outcome is recorded yet for this project. Continue to the surface-specific branch below.
+
+**Chat surface.** Chat has no reliable path to activate a project-scoped `outputStyle` setting the way CLI and Cowork do (the same working-directory concern Step 4b already guards against for chat), so this offer never attempts the `.claude/settings.local.json` write on chat. State: "Nonfiction Studio ships two optional output styles, `manuscript` and `review`. On chat, activate one yourself with `/config` (Output Styles) rather than through this offer. I will record `output_style: declined` in `.claude/nonfiction-studio.local.md` so this offer does not repeat, since no style was actually activated." Then follow the "Recording the outcome" procedure below with `output_style: declined` - this is the one branch where a decline is recorded without the author having been asked to choose. Continue to Step 8.
+
+**Interactive CLI or Cowork session.** Present the offer, stating exactly what each answer does before asking - byte-parallel to the doctor's `install-statusline` consent language (`skills/nfs-doctor/SKILL.md`, "state exactly what will be written, and ask"):
+
+> Nonfiction Studio ships two optional output styles:
+> - `manuscript` - prose-first drafting responses: no unrequested bullet summaries, no code fences around manuscript prose, quoted passages instead of diffs for line edits, claim-marker discipline preserved throughout.
+> - `review` - terse, verdict-first, tabular responses for gate and status work.
+>
+> Activating one changes how Claude's replies are shaped in this project; it changes nothing else on disk. Saying yes to one writes `{"outputStyle": "nonfiction-studio:Manuscript"}` (or `{"outputStyle": "nonfiction-studio:Review"}`) into `.claude/settings.local.json` - created if absent, merged preserving every other key if present. Saying no records `output_style: declined` in `.claude/nonfiction-studio.local.md` instead, so this offer does not repeat.
+>
+> Would you like to activate `manuscript`, `review`, or no thanks? (You can always change this later with `/config`.)
+
+Wait for an explicit answer: `manuscript`, `review`, or a decline (a "no," "no thanks," "neither," or any similarly explicit refusal). Any other reply is not an answer - ask again rather than guessing.
+
+**On `manuscript` or `review` (consent):**
+
+Compose the exact namespaced value from the plugin manifest name and the chosen style's frontmatter `name` - `nonfiction-studio:Manuscript` or `nonfiction-studio:Review` - per the platform's plugin output-style activation contract: a bare style name (the frontmatter `name` alone, or the filename) silently fails to activate with no error, and only the namespaced `plugin-name:<frontmatter name>` form works.
+
+Use the Read tool on `.claude/settings.local.json`:
+- **Does not exist:** treat the existing object as `{}`.
+- **Exists and parses as JSON:** hold the parsed object.
+- **Exists but does not parse as JSON:** halt this step. State: "`.claude/settings.local.json` exists but is not valid JSON, so I cannot safely merge into it without risking the rest of your settings. Please fix or back up that file and re-run `/nonfiction-studio:nfs-new-book`, or activate the style yourself with `/config`." Write nothing for either file - since no outcome was actually recorded, the offer remains open for a later run. Continue to Step 8.
+
+On a parseable object: merge `{"outputStyle": "<the namespaced value>"}` at the top level - a shallow merge, so every other existing key is preserved unchanged. Use the Write tool to write the merged object back to `.claude/settings.local.json` as formatted JSON. Note for the author before writing: the Write tool shows its own permission prompt for this file, same as any file write; this skill does not suppress or work around it, and a denial there is a real refusal (see "an author refuses a file write" in Failure behavior below).
+
+Then follow the "Recording the outcome" procedure below with `output_style: manuscript` or `output_style: review`, matching the activated style. After both writes succeed, report: "`.claude/settings.local.json` now activates the `<style>` output style (`nonfiction-studio:<Name>`). It takes effect at the start of your next Claude Code session." Continue to Step 8.
+
+**On decline:** follow the "Recording the outcome" procedure below with `output_style: declined`. Continue to Step 8.
+
+**Recording the outcome (studio settings file).** This procedure writes exactly one thing - the `output_style` key in `.claude/nonfiction-studio.local.md` - never anything else in that file, and never touches the body content below its frontmatter fence.
+
+- `HAS_SETTINGS` (the file already exists, confirmed with no `output_style` key set, above): use the Edit tool to add `output_style: <value>` to the existing YAML frontmatter block, leaving every other key and the body untouched.
+- `NO_SETTINGS` (the file does not exist): use the Read tool on `PLUGIN_ROOT/templates/nonfiction-studio.local.example.md` (PLUGIN_ROOT resolved in Step 4), then use the Write tool to create `.claude/nonfiction-studio.local.md` from that template's content with only the `output_style` example line uncommented and set to `<value>`; every other commented-out example key is left exactly as the template ships it. This file creation was already disclosed, in the same interaction, by whichever branch above led here (the chat redirect message, or the "Saying no records..." / "Saying yes to one writes..." sentences of the interactive offer) - no separate prompt is asked here.
+
+The Write or Edit tool's own permission prompt still applies to this write, same as any file write. If it is denied, no outcome is recorded: state plainly that no output style outcome was recorded, and that this offer will run again the next time `/nonfiction-studio:nfs-new-book` runs against this project.
+
+## Step 8 - Report success
 
 List all files created. Output:
 
@@ -215,3 +269,5 @@ Then: "The next step is nfs-interview. Invoke it with `/nonfiction-studio:nfs-in
 - **Working directory not confirmed (Step 4b).** If the author does not answer yes, or no path can be confirmed at all, halt before Step 5. No files are written.
 - **Read or write error.** On any file operation failure, stop immediately. Name the exact path and operation that failed. Never continue stamping remaining files after a failure.
 - **Missing template.** If a template file is not readable after PLUGIN_ROOT is confirmed, halt. Name the exact template path and ask the author to verify the plugin installation.
+- **Output style offer: `.claude/settings.local.json` is not valid JSON (Step 7).** Halt that step only; write nothing. The offer's outcome is not recorded, so it remains open for a later run. Continue to Step 8 regardless.
+- **Output style offer: an author refuses a file write (Step 7).** Whether the refusal is a declined conversational answer or a denied Write/Edit tool permission prompt, no `output_style` outcome is recorded in that case. A later `/nonfiction-studio:nfs-new-book` run against this project - including a REINIT run - finds no recorded value and legitimately re-offers the styles.
