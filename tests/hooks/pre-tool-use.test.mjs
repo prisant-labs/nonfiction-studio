@@ -26,6 +26,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
   mkdirSync,
+  mkdtempSync,
   writeFileSync,
   existsSync,
   readFileSync,
@@ -52,6 +53,14 @@ const { pickSnapshotName, foldForCompare } = await import('../../hooks/pre-tool-
 // hooks/lib/agent-identity.mjs (brief 1c): its contract widened from three
 // hardcoded research agents to the five-agent AGENT_WRITE_SCOPES table (brief 1b).
 const { checkAgentWriteConstraint } = await import('../../hooks/lib/agent-identity.mjs');
+// Task 8 (dispatch routing enforcement): the pure comparison function, imported directly for the
+// model-comparison mutation-proof test below (a direct call pinpoints that one comparison, immune
+// to any wiring change elsewhere); readAgentModel and clearRoutingCaches, imported directly for
+// the cache-per-process design-pin test. Every OTHER Task 8 case below - including the readers'
+// actual use inside the shipped hook, the chain reader, and the namespace-guard mutation proof -
+// is exercised only through the spawned hook (runHook), proving the WIRING, not just the isolated
+// function, matching this suite's existing convention.
+const { modelMismatchMessage, readAgentModel, clearRoutingCaches } = await import('../../hooks/lib/routing.mjs');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -132,6 +141,43 @@ function makePowerShellEvent(cwd, command) {
     tool_input: { command },
     tool_use_id: 'toolu_test032'
   });
+}
+
+/** Build a synthetic Agent/Task dispatch event (Task 8: dispatch routing enforcement).
+ *  subagentType lands in tool_input.subagent_type verbatim (namespaced or not, per the case under
+ *  test); model, when given, lands in tool_input.model (a genuine override request per the
+ *  2026-09-04 platform probe - omitted entirely, not null, when not given, matching the probe's
+ *  captured "absent key, not present-but-null" shape). dispatcherType, when given, adds
+ *  agent_id/agent_type shaped like a plugin agent ITSELF making the dispatch call (the chain
+ *  rule's "DISPATCHING context"), same convention as makeWriteEvent's agentType parameter. */
+function makeDispatchEvent(cwd, { toolName = 'Agent', subagentType, model, dispatcherType } = {}) {
+  const toolInput = {
+    description: 'test dispatch from the Task 8 suite',
+    prompt: 'reply with the single word done',
+    subagent_type: subagentType
+  };
+  if (model !== undefined) toolInput.model = model;
+  const event = {
+    session_id: 'test-session-t8',
+    cwd,
+    hook_event_name: 'PreToolUse',
+    tool_name: toolName,
+    tool_input: toolInput,
+    tool_use_id: 'toolu_test_t8'
+  };
+  if (dispatcherType) {
+    event.agent_id = 'atest0000dispatcher00001';
+    event.agent_type = dispatcherType;
+  }
+  return JSON.stringify(event);
+}
+
+/** Writes .claude/nonfiction-studio.local.md under dir with the given raw text content (Task 8
+ *  routing_enforce mode tests; mirrors tests/engines/settings.test.mjs's own writeSettingsFile). */
+function writeRoutingSettings(dir, text) {
+  const settingsDir = join(dir, '.claude');
+  mkdirSync(settingsDir, { recursive: true });
+  writeFileSync(join(settingsDir, 'nonfiction-studio.local.md'), text, 'utf8');
 }
 
 /** Build a synthetic Read event (read-only; should be a no-op). */
@@ -1501,4 +1547,409 @@ test('web gate: corrupt config.json DENIES a web-gated agent (fail-closed, same 
     out.hookSpecificOutput.permissionDecision, 'deny',
     'a corrupt config.json cannot be verified open, so a web-gated agent is denied'
   );
+});
+
+// ---------------------------------------------------------------------------
+// TASK 8: dispatch routing enforcement (model-tier + chain-edge), warn-only by
+// default, deny behind the routing_enforce settings opt-in, fail-open on every
+// internal error. Fires on tool_name "Agent" OR "Task" (both, per the v2.1.63
+// rename precedent and the 2026-09-04 platform probe's live capture, which only
+// ever produced "Agent" live but confirmed the installed binary's own
+// attribution helper still checks "Task" too). Uses the REAL, shipped agents/*.md and
+// agents/_chain-permitted.yaml for the model/chain-rule cases below (their
+// declared models and the one drafting-partner -> research-librarian edge are
+// fixed facts about this repo, not test fixtures); the fail-open cases that
+// need a genuinely broken file use the NS_AGENTS_DIR test-only override
+// (hooks/lib/routing.mjs) to point at a throwaway fixture directory instead.
+// ---------------------------------------------------------------------------
+
+// --- Model rule (D-18 in-plugin model routing) ------------------------------
+
+test('Task 8 (a) Agent dispatch of nonfiction-studio:line-editor with model opus warns citing the declared sonnet tier', () => {
+  const dir = makeTmpDir('t8-a-model-mismatch');
+  const result = runHook(makeDispatchEvent(dir, { subagentType: 'nonfiction-studio:line-editor', model: 'opus' }));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON (warn)');
+  const hso = out.hookSpecificOutput;
+  assert.equal(hso.hookEventName, 'PreToolUse', 'hookEventName is PreToolUse');
+  assert.equal(
+    hso.additionalContext,
+    'Routing: line-editor declares model sonnet (D-18 in-plugin model routing); this dispatch requests opus.',
+    'additionalContext is the exact routing warn sentence, citing the declaration'
+  );
+  assert.equal(hso.permissionDecision, undefined, 'never a deny under the default warn mode');
+});
+
+test('Task 8 (b) tool_name "Task" is matched the same as "Agent" (v2.1.63 rename precedent, both captured live by the platform probe)', () => {
+  const dir = makeTmpDir('t8-b-task-toolname');
+  const result = runHook(makeDispatchEvent(dir, {
+    toolName: 'Task', subagentType: 'nonfiction-studio:line-editor', model: 'opus'
+  }));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON (warn)');
+  assert.ok(
+    out.hookSpecificOutput.additionalContext.includes('line-editor declares model sonnet'),
+    'tool_name "Task" reaches the same routing branch as "Agent"'
+  );
+});
+
+test('Task 8 (c) same dispatch with no model field: silence (the platform resolves to the declaration)', () => {
+  const dir = makeTmpDir('t8-c-no-model');
+  const result = runHook(makeDispatchEvent(dir, { subagentType: 'nonfiction-studio:line-editor' }));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(result.stdout.trim(), '', 'empty stdout: no tool_input.model means silence');
+});
+
+test('Task 8 (d) matching model tier (sonnet requested, sonnet declared): silence, not a false warn', () => {
+  const dir = makeTmpDir('t8-d-model-match');
+  const result = runHook(makeDispatchEvent(dir, { subagentType: 'nonfiction-studio:line-editor', model: 'sonnet' }));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(result.stdout.trim(), '', 'empty stdout: a matching tier is not a mismatch');
+});
+
+test('Task 8 (e) an agent declaring inherit never warns on model, regardless of the requested tier', () => {
+  const dir = makeTmpDir('t8-e-inherit-never-warns');
+  const result = runHook(makeDispatchEvent(dir, { subagentType: 'nonfiction-studio:research-librarian', model: 'haiku' }));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'empty stdout: research-librarian declares model: inherit, which never warns'
+  );
+});
+
+// --- Namespace guard (no false denies under ambiguity) ----------------------
+
+test('Task 8 (f) unnamespaced subagent_type "line-editor" (no plugin prefix), no dispatcher: silence even with a model override', () => {
+  const dir = makeTmpDir('t8-f-bare-nodispatcher');
+  const result = runHook(makeDispatchEvent(dir, { subagentType: 'line-editor', model: 'opus' }));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'a bare (unnamespaced) subagent_type is never judged, even when it collides with a real agent slug'
+  );
+});
+
+test('Task 8 (g) mutation proof (namespace guard): a plugin-agent dispatcher targeting an unnamespaced subagent_type stays silent, never falling through to the chain check', () => {
+  const dir = makeTmpDir('t8-g-namespace-mutation-proof');
+  // drafting-partner (a real dispatcher slug, chain-permitted only to research-librarian)
+  // dispatches the BUILT-IN "general-purpose" agent - not a plugin agent at all, and not
+  // namespaced. If the namespace guard (the `if (!targetSlug) process.exit(0);` early return in
+  // hooks/pre-tool-use.mjs, right after stripPluginNamespace) were deleted, targetSlug would stay
+  // null and fall through to the chain check, which would then warn
+  // "drafting-partner -> null is not a declared edge" - a false positive the guard exists
+  // specifically to prevent. This is the named mutation proof for that guard.
+  const result = runHook(makeDispatchEvent(dir, {
+    subagentType: 'general-purpose',
+    dispatcherType: 'nonfiction-studio:drafting-partner'
+  }));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'empty stdout: a plugin-agent dispatcher targeting a non-plugin agent must never reach the chain check'
+  );
+});
+
+test('Task 8 (h) foreign-namespace subagent_type ("other-plugin:some-agent"): silence', () => {
+  const dir = makeTmpDir('t8-h-foreign-namespace');
+  const result = runHook(makeDispatchEvent(dir, { subagentType: 'other-plugin:some-agent', model: 'opus' }));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(result.stdout.trim(), '', 'empty stdout: a foreign plugin namespace is never judged');
+});
+
+test('Task 8 (i2) mutation proof (model comparison, direct-call): matching models stay silent; mismatched models warn', () => {
+  assert.equal(
+    modelMismatchMessage('line-editor', 'sonnet', 'sonnet'),
+    null,
+    'matching declared and requested models must return null - inverting the equality check would warn here'
+  );
+  assert.equal(
+    modelMismatchMessage('line-editor', 'sonnet', 'opus'),
+    'Routing: line-editor declares model sonnet (D-18 in-plugin model routing); this dispatch requests opus.',
+    'mismatched models must return the warn sentence - inverting the equality check would stay silent here'
+  );
+});
+
+// --- Chain rule (agents/_chain-permitted.yaml, now also a runtime contract) -
+
+test('Task 8 (i) chain rule: a declared edge (drafting-partner -> research-librarian) is silent', () => {
+  const dir = makeTmpDir('t8-i-chain-declared');
+  const result = runHook(makeDispatchEvent(dir, {
+    subagentType: 'nonfiction-studio:research-librarian',
+    dispatcherType: 'nonfiction-studio:drafting-partner'
+    // No model override: research-librarian is model: inherit, so the model rule stays silent
+    // regardless, isolating this case to the chain rule alone.
+  }));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(result.stdout.trim(), '', 'empty stdout: a declared chain edge produces no output');
+});
+
+test('Task 8 (j) chain rule: an undeclared edge (drafting-partner -> line-editor) warns naming both slugs', () => {
+  const dir = makeTmpDir('t8-j-chain-undeclared');
+  const result = runHook(makeDispatchEvent(dir, {
+    subagentType: 'nonfiction-studio:line-editor',
+    model: 'sonnet', // matches line-editor's own declaration: isolates this case to the chain rule
+    dispatcherType: 'nonfiction-studio:drafting-partner'
+  }));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON (warn)');
+  const ctx = out.hookSpecificOutput.additionalContext;
+  assert.ok(ctx.includes('drafting-partner'), 'names the dispatcher slug');
+  assert.ok(ctx.includes('line-editor'), 'names the target slug');
+  assert.ok(ctx.includes('_chain-permitted.yaml'), 'cites the contract file');
+  assert.equal(out.hookSpecificOutput.permissionDecision, undefined, 'never a deny under the default warn mode');
+});
+
+test('Task 8 (k) chain rule: a main-session dispatch (no agent_type) never chain-warns', () => {
+  const dir = makeTmpDir('t8-k-mainsession-nochainwarn');
+  const result = runHook(makeDispatchEvent(dir, {
+    subagentType: 'nonfiction-studio:line-editor',
+    model: 'sonnet'
+    // No dispatcherType: main-session dispatch.
+  }));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'empty stdout: a main-session dispatch (null active agent) never triggers the chain rule'
+  );
+});
+
+// --- routing_enforce modes (off | warn | block; absent settings = warn) -----
+
+test('Task 8 (l) routing_enforce: block turns the model warning into a deny with the same sentence', () => {
+  const dir = makeTmpDir('t8-l-block-mode');
+  writeRoutingSettings(dir, '---\nrouting_enforce: block\n---\nHouse notes.\n');
+  const result = runHook(makeDispatchEvent(dir, { subagentType: 'nonfiction-studio:line-editor', model: 'opus' }));
+
+  assert.equal(result.status, 0, 'exit code is 0 (deny travels in JSON, not exit code)');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON (deny)');
+  const hso = out.hookSpecificOutput;
+  assert.equal(hso.permissionDecision, 'deny', 'routing_enforce: block denies instead of warning');
+  assert.equal(
+    hso.permissionDecisionReason,
+    'Routing: line-editor declares model sonnet (D-18 in-plugin model routing); this dispatch requests opus.',
+    'block-mode deny reason is the exact same sentence the warn mode would have used'
+  );
+});
+
+test('Task 8 (l2) routing_enforce: block also turns the chain warning into a deny with the same sentence (both warns, not just the model one)', () => {
+  const dir = makeTmpDir('t8-l2-block-mode-chain');
+  writeRoutingSettings(dir, '---\nrouting_enforce: block\n---\nHouse notes.\n');
+  const result = runHook(makeDispatchEvent(dir, {
+    subagentType: 'nonfiction-studio:line-editor',
+    model: 'sonnet', // matches line-editor's own declaration: isolates this case to the chain rule
+    dispatcherType: 'nonfiction-studio:drafting-partner'
+  }));
+
+  assert.equal(result.status, 0, 'exit code is 0 (deny travels in JSON, not exit code)');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON (deny)');
+  const hso = out.hookSpecificOutput;
+  assert.equal(hso.permissionDecision, 'deny', 'routing_enforce: block denies the chain warning too, not just the model one');
+  assert.ok(hso.permissionDecisionReason.includes('drafting-partner'), 'deny reason names the dispatcher slug');
+  assert.ok(hso.permissionDecisionReason.includes('line-editor'), 'deny reason names the target slug');
+  assert.ok(hso.permissionDecisionReason.includes('_chain-permitted.yaml'), 'deny reason cites the contract file');
+});
+
+test('Task 8 (m) routing_enforce: off silences the branch entirely, even for what would otherwise warn', () => {
+  const dir = makeTmpDir('t8-m-off-mode');
+  writeRoutingSettings(dir, '---\nrouting_enforce: off\n---\nHouse notes.\n');
+  const result = runHook(makeDispatchEvent(dir, { subagentType: 'nonfiction-studio:line-editor', model: 'opus' }));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(result.stdout.trim(), '', 'routing_enforce: off produces no output');
+});
+
+// --- Fail-open: missing agent file, unparseable frontmatter, unreadable -----
+// --- agents/_chain-permitted.yaml, corrupt settings (four named cases) -----
+
+test('Task 8 (n) fail-open: dispatching a slug with no agents/<slug>.md file produces silence', () => {
+  const dir = makeTmpDir('t8-n-missing-agent-file');
+  const result = runHook(makeDispatchEvent(dir, {
+    subagentType: 'nonfiction-studio:totally-not-a-real-agent', model: 'opus'
+  }));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(result.stdout.trim(), '', 'a missing agent file fails open to silence, not a crash');
+});
+
+test('Task 8 (o) fail-open: unparseable agent frontmatter produces silence', () => {
+  const agentsDir = mkdtempSync(join(tmpdir(), 'ns-t8-agents-'));
+  writeFileSync(join(agentsDir, 'line-editor.md'), '---\nmodel: {unclosed\n---\nbody\n', 'utf8');
+  const dir = makeTmpDir('t8-o-unparseable-frontmatter');
+
+  const result = runHook(
+    makeDispatchEvent(dir, { subagentType: 'nonfiction-studio:line-editor', model: 'opus' }),
+    { NS_AGENTS_DIR: agentsDir }
+  );
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(result.stdout.trim(), '', 'unparseable frontmatter fails open to silence, not a crash');
+});
+
+test('Task 8 (p) fail-open: an unreadable agents/_chain-permitted.yaml produces silence for the chain rule', () => {
+  const agentsDir = mkdtempSync(join(tmpdir(), 'ns-t8-agents-'));
+  writeFileSync(join(agentsDir, 'line-editor.md'), '---\nmodel: sonnet\n---\nbody\n', 'utf8');
+  writeFileSync(join(agentsDir, '_chain-permitted.yaml'), 'drafting-partner: [unterminated\n', 'utf8');
+  const dir = makeTmpDir('t8-p-unreadable-chain-yaml');
+
+  const result = runHook(
+    makeDispatchEvent(dir, {
+      subagentType: 'nonfiction-studio:line-editor',
+      model: 'sonnet', // matches the fixture's declared model: isolates this case to the chain rule
+      dispatcherType: 'nonfiction-studio:drafting-partner'
+    }),
+    { NS_AGENTS_DIR: agentsDir }
+  );
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'an unreadable chain contract fails open to silence, even though this edge would otherwise be undeclared'
+  );
+});
+
+test('Task 8 (q) fail-open ruling 1: a WHOLE-FILE-unparseable settings file produces silence for what would otherwise warn', () => {
+  const dir = makeTmpDir('t8-q-corrupt-settings');
+  writeRoutingSettings(dir, '---\nrouting_enforce: [unterminated\n---\nHouse notes.\n');
+  const result = runHook(makeDispatchEvent(dir, { subagentType: 'nonfiction-studio:line-editor', model: 'opus' }));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'a whole-file parse failure fails open to total silence, not the "warn" default'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Fix round 2 (settings-silencing ruling, revising the original "any warning
+// silences" interpretation): a live-review finding proved that interpretation
+// let an explicitly configured routing_enforce: block go silently dark
+// whenever ANY unrelated settings key was also invalid in the same file - an
+// explicit block control silently failing open is worse than the narrower
+// fail-open behavior it replaces. The revised ruling, keyed off loadSettings'
+// new droppedKeys array (hooks/lib/settings.mjs):
+//   1. Whole-file failure (settings came back empty with a warning, droppedKeys
+//      empty): stays silent - unchanged from before this fix, see (q) above.
+//   2. routing_enforce ITSELF was dropped as invalid (droppedKeys includes
+//      "routing_enforce"): stays silent - author intent unknown, do not guess.
+//   3. routing_enforce parsed VALID, or is absent entirely from an otherwise
+//      valid file (droppedKeys does NOT include "routing_enforce"): a warning
+//      about a DIFFERENT key must not silence the branch - the valid value
+//      (or the "warn" default) governs.
+// ---------------------------------------------------------------------------
+
+test('Task 8 (q2) fail-open ruling 2: routing_enforce ITSELF dropped as invalid stays silent (author intent unknown)', () => {
+  const dir = makeTmpDir('t8-q2-routing-enforce-itself-dropped');
+  writeRoutingSettings(dir, '---\nrouting_enforce: loud\n---\nHouse notes.\n');
+  const result = runHook(makeDispatchEvent(dir, { subagentType: 'nonfiction-studio:line-editor', model: 'opus' }));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'routing_enforce itself failing validation and being dropped fails open to silence'
+  );
+});
+
+test('Task 8 (q3) ruling 3, the reviewer\'s exact live-reproduced scenario: an unrelated invalid key (gate_mode: bogus) must NOT silence a VALID routing_enforce: block - emitDeny fires', () => {
+  const dir = makeTmpDir('t8-q3-unrelated-key-must-not-silence-block');
+  writeRoutingSettings(dir, '---\ngate_mode: bogus\nrouting_enforce: block\n---\nHouse notes.\n');
+  const result = runHook(makeDispatchEvent(dir, { subagentType: 'nonfiction-studio:line-editor', model: 'opus' }));
+
+  assert.equal(result.status, 0, 'exit code is 0 (deny travels in JSON, not exit code)');
+  let out;
+  assert.doesNotThrow(
+    () => { out = JSON.parse(result.stdout.trim()); },
+    'stdout is valid JSON (deny) - NOT empty; the pre-fix bug produced empty stdout here, silently going dark'
+  );
+  const hso = out.hookSpecificOutput;
+  assert.equal(
+    hso.permissionDecision, 'deny',
+    'an unrelated dropped key (gate_mode) must not silence an explicitly configured, validly-parsed routing_enforce: block'
+  );
+  assert.equal(
+    hso.permissionDecisionReason,
+    'Routing: line-editor declares model sonnet (D-18 in-plugin model routing); this dispatch requests opus.',
+    'deny reason is the ordinary model-mismatch sentence, proving the block control fired normally'
+  );
+});
+
+test('Task 8 (q4) ruling 3, warn mode variant: an unrelated invalid key (gate_mode: bogus) must not silence the default warn behavior either', () => {
+  const dir = makeTmpDir('t8-q4-unrelated-key-must-not-silence-warn');
+  writeRoutingSettings(dir, '---\ngate_mode: bogus\n---\nHouse notes.\n');
+  const result = runHook(makeDispatchEvent(dir, { subagentType: 'nonfiction-studio:line-editor', model: 'opus' }));
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout is valid JSON (warn), not silenced');
+  assert.equal(
+    out.hookSpecificOutput.additionalContext,
+    'Routing: line-editor declares model sonnet (D-18 in-plugin model routing); this dispatch requests opus.',
+    'an unrelated dropped key does not suppress the default warn behavior (routing_enforce absent, but not itself invalid)'
+  );
+});
+
+// --- Ordering: runs before, and cannot affect, the write-tools guard --------
+
+test('Task 8 (r) regression: a Write following a dispatch in the same book behaves byte-identically to today', () => {
+  const book = cloneSampleBook('t8-r-write-after-dispatch');
+
+  // Fire a dispatch first (a declared edge, no model override): must be silent and side-effect-free.
+  const dispatchResult = runHook(makeDispatchEvent(book, {
+    subagentType: 'nonfiction-studio:research-librarian',
+    dispatcherType: 'nonfiction-studio:drafting-partner'
+  }));
+  assert.equal(dispatchResult.status, 0, 'dispatch exit code is 0');
+  assert.equal(dispatchResult.stdout.trim(), '', 'dispatch produces no output');
+
+  // Now the existing (a)-style Write scenario, run against the SAME book directory.
+  const target = join(book, 'chapters', '01-listening-before-speaking.md');
+  const slug = '01-listening-before-speaking';
+  const snapshotsBefore = countSnapshots(book, slug);
+  const writeResult = runHook(makeWriteEvent(book, target));
+
+  assert.equal(writeResult.status, 0, 'write exit code is 0');
+  assert.equal(writeResult.stdout.trim(), '', 'Write after a prior dispatch still allows with empty stdout');
+  const flagPath = join(book, '.studio', 'gate', '.session-write-flag');
+  assert.ok(existsSync(flagPath), 'session-write flag still written after a prior dispatch call');
+  assert.equal(
+    countSnapshots(book, slug), snapshotsBefore + 1,
+    'snapshot still created after a prior dispatch call, exactly as without one'
+  );
+});
+
+// --- Design pin: frontmatter reads are cached per process -------------------
+
+test('Task 8 (s) design pin: readAgentModel caches per resolved path within one process', () => {
+  const agentsDir = mkdtempSync(join(tmpdir(), 'ns-t8-cache-'));
+  writeFileSync(join(agentsDir, 'cache-test-agent.md'), '---\nmodel: sonnet\n---\nbody\n', 'utf8');
+  clearRoutingCaches();
+
+  const first = readAgentModel('cache-test-agent', agentsDir);
+  assert.equal(first.model, 'sonnet', 'first read returns the file as currently written');
+
+  writeFileSync(join(agentsDir, 'cache-test-agent.md'), '---\nmodel: opus\n---\nbody\n', 'utf8');
+  const second = readAgentModel('cache-test-agent', agentsDir);
+  assert.equal(
+    second.model, 'sonnet',
+    'cached: a second read of the same path within the same process still returns the first value'
+  );
+
+  clearRoutingCaches();
+  const third = readAgentModel('cache-test-agent', agentsDir);
+  assert.equal(third.model, 'opus', 'after clearRoutingCaches, a fresh read picks up the new content');
 });

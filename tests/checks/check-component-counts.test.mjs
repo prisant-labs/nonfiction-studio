@@ -51,9 +51,9 @@ function wordTwo() { return 'tw' + 'o'; }       // "two"
 function wordThree() { return 'thr' + 'ee'; }   // "three"
 function wordFour() { return 'fo' + 'ur'; }     // "four"
 function wordFive() { return 'fi' + 've'; }     // "five"
-function wordSeven() { return 'sev' + 'en'; }   // "seven"
-function wordEight() { return 'eig' + 'ht'; }   // "eight" - the true CLI count, ns-claims.md's live claim
-function wordNine() { return 'nin' + 'e'; }     // "nine" - not a real CLI/skill count anywhere
+function wordSeven() { return 'sev' + 'en'; }   // "seven" - the complement of the true CLI count as of the previous growth event
+function wordEight() { return 'eig' + 'ht'; }   // "eight" - the complement of the current true CLI count (nine), and not itself a real CLI/skill count anywhere
+function wordNine() { return 'nin' + 'e'; }     // "nine" - the true CLI count, ns-claims.md's live claim
 
 // ---------------------------------------------------------------------------
 // Fixture helpers
@@ -212,14 +212,14 @@ test('real-repo scope: a deliberately corrupted live claim in ns-claims.md is ca
   try {
     const claimsPath = join(root, 'docs', 'reference', 'cli', 'ns-claims.md');
     const before = readFileSync(claimsPath, 'utf8');
-    const bogus = wordNine();
-    // "eight" assembled - see header comment: ns-claims.md's real, currently-true live claim
+    const bogus = wordEight();
+    // "nine" assembled - see header comment: ns-claims.md's real, currently-true live claim
     // must never appear contiguous with "shipped CLIs" in this file's own source.
-    const liveClaimText = wordEight() + ' shipped CLIs';
+    const liveClaimText = wordNine() + ' shipped CLIs';
     const after = before.split(liveClaimText).join(bogus + ' shipped CLIs');
     assert.notEqual(
       after, before,
-      'docs/reference/cli/ns-claims.md must contain the true, live eight-CLI claim for this test to be meaningful'
+      'docs/reference/cli/ns-claims.md must contain the true, live nine-CLI claim for this test to be meaningful'
     );
     writeFileSync(claimsPath, after);
 
@@ -228,7 +228,7 @@ test('real-repo scope: a deliberately corrupted live claim in ns-claims.md is ca
     assert.equal(result.status, 1, 'must exit 1 once a live claim is corrupted; got: ' + result.combined);
     assert.match(result.combined, /ns-claims\.md:\d+:/, 'message must name the corrupted file and line');
     assert.match(result.combined, new RegExp(bogus), 'message must name the claimed (bogus) count verbatim');
-    assert.match(result.combined, /true counts: 8 CLI\(s\)/, 'message must report the true count (8)');
+    assert.match(result.combined, /true counts: 9 CLI\(s\)/, 'message must report the true count (9)');
 
     // The adjacent decision-identifier handle on the same line, "D-05 (five shipped CLIs via
     // bin/)", must still resolve as exempt even after the live claim beside it is corrupted -
@@ -635,19 +635,19 @@ test('synthetic: a stale "other N" claim (N != trueCount - 1) is caught, naming 
   }
 });
 
-test('real-repo scope: bin/ns-statusline\'s real "the other seven CLIs" (currently correct) is not flagged', () => {
+test('real-repo scope: bin/ns-statusline\'s real "the other eight CLIs" (currently correct) is not flagged', () => {
   const { root, cleanup } = cloneRealRepo('real-other-n-correct');
   try {
     const statuslineCliText = readFileSync(join(root, 'bin', 'ns-statusline'), 'utf8');
     // Assembled via RegExp(string) - see the wrapped-handle test above for why.
-    const otherSevenClisRe = new RegExp('the other\\s*\\n\\/\\/\\s*' + wordSeven() + ' CLIs');
+    const otherEightClisRe = new RegExp('the other\\s*\\n\\/\\/\\s*' + wordEight() + ' CLIs');
     assert.match(
-      statuslineCliText, otherSevenClisRe,
+      statuslineCliText, otherEightClisRe,
       'bin/ns-statusline must still carry the LINE-WRAPPED other-precedes-count construction for this test to be meaningful'
     );
 
     const result = runClonedChecker(root, SCRIPT);
-    assert.equal(result.status, 0, 'seven is the correct complement of the true 8-CLI total; got: ' + result.combined);
+    assert.equal(result.status, 0, 'eight is the correct complement of the true 9-CLI total; got: ' + result.combined);
     assert.doesNotMatch(result.combined, /ns-statusline\b/, 'a correct other-N claim must never be flagged');
   } finally {
     cleanup();
@@ -659,17 +659,17 @@ test('real-repo scope: a deliberately corrupted "other N" claim in bin/ns-notes 
   try {
     const notesPath = join(root, 'bin', 'ns-notes');
     const before = readFileSync(notesPath, 'utf8');
-    const liveClaimText = 'other ' + wordSeven() + ' CLIs';
+    const liveClaimText = 'other ' + wordEight() + ' CLIs';
     const bogus = wordThree();
     const after = before.split(liveClaimText).join('other ' + bogus + ' CLIs');
-    assert.notEqual(after, before, 'bin/ns-notes must contain the real "other seven CLIs" claim for this test to be meaningful');
+    assert.notEqual(after, before, 'bin/ns-notes must contain the real "other eight CLIs" claim for this test to be meaningful');
     writeFileSync(notesPath, after);
 
     const result = runClonedChecker(root, SCRIPT);
     assert.equal(result.status, 1, 'a corrupted other-N claim must be caught; got: ' + result.combined);
     assert.match(result.combined, /ns-notes:\d+:/, 'must name the corrupted file and line');
     assert.match(result.combined, new RegExp(bogus), 'must name the claimed (bogus) complement verbatim');
-    assert.match(result.combined, /8 CLIs total/, 'must name the true total (8), not only the complement');
+    assert.match(result.combined, /9 CLIs total/, 'must name the true total (9), not only the complement');
   } finally {
     cleanup();
   }
@@ -680,67 +680,71 @@ test('real-repo scope: a deliberately corrupted "other N" claim in bin/ns-notes 
 // clean clone (no other edit) simulates the next real growth event and asks what the checker
 // actually does at that instant, rather than only what a hand-picked planted fixture proves.
 // Before this fix round, this simulation caught 3 real sites and silently missed 3 more - the
-// "the other seven CLIs" self-referential comments in bin/ns-notes, bin/ns-statusline, and
+// other-N-CLIs self-referential comments in bin/ns-notes, bin/ns-statusline, and
 // hooks/lib/status-engine.mjs, exactly the shape a previous wave's four human sweeps also
 // missed. Running it against the round-1 fix turned up a SEVENTH real site the coordinator's
 // own enumeration had not named: docs/reference/cli/ns-statusline.md:20 carries the identical
-// "the other seven CLIs" construction in prose form, and the fixed checker catches it too - a
+// other-N-CLIs construction in prose form, and the fixed checker catches it too - a
 // finding from running the simulation, not from re-reading the coordinator's list, which is the
 // point of running a simulation instead of only a curated set of planted cases.
 //
 // One expected, non-shipped side effect of cloning the FULL repo (this test file included) and
-// then mutating it: this file's own explanatory prose necessarily quotes real numbers ("seven",
-// "eight") to describe and test against the REAL, unmodified 8-CLI tree - correctly, as the
+// then mutating it: this file's own explanatory prose necessarily quotes real numbers to
+// describe and test against the REAL, unmodified tree's true CLI count - correctly, as the
 // "real-repo scope: the current tree has no stale component-count claims" test above proves
 // (this file included, since it is committed and therefore part of that scan too). Once this
-// simulation mutates the SAME clone's true count to 9, those same quotes necessarily read as
-// stale relative to the mutated clone, which is not a tree defect - it never happens against the
-// real, unmutated repository - so those findings are filtered out below rather than asserted on,
-// and the shipped-site count is asserted precisely instead.
+// simulation mutates the SAME clone's true count up by one, those same quotes necessarily read
+// as stale relative to the mutated clone, which is not a tree defect - it never happens against
+// the real, unmutated repository - so those findings are filtered out below rather than asserted
+// on, and the shipped-site count is asserted precisely instead. A ninth real CLI (ns-overlap)
+// has since shipped for real, not simulated, so this simulation now exercises growth from nine
+// to ten rather than eight to nine; the real sites and their count (8) are unchanged by that
+// shift, only the literal numbers embedded in this test's own assertions are.
 // ---------------------------------------------------------------------------
 
-test('forward-growth simulation: adding a ninth CLI to a real-repo clone catches all eight real sites that go stale', () => {
+test('forward-growth simulation: adding a tenth CLI to a real-repo clone catches all eight real sites that go stale', () => {
   const { root, cleanup } = cloneRealRepo('growth-simulation');
   try {
     const before = runClonedChecker(root, SCRIPT);
     assert.equal(before.status, 0, 'the clone must start clean, matching the real tree; got: ' + before.combined);
 
     // The only change: one new CLI, no other edit. Content is inert (no count-shaped text of
-    // its own), so every finding below is caused by the true CLI count moving from 8 to 9.
+    // its own), so every finding below is caused by the true CLI count moving from 9 to 10.
     writeFile(root, 'bin/ns-zzz-simulated-growth', '#!/usr/bin/env node\n');
 
     const after = runClonedChecker(root, SCRIPT);
-    assert.equal(after.status, 1, 'adding a ninth CLI must turn real sites stale; got: ' + after.combined);
-    assert.match(after.combined, /true counts: 9 CLI\(s\)/, 'must derive the new true count (9) from the tree, not a constant');
+    assert.equal(after.status, 1, 'adding a tenth CLI must turn real sites stale; got: ' + after.combined);
+    assert.match(after.combined, /true counts: 10 CLI\(s\)/, 'must derive the new true count (10) from the tree, not a constant');
 
     const errorLines = after.combined.split('\n').filter((l) => l.includes(' ERROR: '));
     const shippedErrorLines = errorLines.filter((l) => !l.includes('check-component-counts.test.mjs'));
 
     // The one direct "N shipped CLIs" claim a prior review already proved this checker
     // catches (never regressed by this fix round).
-    assert.ok(shippedErrorLines.some((l) => l.includes('ns-claims.md:')), 'must still catch docs/reference/cli/ns-claims.md\'s direct "eight shipped CLIs" claim; got: ' + after.combined);
+    assert.ok(shippedErrorLines.some((l) => l.includes('ns-claims.md:')), 'must still catch docs/reference/cli/ns-claims.md\'s direct "nine shipped CLIs" claim; got: ' + after.combined);
 
     // hooks/lib/bible.mjs's used-by line was rewritten (PF-10 (bible.mjs importer counts)) from
-    // a bare count ("seven of the eight shipped CLIs... thirteen importers total") to a rule
-    // ("every CLI under bin/ imports this directly except ns-statusline"), which carries no
+    // a bare count naming how many of the shipped command-line tools were covered, alongside a
+    // separate bare importer total, to a rule ("every CLI under bin/ imports this directly
+    // except ns-statusline"), which carries no
     // number-plus-noun shape for CANDIDATE_RE to match. Growing the true CLI count must not
     // manufacture a finding here, the same way it must not leave a stale one behind.
     const bibleFindings = shippedErrorLines.filter((l) => l.includes('bible.mjs'));
     assert.equal(bibleFindings.length, 0, 'hooks/lib/bible.mjs\'s used-by line is rule-based, not count-based, so it must produce no findings even as the CLI count grows; got: ' + after.combined);
 
-    // The four "the other seven CLIs" sites fix round 1 exists to close (three code comments the
+    // The four other-N-CLIs sites fix round 1 exists to close (three code comments the
     // coordinator named, plus the docs/reference/cli/ns-statusline.md prose instance the
     // simulation itself turned up) - all silently missed before this round.
-    assert.ok(shippedErrorLines.some((l) => l.includes('ERROR: bin/ns-notes:')), 'must catch bin/ns-notes\'s "the other seven CLIs" now that the true complement is eight; got: ' + after.combined);
-    assert.ok(shippedErrorLines.some((l) => l.includes('ERROR: bin/ns-statusline:')), 'must catch bin/ns-statusline\'s LINE-WRAPPED "the other seven CLIs" now that the true complement is eight; got: ' + after.combined);
-    assert.ok(shippedErrorLines.some((l) => l.includes('ERROR: hooks/lib/status-engine.mjs:')), 'must catch hooks/lib/status-engine.mjs\'s "the other seven CLIs" now that the true complement is eight; got: ' + after.combined);
-    assert.ok(shippedErrorLines.some((l) => l.includes('ERROR: docs/reference/cli/ns-statusline.md:')), 'must catch the prose "the other seven CLIs" instance in docs/reference/cli/ns-statusline.md too - the extra real site this simulation found; got: ' + after.combined);
+    assert.ok(shippedErrorLines.some((l) => l.includes('ERROR: bin/ns-notes:')), 'must catch bin/ns-notes\'s "the other eight CLIs" now that the true complement is nine; got: ' + after.combined);
+    assert.ok(shippedErrorLines.some((l) => l.includes('ERROR: bin/ns-statusline:')), 'must catch bin/ns-statusline\'s LINE-WRAPPED "the other eight CLIs" now that the true complement is nine; got: ' + after.combined);
+    assert.ok(shippedErrorLines.some((l) => l.includes('ERROR: hooks/lib/status-engine.mjs:')), 'must catch hooks/lib/status-engine.mjs\'s "the other eight CLIs" now that the true complement is nine; got: ' + after.combined);
+    assert.ok(shippedErrorLines.some((l) => l.includes('ERROR: docs/reference/cli/ns-statusline.md:')), 'must catch the prose "the other eight CLIs" instance in docs/reference/cli/ns-statusline.md too - the extra real site this simulation found; got: ' + after.combined);
 
     // The three README sites, added when the README was rewritten as a full front page.
     // All three are deliberately written in the shape this checker matches, including the
-    // shields.io badge, whose ALT TEXT carries the claim in matchable form ("8 CLIs")
+    // shields.io badge, whose ALT TEXT carries the claim in matchable form ("9 CLIs")
     // precisely so the badge line is covered: the checker cannot see the count inside the
-    // badge URL itself ("badge/CLIs-8-..."), so an alt text written as "CLIs: 8" would
+    // badge URL itself ("badge/CLIs-9-..."), so an alt text written as "CLIs: 9" would
     // have left the most visible count in the repository silently unenforced.
     const readmeFindings = shippedErrorLines.filter((l) => l.includes('ERROR: README.md:'));
     assert.equal(readmeFindings.length, 3,

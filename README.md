@@ -23,7 +23,7 @@ Most AI writing tools generate plausible prose and leave the verification to you
   <img src="https://img.shields.io/badge/tier-universal%20(Bronze)-CD7F32?style=flat-square" alt="Conformance tier: universal (Bronze)">
   <a href="#the-catalog"><img src="https://img.shields.io/badge/skills-14-brightgreen?style=flat-square" alt="14 skills"></a>
   <a href="#subagents"><img src="https://img.shields.io/badge/subagents-8-brightgreen?style=flat-square" alt="Subagents: 8"></a>
-  <a href="#command-line-engines"><img src="https://img.shields.io/badge/CLIs-8-brightgreen?style=flat-square" alt="8 CLIs"></a>
+  <a href="#command-line-engines"><img src="https://img.shields.io/badge/CLIs-9-brightgreen?style=flat-square" alt="9 CLIs"></a>
   <a href="https://agentskills.io/specification"><img src="https://img.shields.io/badge/spec-agentskills.io-orange?style=flat-square" alt="Agent Skills Spec"></a>
 </p>
 
@@ -116,7 +116,7 @@ Nonfiction Studio is a Claude Code plugin that runs a structured authoring workf
 - **A team of specialist subagents.** An interviewer that captures the brief, a thesis architect, a structure architect, a voice-capture agent, a research librarian, a drafting partner, an adversarial fact-checker, and a line editor. Each has a bounded role and a defined moment it is invoked.
 - **A plain-Markdown project bible.** Your book's state lives in ordinary files in your own folder: `context/`, `structure/`, `chapters/`, `research/`, `production/`. No database, no proprietary format, no lock-in. You can read, diff, and version-control every one of them.
 - **Deterministic engines behind every measurement.** Voice drift, claim coverage, quote fidelity, and state coherence are computed by Node programs you can run yourself, not judged by a model. The same engine that scores your chapter scores it identically tomorrow.
-- **A quality gate that runs before anything counts as done.** Six checks, a named verdict, and a written report. It fires automatically as a Stop hook where hooks are available, and it is a command you can run by hand anywhere.
+- **A quality gate that runs before anything counts as done.** Seven checks, a named verdict, and a written report. It fires automatically as a Stop hook where hooks are available, and it is a command you can run by hand anywhere.
 
 ## What makes it different
 
@@ -154,7 +154,7 @@ flowchart LR
     class A human;
 ```
 
-**The gate runs six checks**, each producing its own verdict rather than a single opaque score:
+**The gate runs seven checks**, each producing its own verdict rather than a single opaque score:
 
 | Check | What it asks |
 |---|---|
@@ -164,6 +164,7 @@ flowchart LR
 | `prompt_scrub` | Is there residue of AI instruction or scaffolding left in the manuscript? |
 | `continuity` | Do the facts, names, and commitments hold across chapters? |
 | `state_coherence` | Do the recorded word counts and project state agree with what is actually on disk? |
+| `overlap` | Does chapter prose overlap, unattributed, with the author's own research packets, verbatim quotes, or prior work? |
 
 A verdict is `pass`, `warn`, or `block`, and a block names the check and the finding. The report is written into your project, so the next run, the status board, and you are all reading the same artifact. See [docs/formats/gate-report.md](docs/formats/gate-report.md) for the report format.
 
@@ -173,7 +174,7 @@ A verdict is `pass`, `warn`, or `block`, and a block names the check and the fin
 
 ## The catalog
 
-**14 skills, 8 subagents, and 8 CLIs**, plus hooks on six events. Every component has a reference page under `docs/reference/`, indexed from [docs/README.md](docs/README.md), and most ship a worked example alongside it.
+**14 skills, 8 subagents, 9 CLIs, and 2 output styles**, plus hooks on six events. Every component has a reference page under `docs/reference/`, indexed from [docs/README.md](docs/README.md), and most ship a worked example alongside it.
 
 ### Skills
 
@@ -205,7 +206,7 @@ Skills are what you invoke, as `/nonfiction-studio:<name>`. Each one orchestrate
 
 - **[nfs-check-chapter](docs/reference/skills/nfs-check-chapter.md)** - runs the deterministic gate over a chapter and translates the verdict into plain language, including which check blocked and what to do about it. It works on every surface, including chat, where hooks never fire and this is the only way to get a verdict. If your voice baseline is missing or stale it degrades honestly to the checks it can still run and tells you the voice check was skipped, rather than reporting a pass that did not measure everything.
 - **[nfs-status-dashboard](docs/reference/skills/nfs-status-dashboard.md)** - narrates the per-chapter board straight from `ns-status`: status, word count, open claims, drift statistic, and latest gate verdict for each chapter, plus whole-book totals. Rows the engine itself flags, meaning drift above that same row's own calibrated threshold or a blocking verdict, are marked as such. It computes nothing and writes nothing of its own, so what you read is exactly what the engine reports.
-- **[nfs-doctor](docs/reference/skills/nfs-doctor.md)** - the diagnostic front door, and the first thing to run when something looks wrong. Its default report checks bible integrity end to end: folder structure, file schemas, evidence and source marker grammar, orphan markers, cross-references, word-count coherence, config validity, snapshot naming, and style-profile structure, then groups the findings by type with a routing hint for each. Read-only by default; the single write it can perform, installing the status line, is offered explicitly and never happens without a yes.
+- **[nfs-doctor](docs/reference/skills/nfs-doctor.md)** - the diagnostic front door, and the first thing to run when something looks wrong. Its default report checks bible integrity end to end: folder structure, file schemas, evidence and source marker grammar, orphan markers, cross-references, word-count coherence, config validity, snapshot naming, style-profile structure, and AI-use-log coverage (which chapters have a covering disclosure record, and the coverage fraction), then groups the findings by type with a routing hint for each. Read-only by default; the single write it can perform, installing the status line, is offered explicitly and never happens without a yes.
 
 **Ship it (1)**
 
@@ -238,10 +239,24 @@ The deterministic spine. Each is a thin shell over an engine in `hooks/lib/`, so
 | [`ns-statusline`](docs/reference/cli/ns-statusline.md) | A zero-token status view for the Claude Code status line. |
 | [`ns-doctor`](docs/reference/cli/ns-doctor.md) | Read-only bible integrity check across structure, schemas, and state. |
 | [`ns-notes`](docs/reference/cli/ns-notes.md) | Generates endnotes, bibliography, and index candidates from the ledger. |
+| [`ns-overlap`](docs/reference/cli/ns-overlap.md) | Detects n-gram overlap between chapter prose and your own research packets, verbatim excerpts, and prior work. |
+
+### Output styles
+
+Optional, off by default, and never imposed - `nfs-new-book` offers both once per project; you can also pick one yourself at any time with the built-in `/config` command. Either style changes only how Claude's replies are shaped; nothing on disk changes. See [Output styles](docs/reference/output-styles.md) for activation and deactivation.
+
+| Style | What it changes |
+|---|---|
+| `manuscript` | Prose-first drafting responses: no unrequested bullet summaries, no code fences around chapter prose, quoted passages instead of diffs for line edits, claim-marker discipline preserved throughout. |
+| `review` | Terse, verdict-first, tabular responses for gate, status, and diagnostic work. |
+
+### Settings
+
+An optional, per-project `.claude/nonfiction-studio.local.md` tunes gate strictness, threshold values, dispatch-routing enforcement, and the output-style record above, without touching the shared, version-controlled `.studio/config.json`. Absent, it changes nothing; corrupt, it warns once and falls back to every default, never breaking a session or silently disabling a check. See [Settings file format](docs/formats/settings.md) for the schema and precedence rules, including the one invariant it cannot override: a settings file can raise gate strictness but can never un-coerce a judgment check back to blocking.
 
 ### Hooks
 
-Hooks on six events keep the studio honest without you asking: `SessionStart` restores context, `PreToolUse` guards write scope and the web-research gate, `PostToolUse` wraps every fetched result in an untrusted-content envelope before Claude reads it, `PostToolBatch` maintains chapter state and automatic demotion, `Stop` runs the quality gate, and `PreCompact` preserves what matters across a context boundary.
+Hooks on six events keep the studio honest without you asking: `SessionStart` restores context and, in a truly empty directory or a project with a freshly generated skill, opens the right next step unprompted; `PreToolUse` guards write scope, the web-research gate, and agent-dispatch routing (model-tier and chain-edge enforcement); `PostToolUse` wraps every fetched result in an untrusted-content envelope before Claude reads it; `PostToolBatch` maintains chapter state and automatic demotion; `Stop` runs the quality gate; and `PreCompact` preserves what matters across a context boundary.
 
 <div align="right">(<a href="#readme-top">back to top</a>)</div>
 
@@ -294,7 +309,7 @@ If you try Nonfiction Studio in Cowork, treat it as "should work" rather than "p
 |---|---|
 | **Current version** | `0.1.0` (source of truth: [`library.json`](library.json)) |
 | **Status** | Pre-release; Phase 1 complete, later phases in progress |
-| **Components** | 14 skills, 8 subagents, 8 CLIs, hooks on six events |
+| **Components** | 14 skills, 8 subagents, 9 CLIs, 2 output styles, hooks on six events |
 | **Conformance** | `universal` (Bronze) at Standard 0.12 |
 | **Agent targets** | Claude Code (Cowork pending verification; chat is skills-only) |
 | **Runtime** | Node 22.12 or later; one runtime dependency (a YAML parser) |
@@ -340,6 +355,8 @@ Optional online research (DOI and URL lookups) uses Claude's own WebSearch and W
 ## Privacy and memory
 
 The fact-checker keeps a small cache of verified claims at `.claude/agent-memory/nonfiction-studio-fact-checker/` inside your project folder, so it does not re-verify the same claim against the same source twice. It stores claim and source verification outcomes only, never your unpublished manuscript text wholesale. Delete that directory any time to clear it; it simply rebuilds as you keep working.
+
+`nfs-new-book` can generate a `book-context` skill at `.claude/skills/book-context/SKILL.md`, committed into your project tree: your thesis one-liner, top style rules, chapter map, and open-claims count, each naming the file it was read from. It is generated only on an explicit yes; declining, or answering in a non-interactive session, writes nothing. Delete the file any time to remove it; a later `nfs-new-book` run then offers to regenerate it.
 
 Everything lives in your project folder and on your own machine. Nothing is sent anywhere beyond your own Claude session. See [docs/privacy.md](docs/privacy.md) for the fuller note, including the AI-use log and chapter snapshots.
 

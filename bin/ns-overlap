@@ -1,0 +1,183 @@
+#!/usr/bin/env node
+// what-it-is:   the ns-overlap local n-gram overlap detection CLI (thin shell over
+//               hooks/lib/overlap-engine.mjs)
+// what-it-does: parses arguments, locates the book root, reads chapter files, discovers the
+//               local author-owned corpus (research/packets/*.md, verbatim fields in
+//               research/evidence-log.md, and context/prior-work/*.md when present), runs the
+//               overlap engine, and emits a report; exits 0 when clean, 1 with findings, 2 on
+//               argument or operational error. No network access - every corpus text already
+//               lives in the project.
+// why:          the CLI is the public surface; all logic lives in overlap-engine.mjs so a future
+//               quality-gate check and this CLI share the identical computation path, per S-07
+//               section 4
+// usage:        ns-overlap [--chapter=<slug>|--all] [--project=<dir>] [--min-words=<n>] [--json]
+
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
+import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
+import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
+import { findOverlaps, discoverCorpora, DEFAULT_MIN_WORDS } from '../hooks/lib/overlap-engine.mjs';
+
+const USAGE =
+  'ns-overlap [--chapter=<slug>|--all] [--project=<dir>] [--min-words=<n>] [--json]\n' +
+  '\n' +
+  'Detects n-gram overlap between chapter prose and the local, author-owned corpus:\n' +
+  'research/packets/*.md, the verbatim field values in research/evidence-log.md, and\n' +
+  '(when present) context/prior-work/*.md. No network access. A chapter span that sits\n' +
+  'inside a quoted-and-anchored span ([quote: EV-nnnn]) is excluded as properly quoted\n' +
+  'and reported as an informational count, never silently dropped.\n' +
+  '\n' +
+  'Flags:\n' +
+  '  --chapter=<slug>   scan a single chapter file chapters/<slug>.md\n' +
+  '  --all              scan all .md files in chapters/ (default when no scope flag is given)\n' +
+  '  --project=<dir>    override the book root to <dir>\n' +
+  '  --min-words=<n>    minimum merged-span word length to flag (default ' + DEFAULT_MIN_WORDS + ')\n' +
+  '  --json             emit the full report as JSON to stdout\n' +
+  '  --help             print this usage text and exit 0\n' +
+  '\n' +
+  'Exit codes: 0 clean, 1 findings present, 2 argument or operational error.\n';
+
+// ---- --help ---------------------------------------------------------------------
+// Checked before argument parsing so it never competes with an unknown-flag error.
+
+if (process.argv.slice(2).includes('--help')) {
+  process.stdout.write(USAGE);
+  process.exit(0);
+}
+
+// ---- arg parsing ---------------------------------------------------------------
+
+let opts;
+try {
+  opts = parseArgs(process.argv.slice(2), [
+    'chapter',
+    'all',
+    'project',
+    'json',
+    // --min-words is not an S-07 shared flag; inline type override per the
+    // established mechanism (see hooks/lib/args.mjs and bin/ns-scrub's --mode).
+    { name: 'min-words', type: 'string' },
+  ]);
+} catch (err) {
+  if (err.name === 'ArgsError') {
+    process.stderr.write('ns-overlap: ' + err.message + '\n');
+    process.exit(2);
+  }
+  throw err;
+}
+
+// ---- --min-words validation -----------------------------------------------------
+
+let minWords = DEFAULT_MIN_WORDS;
+if (opts['min-words'] != null) {
+  const parsed = Number(opts['min-words']);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    process.stderr.write(
+      'ns-overlap: invalid --min-words value "' + opts['min-words'] + '"; expected a positive integer\n'
+    );
+    process.exit(2);
+  }
+  minWords = parsed;
+}
+
+// ---- book root discovery -------------------------------------------------------
+
+const startDir = opts.project ? resolve(opts.project) : process.cwd();
+
+let root;
+try {
+  ({ root } = findBookRoot(startDir));
+} catch (err) {
+  if (err.name === 'BibleError') {
+    process.stderr.write('ns-overlap: ' + err.message + '\n');
+    process.exit(2);
+  }
+  throw err;
+}
+
+// ---- chapter discovery -----------------------------------------------------------
+
+const chapterDir = join(root, 'chapters');
+if (!existsSync(chapterDir)) {
+  process.stderr.write('ns-overlap: chapters/ directory not found at ' + chapterDir + '\n');
+  process.exit(2);
+}
+
+let chapterPaths;
+if (opts.chapter) {
+  const p = join(chapterDir, opts.chapter + '.md');
+  if (!existsSync(p)) {
+    process.stderr.write('ns-overlap: chapter not found: ' + p + '\n');
+    process.exit(2);
+  }
+  chapterPaths = [p];
+} else {
+  // --all or no scope flag: every .md file in chapters/, sorted by name
+  chapterPaths = readdirSync(chapterDir)
+    .filter(f => f.endsWith('.md'))
+    .sort()
+    .map(f => join(chapterDir, f));
+}
+
+const chapters = [];
+for (const absPath of chapterPaths) {
+  let text;
+  try {
+    text = readFileSync(absPath, 'utf8');
+  } catch (err) {
+    process.stderr.write('ns-overlap: cannot read chapter ' + absPath + ': ' + err.message + '\n');
+    process.exit(2);
+  }
+  const relFile = relative(root, absPath).replace(/\\/g, '/');
+  chapters.push({ file: relFile, text });
+}
+
+// ---- corpus discovery (hooks/lib/overlap-engine.mjs; shared with a future gate check) ---
+
+const corpora = discoverCorpora(root);
+
+// ---- run overlap engine ----------------------------------------------------------
+
+const { findings, excluded } = findOverlaps(chapters, corpora, { minWords });
+
+// ---- report building --------------------------------------------------------------
+// Deliberately not hooks/lib/report.mjs: that module's addFinding/finalize fixes the
+// finding shape to {file, line, type, excerpt, detail} and stamps a wall-clock `ts`,
+// both wrong here - the finding shape is {chapter, chapterSpan, source, sourceSpan,
+// words} (both spans always present), and the determinism requirement (two runs
+// produce byte-identical --json output) forbids a timestamp in the output at all.
+
+const exitCode = findings.length > 0 ? 1 : 0;
+
+if (opts.json) {
+  const json = {
+    check: 'overlap',
+    minWords,
+    chapters: chapters.map(c => c.file),
+    corpora: corpora.map(c => c.source),
+    findings,
+    excluded,
+  };
+  process.stdout.write(JSON.stringify(json, null, 2) + '\n');
+} else {
+  const prefix = '[overlap]';
+  if (findings.length === 0) {
+    process.stdout.write(prefix + ' pass: no overlap findings (' + corpora.length + ' corpus text(s) checked)\n');
+  } else {
+    process.stdout.write(prefix + ' ' + findings.length + ' finding(s):\n');
+    for (const f of findings) {
+      process.stdout.write(
+        '  ' + f.chapter + ':' + f.chapterSpan.start + '-' + f.chapterSpan.end +
+        ' <- ' + f.source + ':' + f.sourceSpan.start + '-' + f.sourceSpan.end +
+        ' (' + f.words + ' words)\n' +
+        '    "' + f.chapterSpan.excerpt + '"\n'
+      );
+    }
+  }
+  // Informational, never silence: reported whenever nonzero, in both pass and findings modes.
+  if (excluded > 0) {
+    process.stdout.write(prefix + ' NOTICE: ' + excluded + ' span(s) excluded as properly quoted\n');
+  }
+}
+
+process.exit(exitCode);

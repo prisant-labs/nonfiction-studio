@@ -246,7 +246,10 @@ to avoid.
   classes), landed separately by item 8 (planning-doc sync); it is written precisely enough to
   amend a governing document from.
 - Output styles as a component class are explicitly out of scope for this task; CANON 3.5 will
-  cover them when that work is scheduled.
+  cover them when that work is scheduled. **Implemented by ADR-0013 (wave 1 exit surfaces)**:
+  `manuscript` and `review` ship as the output-styles component class, offered once by
+  `nfs-new-book` and never imposed; see that ADR's Decision 2 for the consent design and the
+  widened settings-write claim.
 - The end-to-end rendering of either statusline inside a real, trust-accepted Claude Code session
   was not observed by this task. The automated test suite proves the engine's behavior against
   the documented stdin/stdout contracts: project-directory resolution from stdin JSON rather than

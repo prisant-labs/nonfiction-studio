@@ -1,6 +1,6 @@
 # Gate Report Format
 
-**Purpose.** This is the normative grammar for gate report files under `.studio/gate/`, one file per gate run, defined in S-08 (schemas and file formats) section 11. `bin/ns-gate` writes a gate report file at the end of every run; the `nfs-status-dashboard` skill and `progress.json` `last_gate.report` read it. The file `.studio/gate/last-gate.json` carries the most recent gate debt for each chapter and is the SessionStart gate-debt input per S-07 (hooks and scripts). Every field name, value constraint, and structural rule below is authoritative. A parser author must be able to implement a conformant reader without consulting any other document.
+**Purpose.** This is the normative grammar for gate report files under `.studio/gate/`, one file per gate run, defined in S-08 (schemas and file formats) section 11. `bin/ns-gate` writes a gate report file at the end of every run; `bin/ns-status` (via `hooks/lib/status-engine.mjs`) reads the newest one per chapter slug, and the `nfs-status-dashboard` skill narrates that CLI's JSON output rather than reading a report file itself. The file `.studio/gate/last-gate.json` carries the most recent gate debt for each chapter and is the SessionStart gate-debt input per S-07 (hooks and scripts); it is written by the `Stop` hook, not `bin/ns-gate` itself (see "Consumed by", below). `progress.json`'s `last_gate` per-chapter field is reserved in the schema and unpopulated in v1: no component writes it during a live gate run. Every field name, value constraint, and structural rule below is authoritative. A parser author must be able to implement a conformant reader without consulting any other document.
 
 ## Filename pattern
 
@@ -76,6 +76,31 @@ crashes the check, and an all-skipped book passes with an advisory detail. In bo
 verdict derives from the aggregate alone once it reaches the book-verdict word floor; below the
 floor the check reports pass-with-advice and never blocks, regardless of the aggregate statistic.
 
+### The overlap check entry
+
+Since Wave 1 exit Task 7 (the seventh configurable gate check), `overlap` reports local n-gram
+overlap between chapter prose and the author's own research corpus (`hooks/lib/overlap-engine.mjs`,
+also used directly by `bin/ns-overlap`): every file in `research/packets/*.md`, every non-empty
+`verbatim` field in `research/evidence-log.md`, and (when present) every file in
+`context/prior-work/*.md`. It carries the standard five check-entry fields only - no structured
+sibling field the way `stylometry` carries `drift`.
+
+- `detail` names the worst finding (the longest merged span) by chapter, source, and word count,
+  for example `2 overlap finding(s); worst: chapters/03-the-signal.md <- research/packets/
+  01-interview.md (30 word(s)); overlap.unlicensed-lift`. When any span was excluded as properly
+  quoted-and-anchored (`[quote: EV-nnnn]`), the detail also names how many, informationally.
+- `evidence` lists the offending chapter files only, deduplicated - never a `#Lnn` line anchor,
+  since the underlying engine reports token offsets into normalized text, not source line numbers.
+- `next` recommends quoting and citing the source verbatim, or rewriting the passage, to resolve
+  each flagged span.
+- Default mode is `warn`. Unlike `quote_fidelity` and `thesis_alignment`, `overlap` is fully
+  deterministic and is NOT structurally coerced: an author can opt it into `block` via the normal
+  D-03 double opt-in (top-level `gate.mode` plus this check's own `mode`, both away from their
+  warn-mode defaults).
+- The minimum merged-span word length to flag is `thresholds.overlap_min_words` (default 15,
+  matching `bin/ns-overlap`'s own `--min-words` default), settings-overridable the same way every
+  other threshold is (Wave 1 exit Task 2).
+
 ### Verdict values
 
 | Value | Meaning |
@@ -91,7 +116,7 @@ floor the check reports pass-with-advice and never blocks, regardless of the agg
 - The `Stop` hook (`hooks/stop-gate.mjs`), not `bin/ns-gate` itself, separately writes `.studio/gate/last-gate.json`: it spawns `bin/ns-gate` as a subprocess and copies the subprocess's stdout verbatim into `last-gate.json` via temp-file-plus-rename. This file carries the most recent gate result for the chapter and is the gate-debt input read by the `SessionStart` hook per S-07 (hooks and scripts). `bin/ns-gate`, run directly (for example from CI or a manual invocation with no Stop hook in the loop), never touches `last-gate.json`.
 - The top-level `verdict` is the most severe per-check verdict, subject to the coercions in `config.json` section 4: judgment checks (`thesis_alignment`) are coerced from `block` to `warn`; the top-level `gate.mode` setting governs whether `block` verdicts actually stop the session.
 - Retention mirrors the snapshot policy: the last 10 reports per chapter slug are kept; older reports are pruned by `bin/ns-gate` at creation time.
-- `progress.json` `last_gate.report` is updated by `bin/ns-gate` to point at the new report's bible-relative path after each run.
+- `bin/ns-gate` writes ONLY under `.studio/gate/` per D-06 (single-writer state discipline): it never touches `progress.json` or any bible file. The `progress.json` `last_gate` per-chapter field stays reserved and unpopulated in v1 regardless of how many gate runs have occurred.
 
 ## Example
 
@@ -140,6 +165,6 @@ floor the check reports pass-with-advice and never blocks, regardless of the agg
 
 ## Consumed by
 
-- `bin/ns-gate` (TSK-029 (ns-gate orchestrator)): writes one report per gate run; updates `progress.json` `last_gate.report`; prunes to the last 10 reports per chapter slug. Does NOT write `.studio/gate/last-gate.json` (see the Stop hook, below).
+- `bin/ns-gate` (TSK-029 (ns-gate orchestrator)): writes one report per gate run; prunes to the last 10 reports per chapter slug. Writes ONLY under `.studio/gate/` per D-06 (single-writer state discipline): it never updates `progress.json` and does NOT write `.studio/gate/last-gate.json` (see the Stop hook, below).
 - `Stop` gate hook (TSK-034 (stop-gate hook)): invokes `bin/ns-gate` at session end, reads the resulting report to determine whether to block the session, and is the sole writer of `.studio/gate/last-gate.json` (a verbatim copy of that same `bin/ns-gate` run's stdout).
 - `bin/ns-status` (via `hooks/lib/status-engine.mjs`): reads the newest report per chapter slug to populate the drift statistic and gate verdict fields in its JSON board. The `nfs-status-dashboard` skill never reads a report file itself; it narrates that JSON output directly.

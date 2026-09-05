@@ -1,6 +1,6 @@
 // what-it-is:   the ns-gate orchestrator engine
-// what-it-does: composes the four deterministic engines (claims, stylometry,
-//               scrub/injection, scrub/continuity) plus the session-write flag check
+// what-it-does: composes the deterministic engines (claims, stylometry, scrub/injection,
+//               scrub/continuity, state coherence, overlap) plus the session-write flag check
 //               into a single policy verdict; loads and coerces the gate config per D-03;
 //               returns a structured gate report matching S-08 section 11 exactly, plus the
 //               stylometry entry's `drift` sibling per ADR-0012 (PF-14 structured drift field);
@@ -33,6 +33,12 @@ import { parseEvidenceLog } from './ledger.mjs';
 //  reuses the exported checkWordCountCoherence from doctor-engine.mjs; one implementation,
 //  two callers (runChecks and the gate). No word-count comparison logic is duplicated here.]
 import { checkWordCountCoherence } from './doctor-engine.mjs';
+// Wave 1 exit Task 2 (settings engine): per-project studio settings overlay. loadGateConfig is
+// the single choke point -- settings are read here and nowhere else in the gate path.
+import { loadSettings } from './settings.mjs';
+// Wave 1 exit Task 7 (overlap gate check): shares the identical corpus-discovery and
+// span-matching computation bin/ns-overlap uses, per overlap-engine.mjs's own used-by contract.
+import { findOverlaps, discoverCorpora, DEFAULT_MIN_WORDS } from './overlap-engine.mjs';
 
 // Check registry: CLI flag -> report check name
 // 'claims'           -> 'claim_coverage'  -> computeCoverage
@@ -49,6 +55,12 @@ import { checkWordCountCoherence } from './doctor-engine.mjs';
 // 'continuity-quick' -> 'continuity'      -> scrub(chapters, 'continuity')
 // 'coherence'        -> 'state_coherence' -> checkWordCountCoherence(root)
 //   [TSK-029b (state-coherence gate check) 2026-07-18 per OQ-13 (gate coherence check) decision]
+// 'overlap'          -> 'overlap'         -> findOverlaps(chapters, discoverCorpora(root), { minWords })
+//   [Wave 1 exit Task 7 (overlap gate check): local n-gram overlap against the author's own
+//    research corpus (hooks/lib/overlap-engine.mjs); warn-mode by default. UNLIKE quote_fidelity
+//    and thesis_alignment, this check is NOT structurally coerced -- it is fully deterministic,
+//    so D-03 lets it block once an author opts in on both the top-level gate.mode AND this
+//    check's own mode (the double opt-in also required of every other deterministic check).]
 // 'session_write_flag' is always evaluated (not in --check list)
 export const CHECK_REGISTRY = [
   { flag: 'claims',           reportName: 'claim_coverage' },
@@ -57,6 +69,7 @@ export const CHECK_REGISTRY = [
   { flag: 'scrub',            reportName: 'prompt_scrub' },
   { flag: 'continuity-quick', reportName: 'continuity' },
   { flag: 'coherence',        reportName: 'state_coherence' },
+  { flag: 'overlap',          reportName: 'overlap' },
 ];
 
 // All valid --check flag values
@@ -87,8 +100,13 @@ const MIN_SCORABLE_CHAPTER_WORDS = 50;
 // check reports pass-with-advice instead of blocking.
 const MIN_BOOK_VERDICT_WORDS = 2200;
 
-// Default gate config per S-08 section 4 sample
-const DEFAULT_GATE = {
+// Default gate config per S-08 section 4 sample. Exported so tests/engines/gate.test.mjs's
+// template-parity test can assert both shipped config templates' gate.checks key sets deeply
+// equal Object.keys(DEFAULT_GATE.checks): both shipped config templates must carry the full
+// default check set, and a parity test in the gate suite enforces it, so the list cannot drift
+// out of sync the way templates/config-defaults.json and templates/book-scaffold/.studio/
+// config.json already had (Wave 1 exit Task 2).
+export const DEFAULT_GATE = {
   mode: 'warn',
   checks: {
     claim_coverage:     { enabled: true, mode: 'block' },
@@ -105,22 +123,37 @@ const DEFAULT_GATE = {
     //  default mode is warn because out-of-session edits produce benign mismatches until the
     //  PostToolBatch hook refreshes progress.json; authors opt it to block per normal D-03 opt-in.]
     state_coherence:    { enabled: true, mode: 'warn' },
+    // [Wave 1 exit Task 7 (overlap gate check): default mode is warn, same as the other
+    //  deterministic content checks above -- and, unlike quote_fidelity just above and
+    //  thesis_alignment just below, NOT structurally coerced back to warn in loadGateConfig: an
+    //  author can opt this one all the way to block via the normal D-03 double opt-in.]
+    overlap:            { enabled: true, mode: 'warn' },
     thesis_alignment:   { enabled: true, mode: 'warn' },
     session_write_flag: { enabled: true, mode: 'block' },
   },
 };
 
 /**
- * Loads the gate config from .studio/config.json and applies the two D-03 invariants.
+ * Loads the gate config from .studio/config.json, overlays per-project studio settings
+ * (Wave 1 exit Task 2), and applies the two D-03 invariants.
+ *
+ * Layering order (single choke point): DEFAULT_GATE <- .studio/config.json gate/thresholds <-
+ * settings mappings (gate_mode -> gate.mode; thresholds -> shallow merge) <- structural
+ * coercions (unchanged). Settings can raise gate.mode to "block" but can never promote
+ * thesis_alignment or quote_fidelity out of their coerced "warn" mode, because the coercion
+ * blocks inspect gate.checks, which the settings overlay never writes to.
  *
  * Missing gate block -> defaults from DEFAULT_GATE.
  * D-03 Invariant 1: thesis_alignment.mode "block" is coerced to "warn"; notice to stderr.
  * D-03 Invariant 2 is applied at verdict time (top-level capping is in runGate).
  * Unknown check names and threshold keys are preserved per S-08 Rule 2.
+ * A corrupt or absent settings file is fail-open: loadSettings never throws, and a warning
+ * (if any) is returned as settingsWarning rather than printed here -- callers (bin/ns-gate,
+ * hooks/stop-gate.mjs) are responsible for printing it to stderr per Task 2's design pin.
  *
  * @param {string}   root      - absolute book root path
  * @param {Function} [stderrFn] - optional stderr write function; defaults to process.stderr.write
- * @returns {{ gate: object, thresholds: object, coercionNotice: string|null }}
+ * @returns {{ gate: object, thresholds: object, coercionNotice: string|null, settingsWarning: string|null }}
  */
 export function loadGateConfig(root, stderrFn) {
   const stderr = stderrFn || (s => process.stderr.write(s));
@@ -133,7 +166,7 @@ export function loadGateConfig(root, stderrFn) {
 
   // If gate block is absent, use defaults
   const rawGate = (rawConfig && rawConfig.gate) ? rawConfig.gate : DEFAULT_GATE;
-  const thresholds = (rawConfig && rawConfig.thresholds) ? rawConfig.thresholds : {};
+  const thresholds = Object.assign({}, (rawConfig && rawConfig.thresholds) ? rawConfig.thresholds : {});
 
   // Build effective gate config preserving unknown fields (S-08 Rule 2)
   const gate = {
@@ -155,6 +188,30 @@ export function loadGateConfig(root, stderrFn) {
     if (!gate.checks[name]) {
       gate.checks[name] = Object.assign({}, rawChecks[name]);
     }
+  }
+
+  // ---- Settings overlay (Wave 1 exit Task 2, P1/P2) ---------------------------------------
+  // Single choke point: settings are read HERE, and applied BEFORE the two structural
+  // coercion blocks immediately below, so that a settings file can raise the top-level
+  // gate.mode to "block" but can never promote thesis_alignment or quote_fidelity out of
+  // their structurally-coerced "warn" mode -- the coercion blocks re-derive their verdict
+  // from gate.checks itself, which this overlay never writes to (P2's settings schema has
+  // no per-check mode key; gate_mode maps only to the top-level gate.mode field config.json's
+  // own gate.mode already occupies). loadSettings never throws (fail-open by construction);
+  // a corrupt or absent settings file yields empty settings here, changing nothing.
+  const { settings, warning: settingsWarning } = loadSettings(root);
+
+  // gate_mode (P2): overrides config.json's gate.mode. Already enum-validated by
+  // loadSettings -- off|warn|block or absent -- so no re-validation is needed here.
+  if (settings.gate_mode) {
+    gate.mode = settings.gate_mode;
+  }
+
+  // thresholds (P2): shallow per-key merge OVER config thresholds -- settings wins on a key
+  // collision, and any config key settings does not name passes through unchanged. Already
+  // type-validated by loadSettings (a plain object or absent), so no re-validation here.
+  if (settings.thresholds) {
+    Object.assign(thresholds, settings.thresholds);
   }
 
   // D-03 Invariant 1: judgment check thesis_alignment must never block in v1
@@ -181,7 +238,7 @@ export function loadGateConfig(root, stderrFn) {
     coercionNotice = (coercionNotice || '') + quoteCoercionNotice;
   }
 
-  return { gate, thresholds, coercionNotice };
+  return { gate, thresholds, coercionNotice, settingsWarning };
 }
 
 /**
@@ -269,17 +326,17 @@ function deriveVerdict(checkConfig, hasFindings) {
  * @param {string[]|null} [opts.checkSubset]  - check flag names to run (null = all four)
  * @param {string|null}   [opts.chapterSlug]  - single chapter slug or null for all
  * @param {Function}      [opts.stderrFn]     - optional stderr override
- * @returns {{ exitCode: 0|1|2, report: object|null, coercionNotice: string|null }}
+ * @returns {{ exitCode: 0|1|2, report: object|null, coercionNotice: string|null, settingsWarning: string|null }}
  */
 export function runGate(root, opts = {}) {
   const { checkSubset, chapterSlug, stderrFn } = opts;
 
-  // Load config; D-03 Invariant 1 applied here
-  let gate, thresholds, coercionNotice;
+  // Load config; D-03 Invariant 1 and the settings overlay (Wave 1 exit Task 2) are applied here
+  let gate, thresholds, coercionNotice, settingsWarning;
   try {
-    ({ gate, thresholds, coercionNotice } = loadGateConfig(root, stderrFn));
+    ({ gate, thresholds, coercionNotice, settingsWarning } = loadGateConfig(root, stderrFn));
   } catch (err) {
-    return { exitCode: 2, report: null, coercionNotice: null };
+    return { exitCode: 2, report: null, coercionNotice: null, settingsWarning: null };
   }
 
   // Determine which report-level check names to include
@@ -299,7 +356,7 @@ export function runGate(root, opts = {}) {
   try {
     chapters = loadChapters(root, chapterSlug);
   } catch (err) {
-    return { exitCode: 2, report: null, coercionNotice };
+    return { exitCode: 2, report: null, coercionNotice, settingsWarning };
   }
 
   // Read the full config once for stylometry baseline (needed when chapters exist)
@@ -736,6 +793,72 @@ export function runGate(root, opts = {}) {
     }
   }
 
+  // ---- OVERLAP (local n-gram overlap against the author's own research corpus) ----
+  // [Wave 1 exit Task 7 (overlap gate check): shares hooks/lib/overlap-engine.mjs's
+  //  findOverlaps/discoverCorpora with bin/ns-overlap, per that module's own used-by contract, so
+  //  the CLI and this check can never compute overlap differently. The corpus (research/packets/
+  //  *.md, verbatim evidence-log fields, and context/prior-work/*.md when present) is discovered
+  //  from the whole book root regardless of --chapter scoping, matching bin/ns-overlap's own
+  //  behavior: an author's corpus does not shrink just because one chapter is being gated.]
+  if (requestedReportNames.has('overlap')) {
+    const reportName = 'overlap';
+    const overlapConfig = gate.checks[reportName];
+
+    if (!overlapConfig || overlapConfig.enabled === false) {
+      checkEntries.push(makeEntry(reportName, 'skip', 'check disabled in config', [], null));
+    } else if ((overlapConfig.mode || 'warn') === 'off') {
+      checkEntries.push(makeEntry(reportName, 'skip', 'check mode is off in config', [], null));
+    } else if (chapters.length === 0) {
+      checkEntries.push(makeEntry(reportName, 'pass', 'no chapters to scan; overlap.pass', [], null));
+    } else {
+      try {
+        const corpora = discoverCorpora(root);
+        // thresholds.overlap_min_words reaches the engine through loadGateConfig's own
+        // thresholds object (settings-overridable per Wave 1 exit Task 2); default 15
+        // (DEFAULT_MIN_WORDS, the engine's own constant) when absent.
+        const minWords = typeof thresholds.overlap_min_words === 'number'
+          ? thresholds.overlap_min_words
+          : DEFAULT_MIN_WORDS;
+        const { findings, excluded } = findOverlaps(chapters, corpora, { minWords });
+        const hasFindings = findings.length > 0;
+        const verdict = deriveVerdict(overlapConfig, hasFindings);
+
+        let detail, evidence, next;
+        if (!hasFindings) {
+          detail = 'no overlap findings against the local research corpus (' + corpora.length + ' corpus text(s) checked)';
+          if (excluded > 0) {
+            detail += '; ' + excluded + ' span(s) excluded as properly quoted';
+          }
+          evidence = [];
+          next = null;
+        } else {
+          // "Worst" finding is the longest merged span. findOverlaps already sorts its
+          // findings by chapter, then source, then chapterSpan.start for determinism, so a
+          // stable linear scan for the max `words` value keeps the tie-break deterministic too.
+          let worst = findings[0];
+          for (const f of findings) {
+            if (f.words > worst.words) worst = f;
+          }
+          detail =
+            findings.length + ' overlap finding(s); worst: ' + worst.chapter + ' <- ' + worst.source +
+            ' (' + worst.words + ' word(s)); overlap.unlicensed-lift';
+          if (excluded > 0) {
+            detail += '; ' + excluded + ' span(s) excluded as properly quoted';
+          }
+          // evidence: the offending chapter files (not file+line -- findOverlaps reports token
+          // offsets, not source line numbers), deduplicated and already in chapter-sorted order.
+          evidence = Array.from(new Set(findings.map(f => f.chapter)));
+          next = 'Quote and cite the source verbatim, or rewrite the passage in your own words, to resolve each flagged overlap.';
+        }
+
+        checkEntries.push(makeEntry(reportName, verdict, detail, evidence, next));
+      } catch (err) {
+        checkEntries.push(makeEntry(reportName, 'skip', 'engine error: ' + err.message, [], null));
+        hasEngineError = true;
+      }
+    }
+  }
+
   // ---- SESSION WRITE FLAG (always evaluated; ns-gate never blocks on this check) ----
   {
     const reportName = 'session_write_flag';
@@ -796,7 +919,7 @@ export function runGate(root, opts = {}) {
     checks: checkEntries,
   };
 
-  return { exitCode, report, coercionNotice };
+  return { exitCode, report, coercionNotice, settingsWarning };
 }
 
 /**

@@ -34,7 +34,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import { writeSyntheticV5Baseline } from '../lib/synthetic-v5-baseline.mjs';
-import { runGate } from '../../hooks/lib/gate-engine.mjs';
+import { runGate, DEFAULT_GATE, loadGateConfig } from '../../hooks/lib/gate-engine.mjs';
 import { measureChapter } from '../../hooks/lib/stylometry-engine.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -120,6 +120,14 @@ function readLatestReport(tmpDir, slug) {
     .sort();
   if (files.length === 0) throw new Error('No gate report found for slug: ' + slug);
   return JSON.parse(readFileSync(join(gateDir, files[files.length - 1]), 'utf8'));
+}
+
+/** Writes .claude/nonfiction-studio.local.md under tmpDir with the given raw text content
+ * (Wave 1 exit Task 2: per-project studio settings file). */
+function writeSettingsFile(tmpDir, text) {
+  const settingsDir = join(tmpDir, '.claude');
+  mkdirSync(settingsDir, { recursive: true });
+  writeFileSync(join(settingsDir, 'nonfiction-studio.local.md'), text, 'utf8');
 }
 
 // ---- T01: golden book warn defaults -------------------------------------------
@@ -963,6 +971,178 @@ test('T18b: --check=claims, (trailing comma, one real item) still runs the named
 });
 
 // ============================================================================
+// Wave 1 exit Task 2 (settings engine): template parity + settings overlay
+// ============================================================================
+
+const TEMPLATES = join(__dirname, '..', '..', 'templates');
+
+// ---- Template parity: both shipped config templates must carry the full default check set --
+
+test('template parity: templates/config-defaults.json gate.checks key set deeply equals Object.keys(DEFAULT_GATE.checks)', () => {
+  const configDefaults = JSON.parse(readFileSync(join(TEMPLATES, 'config-defaults.json'), 'utf8'));
+  const actual = Object.keys(configDefaults.gate.checks).sort();
+  const expected = Object.keys(DEFAULT_GATE.checks).sort();
+  assert.deepStrictEqual(
+    actual, expected,
+    'templates/config-defaults.json gate.checks keys must match DEFAULT_GATE.checks exactly; got: ' +
+    JSON.stringify(actual) + '; expected: ' + JSON.stringify(expected)
+  );
+});
+
+test('template parity: templates/book-scaffold/.studio/config.json gate.checks key set deeply equals Object.keys(DEFAULT_GATE.checks)', () => {
+  const scaffoldConfig = JSON.parse(
+    readFileSync(join(TEMPLATES, 'book-scaffold', '.studio', 'config.json'), 'utf8')
+  );
+  const actual = Object.keys(scaffoldConfig.gate.checks).sort();
+  const expected = Object.keys(DEFAULT_GATE.checks).sort();
+  assert.deepStrictEqual(
+    actual, expected,
+    'templates/book-scaffold/.studio/config.json gate.checks keys must match DEFAULT_GATE.checks exactly; got: ' +
+    JSON.stringify(actual) + '; expected: ' + JSON.stringify(expected)
+  );
+});
+
+// ---- settings gate_mode override: raises exit code without promoting a coerced check -----
+
+// Uses the ai-injection fixture UNMODIFIED (same fixture T06/T07 already prove the "before"
+// half of this comparison with: T07 shows the raw fixture's own gate.mode "warn" caps the real
+// prompt_scrub finding to a top-level "warn" verdict, exit 0). This test additionally plants
+// quote_fidelity.mode=block in config.json (an already-coerced check, alongside prompt_scrub's
+// own real, unrelated finding) and, on the settings side, both the one lever P2 actually exposes
+// (gate_mode) and an inert nested "gate: {checks: {quote_fidelity: {mode: block}}}" shape that
+// loadGateConfig never reads (P2's settings schema has no per-check key) -- covering "every
+// merge layer that exists" per the acceptance criteria, not only the one the schema documents.
+test('Wave 1 exit Task 2: settings gate_mode: block flips a real finding from capped-warn to exit 1, while quote_fidelity stays coerced through every layer (config block + settings gate_mode + an inert nested settings shape)', () => {
+  const tmp = makeTempClone(join(EXAMPLES, 'fixtures', 'ai-injection'));
+  try {
+    // Plant a REAL quote-fidelity mismatch (reusing the same helper T20/T21 use against GOLDEN):
+    // without an actual finding, quote_fidelity trivially reports "pass" regardless of mode, and
+    // the coercion-holds assertion below would prove nothing.
+    plantQuoteMismatch(tmp);
+
+    const configPath = join(tmp, '.studio', 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.gate.checks.quote_fidelity = { enabled: true, mode: 'block' };
+    writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+
+    // Before settings: gate.mode is "warn" (the fixture's own default), so D-03 Invariant 2
+    // caps the real prompt_scrub block finding to a top-level "warn" verdict -- exit 0.
+    const before = spawnGate(tmp, ['--json']);
+    assert.strictEqual(before.status, 0,
+      'before settings: capped to warn, exit 0; stderr: ' + before.stderr);
+    const beforeReport = readLatestReport(tmp, 'all');
+    assert.strictEqual(beforeReport.verdict, 'warn', 'before settings: top-level verdict is warn');
+
+    writeSettingsFile(tmp, [
+      '---',
+      'gate_mode: block',
+      'gate:',
+      '  checks:',
+      '    quote_fidelity:',
+      '      mode: block',
+      '---',
+      '',
+    ].join('\n'));
+
+    const after = spawnGate(tmp, ['--json']);
+    assert.strictEqual(after.status, 1,
+      'settings gate_mode: block must flip the same real finding to exit 1; stderr: ' + after.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    assert.strictEqual(report.verdict, 'block', 'top-level verdict must be block once settings raises gate.mode');
+
+    const scrubEntry = report.checks.find(c => c.check === 'prompt_scrub');
+    assert.strictEqual(scrubEntry.verdict, 'block', 'prompt_scrub (the real, non-coerced finding) drives the block');
+
+    const qfEntry = report.checks.find(c => c.check === 'quote_fidelity');
+    assert.strictEqual(
+      qfEntry.verdict, 'warn',
+      'quote_fidelity must stay coerced to warn even under config block + settings gate_mode: block + ' +
+      'an inert nested settings shape; got: ' + qfEntry.verdict
+    );
+
+    assert.ok(
+      after.stderr.includes('quote_fidelity') && after.stderr.includes('coerced'),
+      'stderr must still carry the quote_fidelity structural coercion notice; got: ' + after.stderr
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---- settings thresholds: shallow merge, settings wins on collision -----------------------
+
+test('Wave 1 exit Task 2: settings thresholds shallow-merges over config thresholds -- settings wins on a colliding key, a settings-only key is added, a config-only key survives untouched', () => {
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    // GOLDEN's own .studio/config.json thresholds: { claim_coverage_min: 1.0, stylometry_marker_tolerance: 2.0 }
+    writeSettingsFile(tmp, [
+      '---',
+      'thresholds:',
+      '  stylometry_marker_tolerance: 9.5',
+      '  overlap_min_words: 15',
+      '---',
+    ].join('\n'));
+
+    const { thresholds } = loadGateConfig(tmp);
+    assert.strictEqual(thresholds.stylometry_marker_tolerance, 9.5, 'settings must win on a colliding key');
+    assert.strictEqual(thresholds.overlap_min_words, 15, 'a settings-only key must be added');
+    assert.strictEqual(
+      thresholds.claim_coverage_min, 1.0,
+      'a config-only key not named in settings must pass through unchanged'
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---- corrupt settings vs. absent settings: identical gate behavior, warning-only difference
+
+test('Wave 1 exit Task 2: corrupt settings never changes gate behavior vs. no settings -- identical reports (ts aside), warning appears on stderr only for the corrupt run', () => {
+  const tmpAbsent = makeTempClone(GOLDEN);
+  const tmpCorrupt = makeTempClone(GOLDEN);
+  try {
+    writeSettingsFile(tmpCorrupt, '---\ngate_mode: [off, warn\n---\n'); // invalid YAML
+
+    const resultAbsent = spawnGate(tmpAbsent, ['--json']);
+    const resultCorrupt = spawnGate(tmpCorrupt, ['--json']);
+
+    assert.strictEqual(
+      resultAbsent.status, resultCorrupt.status,
+      'exit codes must be identical; absent stderr: ' + resultAbsent.stderr + ' corrupt stderr: ' + resultCorrupt.stderr
+    );
+
+    const stripTs = r => {
+      const clone = JSON.parse(JSON.stringify(r));
+      delete clone.ts;
+      return clone;
+    };
+    const reportAbsent = readLatestReport(tmpAbsent, 'all');
+    const reportCorrupt = readLatestReport(tmpCorrupt, 'all');
+    assert.deepStrictEqual(
+      stripTs(reportCorrupt), stripTs(reportAbsent),
+      'corrupt settings must produce an IDENTICAL report (ts aside) to no settings at all'
+    );
+
+    assert.ok(
+      !resultAbsent.stderr.includes('settings warning'),
+      'no settings file: no settings warning on stderr; got: ' + resultAbsent.stderr
+    );
+    assert.ok(
+      resultCorrupt.stderr.includes('settings warning'),
+      'corrupt settings file: a settings warning must appear on stderr; got: ' + resultCorrupt.stderr
+    );
+    assert.ok(
+      resultCorrupt.stderr.includes(join(tmpCorrupt, '.claude', 'nonfiction-studio.local.md')),
+      'the warning must name the corrupt settings file path; got: ' + resultCorrupt.stderr
+    );
+  } finally {
+    rmSync(tmpAbsent, { recursive: true, force: true });
+    rmSync(tmpCorrupt, { recursive: true, force: true });
+  }
+});
+
+// ============================================================================
 // P6 GATE TOPOLOGY (ADR-0012 voice verdict scope, Decision 2; PF-14 structured drift field)
 // ============================================================================
 //
@@ -1368,5 +1548,228 @@ test('P7: thresholds.drift_score_max present -> the retirement notice is appende
     assert.strictEqual(occurrences, 1, 'the notice must appear exactly once; got detail: ' + entry.detail);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ============================================================================
+// Wave 1 exit Task 7 (overlap gate check): the seventh configurable gate check, warn-mode
+// default. Uses the Task 6 overlap fixture book (tests/engines/fixtures/overlap/), which carries
+// no .studio/config.json of its own, so loadGateConfig falls all the way back to DEFAULT_GATE
+// (overlap enabled, mode warn) and DEFAULT_MIN_WORDS (15) unless a test plants its own config.
+// makeTempClone's writeSyntheticV5Baseline no-ops silently on a clone with no config.json to
+// patch (tests/lib/synthetic-v5-baseline.mjs's own documented no-chapters/no-config no-op), so
+// it is safe to reuse here even though every test below requests --check=overlap only.
+// ============================================================================
+
+const OVERLAP_FIXTURE = join(__dirname, 'fixtures', 'overlap');
+
+test('Wave 1 exit Task 7: overlap warns on the whole book (planted lifts in chapters 01 and 04), naming the worst finding by chapter, source, and word count', () => {
+  const tmp = makeTempClone(OVERLAP_FIXTURE);
+  try {
+    const result = spawnGate(tmp, ['--check=overlap', '--json']);
+    assert.strictEqual(result.status, 0, 'warn-mode default must exit 0; stderr: ' + result.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    const entry = report.checks.find(c => c.check === 'overlap');
+    assert.ok(entry, 'overlap entry must be present');
+    assert.strictEqual(entry.verdict, 'warn', 'overlap must warn by default on the planted lifts; got: ' + entry.verdict);
+    assert.strictEqual(report.verdict, 'warn', 'top-level verdict must be warn');
+
+    // detail names the worst finding: chapter, source, word count (the two 30-word findings in
+    // chapter 01 tie; the evidence-log source sorts first alphabetically, matching findOverlaps'
+    // own deterministic chapter/source/start ordering).
+    assert.ok(
+      entry.detail.includes('chapters/01-packet-lift.md'),
+      'detail must name the worst chapter; got: ' + entry.detail
+    );
+    assert.ok(
+      entry.detail.includes('research/evidence-log.md#EV-0001'),
+      'detail must name the worst finding\'s source; got: ' + entry.detail
+    );
+    assert.ok(entry.detail.includes('30 word'), 'detail must name the worst finding\'s word count; got: ' + entry.detail);
+    assert.ok(entry.detail.includes('overlap.unlicensed-lift'), 'detail must carry the overlap signal token; got: ' + entry.detail);
+
+    // evidence: offending chapter files only (no line anchors -- findOverlaps has no line info),
+    // both lifted chapters named, the clean and properly-quoted chapters absent.
+    assert.deepStrictEqual(
+      entry.evidence.sort(),
+      ['chapters/01-packet-lift.md', 'chapters/04-priorwork-lift.md'],
+      'evidence must list exactly the offending chapter files; got: ' + JSON.stringify(entry.evidence)
+    );
+
+    // next says quote-it, cite-it, or rewrite-it (the OPP resolution verbs)
+    assert.ok(entry.next && /quote/i.test(entry.next) && /cite/i.test(entry.next) && /rewrite/i.test(entry.next),
+      'next must recommend quoting, citing, or rewriting; got: ' + entry.next);
+
+    // NO structural sibling field: the drift field stays stylometry-only.
+    assert.deepStrictEqual(
+      Object.keys(entry).sort(), ['check', 'detail', 'evidence', 'next', 'verdict'],
+      'overlap entry must carry exactly the standard five keys; got: ' + JSON.stringify(Object.keys(entry))
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('Wave 1 exit Task 7: overlap passes when scoped to the properly quoted-and-anchored chapter (excluded, not flagged)', () => {
+  const tmp = makeTempClone(OVERLAP_FIXTURE);
+  try {
+    const result = spawnGate(tmp, ['--check=overlap', '--chapter=02-quoted-lift', '--json']);
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    const report = readLatestReport(tmp, '02-quoted-lift');
+    const entry = report.checks.find(c => c.check === 'overlap');
+    assert.strictEqual(entry.verdict, 'pass', 'a properly quoted-and-anchored lift must not flag; detail: ' + entry.detail);
+    assert.ok(entry.detail.includes('excluded as properly quoted'), 'detail must report the exclusion; got: ' + entry.detail);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('Wave 1 exit Task 7: overlap passes when scoped to the clean chapter', () => {
+  const tmp = makeTempClone(OVERLAP_FIXTURE);
+  try {
+    const result = spawnGate(tmp, ['--check=overlap', '--chapter=03-clean', '--json']);
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    const report = readLatestReport(tmp, '03-clean');
+    const entry = report.checks.find(c => c.check === 'overlap');
+    assert.strictEqual(entry.verdict, 'pass', 'a clean chapter must pass; detail: ' + entry.detail);
+    assert.deepStrictEqual(entry.evidence, [], 'a passing overlap check carries no evidence');
+    assert.strictEqual(entry.next, null, 'a passing overlap check carries no next action');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('Wave 1 exit Task 7: overlap warns when scoped to the unquoted packet-lift chapter alone', () => {
+  const tmp = makeTempClone(OVERLAP_FIXTURE);
+  try {
+    const result = spawnGate(tmp, ['--check=overlap', '--chapter=01-packet-lift', '--json']);
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    const report = readLatestReport(tmp, '01-packet-lift');
+    const entry = report.checks.find(c => c.check === 'overlap');
+    assert.strictEqual(entry.verdict, 'warn', 'an unquoted lift must warn; detail: ' + entry.detail);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('Wave 1 exit Task 7: thresholds.overlap_min_words raises the floor above a real finding, suppressing it', () => {
+  const tmp = makeTempClone(OVERLAP_FIXTURE);
+  try {
+    const configPath = join(tmp, '.studio', 'config.json');
+    mkdirSync(join(tmp, '.studio'), { recursive: true });
+    // No committed config.json for this fixture -- write a minimal one naming only the
+    // threshold override, so DEFAULT_GATE still supplies every check's default mode.
+    writeFileSync(configPath, JSON.stringify({ version: 2, thresholds: { overlap_min_words: 31 } }, null, 2), 'utf8');
+
+    const result = spawnGate(tmp, ['--check=overlap', '--chapter=01-packet-lift', '--json']);
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    const report = readLatestReport(tmp, '01-packet-lift');
+    const entry = report.checks.find(c => c.check === 'overlap');
+    assert.strictEqual(
+      entry.verdict, 'pass',
+      'raising overlap_min_words to 31 must suppress the 30-word planted finding; detail: ' + entry.detail
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('Wave 1 exit Task 7: settings thresholds.overlap_min_words reaches the engine the same way config thresholds do', () => {
+  const tmp = makeTempClone(OVERLAP_FIXTURE);
+  try {
+    writeSettingsFile(tmp, ['---', 'thresholds:', '  overlap_min_words: 31', '---'].join('\n'));
+
+    const result = spawnGate(tmp, ['--check=overlap', '--chapter=01-packet-lift', '--json']);
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    const report = readLatestReport(tmp, '01-packet-lift');
+    const entry = report.checks.find(c => c.check === 'overlap');
+    assert.strictEqual(
+      entry.verdict, 'pass',
+      'a settings-supplied overlap_min_words must reach the engine identically to a config one; detail: ' + entry.detail
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('Wave 1 exit Task 7: double opt-in (settings gate_mode: block AND gate.checks.overlap.mode: block) blocks; overlap is NOT structurally coerced', () => {
+  const tmp = makeTempClone(OVERLAP_FIXTURE);
+  try {
+    const configPath = join(tmp, '.studio', 'config.json');
+    mkdirSync(join(tmp, '.studio'), { recursive: true });
+    writeFileSync(
+      configPath,
+      JSON.stringify({ version: 2, gate: { checks: { overlap: { enabled: true, mode: 'block' } } } }, null, 2),
+      'utf8'
+    );
+    writeSettingsFile(tmp, ['---', 'gate_mode: block', '---'].join('\n'));
+
+    const result = spawnGate(tmp, ['--check=overlap', '--json']);
+    assert.strictEqual(result.status, 1, 'double opt-in must block (exit 1); stderr: ' + result.stderr);
+
+    const report = readLatestReport(tmp, 'all');
+    const entry = report.checks.find(c => c.check === 'overlap');
+    assert.strictEqual(entry.verdict, 'block', 'overlap must reach block under the double opt-in; detail: ' + entry.detail);
+    assert.strictEqual(report.verdict, 'block', 'top-level verdict must be block');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('Wave 1 exit Task 7: gate.checks.overlap.enabled: false skips the check', () => {
+  const tmp = makeTempClone(OVERLAP_FIXTURE);
+  try {
+    const configPath = join(tmp, '.studio', 'config.json');
+    mkdirSync(join(tmp, '.studio'), { recursive: true });
+    writeFileSync(
+      configPath,
+      JSON.stringify({ version: 2, gate: { checks: { overlap: { enabled: false, mode: 'warn' } } } }, null, 2),
+      'utf8'
+    );
+
+    const result = spawnGate(tmp, ['--check=overlap', '--json']);
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    const report = readLatestReport(tmp, 'all');
+    const entry = report.checks.find(c => c.check === 'overlap');
+    assert.strictEqual(entry.verdict, 'skip', 'disabled overlap must skip; got: ' + entry.verdict);
+    assert.strictEqual(entry.detail, 'check disabled in config');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('Wave 1 exit Task 7: gate.checks.overlap.mode: off skips the check even though it is enabled', () => {
+  const tmp = makeTempClone(OVERLAP_FIXTURE);
+  try {
+    const configPath = join(tmp, '.studio', 'config.json');
+    mkdirSync(join(tmp, '.studio'), { recursive: true });
+    writeFileSync(
+      configPath,
+      JSON.stringify({ version: 2, gate: { checks: { overlap: { enabled: true, mode: 'off' } } } }, null, 2),
+      'utf8'
+    );
+
+    const result = spawnGate(tmp, ['--check=overlap', '--json']);
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    const report = readLatestReport(tmp, 'all');
+    const entry = report.checks.find(c => c.check === 'overlap');
+    assert.strictEqual(entry.verdict, 'skip', 'mode:off overlap must skip; got: ' + entry.verdict);
+    assert.strictEqual(entry.detail, 'check mode is off in config');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('Wave 1 exit Task 7: sample-book gate run: overlap verdict pass (zero false positives at the gate)', () => {
+  const tmp = makeTempClone(GOLDEN);
+  try {
+    const result = spawnGate(tmp, ['--check=overlap', '--json']);
+    assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
+    const report = readLatestReport(tmp, 'all');
+    const entry = report.checks.find(c => c.check === 'overlap');
+    assert.strictEqual(entry.verdict, 'pass', 'sample book must show zero false positives; detail: ' + entry.detail);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
   }
 });

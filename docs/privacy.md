@@ -25,10 +25,20 @@ This is the plugin's working memory for your book: progress tracking and configu
 
 **To clear it:** delete the whole `.studio/` folder, or just the piece you want gone, for example `.studio/snapshots/` to drop old chapter snapshots, or the contents of `.studio/ai-use-log.jsonl` to reset the disclosure history. Deleting all of `.studio/` also resets your project's progress tracking and configuration; the plugin recreates the basic structure the next time it needs it, but the deleted history itself is not recoverable.
 
+### 3. Generated book-context skill
+
+**Location:** `.claude/skills/book-context/SKILL.md` inside your book project folder.
+
+The `nfs-new-book` skill can generate this file: a short, project-committed quick-reference assembled from your bible content at the time it was generated - your thesis one-liner, your top three style rules, your chapter map, and your open-claims count - each line naming the exact file (or CLI) it was read from. Unlike the fact-checker cache and `.studio/`, which the plugin maintains on its own, this file is written only after you say yes to an explicit question; a non-interactive session skips the offer and writes nothing, and declining the question writes nothing.
+
+It is generated once and does not update itself as your bible changes. Because a skill file written during a running session only becomes usable at the start of your next session (a confirmed Claude Code platform behavior, not a plugin choice), the offer says so plainly before you decide.
+
+**To clear it:** delete the file. The offer to generate it repeats the next time `/nonfiction-studio:nfs-new-book` runs against that project, since the offer only re-fires when the file is absent.
+
 ## Per-project isolation
 
-Every book project keeps its own `.studio/` folder and its own fact-checker memory, scoped to that project's folder. One book's state is never read by, or mixed into, another book's. If you write two books with Nonfiction Studio, each keeps a completely separate history.
+Every book project keeps its own `.studio/` folder, its own fact-checker memory, and its own generated book-context skill (if any), scoped to that project's folder. One book's state is never read by, or mixed into, another book's. If you write two books with Nonfiction Studio, each keeps a completely separate history.
 
 ## Further reading
 
-For the technical file-format details behind the log and the snapshots, see [formats/ai-use-log.md](formats/ai-use-log.md) and [formats/snapshots.md](formats/snapshots.md). For general orientation, see the main [README](../README.md).
+For the technical file-format details behind the log and the snapshots, see [formats/ai-use-log.md](formats/ai-use-log.md) and [formats/snapshots.md](formats/snapshots.md). For how the book-context skill is generated, see the [nfs-new-book skill reference](reference/skills/nfs-new-book.md#book-context-skill-generation). For general orientation, see the main [README](../README.md).

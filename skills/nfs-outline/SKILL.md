@@ -40,6 +40,8 @@ The output is a binary token:
 
 Do not proceed past Step 1 on `UNCONFIRMED`. Do not attempt to infer brief content from conversation context.
 
+Before this flow's first write, take the ai-use-log.jsonl count snapshot described in Step 5's Compliance append section for `structure/thesis.md`, `structure/outline.md`, `structure/chapter-list.md`, and `research/open-questions.md` (whichever of these this invocation's scope will actually write).
+
 ---
 
 ## Step 2 - Thesis check (full and thesis scopes) / Thesis guard (chapters scope)
@@ -66,6 +68,8 @@ For `thesis` scope: after the thesis is confirmed (author accepts or `thesis-arc
 
 > The thesis is confirmed. To build the chapter outline, run:
 > `/nonfiction-studio:nfs-outline` (full scope) or `/nonfiction-studio:nfs-outline chapters`
+
+Before closing, perform Step 5's Compliance append procedure for `structure/thesis.md` (the only file this scope wrote).
 
 Do not continue to Steps 3-5 in `thesis` scope.
 
@@ -106,7 +110,25 @@ After `structure-architect` completes, present the outline to the author and ask
 
 ---
 
-## Step 5 - Confirm outputs and close (full and chapters scopes)
+## Step 5 - Compliance append, confirm outputs, and close (full and chapters scopes)
+
+### Compliance append (verify-then-append)
+
+This flow's writes may already be logged automatically by a hook on this surface; this skill never assumes which surfaces do or do not fire that hook, and it never assumes the flow is running on any particular surface. Before this flow's first write, read `.studio/ai-use-log.jsonl` and count how many records currently target each file this flow is about to write (the file's path appearing in that record's `targets` array). Hold that starting count per file. After this flow's writes complete, re-read `.studio/ai-use-log.jsonl` and count the records targeting each of those files again. For each file: if the count increased between the two reads, a hook already appended a record for this write on this surface, and this skill appends nothing further for that file. If the count did not increase, append the flow's record or records for that file to `.studio/ai-use-log.jsonl`, per the record template below, using the six-field shape in `docs/formats/ai-use-log.md` (S-08 section 5): `ts`, `agent`, `surface`, `scope`, `targets`, `summary` - with `surface` set honestly to the surface this flow is actually running on. A record already sitting in the log before this flow started, from an earlier session, does not by itself suppress the append; only a count increase observed between this flow's own two reads does. This skill never appends twice for the same write.
+
+**Record template for this flow.** One record per agent that wrote in this invocation (per the count-delta check above):
+
+When `thesis-architect` produced or revised the controlling idea in this run:
+```json
+{"ts":"<RFC 3339 UTC>","agent":"thesis-architect","surface":"<actual surface>","scope":"mechanical","targets":["structure/thesis.md"],"summary":"Produced or revised the confirmed controlling idea."}
+```
+
+When `structure-architect` ran (full and chapters scopes):
+```json
+{"ts":"<RFC 3339 UTC>","agent":"structure-architect","surface":"<actual surface>","scope":"mechanical","targets":["structure/outline.md","structure/chapter-list.md","research/open-questions.md"],"summary":"Produced the chapter-by-chapter outline, the slug registry, and any new open-question items."}
+```
+
+`surface` is `claude-code`, `cowork`, or `chat` per `docs/formats/ai-use-log.md` - whichever this flow is actually running on. None of these files is watched by the PostToolBatch hook (it watches only `chapters/`), so the count-delta check above finds no prior coverage on any surface and this skill appends the applicable record every time.
 
 Use the Read tool on `structure/outline.md` and `structure/chapter-list.md` to confirm both files are present and non-empty.
 

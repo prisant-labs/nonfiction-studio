@@ -10,7 +10,7 @@ tags: ["skill", "draft", "chapter", "drafting-partner", "line-editor", "complian
 
 This is a condensed transcript of a `nfs-draft` session on the chat surface for the sample book "The Quiet Network" (see `examples/sample-book/`). The session drafts Chapter 3 (Your Curation Practice, slug `03-your-curation-practice`) for the first time. The example follows the flow specified in S-06 3.6 (skills and invocation surface) and the adjudications recorded in TSK-049 (draft-chapter skill).
 
-**Session provenance note.** This example continues from the committed sample-book baseline after a `nfs-research` session added EV-0011 (information-volume-overload) and EV-0012 (intentional-selection-sustainability) for Chapter 3, as shown in `docs/reference/skills/nfs-research.example.md`. Chapters 1 and 2 in `examples/sample-book/chapters/` are committed fixtures; the content of Chapter 3 shown here is a hypothetical draft that does not contradict those committed chapters. The session runs on the chat surface to illustrate the compliance append that does not occur on CLI or Cowork.
+**Session provenance note.** This example continues from the committed sample-book baseline after a `nfs-research` session added EV-0011 (information-volume-overload) and EV-0012 (intentional-selection-sustainability) for Chapter 3, as shown in `docs/reference/skills/nfs-research.example.md`. Chapters 1 and 2 in `examples/sample-book/chapters/` are committed fixtures; the content of Chapter 3 shown here is a hypothetical draft that does not contradict those committed chapters. The session runs on the chat surface to illustrate the verify-then-append compliance rule's count-delta check finding no hook coverage and appending its own records (see [Compliance Append](./nfs-draft.md#compliance-append) in the skill reference).
 
 ---
 
@@ -176,11 +176,11 @@ The agent writes the updated `chapters/03-your-curation-practice.md` with the ac
 
 ---
 
-**Studio (Step 6 - Confirm chapter file, chat compliance, and gate close):**
+**Studio (Step 6 - Confirm chapter file, compliance append, and gate close):**
 
 The skill uses the Read tool on `chapters/03-your-curation-practice.md`. The file is present with the accepted replacement applied.
 
-**Chat compliance append.** This session runs on the chat surface. The skill appends two records to `.studio/ai-use-log.jsonl`:
+**Compliance append.** The skill's count-delta check finds no hook-appended record for `chapters/03-your-curation-practice.md` since the flow started (no hooks fire on chat). It appends two records to `.studio/ai-use-log.jsonl`:
 
 ```json
 {"ts":"2026-07-19T15:04:22Z","agent":"drafting-partner","surface":"chat","scope":"generated","targets":["chapters/03-your-curation-practice.md"],"summary":"Drafted 03-your-curation-practice with claim anchors from the evidence ledger."}
@@ -221,6 +221,6 @@ The skill uses the Read tool on `chapters/03-your-curation-practice.md`. The fil
 
 - **No progress.json write.** The skill wrote no `.studio/progress.json`. On CLI or Cowork, the PostToolBatch hook would update the word count for `03-your-curation-practice` in `progress.json` when `drafting-partner` writes the file - but only if a matching slug entry already exists in the `chapters` array. The chapter STATUS lifecycle field is not updated by this flow.
 
-- **Chat compliance append, not hook.** The two ai-use-log records (scope `generated` for `drafting-partner`, scope `assisted` for `line-editor`) are appended by the skill at Step 6 because this session runs on the chat surface. On CLI or Cowork the PostToolBatch hook writes those records; the skill would not append in that case.
+- **Compliance append via count-delta, not a chat-only special case.** The two ai-use-log records (scope `generated` for `drafting-partner`, scope `assisted` for `line-editor`) are appended by the skill at Step 6 because its count-delta check found no hook-appended record for `chapters/03-your-curation-practice.md` since the flow started - true here because no hooks fire on chat. On CLI or Cowork the PostToolBatch hook normally appends those records first, so the same check normally finds no append needed there; either way it is the identical verify-then-append rule, not two different code paths.
 
 - **Explicit quality gate prompt on chat.** The skill closes with an explicit `/nonfiction-studio:nfs-check-chapter` prompt. On CLI and Cowork the Stop hook fires automatically; on chat this prompt is the substitute per S-06 1.3 (gate closure compensation).

@@ -13,7 +13,7 @@
 // statusline documentation); a stack trace or a non-zero exit here would be far more disruptive
 // than in a one-shot CLI, so the entire body below is wrapped in a catch that swallows any
 // unexpected error and falls through to silence. This is intentionally broader than the other
-// seven CLIs' error handling (which do report named errors on stderr with exit 2): ns-statusline
+// eight CLIs' error handling (which do report named errors on stderr with exit 2): ns-statusline
 // has no operator watching its exit code, only a status bar that must never show a stack trace.
 
 import { readFileSync } from 'node:fs';

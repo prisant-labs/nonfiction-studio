@@ -4,7 +4,10 @@
 //               and computes per-chapter and book-level coverage statistics with open-claim findings
 // why:          the engine logic lives in a lib module so both bin/ns-claims (CLI) and the Stop
 //               gate hook share the same computation path per S-07 section 4
-// used-by:      bin/ns-claims, hooks/stop-gate.mjs
+// used-by:      bin/ns-claims, hooks/stop-gate.mjs, hooks/lib/gate-engine.mjs (computeCoverage,
+//               scanChapter, scanQuoteAnchors, computeQuoteFindings), hooks/lib/doctor-engine.mjs
+//               (scanChapter), and hooks/lib/overlap-engine.mjs (findQuoteAnchorSpans, for its
+//               quoted-span exclusion rule)
 
 import { resolvedStatuses } from './ledger.mjs';
 
@@ -210,7 +213,8 @@ const QUOTE_ANCHOR_RE = /\[quote: (EV-\d{4})\]/g;
 const QUOTE_GAP_RE = /^[\s.!?]*$/;
 
 /**
- * Finds the quoted span, if any, that immediately precedes a [quote: EV-nnnn] anchor.
+ * Finds the character range [start, end) of the quoted span, if any, that
+ * immediately precedes a [quote: EV-nnnn] anchor.
  *
  * The span is the text between the nearest preceding pair of straight double
  * quotation marks (") whose closing mark is separated from the anchor by nothing
@@ -219,11 +223,17 @@ const QUOTE_GAP_RE = /^[\s.!?]*$/;
  * whitespace/terminal punctuation sits in the gap, or there is no matching
  * opening quote before the closing one).
  *
+ * This is the single implementation of the quote-anchor grammar's span-finding
+ * rule: findPrecedingQuotedSpan (string result, used by scanQuoteAnchors via
+ * findQuoteAnchorSpans below) and findQuoteAnchorSpans (offset-aware result,
+ * imported by hooks/lib/overlap-engine.mjs for its quoted-span exclusion rule)
+ * both delegate to this function rather than re-implementing the gap/pairing rule.
+ *
  * @param {string} text        - full chapter text
  * @param {number} anchorStart - character offset where the '[quote: ' anchor begins
- * @returns {string|null}
+ * @returns {{start: number, end: number}|null}
  */
-function findPrecedingQuotedSpan(text, anchorStart) {
+function findPrecedingQuotedSpanRange(text, anchorStart) {
   const before = text.slice(0, anchorStart);
   const closeIdx = before.lastIndexOf('"');
   if (closeIdx === -1) return null;
@@ -234,7 +244,54 @@ function findPrecedingQuotedSpan(text, anchorStart) {
   const openIdx = before.lastIndexOf('"', closeIdx - 1);
   if (openIdx === -1) return null;
 
-  return before.slice(openIdx + 1, closeIdx);
+  return { start: openIdx + 1, end: closeIdx };
+}
+
+/**
+ * Finds the quoted span, if any, that immediately precedes a [quote: EV-nnnn]
+ * anchor, as a string. See findPrecedingQuotedSpanRange for the grammar.
+ *
+ * @param {string} text        - full chapter text
+ * @param {number} anchorStart - character offset where the '[quote: ' anchor begins
+ * @returns {string|null}
+ */
+function findPrecedingQuotedSpan(text, anchorStart) {
+  const range = findPrecedingQuotedSpanRange(text, anchorStart);
+  return range ? text.slice(range.start, range.end) : null;
+}
+
+/**
+ * Scans text for every [quote: EV-nnnn] anchor and returns its preceding quoted
+ * span, both as a string and as character offsets - independent of the evidence
+ * ledger. This is the anchor-scanning grammar shared with scanQuoteAnchors (which
+ * layers ledger evaluation on top of this) and is imported directly by
+ * hooks/lib/overlap-engine.mjs for its quoted-span exclusion rule: a chapter span
+ * that sits inside a quoted-and-anchored span is excluded from the overlap engine's
+ * findings as properly quoted, regardless of whether the anchor's EV id resolves
+ * in the ledger (that separate question is quote-fidelity's job, not overlap's).
+ *
+ * @param {string} text - full chapter text
+ * @returns {object[]} one entry per anchor, in document order:
+ *   { id: string, index: number, line: number, span: string|null,
+ *     spanStart: number|null, spanEnd: number|null }
+ *   span/spanStart/spanEnd are null when no valid preceding quoted span is found.
+ */
+export function findQuoteAnchorSpans(text) {
+  const results = [];
+  QUOTE_ANCHOR_RE.lastIndex = 0;
+  let m;
+  while ((m = QUOTE_ANCHOR_RE.exec(text)) !== null) {
+    const range = findPrecedingQuotedSpanRange(text, m.index);
+    results.push({
+      id: m[1],
+      index: m.index,
+      line: lineNumberAt(text, m.index),
+      span: range ? text.slice(range.start, range.end) : null,
+      spanStart: range ? range.start : null,
+      spanEnd: range ? range.end : null,
+    });
+  }
+  return results;
 }
 
 /**
@@ -331,11 +388,7 @@ export function scanQuoteAnchors(text, ledgerEntries) {
   }
 
   const results = [];
-  QUOTE_ANCHOR_RE.lastIndex = 0;
-  let m;
-  while ((m = QUOTE_ANCHOR_RE.exec(text)) !== null) {
-    const id = m[1];
-    const line = lineNumberAt(text, m.index);
+  for (const { id, line, span } of findQuoteAnchorSpans(text)) {
     const entry = ledgerMap.get(id) || null;
 
     if (!entry) {
@@ -355,7 +408,6 @@ export function scanQuoteAnchors(text, ledgerEntries) {
       continue;
     }
 
-    const span = findPrecedingQuotedSpan(text, m.index);
     if (span == null) {
       results.push({
         id, line, entry, span: null, status: 'no-span',

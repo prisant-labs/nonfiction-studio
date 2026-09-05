@@ -17,7 +17,7 @@ drift band, and gate state, visible continuously instead of only after a command
 ## Purpose
 
 `ns-statusline` is the sixth CLI shipped under `bin/` (D-05, five shipped CLIs, grown by one per
-OPP-P03). Unlike the other seven CLIs, it never reads its input from `--project` or the working
+OPP-P03). Unlike the other eight CLIs, it never reads its input from `--project` or the working
 directory: the platform's statusLine and subagentStatusLine features pipe a JSON event to stdin on
 every invocation, and this CLI reads the project directory out of that event
 (`workspace.current_dir` or `cwd`), never from `process.cwd()`. It reads at most four small files

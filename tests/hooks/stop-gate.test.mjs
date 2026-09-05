@@ -148,6 +148,14 @@ function readJsonlLines(filePath) {
   return readFileSync(filePath, 'utf8').split('\n').filter(l => l.trim());
 }
 
+/** Writes .claude/nonfiction-studio.local.md under bookDir with the given raw text content
+ * (Wave 1 exit Task 2: per-project studio settings file). */
+function writeSettingsFile(bookDir, text) {
+  const settingsDir = join(bookDir, '.claude');
+  mkdirSync(settingsDir, { recursive: true });
+  writeFileSync(join(settingsDir, 'nonfiction-studio.local.md'), text, 'utf8');
+}
+
 /**
  * Overlay a block-mode gate config onto a cloned fixture.
  * Sets gate.mode=block and all four deterministic checks to mode=block,
@@ -268,8 +276,14 @@ test('(c) golden clone + flag: gate runs, empty stdout (pass), last-gate byte-id
 // gate report even though `bin/ns-gate` (invoked directly, with no --check flag) always
 // included it. Asserted against the real hook and the real gate-engine registry, not a
 // mock: this fails RED if either list is ever hand-edited out of sync with the other again.
+//
+// Wave 1 exit Task 7 (overlap gate check) extends this same test with a second hardcoded,
+// non-self-referential assertion for 'overlap', the seventh registered check: checkNames.
+// includes('overlap') names the literal string, so it fails RED if CHECK_REGISTRY's 'overlap'
+// entry is ever removed (unlike the loop below, which derives its own expectation from the same
+// registry the hook reads and so cannot detect a missing entry, only a drifted SECOND list).
 // ---------------------------------------------------------------------------
-test('(c2) Stop-hook-driven gate report includes quote_fidelity (the Stop hook derives its check list from gate-engine.mjs, not a second hardcoded list)', async () => {
+test('(c2) Stop-hook-driven gate report includes quote_fidelity and overlap (the Stop hook derives its check list from gate-engine.mjs, not a second hardcoded list)', async () => {
   const book = cloneSampleBook('c2-quote-fidelity');
   setFlag(book);
 
@@ -284,6 +298,10 @@ test('(c2) Stop-hook-driven gate report includes quote_fidelity (the Stop hook d
   assert.ok(
     checkNames.includes('quote_fidelity'),
     'Stop-hook-driven report checks include quote_fidelity; got: ' + checkNames.join(', ')
+  );
+  assert.ok(
+    checkNames.includes('overlap'),
+    'Stop-hook-driven report checks include overlap, the seventh registered check; got: ' + checkNames.join(', ')
   );
 
   // Cross-check against the gate engine's own registry rather than a second hand
@@ -662,4 +680,46 @@ test('(k) invalid config.json + flag: exit 0, Gate-skipped additionalContext, no
 
   // Flag NOT consumed (gate never answered)
   assert.ok(existsSync(flagPath), 'session-write flag NOT consumed on corrupt-config path');
+});
+
+// ---------------------------------------------------------------------------
+// (l)/(m) Wave 1 exit Task 2 (settings engine): stop-gate.mjs forwards the settings-warning
+// line from the ns-gate subprocess's own stderr to its own stderr, on every exit-code branch.
+// This hook never reads config.json or resolves check modes itself (see the header comment
+// above); it only forwards a line ns-gate already printed. These two cases cover the corrupt
+// (warning present) and absent (no warning) settings-file states, against the same golden,
+// pass-verdict clone so the only variable is the settings file.
+// ---------------------------------------------------------------------------
+
+test('(l) corrupt settings file + flag: the ns-gate settings warning is forwarded to stderr', () => {
+  const book = cloneSampleBook('l-corrupt-settings');
+  setFlag(book);
+
+  writeSettingsFile(book, '---\ngate_mode: [off, warn\n---\n'); // invalid YAML
+
+  const result = runHook(makeStopEvent(book));
+
+  assert.strictEqual(result.status, 0, 'exit 0 (settings corruption is fail-open, never a hook failure)');
+  assert.ok(
+    result.stderr.includes('ns-gate: settings warning: '),
+    'stderr must carry the forwarded settings-warning line; got: ' + result.stderr
+  );
+  assert.ok(
+    result.stderr.includes(join(book, '.claude', 'nonfiction-studio.local.md')),
+    'the forwarded warning must name the corrupt settings file path; got: ' + result.stderr
+  );
+});
+
+test('(m) no settings file + flag: no settings warning appears on stderr', () => {
+  const book = cloneSampleBook('m-no-settings');
+  setFlag(book);
+
+  // No .claude/nonfiction-studio.local.md is written for this clone.
+  const result = runHook(makeStopEvent(book));
+
+  assert.strictEqual(result.status, 0, 'exit 0');
+  assert.ok(
+    !result.stderr.includes('ns-gate: settings warning: '),
+    'no settings file present: stderr must NOT carry a settings-warning line; got: ' + result.stderr
+  );
 });

@@ -4,10 +4,26 @@
 # Schema: caller-component-name to yaml-sequence of callee-component-names.
 # The vendored check (S4, chain-contract.mjs) validates this file when chaining is
 # in use. Under --profile plain-plugin, S4 is provenance "house" and is turned off
-# (HOUSE_REQIDS). Phantom errors for skill callers not yet on disk (nfs-interview,
-# nfs-capture-voice, nfs-outline, nfs-research, nfs-draft, nfs-fact-check) are
-# suppressed in that profile. Enforcement of those edges is pending TSK-055 (Tier A
-# check scripts). See X-02 (task catalog) TSK-044 acceptance note, dated 2026-07-19.
+# (HOUSE_REQIDS). Lint-time enforcement of every edge below (including the six
+# skill callers - nfs-interview, nfs-capture-voice, nfs-outline, nfs-research,
+# nfs-draft, nfs-fact-check) has been live since TSK-055 (Tier A check scripts):
+# all six skill directories exist on disk, scripts/check-frontmatter.mjs enforces
+# this file's S4 chain contract bidirectionally against them, and there is no
+# remaining phantom-caller gap. See X-02 (task catalog) TSK-044 acceptance note,
+# dated 2026-07-19. Dispatch-time enforcement (the runtime contract described
+# immediately below) was added separately, by the Wave 1 exit routing task.
+#
+# Wave 1 exit Task 8: this file is now ALSO a runtime contract, not lint-time only.
+# hooks/pre-tool-use.mjs (via hooks/lib/routing.mjs) reads it at Agent/Task dispatch
+# time to check the agent-to-agent edge below (drafting-partner -> research-librarian)
+# whenever the dispatching context is itself a plugin agent: an edge this file does
+# not list warns, naming both agents, unless routing_enforce is set to "off" in the
+# per-project settings file, or to "block" to deny instead of warn. A missing or
+# unparseable copy of this file fails that runtime check open (silence), the same
+# fail-open posture the lint-time check does not need but the hook does. The
+# agent-to-skill and skill-to-agent edges below are not read at runtime - only the
+# agent-to-agent edge shape is, since Agent/Task dispatch is the only event this hook
+# observes; skill invocation carries no equivalent PreToolUse signal.
 #
 # Every edge is derived from a spec sentence; the per-edge comment cites the source.
 # No Phase 2 or Phase 3 agents appear here (developmental-editor, voice-guardian,

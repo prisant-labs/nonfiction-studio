@@ -87,7 +87,7 @@ Use the Bash tool for the full gate, no chapter or check scoping:
 node "<plugin-root>/bin/ns-gate" --project="<tour-dir>"
 ```
 
-Present the result as a genuine pass, in block mode: report the top-level verdict and each check's one-line detail (claim coverage, quote fidelity, stylometry, prompt scrub, continuity, state coherence, session write flag). Call out the stylometry line specifically and read it verbatim: the sample book's two chapters total 1,055 scored words, below the 2,200-word floor a supportable book-scale verdict needs, so the check reports "book-scale verdict only: ... reporting for advice only, never blocking below the floor" rather than a pass with a margin it cannot support. This is the stronger demonstration, not a weaker one: the gate says out loud that its own measured detectability cannot support a chapter-scale verdict on this book, instead of printing a number that would look precise but rest on too little text. The report's structured `drift` field does carry a `per_chapter` array with each chapter's own statistic and worst marker, but those are advisory only - there is no per-chapter threshold and no per-chapter pass or fail on this screen; the verdict is aggregate-or-nothing at book scale.
+Present the result as a genuine pass, in block mode: report the top-level verdict and each check's one-line detail (claim coverage, quote fidelity, stylometry, prompt scrub, continuity, state coherence, overlap, session write flag). Call out the stylometry line specifically and read it verbatim: the sample book's two chapters total 1,055 scored words, below the 2,200-word floor a supportable book-scale verdict needs, so the check reports "book-scale verdict only: ... reporting for advice only, never blocking below the floor" rather than a pass with a margin it cannot support. This is the stronger demonstration, not a weaker one: the gate says out loud that its own measured detectability cannot support a chapter-scale verdict on this book, instead of printing a number that would look precise but rest on too little text. The report's structured `drift` field does carry a `per_chapter` array with each chapter's own statistic and worst marker, but those are advisory only - there is no per-chapter threshold and no per-chapter pass or fail on this screen; the verdict is aggregate-or-nothing at book scale.
 
 ---
 
@@ -135,7 +135,7 @@ Present the result as a pass again, confirming recovery: the block is gone becau
 
 ## Step 9 - Close
 
-Summarize in a few lines what the gate's seven checks cover (claim coverage, quote fidelity, prompt scrub, stylometry drift, continuity, state coherence, session write flag), and that a block is informative rather than annoying: it names the exact line and the exact reason, the way Step 6 just did, rather than issuing a vague warning.
+Summarize in a few lines what the gate's seven configurable checks cover (claim coverage, quote fidelity, prompt scrub, stylometry drift, continuity, state coherence, and overlap against the author's own research corpus), plus the always-on session-write-flag check that runs regardless of configuration, and that a block is informative rather than annoying: it names the exact line and the exact reason, the way Step 6 just did, rather than issuing a vague warning.
 
 Restate that `<tour-dir>` is disposable and can be deleted any time, and that the shipped `examples/sample-book` was never opened for writing during this walkthrough.
 

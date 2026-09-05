@@ -23,6 +23,8 @@ Use the Read tool on `context/brief.md`.
 - If DRAFT blocks with section tags are present: announce the resumption point, name the sections already captured, and state that those sections will be skipped. Pass the captured-section list to Step 2 as context for the agent.
 - If the file does not exist or contains no DRAFT blocks: proceed as a new session with no prior state to skip.
 
+Before this flow's first write (the first DRAFT-block flush in Step 3), take the ai-use-log.jsonl count snapshot described in Step 6's Compliance append section for `context/brief.md`.
+
 ## Step 2 - Delegate to the interviewer agent
 
 Spawn the `interviewer` agent, passing the current brief state as context. The chain edge for this delegation is `nfs-interview -> interviewer` per `agents/_chain-permitted.yaml` (TSK-044 (chain contract, Phase 1)).
@@ -43,7 +45,25 @@ After all sections are complete, the `interviewer` agent presents the full draft
 
 On author confirmation, the `interviewer` agent resolves the DRAFT blocks into the confirmed `context/brief.md` and writes the committed bible files. No final bible file is written before the author confirms the written brief.
 
-## Step 6 - Conditional close
+## Step 6 - Compliance append and conditional close
+
+### Compliance append (verify-then-append)
+
+This flow's writes may already be logged automatically by a hook on this surface; this skill never assumes which surfaces do or do not fire that hook, and it never assumes the flow is running on any particular surface. Before this flow's first write, read `.studio/ai-use-log.jsonl` and count how many records currently target each file this flow is about to write (the file's path appearing in that record's `targets` array). Hold that starting count per file. After this flow's writes complete, re-read `.studio/ai-use-log.jsonl` and count the records targeting each of those files again. For each file: if the count increased between the two reads, a hook already appended a record for this write on this surface, and this skill appends nothing further for that file. If the count did not increase, append the flow's record or records for that file to `.studio/ai-use-log.jsonl`, per the record template below, using the six-field shape in `docs/formats/ai-use-log.md` (S-08 section 5): `ts`, `agent`, `surface`, `scope`, `targets`, `summary` - with `surface` set honestly to the surface this flow is actually running on. A record already sitting in the log before this flow started, from an earlier session, does not by itself suppress the append; only a count increase observed between this flow's own two reads does. This skill never appends twice for the same write.
+
+**Record template for this flow.** One record for `context/brief.md` (per the count-delta check above):
+
+For a first-session brief (no prior DRAFT blocks; Step 1 found none):
+```json
+{"ts":"<RFC 3339 UTC>","agent":"interviewer","surface":"<actual surface>","scope":"assisted","targets":["context/brief.md"],"summary":"Captured the confirmed project brief from the intake interview."}
+```
+
+For a resumed session (Step 1 found prior DRAFT blocks):
+```json
+{"ts":"<RFC 3339 UTC>","agent":"interviewer","surface":"<actual surface>","scope":"assisted","targets":["context/brief.md"],"summary":"Resumed the intake interview and confirmed the remaining brief sections."}
+```
+
+`surface` is `claude-code`, `cowork`, or `chat` per `docs/formats/ai-use-log.md` - whichever this flow is actually running on. `context/brief.md` is outside the PostToolBatch hook's watch (it watches only `chapters/`) on every surface, so this skill's own append is typically the only record for this file.
 
 Use the Bash tool to run:
 ```

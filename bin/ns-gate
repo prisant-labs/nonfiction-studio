@@ -64,11 +64,18 @@ try {
 
 // ---- run gate ------------------------------------------------------------------
 
-const { exitCode, report } = runGate(root, {
+const { exitCode, report, settingsWarning } = runGate(root, {
   checkSubset: opts.check || null,
   chapterSlug: opts.chapter || null,
   stderrFn: s => process.stderr.write(s),
 });
+
+// Settings reader warning (Wave 1 exit Task 2): a corrupt or unreadable per-project settings
+// file never breaks the gate (loadSettings fails open), but it must warn loudly on stderr so
+// the author knows the file is being ignored rather than honored.
+if (settingsWarning) {
+  process.stderr.write('ns-gate: settings warning: ' + settingsWarning + '\n');
+}
 
 if (!report) {
   process.stderr.write('ns-gate: gate engine failed to produce a report\n');
