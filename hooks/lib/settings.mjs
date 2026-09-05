@@ -1,9 +1,10 @@
 // what-it-is:   per-project studio settings reader (P1/P2, Wave 1 exit Task 2)
 // what-it-does: walks UP from a start directory (same walk shape as findBookRoot in
 //               hooks/lib/bible.mjs) looking for .claude/nonfiction-studio.local.md; parses its
-//               YAML frontmatter with the yaml package (the same runtime dependency
-//               scripts/lib/frontmatter.mjs already uses, loaded lazily here so a missing
-//               node_modules/yaml cannot crash any hook at import time); validates the P2 schema
+//               YAML frontmatter with hooks/lib/mini-yaml.mjs (a vendored, zero-dependency
+//               YAML-subset parser -- see that module's own header for why this hook execution
+//               path no longer requires the "yaml" npm package: an installed plugin has no
+//               node_modules, and nothing installs dependencies for one); validates the P2 schema
 //               keys individually, dropping only the offending key on a type mismatch and
 //               keeping valid siblings; returns { settings, body, warning, path }.
 // why:          a corrupt or absent settings file must never break a session (hooks fail open)
@@ -15,7 +16,7 @@
 
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
-import { createRequire } from 'node:module';
+import { parseMiniYaml } from './mini-yaml.mjs';
 
 // The YAML frontmatter fence, matching scripts/lib/frontmatter.mjs's own FENCE exactly (same
 // format contract; this module does not import that one directly since hooks/ and scripts/ are
@@ -66,30 +67,6 @@ const KEY_SCHEMA = {
 };
 
 /**
- * Lazily loads the yaml package's parse function. Loaded via createRequire (not a static
- * top-of-file import) so a checkout missing node_modules/yaml cannot crash gate-engine.mjs (and
- * therefore stop-gate.mjs and every ns-gate invocation) at MODULE LOAD time -- fail-open extends
- * to the dependency itself, not just to file-read/parse errors. Cached after first attempt.
- *
- * @returns {{ parse: Function|null, error: Error|null }}
- */
-let _yamlAttempted = false;
-let _yamlParse = null;
-let _yamlError = null;
-function loadYamlParse() {
-  if (_yamlAttempted) return { parse: _yamlParse, error: _yamlError };
-  _yamlAttempted = true;
-  try {
-    const req = createRequire(import.meta.url);
-    const mod = req('yaml');
-    _yamlParse = mod.parse;
-  } catch (err) {
-    _yamlError = err;
-  }
-  return { parse: _yamlParse, error: _yamlError };
-}
-
-/**
  * Validates the P2 schema keys on a parsed frontmatter object. Unknown keys are copied through
  * unvalidated (preserved and ignored, per P1). A known key with the wrong type/value is dropped
  * individually -- one warning sentence per dropped key, and the key name recorded in droppedKeys
@@ -132,8 +109,8 @@ function validateKnownKeys(data, path) {
 
 /**
  * Reads and parses one confirmed-present settings file. Every WHOLE-FILE failure path (unreadable
- * file, missing frontmatter fence, invalid YAML, non-object frontmatter, unavailable yaml parser)
- * returns EMPTY settings plus a one-sentence warning naming the file, and an EMPTY droppedKeys --
+ * file, missing frontmatter fence, invalid YAML, non-object frontmatter) returns EMPTY settings
+ * plus a one-sentence warning naming the file, and an EMPTY droppedKeys --
  * never a thrown error, and never a per-key attribution when the whole file is the casualty, not
  * any one key. A per-KEY failure (the file parsed fine; one or more known keys individually failed
  * their own schema) instead returns the surviving settings, the joined warning sentence(s), AND a
@@ -151,7 +128,7 @@ function parseSettingsFile(path) {
     return {
       settings: {},
       body: '',
-      warning: 'Settings file at ' + path + ' could not be read (' + err.message + '); using defaults.',
+      warning: 'Settings file at ' + path + ' could not be read (' + singleLine(err.message) + '); using defaults.',
       path,
       droppedKeys: [],
     };
@@ -170,25 +147,9 @@ function parseSettingsFile(path) {
     };
   }
 
-  const { parse: parseYaml, error: yamlError } = loadYamlParse();
-  if (!parseYaml) {
-    return {
-      settings: {},
-      body: m[2],
-      warning:
-        'Settings file at ' + path + ' could not be parsed: the yaml parser is unavailable (' +
-        (yamlError ? yamlError.message : 'unknown error') + '); using defaults.',
-      path,
-      droppedKeys: [],
-    };
-  }
-
   let data;
   try {
-    // prettyErrors: false suppresses the multi-line source-snippet code frame the yaml package
-    // otherwise appends to YAMLParseError#message -- a warning naming the file must stay one
-    // sentence (P1), not a code-frame dump.
-    data = parseYaml(m[1], { prettyErrors: false });
+    data = parseMiniYaml(m[1]);
   } catch (err) {
     return {
       settings: {},

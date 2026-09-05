@@ -14,10 +14,13 @@
 //               orchestrating skill could silently dispatch any agent at any model tier, or along
 //               any edge, with no signal.
 // fail-open:    every read here can fail (file missing, YAML unreadable, frontmatter not a
-//               key/value map, yaml module unavailable) and none of those failures throw - each
-//               returns a { ..., error } shape the caller treats as "cannot judge this, stay
-//               silent", matching hooks/lib/settings.mjs's own fail-open contract (same rationale:
-//               a corrupt or absent file must never crash a hook or force a false decision).
+//               key/value map) and none of those failures throw - each returns a { ..., error }
+//               shape the caller treats as "cannot judge this, stay silent", matching
+//               hooks/lib/settings.mjs's own fail-open contract (same rationale: a corrupt or
+//               absent file must never crash a hook or force a false decision). YAML parsing goes
+//               through hooks/lib/mini-yaml.mjs, a vendored zero-dependency parser (C1, Wave 1
+//               exit final review) - there is no longer a "parser unavailable" failure mode, since
+//               that module ships in this plugin's own tree rather than depending on node_modules.
 // override:     NS_AGENTS_DIR (test-only, mirrors the NS_HOOK_TRACE convention in
 //               hooks/pre-tool-use.mjs) redirects both readers at a fixture directory instead of
 //               this plugin's own shipped agents/ tree, so fail-open cases (unparseable
@@ -27,7 +30,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
+import { parseMiniYaml } from './mini-yaml.mjs';
 
 // hooks/lib/routing.mjs -> hooks/lib -> hooks -> plugin root -> agents/
 // (the plugin root is this repo's own root; hooks are invoked as
@@ -45,25 +48,6 @@ const FENCE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/;
  */
 function resolveAgentsDir() {
   return process.env.NS_AGENTS_DIR ? resolve(process.env.NS_AGENTS_DIR) : DEFAULT_AGENTS_DIR;
-}
-
-// Lazy yaml loader: the same createRequire pattern hooks/lib/settings.mjs uses, and for the same
-// reason (settings.mjs's own comment explains it) - hooks/ and scripts/ are separate boundaries
-// with no cross-import precedent, so scripts/lib/frontmatter.mjs is not imported here even though
-// its FENCE regex and yaml.parse call are the same shape. A missing node_modules/yaml must not
-// crash this module at import time, so the require happens lazily, on first use, and is cached.
-let _yamlAttempted = false;
-let _yamlParse = null;
-function loadYamlParse() {
-  if (_yamlAttempted) return _yamlParse;
-  _yamlAttempted = true;
-  try {
-    const req = createRequire(import.meta.url);
-    _yamlParse = req('yaml').parse;
-  } catch {
-    _yamlParse = null;
-  }
-  return _yamlParse;
 }
 
 // ---------------------------------------------------------------------------
@@ -104,14 +88,9 @@ function parseAgentModel(absPath) {
     return { model: null, error: 'agent file has no YAML frontmatter fence (--- fenced block at top)' };
   }
 
-  const parseYaml = loadYamlParse();
-  if (!parseYaml) {
-    return { model: null, error: 'yaml parser unavailable' };
-  }
-
   let data;
   try {
-    data = parseYaml(m[1], { prettyErrors: false });
+    data = parseMiniYaml(m[1]);
   } catch (err) {
     return { model: null, error: 'invalid YAML frontmatter: ' + err.message };
   }
@@ -154,14 +133,9 @@ function parseChainPermitted(absPath) {
     return { contract: null, error: 'agents/_chain-permitted.yaml unreadable: ' + err.message };
   }
 
-  const parseYaml = loadYamlParse();
-  if (!parseYaml) {
-    return { contract: null, error: 'yaml parser unavailable' };
-  }
-
   let data;
   try {
-    data = parseYaml(text, { prettyErrors: false });
+    data = parseMiniYaml(text);
   } catch (err) {
     return { contract: null, error: 'agents/_chain-permitted.yaml is not valid YAML: ' + err.message };
   }

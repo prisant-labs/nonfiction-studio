@@ -31,7 +31,7 @@ Every failure mode is fail-open: `loadSettings` never throws, and a corrupt or m
 
 Two different granularities of failure exist, and callers with more than one settings key in play distinguish them via a `droppedKeys` array (see Return contract, below):
 
-**Whole-file failures** - the file could not be read; it has no YAML frontmatter fence; the YAML parser dependency is unavailable; the YAML itself fails to parse; or the parsed frontmatter is not a key/value map (a bare string, number, or list). Every one of these returns empty settings, a one-sentence warning, and an **empty** `droppedKeys` - no single key can be blamed when the whole file is the casualty.
+**Whole-file failures** - the file could not be read; it has no YAML frontmatter fence; the YAML itself fails to parse; or the parsed frontmatter is not a key/value map (a bare string, number, or list). Every one of these returns empty settings, a one-sentence warning, and an **empty** `droppedKeys` - no single key can be blamed when the whole file is the casualty. Parsing goes through `hooks/lib/mini-yaml.mjs`, a vendored, zero-dependency YAML-subset parser shipped in this plugin's own tree (not the `yaml` npm package, and not something an install step must fetch), so there is no "parser unavailable" failure mode to distinguish from an ordinary parse failure.
 
 One YAML result is deliberately **not** treated as a failure: an empty or comments-only frontmatter block parses to `null`, and `null` is routed to silent success (empty settings, no warning) rather than the "not a key/value map" warning. This is what lets the shipped example template, copied verbatim with every key left commented out, produce zero warnings.
 
@@ -41,7 +41,6 @@ One YAML result is deliberately **not** treated as a failure: an empty or commen
 |---|---|---|---|
 | File unreadable | `{}` | one sentence, path + read error | `[]` |
 | No frontmatter fence | `{}` | one sentence, path | `[]` |
-| YAML parser unavailable | `{}` | one sentence, path + underlying error | `[]` |
 | Invalid YAML | `{}` | one sentence, path + underlying error | `[]` |
 | Frontmatter is empty/comments-only (parses to `null`) | `{}` | `null` (success, not a failure) | `[]` |
 | Frontmatter parses but is not a key/value map | `{}` | one sentence, path | `[]` |
