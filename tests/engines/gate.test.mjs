@@ -971,14 +971,14 @@ test('T18b: --check=claims, (trailing comma, one real item) still runs the named
 });
 
 // ============================================================================
-// Wave 1 exit Task 2 (settings engine): template parity (PF-28) + settings overlay
+// Wave 1 exit Task 2 (settings engine): template parity + settings overlay
 // ============================================================================
 
 const TEMPLATES = join(__dirname, '..', '..', 'templates');
 
-// ---- PF-28: template parity against DEFAULT_GATE.checks -----------------------
+// ---- Template parity: both shipped config templates must carry the full default check set --
 
-test('PF-28 template parity: templates/config-defaults.json gate.checks key set deeply equals Object.keys(DEFAULT_GATE.checks)', () => {
+test('template parity: templates/config-defaults.json gate.checks key set deeply equals Object.keys(DEFAULT_GATE.checks)', () => {
   const configDefaults = JSON.parse(readFileSync(join(TEMPLATES, 'config-defaults.json'), 'utf8'));
   const actual = Object.keys(configDefaults.gate.checks).sort();
   const expected = Object.keys(DEFAULT_GATE.checks).sort();
@@ -989,7 +989,7 @@ test('PF-28 template parity: templates/config-defaults.json gate.checks key set 
   );
 });
 
-test('PF-28 template parity: templates/book-scaffold/.studio/config.json gate.checks key set deeply equals Object.keys(DEFAULT_GATE.checks)', () => {
+test('template parity: templates/book-scaffold/.studio/config.json gate.checks key set deeply equals Object.keys(DEFAULT_GATE.checks)', () => {
   const scaffoldConfig = JSON.parse(
     readFileSync(join(TEMPLATES, 'book-scaffold', '.studio', 'config.json'), 'utf8')
   );

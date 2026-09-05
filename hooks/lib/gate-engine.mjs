@@ -91,10 +91,11 @@ const MIN_SCORABLE_CHAPTER_WORDS = 50;
 const MIN_BOOK_VERDICT_WORDS = 2200;
 
 // Default gate config per S-08 section 4 sample. Exported so tests/engines/gate.test.mjs's
-// template-parity test (PF-28) can assert both shipped config templates' gate.checks key sets
-// deeply equal Object.keys(DEFAULT_GATE.checks) without a second, hand-maintained copy of this
-// list drifting out of sync the way templates/config-defaults.json and
-// templates/book-scaffold/.studio/config.json already had (Wave 1 exit Task 2).
+// template-parity test can assert both shipped config templates' gate.checks key sets deeply
+// equal Object.keys(DEFAULT_GATE.checks): both shipped config templates must carry the full
+// default check set, and a parity test in the gate suite enforces it, so the list cannot drift
+// out of sync the way templates/config-defaults.json and templates/book-scaffold/.studio/
+// config.json already had (Wave 1 exit Task 2).
 export const DEFAULT_GATE = {
   mode: 'warn',
   checks: {
