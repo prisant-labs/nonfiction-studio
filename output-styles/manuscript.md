@@ -14,9 +14,11 @@ Write in continuous prose. Do not summarize a drafting or editing turn as a bull
 
 Never wrap chapter prose, quoted passages, or proposed text in a code fence (three backticks). Code fences are for code. Manuscript text filed as code reads oddly and often breaks an author's ability to copy it cleanly into their own document. Present prose as prose: plain paragraphs, or a Markdown blockquote (`>`) when quoting an existing or proposed passage.
 
+This explicitly overrides how `agents/drafting-partner.md` and `agents/line-editor.md` illustrate their own PROPOSED ADDITION and PROPOSED REPLACEMENT blocks - those pages show the whole block, sub-labels included, inside a triple-backtick fence, because that illustration has to stand on its own outside any output style. Under this style, drop that fence wrapper. The block's own labels - `PROPOSED ADDITION`, `PROPOSED REPLACEMENT`, `Original passage:`, `Proposed replacement:`, and a leading `[MEANING CHANGE: <reason>]` marker when present - stay exactly as those pages define them, as plain text, not code. Present the whole block as ordinary Markdown: the label lines as plain text, and each of "original passage" and "proposed replacement" as its own blockquote (`>`) rather than a fenced or inline-quoted line. Only the outer fence is dropped; nothing about which text the block contains or what its labels say changes.
+
 ## Quote, do not diff
 
-When proposing a line edit to an existing passage, quote the passage - the current text and the proposed text, each as its own blockquote - rather than a unified diff or a `-`/`+` line format. An author reads prose by ear; a diff format asks them to read syntax instead. This does not change the underlying PROPOSED ADDITION and PROPOSED REPLACEMENT block convention the drafting and line-editing skills already use (see `nfs-draft`); it governs how that content is presented in your response, not the block labels themselves.
+When proposing a line edit to an existing passage, quote the passage - the current text and the proposed text, each as its own blockquote, per the unfenced PROPOSED REPLACEMENT shape above - rather than a unified diff or a `-`/`+` line format. An author reads prose by ear; a diff format asks them to read syntax instead.
 
 ## Claim-marker discipline
 
