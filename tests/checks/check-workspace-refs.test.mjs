@@ -19,7 +19,11 @@
 //               Every fixture gets a fresh copy of THIS REPO'S CURRENT on-disk checker script (see
 //               copyFromRepo, buildSyntheticRoot, and cloneRealRepo below), copied in directly
 //               rather than relying on the script being staged in git's index, so the test suite is
-//               never coupled to staging order during iteration.
+//               never coupled to staging order during iteration. The checker now also requires a
+//               committed manifest (workspace-refs-manifest.json, next to the script) to be
+//               present, so buildSyntheticRoot always writes one too (empty by default, or a
+//               caller-supplied hash set), and cloneRealRepo copies the real one the same way it
+//               copies the script itself.
 // self-matching discipline: real gitignored-directory names (_local, .superpowers) used together
 //               WITH a trailing path segment, and any real basename that already exists only under
 //               this repo's real scratch directories, are exactly what this checker searches for -
@@ -39,14 +43,20 @@
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, cpSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, cpSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 
 import { cloneRepoToTemp, runClonedChecker, cleanupGoldenClone, snapshotPaths, diffPathSnapshots, REPO_ROOT } from './clone-helper.mjs';
 
 const SCRIPT = 'scripts/checks/check-workspace-refs.mjs';
 const TEST_FILE_REL = 'tests/checks/check-workspace-refs.test.mjs';
+const MANIFEST_REL = 'scripts/checks/workspace-refs-manifest.json';
+
+function sha256Hex(s) {
+  return createHash('sha256').update(s, 'utf8').digest('hex');
+}
 
 after(() => {
   cleanupGoldenClone();
@@ -72,16 +82,29 @@ function copyFromRepo(fixtureRoot, relPath) {
   cpSync(src, dst);
 }
 
+/** Writes a manifest fixture ({ version: 1, algorithm: "sha256", hashes: [...] }) into a
+ *  fixture root at the real manifest's path, so the checker (which fatals on a missing or
+ *  malformed manifest - see this checker's header) always has one to read. Defaults to an
+ *  empty hash set: a fixture that needs specific manifest-only hashes passes them explicitly. */
+function writeManifestFixture(root, hashes = []) {
+  const dst = join(root, ...MANIFEST_REL.split('/'));
+  mkdirSync(dirname(dst), { recursive: true });
+  writeFileSync(dst, JSON.stringify({ version: 1, algorithm: 'sha256', hashes: [...hashes].sort() }, null, 2) + '\n');
+}
+
 /**
  * Builds a from-scratch temp directory carrying its own .gitignore and shipped
- * files, plus a fresh copy of this repo's CURRENT on-disk checker script. Not
- * derived from the real tracked tree at all, so assertions here are never
+ * files, plus a fresh copy of this repo's CURRENT on-disk checker script and a
+ * manifest fixture (empty by default; pass manifestHashes for a test that needs
+ * a specific committed-manifest hash with no corresponding live scratch file).
+ * Not derived from the real tracked tree at all, so assertions here are never
  * contaminated by anything already present in this repo.
  */
-function buildSyntheticRoot(label, gitignoreLines, files) {
+function buildSyntheticRoot(label, gitignoreLines, files, manifestHashes = []) {
   const root = mkdtempSync(join(tmpdir(), 'nonfiction-workspace-refs-synth-' + label + '-'));
   writeFileSync(join(root, '.gitignore'), gitignoreLines.join('\n') + '\n');
   copyFromRepo(root, SCRIPT);
+  writeManifestFixture(root, manifestHashes);
   for (const [relPath, content] of Object.entries(files)) {
     const dst = join(root, ...relPath.split('/'));
     mkdirSync(dirname(dst), { recursive: true });
@@ -90,12 +113,13 @@ function buildSyntheticRoot(label, gitignoreLines, files) {
   return { root, cleanup: () => safeRemove(root) };
 }
 
-/** cloneRepoToTemp, but with this repo's CURRENT on-disk checker script copied over
- *  whatever the git-tracked snapshot provided, so tests never depend on the script
- *  being staged. */
+/** cloneRepoToTemp, but with this repo's CURRENT on-disk checker script AND manifest copied
+ *  over whatever the git-tracked snapshot provided, so tests never depend on either being
+ *  staged. */
 function cloneRealRepo(label) {
   const { root, cleanup } = cloneRepoToTemp(label);
   copyFromRepo(root, SCRIPT);
+  copyFromRepo(root, MANIFEST_REL);
   return { root, cleanup };
 }
 
@@ -109,6 +133,8 @@ function cloneRealRepo(label) {
 const WATCHED_LIVE_PATHS = [
   'docs/_task11-planted-path-ref.md',
   'docs/_task11-planted-bare-ref.md',
+  'docs/_fixture-clean-clone-mutation.md',
+  'docs/_fixture-tracked-subtraction.md',
 ];
 
 const beforeWatchedSnapshot = snapshotPaths(WATCHED_LIVE_PATHS);
@@ -181,6 +207,31 @@ test('genericity, form 2 (bare filename): a basename that exists only under an i
     assert.match(result.combined, /docs\/example\.md:1:/, 'message must name the planted file and line');
     assert.match(result.combined, /bare workspace filename reference/, 'message must name the violation type');
     assert.match(result.combined, /rationale-99\.md/, 'message must name the planted basename');
+  } finally {
+    cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Scope widening: output-styles/ - a shipped plugin folder that previously
+// matched none of the scan-scope prefixes at all, so a reference planted
+// inside it went completely unread regardless of form.
+// ---------------------------------------------------------------------------
+
+test('scope widening: a form-1 path reference planted under output-styles/ is caught', () => {
+  const { root, cleanup } = buildSyntheticRoot(
+    'output-styles-form1',
+    ['node_modules/', 'planning-scratch/'],
+    {
+      'output-styles/some-style.md': 'See planning-scratch/deep-notes.md for the full rationale.\n',
+    }
+  );
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+
+    assert.equal(result.status, 1, 'must exit 1 on a planted reference under output-styles/; got: ' + result.combined);
+    assert.match(result.combined, /output-styles\/some-style\.md:1:/, 'message must name the planted file and line');
+    assert.match(result.combined, /planning-scratch\/deep-notes\.md/, 'message must name the planted path');
   } finally {
     cleanup();
   }
@@ -388,5 +439,292 @@ test('self-non-matching: the checker does not cite its own source or its own tes
     assert.doesNotMatch(result.combined, /check-workspace-refs\.test\.mjs:\d+:/, 'the checker must never cite its own test file as a finding site');
   } finally {
     cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Manifest-backed hashed matching: form 2's forbidden-basename set now comes
+// from a committed, hashed manifest (unioned with a live scratch-tree walk
+// when one exists), matched via token extraction plus hashing rather than a
+// literal alternation regex, so a clean CI checkout (no scratch tree at all)
+// still enforces the bare-filename form. Fixture basenames throughout this
+// section are entirely invented; none of them, hashed or in clear text, name
+// anything that exists on this machine.
+// ---------------------------------------------------------------------------
+
+/** Extracts "lineNo:matchedText" pairs from a checker run's combined output, for form 2
+ *  ("bare workspace filename reference") findings only - form 1 and form 3 findings use a
+ *  different message shape and are not captured here. */
+function extractForm2Findings(combinedOutput) {
+  const re = /[^\s:]+:(\d+): bare workspace filename reference "([^"]+)"/g;
+  const out = [];
+  let m;
+  while ((m = re.exec(combinedOutput)) !== null) {
+    out.push(m[1] + ':' + m[2]);
+  }
+  return out.sort();
+}
+
+/** A direct re-implementation of the pre-hash literal alternation regex (escape, sort by
+ *  descending length, lookbehind/lookahead), used ONLY as a parity oracle in this test file -
+ *  never shipped. Runs against caller-supplied text and a caller-supplied basename list, so it
+ *  never depends on this repo's own real scratch tree. */
+function referenceLiteralForm2Matches(text, basenames) {
+  if (basenames.length === 0) return [];
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const alternation = basenames.map(esc).sort((a, b) => b.length - a.length).join('|');
+  const re = new RegExp('(?<![A-Za-z0-9_./-])(' + alternation + ')(?![A-Za-z0-9_-])', 'g');
+  const lines = text.split('\n');
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(lines[i])) !== null) {
+      out.push((i + 1) + ':' + m[1]);
+      if (m.index === re.lastIndex) re.lastIndex++;
+    }
+  }
+  return out.sort();
+}
+
+test('parity: the hashed token matcher and the literal alternation regex agree on every boundary case (trailing-period, slash-preceded, prefix-of-longer-token, overlapping-basename, lookahead-negative, dotless)', () => {
+  const forbidden = [
+    'alpha-thing.md',
+    'alpha-thing.md.bak',
+    'beta-notes.txt',
+    'gamma-record.csv',
+    'epsilon-file.json',
+    'zetaitem',
+  ];
+  const corpusLines = [
+    'Combined alpha-thing.md.bak should match only as the longer entry.',              // overlapping-basename
+    'Standing alone, alpha-thing.md is also independently flagged.',                    // shorter alone
+    'Trailing sentence example: beta-notes.txt.',                                       // trailing-period
+    'See widget-scratch/gamma-record.csv for the slash-preceded case.',                 // slash-preceded (no match)
+    'A longer suffix example: epsilon-file.json.old provides a snapshot.',              // prefix-of-longer-token
+    'Extension variant example: alpha-thing.mdx should never match.',                   // lookahead-negative (letter)
+    'Hyphen suffix example: alpha-thing.md-old should never match.',                    // lookahead-negative (hyphen)
+    'Prefixed example: xalpha-thing.md should never match on its own.',                 // lookbehind-negative (non-slash)
+    'Dotless example: zetaitem should still match.',                                    // dotless full-token
+  ];
+  const corpusText = corpusLines.join('\n') + '\n';
+
+  const files = { 'docs/parity-corpus.md': corpusText };
+  for (const name of forbidden) {
+    files['widget-scratch/' + name] = 'fixture placeholder\n';
+  }
+
+  const { root, cleanup } = buildSyntheticRoot('parity', ['node_modules/', 'widget-scratch/'], files);
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    const actual = extractForm2Findings(result.combined);
+    const expectedOracle = referenceLiteralForm2Matches(corpusText, forbidden);
+
+    assert.ok(expectedOracle.length > 0, 'the oracle itself must not be vacuous');
+    assert.deepEqual(actual, expectedOracle, 'the hashed matcher and the literal-regex oracle must find identical findings; got: ' + result.combined);
+
+    // Pin the exact expected set by hand too, so a bug shared by both implementations cannot
+    // mask a regression that a pure oracle-equality check would miss.
+    assert.deepEqual(actual, [
+      '1:alpha-thing.md.bak',
+      '2:alpha-thing.md',
+      '3:beta-notes.txt',
+      '5:epsilon-file.json',
+      '9:zetaitem',
+    ]);
+  } finally {
+    cleanup();
+  }
+});
+
+test('non-token-shaped basename (one containing a space) stays live-derived only, and --write-manifest reports it as skipped', () => {
+  const invented = 'fixture notes draft.md';
+  const files = {
+    'docs/example.md': 'See ' + invented + ' for the source list.\n',
+  };
+  files['planning-scratch/' + invented] = 'A fixture whose name is not token-shaped.\n';
+
+  const { root, cleanup } = buildSyntheticRoot('nontoken', ['node_modules/', 'planning-scratch/'], files);
+  try {
+    const scanResult = runClonedChecker(root, SCRIPT);
+    assert.equal(scanResult.status, 1, 'the live-derived literal-regex fallback must still catch a non-token-shaped basename locally; got: ' + scanResult.combined);
+    assert.match(scanResult.combined, /bare workspace filename reference "fixture notes draft\.md"/);
+
+    const writeResult = runClonedChecker(root, SCRIPT, ['--write-manifest']);
+    assert.equal(writeResult.status, 0, 'got: ' + writeResult.combined);
+    assert.match(writeResult.combined, /1 skipped: non-token-shaped/);
+
+    const manifestPath = join(root, ...MANIFEST_REL.split('/'));
+    const written = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    const inventedHash = sha256Hex(invented);
+    assert.ok(!written.hashes.includes(inventedHash), 'a non-token-shaped basename must never be written to the manifest');
+  } finally {
+    cleanup();
+  }
+});
+
+test('clean-clone mutation proof: a manifest-listed name is caught with no scratch dirs on disk, and clears once removed from the manifest', () => {
+  const { root, cleanup } = cloneRealRepo('clean-clone-mutation');
+  try {
+    const markerName = 'zzz-fixture-marker-9231.md';
+    const markerHash = sha256Hex(markerName);
+    const manifestPath = join(root, ...MANIFEST_REL.split('/'));
+    writeFileSync(manifestPath, JSON.stringify({ version: 1, algorithm: 'sha256', hashes: [markerHash] }, null, 2) + '\n');
+
+    const target = join(root, 'docs', '_fixture-clean-clone-mutation.md');
+    writeFileSync(target, 'See ' + markerName + ' for details.\n');
+
+    const red = runClonedChecker(root, SCRIPT);
+    assert.equal(red.status, 1, 'must exit 1 when the manifest lists the matched name with no scratch dirs present; got: ' + red.combined);
+    assert.match(red.combined, /bare workspace filename reference "zzz-fixture-marker-9231\.md"/);
+    assert.match(red.combined, /matches the committed workspace-refs manifest/);
+
+    writeFileSync(manifestPath, JSON.stringify({ version: 1, algorithm: 'sha256', hashes: [] }, null, 2) + '\n');
+    const green = runClonedChecker(root, SCRIPT);
+    assert.equal(green.status, 0, 'must exit 0 once the hash is removed from the manifest, with no scratch dirs present either time; got: ' + green.combined);
+  } finally {
+    cleanup();
+  }
+});
+
+test('freshness: a live-derived scratch basename not yet in the committed manifest prints a NOTICE and still exits 0', () => {
+  const { root, cleanup } = cloneRealRepo('freshness-notice');
+  try {
+    // Assembled from separate parts per this file's self-matching discipline (see header): this
+    // test runs against a real-repo clone that includes this very test file's on-disk source, so
+    // a contiguous literal here would be a genuine, self-inflicted live-derived match once this
+    // basename becomes a real scratch file inside the clone below.
+    const freshName = 'fixture-fresh-name-' + '4471' + '.md';
+    const scratchFile = join(root, '_local', '_fixture-freshness', freshName);
+    mkdirSync(dirname(scratchFile), { recursive: true });
+    writeFileSync(scratchFile, 'Fixture-only scratch content, never referenced elsewhere.\n');
+
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 0, 'an unreferenced fresh scratch basename must not fail the run; got: ' + result.combined);
+    assert.match(result.combined, /NOTICE: 1 scratch basename\(s\) not in the committed manifest; run with --write-manifest/);
+  } finally {
+    cleanup();
+  }
+});
+
+test('--write-manifest is byte-stable across repeated runs and preserves a pre-existing hash whose file is absent', () => {
+  const { root, cleanup } = cloneRealRepo('write-manifest-stable');
+  try {
+    const manifestPath = join(root, ...MANIFEST_REL.split('/'));
+    const before = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    const staleHash = sha256Hex('fixture-vanished-name-8820.md');
+    writeFileSync(manifestPath, JSON.stringify({ version: 1, algorithm: 'sha256', hashes: [...before.hashes, staleHash].sort() }, null, 2) + '\n');
+
+    const first = runClonedChecker(root, SCRIPT, ['--write-manifest']);
+    assert.equal(first.status, 0, 'got: ' + first.combined);
+    const afterFirst = readFileSync(manifestPath, 'utf8');
+
+    const second = runClonedChecker(root, SCRIPT, ['--write-manifest']);
+    assert.equal(second.status, 0, 'got: ' + second.combined);
+    const afterSecond = readFileSync(manifestPath, 'utf8');
+
+    assert.equal(afterFirst, afterSecond, 'running --write-manifest twice in a row must be byte-identical (a no-op the second time)');
+    assert.ok(afterSecond.endsWith('\n'), 'must end with a trailing newline');
+
+    const finalData = JSON.parse(afterSecond);
+    assert.ok(finalData.hashes.includes(staleHash), 'a pre-existing hash whose scratch file no longer exists must survive the union, never auto-pruned');
+  } finally {
+    cleanup();
+  }
+});
+
+test('tracked-basename subtraction: a manifest hash equal to a tracked basename never flags', () => {
+  const { root, cleanup } = cloneRealRepo('tracked-subtraction');
+  try {
+    const trackedName = 'CHANGELOG.md';
+    const trackedHash = sha256Hex(trackedName);
+    const manifestPath = join(root, ...MANIFEST_REL.split('/'));
+    writeFileSync(manifestPath, JSON.stringify({ version: 1, algorithm: 'sha256', hashes: [trackedHash] }, null, 2) + '\n');
+
+    const target = join(root, 'docs', '_fixture-tracked-subtraction.md');
+    writeFileSync(target, 'See ' + trackedName + ' for the full history.\n');
+
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 0, 'a manifest hash equal to a tracked basename must never flag; got: ' + result.combined);
+  } finally {
+    cleanup();
+  }
+});
+
+test('a checkout with no manifest file fails loudly (exit 2), not a silent pass', () => {
+  const { root, cleanup } = buildSyntheticRoot('no-manifest', ['node_modules/'], {
+    'docs/example.md': 'Ordinary prose with nothing gitignored-related.\n',
+  });
+  try {
+    rmSync(join(root, ...MANIFEST_REL.split('/')), { force: true });
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 2, 'a missing manifest must be an operational error, not a silent pass; got: ' + result.combined);
+  } finally {
+    cleanup();
+  }
+});
+
+test('a malformed manifest entry (non-hex) fails loudly (exit 2)', () => {
+  const { root, cleanup } = buildSyntheticRoot('malformed-manifest', ['node_modules/'], {
+    'docs/example.md': 'Ordinary prose with nothing gitignored-related.\n',
+  });
+  try {
+    writeFileSync(
+      join(root, ...MANIFEST_REL.split('/')),
+      JSON.stringify({ version: 1, algorithm: 'sha256', hashes: ['not-a-hex-digest'] }, null, 2) + '\n'
+    );
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 2, 'a malformed manifest entry must be an operational error; got: ' + result.combined);
+  } finally {
+    cleanup();
+  }
+});
+
+test('--write-manifest mode: a missing manifest file starts from an empty set (not a fatal), reports so, and writes one', () => {
+  const { root, cleanup } = buildSyntheticRoot('write-no-manifest', ['node_modules/'], {
+    'docs/example.md': 'Ordinary prose with nothing gitignored-related.\n',
+  });
+  try {
+    const manifestPath = join(root, ...MANIFEST_REL.split('/'));
+    rmSync(manifestPath, { force: true });
+
+    const result = runClonedChecker(root, SCRIPT, ['--write-manifest']);
+    assert.equal(result.status, 0, '--write-manifest must tolerate a missing file, not fatal; got: ' + result.combined);
+    assert.match(result.combined, /no existing manifest at .*; starting from an empty set/);
+
+    const written = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    assert.deepEqual(written, { version: 1, algorithm: 'sha256', hashes: [] });
+  } finally {
+    cleanup();
+  }
+});
+
+test('--write-manifest mode: a malformed manifest entry (non-hex) is still fatal (exit 2), never silently overwritten', () => {
+  const { root, cleanup } = buildSyntheticRoot('write-malformed-manifest', ['node_modules/'], {
+    'docs/example.md': 'Ordinary prose with nothing gitignored-related.\n',
+  });
+  try {
+    const manifestPath = join(root, ...MANIFEST_REL.split('/'));
+    writeFileSync(manifestPath, JSON.stringify({ version: 1, algorithm: 'sha256', hashes: ['not-a-hex-digest'] }, null, 2) + '\n');
+    const before = readFileSync(manifestPath, 'utf8');
+
+    const result = runClonedChecker(root, SCRIPT, ['--write-manifest']);
+    assert.equal(result.status, 2, 'a malformed manifest entry must stay fatal even in --write-manifest mode; got: ' + result.combined);
+
+    const after = readFileSync(manifestPath, 'utf8');
+    assert.equal(after, before, 'a fatal malformed-manifest run must never overwrite the file');
+  } finally {
+    cleanup();
+  }
+});
+
+test('committed manifest: every entry is a lowercase hex sha256 digest, never a clear-text basename', () => {
+  const manifestPath = join(REPO_ROOT, ...MANIFEST_REL.split('/'));
+  const data = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  assert.equal(data.version, 1);
+  assert.equal(data.algorithm, 'sha256');
+  assert.ok(Array.isArray(data.hashes) && data.hashes.length > 0, 'the committed manifest must not be empty');
+  for (const h of data.hashes) {
+    assert.match(h, /^[0-9a-f]{64}$/, 'every manifest entry must be a lowercase hex sha256 digest: ' + JSON.stringify(h));
   }
 });

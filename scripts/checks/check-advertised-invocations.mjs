@@ -1,7 +1,7 @@
 // scripts/checks/check-advertised-invocations.mjs
 // what-it-is:   advertised skill-invocation resolution checker
-// what-it-does: scans every git-tracked .md file under agents/, docs/, examples/, skills/,
-//               templates/, plus root-level .md files, for the literal advertised invocation
+// what-it-does: scans every git-tracked .md file under agents/, docs/, examples/, output-styles/,
+//               skills/, templates/, plus root-level .md files, for the literal advertised invocation
 //               form "/nonfiction-studio:<name>" - the namespaced slash-invocation shape this
 //               plugin's own docs teach an author to type - and asserts each named <name>
 //               resolves to a shipped skill: a directory at skills/<name>/. A document that
@@ -49,13 +49,18 @@ const PREFIX = '[check-advertised-invocations]';
 const SKILLS_DIR = join(REPO_ROOT, 'skills');
 
 // ---------------------------------------------------------------------------
-// Scan scope: every .md file under agents/, docs/, examples/, skills/,
-// templates/, plus root-level .md files, except docs/adr/ and docs/gates/
-// (dated historical records - see header comment). Identical shape to
-// scripts/checks/check-skill-cli-targets.mjs's own scan scope.
+// Scan scope: every .md file under agents/, docs/, examples/, output-styles/,
+// skills/, templates/, plus root-level .md files, except docs/adr/ and
+// docs/gates/ (dated historical records - see header comment). Identical
+// shape to scripts/checks/check-link-labels.mjs's own Markdown scan scope.
+// check-skill-cli-targets.mjs also covers a non-Markdown scope neither of
+// these two has, and its own Markdown scope has grown to include .md files
+// under a few directories (scripts/, hooks/, bin/, evals/) that carry a
+// non-Markdown scope of their own too - a widening this checker's own scope
+// had no reason to follow, since it has no non-Markdown scope to mirror.
 // ---------------------------------------------------------------------------
 
-const SCAN_DIR_PREFIXES = ['agents/', 'docs/', 'examples/', 'skills/', 'templates/'];
+const SCAN_DIR_PREFIXES = ['agents/', 'docs/', 'examples/', 'output-styles/', 'skills/', 'templates/'];
 const HISTORICAL_RECORD_PREFIXES = ['docs/adr/', 'docs/gates/'];
 
 function isRootLevelFile(rel) {
@@ -151,8 +156,9 @@ const filesToScan = trackedFiles.filter(inScope).sort();
 
 if (filesToScan.length === 0) {
   process.stderr.write(
-    PREFIX + ' FATAL: zero files matched the scan scope (agents/, docs/, examples/, skills/, ' +
-    'templates/, root-level .md files; excluding docs/adr/, docs/gates/) under ' + REPO_ROOT +
+    PREFIX + ' FATAL: zero files matched the scan scope (agents/, docs/, examples/, ' +
+    'output-styles/, skills/, templates/, root-level .md files; excluding docs/adr/, ' +
+    'docs/gates/) under ' + REPO_ROOT +
     '. This indicates a broken checkout or a resolution bug, not a clean pass.\n'
   );
   process.exit(2);
@@ -216,7 +222,7 @@ for (const rel of filesToScan) {
 if (degradedReason) {
   process.stdout.write(PREFIX + ' NOTE: degraded mode, scanning the filesystem directly instead of the git-tracked set (' + degradedReason + ')\n');
 } else {
-  process.stdout.write(PREFIX + ' mode: git-tracked (' + filesToScan.length + ' file(s) in scope: agents/, docs/, examples/, skills/, templates/, root-level .md files; excluding docs/adr/, docs/gates/)\n');
+  process.stdout.write(PREFIX + ' mode: git-tracked (' + filesToScan.length + ' file(s) in scope: agents/, docs/, examples/, output-styles/, skills/, templates/, root-level .md files; excluding docs/adr/, docs/gates/)\n');
 }
 
 if (findings.length === 0) {

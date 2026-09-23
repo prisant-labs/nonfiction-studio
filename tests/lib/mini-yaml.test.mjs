@@ -4,7 +4,9 @@
 //               callers actually feed it (flat settings frontmatter, an agent's full frontmatter
 //               including a folded description scalar and nested metadata, and
 //               agents/_chain-permitted.yaml's flat map-of-sequences), plus its error paths (flow
-//               collections, mis-indented siblings) and the empty/comments-only success case.
+//               collections, mis-indented siblings, a repeated key within one mapping, and a
+//               nested child line whose indentation mixes spaces and tabs) and the
+//               empty/comments-only success case.
 // runner:       node --test tests/lib/mini-yaml.test.mjs
 
 import { test } from 'node:test';
@@ -107,5 +109,69 @@ test('a mapping value nested one level too deep (over-indented) throws rather th
   assert.throws(
     () => parseMiniYaml('gate_mode: warn\n    routing_enforce: block\n'),
     MiniYamlError
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Regression: a repeated key within one mapping throws naming the line, rather than silently
+// resolving last-wins (the real "yaml" package this module replaces throws on this shape; a stray
+// repeated routing_enforce: line silently changing enforcement mode would violate the settings
+// page's never-silently-disable promise).
+// ---------------------------------------------------------------------------
+
+test('a repeated key within one mapping throws MiniYamlError naming the 1-based line number', () => {
+  assert.throws(
+    () => parseMiniYaml('gate_mode: warn\nrouting_enforce: block\nrouting_enforce: off\n'),
+    (err) => err instanceof MiniYamlError && /\bline 3\b/.test(err.message),
+    'must throw naming line 3 (the second occurrence), not silently take the last value'
+  );
+});
+
+test('a repeated key in a nested mapping throws MiniYamlError naming the 1-based line number', () => {
+  assert.throws(
+    () => parseMiniYaml('thresholds:\n  overlap_min_words: 20\n  overlap_min_words: 5\n'),
+    (err) => err instanceof MiniYamlError && /\bline 3\b/.test(err.message),
+    'a duplicate inside a nested mapping must throw too, naming the line it repeats on'
+  );
+});
+
+test('the same key name at two different mapping depths is not a duplicate (each mapping tracks its own keys)', () => {
+  const doc = parseMiniYaml('name: outer\nthresholds:\n  name: inner\n');
+  assert.deepStrictEqual(doc, { name: 'outer', thresholds: { name: 'inner' } });
+});
+
+// ---------------------------------------------------------------------------
+// Regression: a nested child line whose leading indentation mixes spaces and tabs throws naming
+// the line, rather than degrading to a garbled scalar (indentOf only counts spaces, so a
+// spaces-then-tab prefix under-measures the child's own indent width and the child line's content
+// -- still carrying the tab -- fails both the mapping-key and sequence-item shape checks and falls
+// through to being misparsed as a bare scalar).
+// ---------------------------------------------------------------------------
+
+test('a nested mapping child indented with a mix of spaces and a tab throws MiniYamlError naming the line, instead of misparsing as a scalar', () => {
+  // Two spaces then a tab, then "child: value" -- indentOf sees only the two spaces.
+  const doc = 'parent:\n  \tchild: value\n';
+  assert.throws(
+    () => parseMiniYaml(doc),
+    (err) => err instanceof MiniYamlError && /\bline 2\b/.test(err.message) && /tab/i.test(err.message),
+    'must throw naming line 2 and mentioning the tab, not silently produce a garbled scalar'
+  );
+});
+
+test('a sequence item\'s own nested child indented with a mix of spaces and a tab throws MiniYamlError naming the line', () => {
+  // "items:" descends into a sequence at indent 2; that lone item's own value is empty, so it
+  // descends again into a nested mapping at indent 4 -- exercising parseSequence's own child
+  // descent point, distinct from the mapping-child case above.
+  const doc = 'items:\n  -\n    \tkey: value\n';
+  assert.throws(
+    () => parseMiniYaml(doc),
+    (err) => err instanceof MiniYamlError && /\bline 3\b/.test(err.message) && /tab/i.test(err.message)
+  );
+});
+
+test('indentation of spaces only is unaffected by the mixed-indentation check', () => {
+  assert.deepStrictEqual(
+    parseMiniYaml('thresholds:\n  overlap_min_words: 20\n'),
+    { thresholds: { overlap_min_words: 20 } }
   );
 });

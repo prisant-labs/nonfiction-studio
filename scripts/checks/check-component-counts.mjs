@@ -215,9 +215,12 @@ function walkRootLevelFiles(baseDir, out = []) {
 
 // ---------------------------------------------------------------------------
 // Scan scope: bin/, hooks/, scripts/, skills/, agents/, docs/, examples/,
-// templates/, evals/, tests/, and root-level files - mirrors
-// check-workspace-refs.mjs's scan scope. docs/adr/ and docs/gates/ are
-// excluded entirely (dated historical record, see header comment above).
+// templates/, evals/, tests/, and root-level files - the same list
+// check-workspace-refs.mjs's scan scope started from, minus output-styles/:
+// output-styles/ was added to that checker's scan scope but not to this
+// one's; output-styles/ carries no CLI or skill count claim for this
+// checker to verify. docs/adr/ and docs/gates/ are excluded entirely
+// (dated historical record, see header comment above).
 // ---------------------------------------------------------------------------
 
 const SCAN_PREFIXES = [
