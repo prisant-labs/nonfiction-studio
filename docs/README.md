@@ -9,5 +9,6 @@ This folder holds the reference material for Nonfiction Studio. It is organized 
 - **[gates/](gates/)** - Internal engineering verification records for each build phase. Not user documentation; kept for the project's own accountability trail.
 - **[reference/](reference/)** - A reference page, and a worked example, for every agent, skill, and command-line tool the plugin ships: [reference/agents/](reference/agents/), [reference/skills/](reference/skills/), [reference/cli/](reference/cli/). The two optional output styles have their own page too: [reference/output-styles.md](reference/output-styles.md). The hook events the plugin wires, and the `SessionStart` output-field contract in particular, are documented in [reference/hooks.md](reference/hooks.md).
 - **[privacy.md](privacy.md)** - The plugin's privacy and persistent-state behavior, author-facing.
+- **[releasing.md](releasing.md)** - The maintainer's runbook for cutting a release: the shape of a `RELEASE-NOTES.md` entry and the version-bump-to-tag-push sequence. Maintainer-facing, not author-facing.
 
 **New here?** Start with [quickstart.md](quickstart.md) for the fast path, or [reference/skills/nfs-start.md](reference/skills/nfs-start.md) for the guided front door that the rest of the plugin routes through.

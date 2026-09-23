@@ -56,7 +56,7 @@ Steps 16 and 17 are also referred to on their own, since they are what you reach
 
 `scripts/checks/check-workspace-refs.mjs` fails on a shipped file naming a path under a gitignored scratch directory, or naming a private scratch file by its bare filename. Refer to a scratch working area generically ("a gitignored scratch directory") in anything you commit; never write out its actual path or a private filename.
 
-None of this is pedantry for its own sake: each of these checkers was added or widened after a real stale or leaked reference got past review; `CHANGELOG.md`'s `Unreleased` section records most of those cases.
+None of this is pedantry for its own sake: each of these checkers was added or widened after a real stale or leaked reference got past review; `CHANGELOG.md`'s `0.1.0` section records most of those cases.
 
 ## TDD and mutation-proof expectations for a new check or engine
 
@@ -108,17 +108,11 @@ node scripts/run-integration.mjs
 node scripts/run-evals.mjs
 ```
 
-Both also support `--dry-run` for a keyless smoke pass with no model calls at all. See [ADR-0010 (Tier B trigger and credential)](docs/adr/ADR-0010-tier-b-trigger-and-credential.md) for the full trigger, credential, and skip-versus-fail contract. Tier B is advisory to every pull request; it is a manual precondition to a release (below), not something a contributor's PR is judged against.
+Both also support `--dry-run` for a keyless smoke pass with no model calls at all. See [ADR-0010 (Tier B trigger and credential)](docs/adr/ADR-0010-tier-b-trigger-and-credential.md) for the full trigger, credential, and skip-versus-fail contract. Tier B is advisory to every pull request; it is a manual precondition to a release (see [`docs/releasing.md`](docs/releasing.md)), not something a contributor's PR is judged against.
 
 ## Release process
 
-The maintainer, not a contributor, cuts a release, but the mechanics are worth knowing when a change you are proposing is version-bearing.
-
-1. `library.json` is the version source of truth. `package.json`'s `version` and `.claude-plugin/plugin.json`'s `version` must be bumped to the identical value in the same change.
-2. Push a tag of the form `vX.Y.Z` matching that value exactly.
-3. `.github/workflows/release.yml` triggers on the tag push. Its first step, `node scripts/check-release-tag.mjs`, refuses the release (exit 1) and names every manifest that disagrees with the tag unless the tag and all three manifests (`library.json`, `package.json`, `.claude-plugin/plugin.json`) agree exactly.
-4. Once verified, the workflow publishes a GitHub release for that tag using `RELEASE-NOTES.md`'s current contents as the release body.
-5. A maintainer treats a green, manually dispatched Tier B run as a precondition to cutting the tag; nothing in the workflow enforces this mechanically, so it is a runbook step, not a gate (see ADR-0010's Decision 4).
+The maintainer, not a contributor, cuts a release. `library.json` is the version source of truth, and `package.json`'s and `.claude-plugin/plugin.json`'s `version` fields must be bumped to the identical value in the same change before a tag is pushed. The full, step-by-step runbook - version bump, `MIGRATION.md` and `CHANGELOG.md` updates, the `RELEASE-NOTES.md` entry shape, tagging, and what the tag-triggered `release.yml` workflow does with them - lives in [`docs/releasing.md`](docs/releasing.md), not here; a change you are proposing that is version-bearing is worth reading it for, but cutting the release itself is not a contributor's job.
 
 ## Before you push: refresh the workspace-reference manifest (maintainers with a local scratch directory)
 

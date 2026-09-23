@@ -7,8 +7,8 @@ name: Release
 # (scripts/check-release-tag.mjs), and publishing is a single gh CLI call, matching the
 # convention already established in tier-a.yml and tier-b.yml.
 #
-# This workflow has never executed live: no version tag has been pushed on this branch. It
-# first proves itself on the first real tag push. See docs/adr/ADR-0010-tier-b-trigger-and-credential.md
+# This workflow first proves itself live on the v0.1.0 tag push, the repository's first release.
+# See docs/adr/ADR-0010-tier-b-trigger-and-credential.md
 # for the release-blocking-versus-PR-advisory posture this fits into (Tier B must be green
 # before a maintainer cuts a tag; this workflow does not itself run Tier B).
 

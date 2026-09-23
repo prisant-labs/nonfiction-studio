@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for the suggestion. Nonfiction Studio is a solo-maintained, pre-release plugin, so
+        Thanks for the suggestion. Nonfiction Studio is a solo-maintained, pre-1.0 plugin, so
         not every good idea lands quickly - but a clear, concrete request is easy to weigh.
 
   - type: textarea

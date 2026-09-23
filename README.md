@@ -17,7 +17,7 @@ Most AI writing tools generate plausible prose and leave the verification to you
 </p>
 
 <p>
-  <img src="https://img.shields.io/badge/status-pre--release-orange?style=flat-square" alt="Status: pre-release">
+  <img src="https://img.shields.io/badge/status-pre--1.0-orange?style=flat-square" alt="Status: pre-1.0">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/version-0.1.0-blue?style=flat-square" alt="Version 0.1.0">
   <img src="https://img.shields.io/badge/tier-universal%20(Bronze)-CD7F32?style=flat-square" alt="Conformance tier: universal (Bronze)">
@@ -72,7 +72,7 @@ Most AI writing tools generate plausible prose and leave the verification to you
 
 Nonfiction Studio is listed in the [prisant-labs marketplace](https://github.com/prisant-labs/agent-plugins), which catalogs every plugin published under [prisant-labs](https://github.com/prisant-labs).
 
-**From the marketplace** (once this repository is public):
+**From the marketplace** (recommended):
 
 ```
 /plugin marketplace add prisant-labs/agent-plugins
@@ -81,7 +81,7 @@ Nonfiction Studio is listed in the [prisant-labs marketplace](https://github.com
 
 You **add** the marketplace by its repo path and **install** by the marketplace's registered name (`@prisant-labs`): the path is the address, the registered name is the catalog. Add the marketplace once and every plugin published there becomes available, including ones added later.
 
-**From a local clone** (what works today):
+**From a local clone** (for a fork or an offline install):
 
 ```
 claude plugin marketplace add /path/to/nonfiction-studio
@@ -90,7 +90,7 @@ claude plugin install nonfiction-studio@nonfiction-studio
 
 Replace `/path/to/nonfiction-studio` with wherever you cloned or unzipped it. The plugin carries a self-marketplace in its own repository, which is what makes the local directory install work; that is why the marketplace name after the @ differs between the two paths.
 
-> **Availability.** The marketplace listing exists and is live, but this repository is not public yet, so the marketplace path will fail to resolve until the public flip. The local-clone path is the supported route in the meantime. Requires Node 22.12 or later.
+> **Availability.** The repository is public and the marketplace listing is live, so `/plugin marketplace add prisant-labs/agent-plugins` now resolves. The local-clone path above remains available too. Requires Node 22.12 or later.
 
 <div align="right">(<a href="#readme-top">back to top</a>)</div>
 
@@ -301,14 +301,14 @@ If you try Nonfiction Studio in Cowork, treat it as "should work" rather than "p
 
 ## Project status
 
-**`v0.1.0`, pre-release, under construction.** Phase 1, the core authoring workflow, is complete and exercised. Later work (deeper research tooling, a revision pass, manuscript export, and further publishing-compliance features) is still being built, and rough edges are expected. No version has been tagged yet.
+**`v0.1.0`, the first tagged release, pre-1.0.** Phase 1, the core authoring workflow, is complete and exercised. Later work (deeper research tooling, a revision pass, manuscript export, and further publishing-compliance features) is still being built, and rough edges are expected.
 
 ### At a glance
 
 |  |  |
 |---|---|
 | **Current version** | `0.1.0` (source of truth: [`library.json`](library.json)) |
-| **Status** | Pre-release; Phase 1 complete, later phases in progress |
+| **Status** | Pre-1.0; Phase 1 complete, later phases in progress |
 | **Components** | 14 skills, 8 subagents, 9 CLIs, 2 output styles, hooks on six events |
 | **Conformance** | `universal` (Bronze) at Standard 0.12 |
 | **Agent targets** | Claude Code (Cowork pending verification; chat is skills-only) |
@@ -338,7 +338,7 @@ nonfiction-studio/
 
 ### Changelog
 
-Full technical detail in [`CHANGELOG.md`](CHANGELOG.md); curated, author-facing highlights in [`RELEASE-NOTES.md`](RELEASE-NOTES.md). Everything currently sits under `Unreleased`, because no version has been tagged.
+Full technical detail in [`CHANGELOG.md`](CHANGELOG.md); curated, author-facing highlights in [`RELEASE-NOTES.md`](RELEASE-NOTES.md). `0.1.0`, tagged 2026-09-23, is the first release; changes since then accumulate under `Unreleased` in `CHANGELOG.md` until the next version is cut.
 
 <div align="right">(<a href="#readme-top">back to top</a>)</div>
 

@@ -6,8 +6,7 @@ report a problem privately, and what to expect when you do.
 
 ## Supported versions
 
-Pre-1.0, only the latest release receives fixes (before the first tagged
-release, that means the `main` branch). If you find a problem on an older
+Pre-1.0, only the latest release receives fixes. If you find a problem on an older
 tag, please upgrade to the latest release and confirm the problem still
 reproduces there before reporting it.
 
