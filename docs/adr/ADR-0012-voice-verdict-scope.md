@@ -36,9 +36,9 @@ AUC 0.50 is a coin flip and 1.00 is perfect. FPR@90 is the false-block rate at t
 
 **Why ADR-0011's divisor sweep could not have succeeded.** A threshold sweep over a statistic with AUC 0.53 is a sweep over a coin flip. The ghostwriting score and the honest-variance score moved together across every divisor because the statistic barely distinguishes them; there was no separating value to find. ADR-0011 was searching the wrong parameter, and its record of the failure is what made the real cause findable. The budget was never the problem.
 
-**Evidence provenance, and what was and was not re-verified.** The corpus-sizing findings document of 2026-08-21 and the six probe scripts beside it.
+**Evidence provenance, and what was and was not re-verified.** The maintainer's unpublished corpus-sizing notes of 2026-08-21 and the six probe scripts that accompany them.
 
-The PF-21 comparison table above was re-measured at `3f68081` before being quoted here, per this repository's standing rule to verify figures against current code rather than copy them. It reproduces, and the re-run corrected four items in the source document, recorded in the PF-01 (voice verdict scope) decision brief of 2026-08-25, Section 0. All four corrections move in the favourable direction and none changes a conclusion.
+The PF-21 comparison table above was re-measured at `3f68081` before being quoted here, per this repository's standing rule to verify figures against current code rather than copy them. It reproduces, and the re-run corrected four items in the source document, recorded in the maintainer's unpublished PF-01 (voice verdict scope) decision brief of 2026-08-25, Section 0. All four corrections move in the favourable direction and none changes a conclusion.
 
 The round-one figures are quoted from the 2026-08-21 findings document and were **not** re-run this session: the 98 to 100 percent block rate, the flat median of 41 to 45 across the corpus sweep, and the expected-count and words-needed tables. The findings document pins only its PF-21 section to a commit, so those figures cannot be attributed to a known engine state. They are directional context here. **The decision rests on the PF-21 table, which was verified.** Re-running the marker-stability sweep script at HEAD would close the gap and is not required to accept this ADR.
 
