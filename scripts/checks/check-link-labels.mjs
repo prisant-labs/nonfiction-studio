@@ -21,15 +21,14 @@
 //               survey of the live tree found only four links to the single output-styles
 //               reference page and none to either individual style file, too thin a shape to
 //               justify a third named page-kind, so this checker leaves that page out of scope.
-//               Rule A (the primary rule - see "Rule B" below for the secondary one): once an
-//               href resolves to a component page, the LABEL text (the raw string between "[" and "]")
-//               must contain that component's <name> as a whole token - not preceded or followed
-//               by a lowercase letter, digit, or hyphen (a string edge counts as a valid
-//               boundary; a backtick, space, or punctuation mark all satisfy it too, so
-//               "`nfs-doctor`" and "nfs-doctor's" both count). This also distinguishes two real,
-//               separately shipped components whose names share a prefix - "ns-status" is not a
-//               token match inside a label naming "ns-statusline" - which a plain substring test
-//               would get wrong.
+//               The rule (href-to-label): once an href resolves to a component page, the LABEL
+//               text (the raw string between "[" and "]") must contain that component's <name> as
+//               a whole token - not preceded or followed by a lowercase letter, digit, or hyphen
+//               (a string edge counts as a valid boundary; a backtick, space, or punctuation mark
+//               all satisfy it too, so "`nfs-doctor`" and "nfs-doctor's" both count). This also
+//               distinguishes two real, separately shipped components whose names share a prefix -
+//               "ns-status" is not a token match inside a label naming "ns-statusline" - which a
+//               plain substring test would get wrong.
 //               Fragment acceptance: when the href carries a "#fragment", a label that fails the
 //               token test is still accepted when the label's GitHub-style slug (lowercase, only
 //               letters/digits/spaces/hyphens kept, spaces turned into hyphens) equals the
@@ -46,20 +45,39 @@
 //               contains a nested code span (for example "[`nfs-doctor`](...)") is unaffected:
 //               only the outer link's own start position is tested against the fenced/code-span
 //               ranges, and a code span nested inside a label closes before the label does.
-//               Rule B (measured, adopted): the pinned design also specified a cheap secondary
-//               rule - a label that is SOLELY one component name (after stripping backticks and
-//               bold asterisks) must link to that same component's own page. Measured against the
-//               live tree: 40 links carry a bare-name-only label, and zero of them fail the rule -
-//               no false positive, so the rule is adopted. It is scoped to run ONLY when the href
-//               does not resolve to any component page at all: when it does resolve to one, Rule
-//               A's own token test already covers the case fully (a bare label equal to a
-//               DIFFERENT component's name than the one the href resolves to necessarily fails
-//               Rule A's token test too, since the two names differ), so running Rule B there as
-//               well would only double-report the identical link under two messages. The case
-//               Rule A structurally cannot see is exactly the one Rule B exists for: a bare-name
-//               label whose href does not land on any component page shape at all - a typo'd or
-//               misdirected target - which Rule A skips outright because it has no component name
-//               to test the label against. Rule B's own detection surface is confined to that gap.
+//               An optional CommonMark link title after the destination - "(path "title")",
+//               "(path 'title')", or "(path (title))", separated from the destination by
+//               whitespace - is stripped before the destination is resolved, so a titled link
+//               (ordinary, spec-legal Markdown used for hover text) resolves exactly like its
+//               untitled equivalent instead of failing to match any component-page shape.
+//               Two shapes are DELIBERATELY out of scope, both precedented by the existing
+//               scripts/check-links.mjs, which uses the identical single-line
+//               "\[([^\]]*)\]\(([^)]+)\)" link-extraction regex and has never handled them either:
+//               reference-style links ("[label][ref]"), angle-bracket destinations
+//               ("[label](<path>)"), a label containing balanced nested brackets, and a label
+//               whose text spans a soft line break are all silently unrecognized as links at all,
+//               rather than misclassified - a false negative, not a false positive, and no worse
+//               than the coverage the tree already ships. A 4-space-indented (non-fenced) code
+//               block is likewise not recognized as code (only a fenced block or an inline code
+//               span is): CommonMark's indentation rule is ambiguous with an ordinary indented
+//               list continuation without also parsing list context, which this line-based scanner
+//               does not do, and the live tree has zero occurrences of an example link shown this
+//               way (house style favors long unwrapped lines and fenced blocks).
+//               A secondary rule was also measured and considered: flag a label that is SOLELY one
+//               component name (after stripping backticks and bold asterisks) whose href does NOT
+//               land on that same component's own page. It measured clean against the live tree
+//               (40 bare-name labels, 0 failures), but every one of the 32 real rename-wave defects
+//               already took the primary rule's shape (an href correctly repointed at a renamed
+//               page, next to a label still naming the OLD component) - the secondary rule would
+//               have added zero coverage against the actual defect class this checker exists to
+//               close. Its only incremental coverage is a bare component-name label whose href
+//               points somewhere else entirely, and that class includes ordinary, legitimate prose:
+//               an author writing a bare component name to label a link to a design-discussion
+//               section on a DIFFERENT page (for example a label "nfs-doctor" on a link into
+//               ../architecture.md's own "nfs-doctor design notes" section) names the component
+//               being discussed without claiming to link to its own reference page, and the
+//               secondary rule would have flagged that correct, common pattern as a defect.
+//               Dropped; this checker enforces the primary, href-to-label rule only.
 //               Scope, discovery, and degraded (no-git) fallback: byte-identical in shape to
 //               scripts/checks/check-advertised-invocations.mjs - git-tracked file discovery via
 //               `git ls-files`, falling back to a plain filesystem walk (which skips
@@ -89,12 +107,10 @@
 //               correctly, throughout) and asserts the label still names the component that
 //               target documents, so a label frozen on a retired name is caught even though the
 //               name it uses resolves to nothing.
-// exit taxonomy: 0 = every component-page link's label names its target's component, and every
-//               bare-name-only label links to that same component's own page; 1 = named
-//               finding(s) (Rule A: a label fails both the token test and, where a fragment is
-//               present, the slug test; Rule B: a bare-name-only label's href does not resolve to
-//               any component page at all); 2 = operational error (zero files matched the scan
-//               scope, which means a broken checkout or a resolution bug, not a clean pass).
+// exit taxonomy: 0 = every component-page link's label names its target's component; 1 = named
+//               finding(s) (a label fails both the token test and, where a fragment is present,
+//               the slug test); 2 = operational error (zero files matched the scan scope, which
+//               means a broken checkout or a resolution bug, not a clean pass).
 // used-by:      .github/workflows/tier-a.yml, the "Link labels name their target" step.
 
 import { readFileSync, readdirSync } from 'node:fs';
@@ -196,21 +212,12 @@ function walkRootLevelFiles(baseDir, out = []) {
 
 let trackedFiles = getGitTrackedFiles(REPO_ROOT);
 let degradedReason = null;
-// knownNameSourceFiles feeds Rule B's known-component-name map (see below): it must cover bin/
-// too, which is not one of the Markdown scan prefixes, so a separate degraded-mode walk adds it
-// on top of the same file list the Markdown scope uses. In git-tracked mode, `git ls-files`
-// already returns every tracked path repo-wide, so no extra walk is needed there.
-let knownNameSourceFiles;
 if (!trackedFiles) {
   degradedReason = 'git unavailable or ' + REPO_ROOT + ' is not a git repository';
   trackedFiles = walkRootLevelFiles(REPO_ROOT);
   for (const prefix of SCAN_DIR_PREFIXES) {
     walkDirRecursive(join(REPO_ROOT, prefix.slice(0, -1)), REPO_ROOT, trackedFiles);
   }
-  knownNameSourceFiles = [...trackedFiles];
-  walkDirRecursive(join(REPO_ROOT, 'bin'), REPO_ROOT, knownNameSourceFiles);
-} else {
-  knownNameSourceFiles = trackedFiles;
 }
 
 const filesToScan = trackedFiles.filter(inScope).sort();
@@ -245,26 +252,6 @@ function componentNameForTarget(relPath) {
     if (m) return m[1];
   }
   return null;
-}
-
-// ---------------------------------------------------------------------------
-// Rule B's known-component-name map: name -> the set of repo-relative paths
-// that ARE that component's own page(s), derived by applying the same
-// componentNameForTarget() classifier to every file knownNameSourceFiles
-// lists (not only the Markdown scan scope - bin/<name> is a component page
-// too, and it is never itself a .md file).
-// ---------------------------------------------------------------------------
-
-const knownComponentPages = new Map();
-for (const rel of knownNameSourceFiles) {
-  const name = componentNameForTarget(rel);
-  if (!name) continue;
-  if (!knownComponentPages.has(name)) knownComponentPages.set(name, new Set());
-  knownComponentPages.get(name).add(rel);
-}
-
-function stripBoldAndBackticks(s) {
-  return s.replace(/[`*]/g, '');
 }
 
 // ---------------------------------------------------------------------------
@@ -376,6 +363,18 @@ function isExternalLink(target) {
   );
 }
 
+// A CommonMark inline link may carry an optional title after the destination, separated from it
+// by whitespace: (dest "title"), (dest 'title'), or (dest (title)). Stripped here, before the
+// destination is ever resolved, so a titled link ("[label](path "title")", ordinary hover-text
+// markup) resolves exactly like its untitled equivalent instead of the quoted title text becoming
+// part of the resolved path and matching no component-page shape.
+const LINK_TITLE_RE = /\s+("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\((?:[^()\\]|\\.)*\))\s*$/;
+
+function stripLinkTitle(href) {
+  const m = LINK_TITLE_RE.exec(href);
+  return m ? href.slice(0, m.index) : href;
+}
+
 // ---------------------------------------------------------------------------
 // Scan
 // ---------------------------------------------------------------------------
@@ -415,7 +414,7 @@ for (const rel of filesToScan) {
       }
 
       const label = m[1];
-      const rawHref = m[2].trim();
+      const rawHref = stripLinkTitle(m[2].trim());
 
       if (!rawHref || isExternalLink(rawHref) || rawHref.startsWith('#')) {
         if (m.index === LINK_RE.lastIndex) LINK_RE.lastIndex++;
@@ -449,19 +448,6 @@ for (const rel of filesToScan) {
             rel + ':' + (li + 1) + ': link label "' + label + '" does not name the component "' +
             name + '" that its target "' + resolvedRel + '" documents' +
             (fragment !== null ? ' (fragment "#' + fragment + '" does not match the label\'s slug either)' : '')
-          );
-        }
-      } else {
-        // Rule B: a label that is SOLELY one known component name (backticks and bold asterisks
-        // stripped) must land on that same component's own page. Only reachable here - when the
-        // href does NOT resolve to any component page at all - because when it does, Rule A's own
-        // token test above already fully covers whether the label matches (see the header comment
-        // for why running both there would only double-report the same link).
-        const bareLabel = stripBoldAndBackticks(label).trim();
-        if (knownComponentPages.has(bareLabel)) {
-          findings.push(
-            rel + ':' + (li + 1) + ': link label "' + bareLabel + '" names the component "' +
-            bareLabel + '", but its target "' + resolvedRel + '" is not that component\'s page'
           );
         }
       }

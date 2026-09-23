@@ -92,8 +92,8 @@ const GIZMO_EXAMPLE_PAGE = 'docs/reference/skills/acme-gizmo.example.md';
 const GIZMO_EXAMPLE_CONTENT = 'The acme-gizmo example transcript.\n';
 
 // ---------------------------------------------------------------------------
-// Rule A: bare old-name label, and old name + "skill reference" - the two
-// shapes the real 32-finding replay showed most often.
+// Bare old-name label, and old name + "skill reference" - the two shapes
+// the real 32-finding replay showed most often.
 // ---------------------------------------------------------------------------
 
 test('a bare old-name label that no longer matches the current component name is flagged', () => {
@@ -270,35 +270,61 @@ test('a label containing a nested code span (not the whole link) is still scanne
 });
 
 // ---------------------------------------------------------------------------
-// Rule B: a bare-name-only label whose href does not resolve to ANY
-// component page (the one gap Rule A cannot see, since it never gets a
-// component name to test the label against).
+// Dropped-rule regression guard: an earlier revision of this checker also
+// flagged a label that was SOLELY one component name whose href did not
+// resolve to that component's own page ("Rule B"). Measured against the
+// live tree it never fired, but it produces a real false positive on
+// legitimate prose - a bare component-name label intentionally linking to a
+// discussion section on a DIFFERENT page - so it was dropped; this checker
+// enforces the href-to-label rule only. This test is the permanent proof
+// that shape stays silent.
 // ---------------------------------------------------------------------------
 
-test('Rule B: a bare-name-only label whose href resolves to no component page at all is flagged', () => {
-  const { root, cleanup } = buildSyntheticRoot('rule-b-misdirected', {
+test('a bare component-name label linking to a section on a different, non-component page is silent', () => {
+  const { root, cleanup } = buildSyntheticRoot('bare-name-to-different-page', {
     [GIZMO_PAGE]: GIZMO_PAGE_CONTENT,
-    'docs/reference/unrelated.md': 'Nothing about acme-gizmo here.\n',
-    'SOME-DOC.md': 'See [acme-gizmo](docs/reference/unrelated.md) for details.\n',
+    'ARCHITECTURE.md': '## Acme Gizmo Design Notes\n\nDiscussion.\n',
+    'SOME-DOC.md': 'See [acme-gizmo](ARCHITECTURE.md#acme-gizmo-design-notes) for the rationale.\n',
   });
   try {
     const result = runClonedChecker(root, SCRIPT);
-    assert.equal(result.status, 1, 'must exit 1 when a bare-name label misdirects to a non-component page; got: ' + result.combined);
-    assert.match(result.combined, /SOME-DOC\.md:1:/, 'message must name the planted file and line');
-    assert.match(result.combined, /is not that component's page/, 'message must name the Rule B violation shape');
+    assert.equal(result.status, 0, 'a bare component-name label pointing at a different page must not be flagged; got: ' + result.combined);
   } finally {
     cleanup();
   }
 });
 
-test('Rule B: a bare-name-only label linking to its own component page passes', () => {
-  const { root, cleanup } = buildSyntheticRoot('rule-b-correct', {
+// ---------------------------------------------------------------------------
+// CommonMark link title: "(path "title")", "(path 'title')", or
+// "(path (title))" after the destination, separated by whitespace. Stripped
+// before resolution so a titled link resolves exactly like its untitled
+// equivalent - a genuinely wrong label still flags, and a genuinely correct
+// one stays silent, instead of the title text breaking resolution either way.
+// ---------------------------------------------------------------------------
+
+test('a titled href with a wrong label is flagged once the title is stripped', () => {
+  const { root, cleanup } = buildSyntheticRoot('titled-href-wrong-label', {
     [GIZMO_PAGE]: GIZMO_PAGE_CONTENT,
-    'SOME-DOC.md': 'See [acme-gizmo](docs/reference/skills/acme-gizmo.md) for details.\n',
+    'SOME-DOC.md': 'See [gizmo](docs/reference/skills/acme-gizmo.md "Gizmo page") for details.\n',
   });
   try {
     const result = runClonedChecker(root, SCRIPT);
-    assert.equal(result.status, 0, 'a bare-name label linking to its own page must not be flagged; got: ' + result.combined);
+    assert.equal(result.status, 1, 'must exit 1 once the title is stripped and the href resolves to the real component page; got: ' + result.combined);
+    assert.match(result.combined, /SOME-DOC\.md:1:/, 'message must name the planted file and line');
+    assert.match(result.combined, /"acme-gizmo"/, 'message must name the current component verbatim');
+  } finally {
+    cleanup();
+  }
+});
+
+test('a titled href with a correct label stays silent', () => {
+  const { root, cleanup } = buildSyntheticRoot('titled-href-correct-label', {
+    [GIZMO_PAGE]: GIZMO_PAGE_CONTENT,
+    'SOME-DOC.md': 'See [acme-gizmo](docs/reference/skills/acme-gizmo.md "Gizmo page") for details.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 0, 'a correct label with a titled href must not be flagged; got: ' + result.combined);
   } finally {
     cleanup();
   }
@@ -333,7 +359,7 @@ test('an image link is never flagged even with a mismatched alt text', () => {
   }
 });
 
-test('a link whose href does not resolve to any component page shape is not flagged (Rule A only applies to component pages)', () => {
+test('a link whose href does not resolve to any component page shape is not flagged (the rule only applies to component pages)', () => {
   const { root, cleanup } = buildSyntheticRoot('non-component-target', {
     'docs/reference/unrelated.md': 'Unrelated content.\n',
     'SOME-DOC.md': 'See [something else entirely](docs/reference/unrelated.md) for details.\n',
