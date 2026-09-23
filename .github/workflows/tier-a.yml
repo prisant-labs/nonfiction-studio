@@ -117,30 +117,41 @@ jobs:
       - name: Advertised invocations
         run: node scripts/checks/check-advertised-invocations.mjs
 
-      # Live step 14: component-count claim checker - derives the true CLI and skill counts from
+      # Live step 14: link-label agreement checker - asserts that once an inline Markdown link's
+      # href resolves to a component's own reference page, SKILL.md, agent page, or bin/ CLI, the
+      # link's label still names that component. A prior rename wave left 32 labels holding an
+      # old, no-longer-shipped component name next to an href that had already been correctly
+      # repointed at the renamed page - invisible to the link checker above (step 7), which
+      # validates only that an href resolves, never what the label says. Same Markdown scan scope
+      # and dated-historical-record exclusions as the "Skill CLI routing targets" and "Advertised
+      # invocations" steps above it.
+      - name: Link labels name their target
+        run: node scripts/checks/check-link-labels.mjs
+
+      # Live step 15: component-count claim checker - derives the true CLI and skill counts from
       # the tree at run time and fails on a stale prose claim about either total. This step is
-      # this checker's only proof of its git-tracked code path, the same reason steps 12 and 13
-      # above exist on their own: the Checkout action leaves .git present, exactly like every
+      # this checker's only proof of its git-tracked code path, the same reason steps 12 through
+      # 14 above exist on their own: the Checkout action leaves .git present, exactly like every
       # standalone checker step above it; the test suite exercises the degraded filesystem-walk
       # fallback separately, by design, since its from-scratch fixtures never carry .git.
       - name: Component count claims
         run: node scripts/checks/check-component-counts.mjs
 
-      # Live step 15: chat-compliance stanza parity checker (Task 5, Wave 1 exit) - derives the
+      # Live step 16: chat-compliance stanza parity checker (Task 5, Wave 1 exit) - derives the
       # agent-dispatching skill set from each skill's own frontmatter `chain:` list (never a
       # hardcoded name list) and asserts the shared verify-then-append compliance-stanza core is
       # present and byte-identical across every one of them.
       - name: Compliance stanza parity
         run: node scripts/checks/check-compliance-stanza.mjs
 
-      # Live step 16: engine, lib, hook, and schema unit test suites (no API key required).
+      # Live step 17: engine, lib, hook, and schema unit test suites (no API key required).
       - name: Engine unit tests
         run: node scripts/test-engines.mjs
 
-      # Live step 17: bidirectional fixture matrix with temp-clone discipline.
+      # Live step 18: bidirectional fixture matrix with temp-clone discipline.
       - name: Fixture tests
         run: node scripts/test-fixtures.mjs
 
-      # Live step 18: sample book integrity - verifies resolution through marker-to-ledger-to-SRC chains.
+      # Live step 19: sample book integrity - verifies resolution through marker-to-ledger-to-SRC chains.
       - name: Sample book integrity
         run: node scripts/verify-sample-book.mjs
