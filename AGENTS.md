@@ -117,8 +117,8 @@ Every new file must obey these; several are CI-enforced.
   resolution)" or "D-04 (Node everywhere)".
 - Skill and CLI counts in prose are machine-checked
   (`scripts/checks/check-component-counts.mjs`; agent and output-style counts are outside its
-  scope): state a count only when it matches the tree
-  (currently 14 skills, 8 agents, 9 CLIs, 2 output styles), or avoid stating one at all.
+  scope): state a count only when it matches the tree (the README's "At a glance" table
+  carries the canonical totals), or avoid stating one at all.
 - A Markdown link whose target is a component's own reference page must name that component
   in the link's label (`scripts/checks/check-link-labels.mjs`). Every relative link must
   resolve (`scripts/check-links.mjs`).
