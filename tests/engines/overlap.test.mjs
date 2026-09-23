@@ -295,10 +295,12 @@ test('corpus discovery: a missing context/prior-work/ directory contributes noth
 // =====================================================================================
 
 test('findings order: two chapters whose names collate one way under locale rules and the other way under code-unit order sort by code unit', () => {
-  assert.ok(
-    'a-chapter.md'.localeCompare('B-chapter.md') < 0,
-    'fixture precondition: this Node build\'s ICU collates lowercase "a" before uppercase "B"'
-  );
+  // This filename pair was chosen because, on a full-ICU Node build, 'a-chapter.md'.localeCompare('B-chapter.md')
+  // is negative (collation compares base letters before case, so lowercase "a" sorts before uppercase
+  // "B"), the opposite of code-unit order below - the exact divergence this fix closes. That
+  // localeCompare fact is NOT asserted here: it is a property of the runtime's ICU data, which is
+  // precisely what this module must no longer depend on, so the assertion below is the whole proof
+  // and stands on its own regardless of ICU data availability.
 
   const lift = LIFT_15;
   const chapters = [

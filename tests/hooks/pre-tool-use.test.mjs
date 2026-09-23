@@ -1865,6 +1865,31 @@ test('a chain file with a duplicated caller key fails open to silence at the dis
   );
 });
 
+// ---------------------------------------------------------------------------
+// The chain rule's fail-open silence above is only safe because the SHIPPED contract itself is
+// known-good: silence on a malformed chain file is the right behavior for an unforeseen local
+// corruption, but a malformed file shipped IN the plugin tree would silently disable chain-edge
+// validation for every author, with nothing in CI ever turning red. This pins that the real,
+// checked-in agents/_chain-permitted.yaml parses cleanly through the exact same library reader
+// the dispatch hook uses (no directory override), so a future edit that breaks it fails this
+// suite instead of failing open in silence.
+// ---------------------------------------------------------------------------
+
+test('the shipped agents/_chain-permitted.yaml parses cleanly through the library reader the dispatch hook uses', () => {
+  const result = readChainPermitted();
+
+  assert.strictEqual(
+    result.error, null,
+    'the shipped chain contract must parse with no error; a malformed shipped copy would silently ' +
+    'disable chain-edge validation for every author, since the dispatch hook fails open to silence'
+  );
+  assert.ok(
+    result.contract && typeof result.contract === 'object' && !Array.isArray(result.contract),
+    'a clean parse must yield a usable contract object'
+  );
+  assert.ok(Object.keys(result.contract).length > 0, 'the shipped contract is not empty');
+});
+
 test('Task 8 (q) fail-open ruling 1: a WHOLE-FILE-unparseable settings file produces silence for what would otherwise warn', () => {
   const dir = makeTmpDir('t8-q-corrupt-settings');
   writeRoutingSettings(dir, '---\nrouting_enforce: [unterminated\n---\nHouse notes.\n');
