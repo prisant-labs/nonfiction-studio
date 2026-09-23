@@ -52,7 +52,8 @@ const SKILLS_DIR = join(REPO_ROOT, 'skills');
 // Scan scope: every .md file under agents/, docs/, examples/, skills/,
 // templates/, plus root-level .md files, except docs/adr/ and docs/gates/
 // (dated historical records - see header comment). Identical shape to
-// scripts/checks/check-skill-cli-targets.mjs's own scan scope.
+// scripts/checks/check-skill-cli-targets.mjs's own Markdown scan scope; that
+// checker also separately covers a non-Markdown scope this one does not.
 // ---------------------------------------------------------------------------
 
 const SCAN_DIR_PREFIXES = ['agents/', 'docs/', 'examples/', 'skills/', 'templates/'];

@@ -1,43 +1,74 @@
 // scripts/checks/check-skill-cli-targets.mjs
-// what-it-is:   shipped-Markdown CLI routing-target resolution checker
-// what-it-does: scans every git-tracked .md file under agents/, docs/, examples/, skills/,
-//               templates/, plus root-level .md files, for the literal invocation form a
-//               CLI-wrapper skill (or any other shipped document) uses to name a routing
-//               target - "bin/ns-<name>", the same shape node "<plugin-root>/bin/ns-<name>"
-//               resolves to once the plugin root is substituted in (see skills/nfs-new-book/
-//               SKILL.md Step 4 for that resolution) - and asserts each named CLI is genuinely
-//               shipped: the extensionless file exists directly under bin/. A bare "ns-<name>"
-//               mention with no "bin/" prefix (for example a sentence naming a sibling CLI in
-//               passing) is deliberately out of scope: this checker verifies that a document's
-//               own ROUTING target resolves to a real file, not that every CLI name mentioned
-//               anywhere in shipped prose is spelled correctly. Checking for the ".cmd" Windows
-//               shim is scripts/checks/check-inventory.mjs's job (component inventory
-//               equality); this checker only ever asserts the extensionless bin/ns-<name>
-//               target a document actually invokes.
-//               EXCLUDED: files under docs/adr/ and docs/gates/ are skipped entirely - dated,
+// what-it-is:   CLI routing-target resolution checker (Markdown and non-Markdown)
+// what-it-does: scans two scopes for the literal invocation form a CLI-wrapper skill (or any
+//               other shipped file) uses to name a routing target - "bin/ns-<name>", the same
+//               shape node "<plugin-root>/bin/ns-<name>" resolves to once the plugin root is
+//               substituted in (see skills/nfs-new-book/SKILL.md Step 4 for that resolution) -
+//               and asserts each named CLI is genuinely shipped: the extensionless file exists
+//               directly under bin/. A bare "ns-<name>" mention with no "bin/" prefix (for
+//               example a sentence naming a sibling CLI in passing) is deliberately out of
+//               scope: this checker verifies that a document's own ROUTING target resolves to a
+//               real file, not that every CLI name mentioned anywhere in shipped prose is
+//               spelled correctly. Checking for the ".cmd" Windows shim is scripts/checks/
+//               check-inventory.mjs's job (component inventory equality); this checker only
+//               ever asserts the extensionless bin/ns-<name> target a document actually invokes.
+//               Scope 1, Markdown: every git-tracked .md file under agents/, docs/, examples/,
+//               skills/, templates/, plus root-level .md files. Byte-identical to the scope this
+//               checker has run since PF-22 (checker coverage shapes) widening 1.
+//               Scope 2, non-Markdown: every git-tracked NON-.md file under hooks/, bin/,
+//               scripts/, agents/, templates/, evals/, examples/, plus root-level non-.md files
+//               (settings.json carries one live reference today) - PF-22 (checker coverage
+//               shapes) widening 2. A hook module's own comment, a scripts/ helper, or a
+//               root-level config file can name a stale bin/ns-<name> routing target exactly as
+//               easily as a SKILL.md can, and nothing previously read any of them. docs/ and
+//               skills/ are deliberately NOT part of this second scope: their Markdown files are
+//               already covered by scope 1, and widening to their non-Markdown files too was not
+//               part of this pass. A file matching EITHER scope is scanned exactly once.
+//               EXCLUDED from both scopes: files under docs/adr/ and docs/gates/ - dated,
 //               point-in-time historical records (an ADR's own Date: field fixes what it
 //               describes to that date; a gate doc records what was true at a named past gate),
 //               not living documents that track the current tree, so a routing target named in
 //               one that has since been renamed or removed is not a live defect. Same rationale
 //               and the same path-prefix-skip mechanism as scripts/checks/
 //               check-component-counts.mjs's HISTORICAL_RECORD_PREFIXES.
+//               EXCLUDED from the non-Markdown scope specifically: everything under tests/, home
+//               to this checker's own planted-violation fixtures (ns-a through ns-h,
+//               ns-nonexistent, ns-widget, ns-zzz-simulated-growth - named here without a
+//               leading "bin/" deliberately: this file's own source now sits inside the
+//               non-Markdown scope it defines, via the scripts/ prefix, so gluing "bin/" onto
+//               any nonexistent name in this header would make this very file the finding).
+//               tests/ needs no separate exclusion rule in the scan-scope logic below: it was
+//               never one of the seven non-Markdown prefixes to begin with, so a fixture planted
+//               there is simply never enumerated. node_modules is never git-tracked, so it never
+//               reaches either scope regardless of mode.
+//               Binary files are skipped entirely in both scopes: a file is treated as binary,
+//               and never read as text, when a NUL byte (0x00) appears anywhere in its first
+//               8 KB - the same shape of heuristic git itself uses to classify a blob as binary.
 // why:          F-CI-07 (dispatcher and CLI-wrapper skills uncovered) - nothing previously
 //               asserted that a CLI-wrapper skill's named routing target is a real, shipped
 //               file, so a typo'd or renamed CLI reference would ship silently and surface only
 //               as a runtime failure for an author. This is the generic, reusable form of that
-//               finding's fix; it was written to close the gap for nfs-status-dashboard's
-//               bin/ns-status reference, and it applies to every other skill in the same scan
-//               scope for free, at no extra cost, because the mechanism does not special-case
-//               any one skill. The scan scope was widened from skills/**/SKILL.md only to every
-//               shipped Markdown location - PF-22 (checker coverage shapes) widening 1 - because
-//               the original scope missed a broken bin/ns-<name> reference anywhere else in the
-//               tree: an agent's own prose, a reference doc, a fixture note, a scaffold
-//               template, or a root-level doc could name a stale routing target with nothing to
-//               catch it, the exact same defect class this checker already catches inside a
-//               SKILL.md file.
+//               finding's fix; it was written to close the gap for nfs-status-dashboard's own
+//               routing target, the ns-status CLI, and it applies to every other skill in the
+//               same scan scope for free, at no extra cost, because the mechanism does not
+//               special-case any one skill. The scan scope was widened from skills/**/SKILL.md
+//               only to every shipped Markdown location - PF-22 (checker coverage shapes)
+//               widening 1 - because the original scope missed a broken bin/ns-<name> reference
+//               anywhere else in the tree: an agent's own prose, a reference doc, a fixture
+//               note, a scaffold template, or a root-level doc could name a stale routing target
+//               with nothing to catch it, the exact same defect class this checker already
+//               caught inside a SKILL.md file. Widening 1 still left a second, symmetric blind
+//               spot: the exact same defect class inside a NON-Markdown shipped file - a hook
+//               module's comment, a scripts/ helper's usage note, a root-level config value -
+//               had nothing to catch it either, even though the checker's own regex has never
+//               cared what kind of file it is reading. PF-22 (checker coverage shapes) widening
+//               2 closes that: the non-Markdown scope described above. A probe run before this
+//               widening found 56 non-Markdown bin/ns-<name> references already in the newly
+//               scanned scope on the real tree, all resolving, so this widening lands green with
+//               no live defect to fix.
 // exit taxonomy: 0 = every referenced CLI target resolves; 1 = named finding(s) (a document
 //               names a bin/ns-<name> target that does not exist under bin/); 2 = operational
-//               error (zero files matched the scan scope, which means a broken checkout or a
+//               error (zero files matched either scan scope, which means a broken checkout or a
 //               resolution bug, not a clean pass).
 // used-by:      .github/workflows/tier-a.yml, the "Skill CLI routing targets" step.
 
@@ -54,23 +85,37 @@ const PREFIX = '[check-skill-cli-targets]';
 const BIN_DIR = join(REPO_ROOT, 'bin');
 
 // ---------------------------------------------------------------------------
-// Scan scope: every .md file under agents/, docs/, examples/, skills/,
-// templates/, plus root-level .md files, except docs/adr/ and docs/gates/
-// (dated historical records - see header comment).
+// Scan scope. Two independent scopes, both excluding docs/adr/ and
+// docs/gates/ (dated historical records - see header comment):
+//   - Markdown: every .md file under agents/, docs/, examples/, skills/,
+//     templates/, plus root-level .md files. Byte-identical to the scope
+//     this checker ran before PF-22 (checker coverage shapes) widening 2.
+//   - non-Markdown: every NON-.md file under hooks/, bin/, scripts/,
+//     agents/, templates/, evals/, examples/, plus root-level non-.md
+//     files. tests/ is never one of these prefixes, so a fixture planted
+//     there is simply never enumerated - no separate exclusion needed.
 // ---------------------------------------------------------------------------
 
-const SCAN_DIR_PREFIXES = ['agents/', 'docs/', 'examples/', 'skills/', 'templates/'];
+const MD_SCAN_DIR_PREFIXES = ['agents/', 'docs/', 'examples/', 'skills/', 'templates/'];
+const NON_MD_SCAN_DIR_PREFIXES = ['hooks/', 'bin/', 'scripts/', 'agents/', 'templates/', 'evals/', 'examples/'];
 const HISTORICAL_RECORD_PREFIXES = ['docs/adr/', 'docs/gates/'];
 
 function isRootLevelFile(rel) {
   return !rel.includes('/');
 }
 
-function inScope(rel) {
+function inMdScope(rel) {
   if (!rel.endsWith('.md')) return false;
   if (HISTORICAL_RECORD_PREFIXES.some((p) => rel.startsWith(p))) return false;
   if (isRootLevelFile(rel)) return true;
-  return SCAN_DIR_PREFIXES.some((p) => rel.startsWith(p));
+  return MD_SCAN_DIR_PREFIXES.some((p) => rel.startsWith(p));
+}
+
+function inNonMdScope(rel) {
+  if (rel.endsWith('.md')) return false;
+  if (HISTORICAL_RECORD_PREFIXES.some((p) => rel.startsWith(p))) return false;
+  if (isRootLevelFile(rel)) return true;
+  return NON_MD_SCAN_DIR_PREFIXES.some((p) => rel.startsWith(p));
 }
 
 // ---------------------------------------------------------------------------
@@ -141,22 +186,31 @@ function walkRootLevelFiles(baseDir, out = []) {
   return out;
 }
 
+// Union of both scopes' directory prefixes, deduplicated (agents/,
+// templates/, and examples/ appear in both lists) - walking a directory
+// twice would otherwise duplicate its files in the degraded-mode fallback.
+const ALL_SCAN_DIR_PREFIXES = Array.from(new Set([...MD_SCAN_DIR_PREFIXES, ...NON_MD_SCAN_DIR_PREFIXES]));
+
 let trackedFiles = getGitTrackedFiles(REPO_ROOT);
 let degradedReason = null;
 if (!trackedFiles) {
   degradedReason = 'git unavailable or ' + REPO_ROOT + ' is not a git repository';
   trackedFiles = walkRootLevelFiles(REPO_ROOT);
-  for (const prefix of SCAN_DIR_PREFIXES) {
+  for (const prefix of ALL_SCAN_DIR_PREFIXES) {
     walkDirRecursive(join(REPO_ROOT, prefix.slice(0, -1)), REPO_ROOT, trackedFiles);
   }
 }
 
-const filesToScan = trackedFiles.filter(inScope).sort();
+const filesToScan = trackedFiles.filter((rel) => inMdScope(rel) || inNonMdScope(rel)).sort();
+const mdCount = filesToScan.filter(inMdScope).length;
+const nonMdCount = filesToScan.length - mdCount;
 
 if (filesToScan.length === 0) {
   process.stderr.write(
-    PREFIX + ' FATAL: zero files matched the scan scope (agents/, docs/, examples/, skills/, ' +
-    'templates/, root-level .md files; excluding docs/adr/, docs/gates/) under ' + REPO_ROOT +
+    PREFIX + ' FATAL: zero files matched either scan scope (Markdown: agents/, docs/, ' +
+    'examples/, skills/, templates/, root-level .md files; non-Markdown: hooks/, bin/, ' +
+    'scripts/, agents/, templates/, evals/, examples/, root-level non-.md files; excluding ' +
+    'tests/, docs/adr/, docs/gates/) under ' + REPO_ROOT +
     '. This indicates a broken checkout or a resolution bug, not a clean pass.\n'
   );
   process.exit(2);
@@ -172,18 +226,31 @@ if (filesToScan.length === 0) {
 
 const BIN_TARGET_RE = /bin\/(ns-[a-z0-9][a-z0-9-]*)/g;
 
+// A file is treated as binary, and never read as text, when a NUL byte
+// (0x00) appears anywhere in its first 8 KB - the same shape of heuristic
+// git itself uses to classify a blob as binary. Applies to both scopes; in
+// practice only the non-Markdown scope can contain a binary file.
+const BINARY_SNIFF_BYTES = 8192;
+
 const findings = [];
+let skippedBinaryCount = 0;
 
 for (const rel of filesToScan) {
   const absFile = join(REPO_ROOT, rel);
-  let text;
+  let buf;
   try {
-    text = readFileSync(absFile, 'utf8');
+    buf = readFileSync(absFile);
   } catch (err) {
     findings.push(rel + ': cannot read file: ' + err.message);
     continue;
   }
 
+  if (buf.subarray(0, BINARY_SNIFF_BYTES).includes(0)) {
+    skippedBinaryCount++;
+    continue;
+  }
+
+  const text = buf.toString('utf8');
   const lines = text.split('\n');
   for (let li = 0; li < lines.length; li++) {
     const line = lines[li];
@@ -210,11 +277,23 @@ for (const rel of filesToScan) {
 if (degradedReason) {
   process.stdout.write(PREFIX + ' NOTE: degraded mode, scanning the filesystem directly instead of the git-tracked set (' + degradedReason + ')\n');
 } else {
-  process.stdout.write(PREFIX + ' mode: git-tracked (' + filesToScan.length + ' file(s) in scope: agents/, docs/, examples/, skills/, templates/, root-level .md files; excluding docs/adr/, docs/gates/)\n');
+  process.stdout.write(
+    PREFIX + ' mode: git-tracked (' + filesToScan.length + ' file(s) in scope: ' + mdCount +
+    ' Markdown under agents/, docs/, examples/, skills/, templates/, root-level .md files; ' +
+    nonMdCount + ' non-Markdown under hooks/, bin/, scripts/, agents/, templates/, evals/, ' +
+    'examples/, root-level non-.md files; excluding tests/, docs/adr/, docs/gates/)\n'
+  );
+}
+
+if (skippedBinaryCount > 0) {
+  process.stdout.write(PREFIX + ' NOTE: skipped ' + skippedBinaryCount + ' binary file(s) (NUL byte in the first 8 KB)\n');
 }
 
 if (findings.length === 0) {
-  process.stdout.write(PREFIX + ' pass: ' + filesToScan.length + ' file(s) checked, every bin/ns-<name> routing target resolves to a shipped CLI\n');
+  process.stdout.write(
+    PREFIX + ' pass: ' + filesToScan.length + ' file(s) checked (' + mdCount + ' Markdown, ' +
+    nonMdCount + ' non-Markdown), every bin/ns-<name> routing target resolves to a shipped CLI\n'
+  );
   process.exit(0);
 } else {
   for (const f of findings) {
