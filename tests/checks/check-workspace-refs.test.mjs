@@ -213,6 +213,31 @@ test('genericity, form 2 (bare filename): a basename that exists only under an i
 });
 
 // ---------------------------------------------------------------------------
+// Scope widening: output-styles/ - a shipped plugin folder that previously
+// matched none of the scan-scope prefixes at all, so a reference planted
+// inside it went completely unread regardless of form.
+// ---------------------------------------------------------------------------
+
+test('scope widening: a form-1 path reference planted under output-styles/ is caught', () => {
+  const { root, cleanup } = buildSyntheticRoot(
+    'output-styles-form1',
+    ['node_modules/', 'planning-scratch/'],
+    {
+      'output-styles/some-style.md': 'See planning-scratch/deep-notes.md for the full rationale.\n',
+    }
+  );
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+
+    assert.equal(result.status, 1, 'must exit 1 on a planted reference under output-styles/; got: ' + result.combined);
+    assert.match(result.combined, /output-styles\/some-style\.md:1:/, 'message must name the planted file and line');
+    assert.match(result.combined, /planning-scratch\/deep-notes\.md/, 'message must name the planted path');
+  } finally {
+    cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Real-repo integration: proves the mechanism against the actual scan scope
 // and the actual .gitignore, not only a miniature fixture. The real
 // gitignored-directory name used here ("_local") together with a trailing

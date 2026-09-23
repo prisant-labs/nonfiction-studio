@@ -89,31 +89,33 @@ jobs:
         run: node scripts/checks/check-inventory.mjs
 
       # Live step 11: workspace-reference guard - a shipped file must not point at a path that
-      # does not survive a clean checkout (this wave's own scratch workspace included). The
-      # bare-filename form reads a committed, hashed manifest (no clear-text names), so this
-      # runner - with no scratch tree on disk at all - still enforces it, not only a local run.
+      # does not survive a clean checkout (this wave's own scratch workspace included), scanning
+      # bin/, hooks/, scripts/, skills/, agents/, docs/, examples/, templates/, evals/,
+      # output-styles/, tests/, and root-level files. The bare-filename form reads a committed,
+      # hashed manifest (no clear-text names), so this runner - with no scratch tree on disk at
+      # all - still enforces it, not only a local run.
       - name: Workspace reference guard
         run: node scripts/checks/check-workspace-refs.mjs
 
       # Live step 12: CLI routing-target resolution check (F-CI-07) - asserts every bin/ns-<name>
       # a shipped file names as a routing target is actually shipped under bin/, across two
-      # scopes: Markdown files under agents/, docs/, examples/, skills/, templates/, and
-      # root-level .md files; and non-Markdown files under hooks/, bin/, scripts/, agents/,
-      # templates/, evals/, examples/, and root-level non-.md files (excluding tests/, home to
-      # this checker's own planted fixtures, and docs/adr/ and docs/gates/, dated historical
-      # records - see the checker's own header for the exemption and the two scopes' exact
-      # shape). This step is this checker's only proof of its git-tracked code path: the
-      # Checkout action above leaves .git present, exactly like the plugin-root,
-      # self-sufficiency, inventory, and workspace-reference steps above it; the test suite
-      # exercises only the degraded filesystem-walk fallback, by design, since its fixtures
-      # never carry .git.
+      # scopes: Markdown files under agents/, bin/, docs/, evals/, examples/, hooks/,
+      # output-styles/, scripts/, skills/, templates/, and root-level .md files; and non-Markdown
+      # files under hooks/, bin/, scripts/, agents/, templates/, evals/, examples/, and
+      # root-level non-.md files (excluding tests/, home to this checker's own planted fixtures,
+      # and docs/adr/ and docs/gates/, dated historical records - see the checker's own header
+      # for the exemption and the two scopes' exact shape). This step is this checker's only
+      # proof of its git-tracked code path: the Checkout action above leaves .git present,
+      # exactly like the plugin-root, self-sufficiency, inventory, and workspace-reference steps
+      # above it; the test suite exercises only the degraded filesystem-walk fallback, by
+      # design, since its fixtures never carry .git.
       - name: Skill CLI routing targets
         run: node scripts/checks/check-skill-cli-targets.mjs
 
       # Live step 13: advertised-invocation resolution check (PF-09 remedy, F-CI-07's remaining
       # half) - asserts every "/nonfiction-studio:<name>" a shipped document advertises actually
-      # resolves to a shipped skill directory, across agents/, docs/, examples/, skills/,
-      # templates/, and root-level .md files (excluding docs/adr/ and docs/gates/, dated
+      # resolves to a shipped skill directory, across agents/, docs/, examples/, output-styles/,
+      # skills/, templates/, and root-level .md files (excluding docs/adr/ and docs/gates/, dated
       # historical records - see the checker's own header for the exemption). Same git-tracked
       # coverage rationale as the "Skill CLI routing targets" step above it.
       - name: Advertised invocations
@@ -125,8 +127,10 @@ jobs:
       # old, no-longer-shipped component name next to an href that had already been correctly
       # repointed at the renamed page - invisible to the link checker above (step 7), which
       # validates only that an href resolves, never what the label says. Same Markdown scan scope
-      # and dated-historical-record exclusions as the "Skill CLI routing targets" and "Advertised
-      # invocations" steps above it.
+      # (agents/, docs/, examples/, output-styles/, skills/, templates/, root-level .md files)
+      # and dated-historical-record exclusions as the "Advertised invocations" step above it;
+      # "Skill CLI routing targets" two steps above shares the same exclusions but a wider
+      # Markdown scope of its own (see that step's comment).
       - name: Link labels name their target
         run: node scripts/checks/check-link-labels.mjs
 

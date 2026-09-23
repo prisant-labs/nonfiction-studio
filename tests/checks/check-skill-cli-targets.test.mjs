@@ -285,6 +285,20 @@ test('widened scope: a broken bin/ns-<name> reference in a root-level .md file i
   }
 });
 
+test('widened scope: a broken bin/ns-<name> reference under output-styles/ is caught', () => {
+  const { root, cleanup } = buildSyntheticRoot('widened-output-styles', {
+    'output-styles/some-style.md': 'This style routes through `bin/ns-nonexistent`.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 1, 'must exit 1 on a broken routing target under output-styles/; got: ' + result.combined);
+    assert.match(result.combined, /output-styles\/some-style\.md:1:/, 'message must name the planted file and line');
+    assert.match(result.combined, /ns-nonexistent/, 'message must name the bogus CLI name verbatim');
+  } finally {
+    cleanup();
+  }
+});
+
 test('dated-record exemption: a broken bin/ns-<name> reference under docs/adr/ is NOT flagged', () => {
   const { root, cleanup } = buildSyntheticRoot('adr-exempt', {
     'docs/adr/ADR-9999-fake-decision.md': 'This ADR routes through `bin/ns-nonexistent`.\n',
@@ -310,9 +324,10 @@ test('dated-record exemption: a broken bin/ns-<name> reference under docs/adr/ i
 // lives inside the widened scan scope, and gluing "bin/" onto any
 // nonexistent name in this comment would make this very file the finding).
 // docs/adr/ and docs/gates/ stay exempt for the reason already given above.
-// docs/ and skills/ are deliberately NOT part of the non-Markdown scope at
-// all (their Markdown files are already covered above; a non-Markdown file
-// under either stays unscanned, proven by the boundary test below).
+// docs/, output-styles/, and skills/ are deliberately NOT part of the
+// non-Markdown scope at all (their Markdown files are already covered
+// above; a non-Markdown file under any of the three stays unscanned,
+// proven by the boundary test below).
 // ---------------------------------------------------------------------------
 
 test('non-Markdown scope: a broken bin/ns-<name> reference in a hooks/lib/*.mjs comment is caught', () => {
@@ -427,16 +442,41 @@ test('non-Markdown scope: a broken bin/ns-<name> reference in a non-Markdown fil
   }
 });
 
-test('non-Markdown scope boundary: a non-Markdown file under docs/ or skills/ is NOT scanned (only the seven non-Markdown prefixes are)', () => {
+test('non-Markdown scope boundary: a non-Markdown file under docs/, output-styles/, or skills/ is NOT scanned (only the seven non-Markdown prefixes are)', () => {
   const { root, cleanup } = buildSyntheticRoot('nonmd-boundary', {
     'docs/reference/notes.txt': 'bin/ns-nonexistent\n',
+    'output-styles/notes.txt': 'bin/ns-nonexistent\n',
     'skills/widget-tool/notes.txt': 'bin/ns-nonexistent\n',
     'hooks/lib/clean.mjs': '// nothing interesting here\n',
   });
   try {
     const result = runClonedChecker(root, SCRIPT);
-    assert.equal(result.status, 0, 'a non-Markdown file under docs/ or skills/ must not be scanned; got: ' + result.combined);
-    assert.doesNotMatch(result.combined, /ns-nonexistent/, 'the planted references under docs/ and skills/ must never appear as findings');
+    assert.equal(result.status, 0, 'a non-Markdown file under docs/, output-styles/, or skills/ must not be scanned; got: ' + result.combined);
+    assert.doesNotMatch(result.combined, /ns-nonexistent/, 'the planted references under docs/, output-styles/, and skills/ must never appear as findings');
+  } finally {
+    cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Markdown/non-Markdown scope gap closure: a .md file under scripts/, hooks/,
+// bin/, or evals/ - directories that were part of the non-Markdown scope but
+// not the Markdown scope - previously matched neither scope (inMdScope
+// requires a Markdown-scope prefix; inNonMdScope rejects any .md file
+// outright), so it was scanned by nothing at all. Closed by folding these
+// four prefixes into the Markdown scope too, alongside output-styles/ above;
+// the non-Markdown scope's own prefix list is unchanged.
+// ---------------------------------------------------------------------------
+
+test('gap closure: a broken bin/ns-<name> reference in a .md file under hooks/ is caught', () => {
+  const { root, cleanup } = buildSyntheticRoot('gap-hooks-md', {
+    'hooks/lib/NOTES.md': 'This note routes through `bin/ns-nonexistent`.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 1, 'must exit 1 on a broken routing target in a .md file under hooks/; got: ' + result.combined);
+    assert.match(result.combined, /hooks\/lib\/NOTES\.md:1:/, 'message must name the planted file and line');
+    assert.match(result.combined, /ns-nonexistent/, 'message must name the bogus CLI name verbatim');
   } finally {
     cleanup();
   }

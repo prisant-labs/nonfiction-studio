@@ -6,8 +6,9 @@
 //               glob-wildcard directory patterns are not supported and are skipped, since none
 //               occur in this repo's .gitignore today), then scans every git-tracked file under
 //               the shipped scan scope (bin/, hooks/, scripts/, skills/, agents/, docs/,
-//               examples/, templates/, evals/, tests/, and root-level files) for three forms of
-//               plain-text reference to content that will not survive a clean checkout:
+//               examples/, templates/, evals/, output-styles/, tests/, and root-level files) for
+//               three forms of plain-text reference to content that will not survive a clean
+//               checkout:
 //                 form 1 (path reference): a forbidden directory name immediately followed by "/"
 //                 and at least one more non-whitespace path segment, anywhere in the file's text
 //                 (not only inside Markdown link syntax - scripts/check-links.mjs already covers
@@ -268,14 +269,18 @@ if (gitInfo) {
 
 // ---------------------------------------------------------------------------
 // Scan scope: bin/, hooks/, scripts/, skills/, agents/, docs/, examples/,
-// templates/, evals/, tests/, and root-level files. Deliberately excludes
-// .github/, .claude-plugin/, and .codex-plugin/, which are out of this
-// checker's stated scope.
+// templates/, evals/, output-styles/, tests/, and root-level files.
+// output-styles/ - a shipped plugin folder of output-style pages - was
+// previously absent from this list entirely, a shipped-content scope gap
+// check-skill-cli-targets.mjs had too, for the same reason: a plain-text
+// reference to scratch workspace content planted inside an output style had
+// nothing scanning it. Deliberately excludes .github/, .claude-plugin/, and
+// .codex-plugin/, which are out of this checker's stated scope.
 // ---------------------------------------------------------------------------
 
 const SCAN_PREFIXES = [
   'bin/', 'hooks/', 'scripts/', 'skills/', 'agents/', 'docs/',
-  'examples/', 'templates/', 'evals/', 'tests/',
+  'examples/', 'templates/', 'evals/', 'output-styles/', 'tests/',
 ];
 
 function isRootLevelFile(rel) {
@@ -292,7 +297,7 @@ const filesToScan = allTrackedRelPaths.filter(inScanScope).sort();
 if (filesToScan.length === 0) {
   fatal(
     'zero files matched the scan scope (bin/, hooks/, scripts/, skills/, agents/, docs/, ' +
-    'examples/, templates/, evals/, tests/, root-level files) under ' + scanRoot +
+    'examples/, templates/, evals/, output-styles/, tests/, root-level files) under ' + scanRoot +
     '. This indicates a broken checkout or a resolution bug, not a clean pass.'
   );
 }

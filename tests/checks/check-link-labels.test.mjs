@@ -373,6 +373,26 @@ test('a link whose href does not resolve to any component page shape is not flag
 });
 
 // ---------------------------------------------------------------------------
+// Scope widening: output-styles/ - added for consistency with the other
+// Markdown-scope checkers (the live output styles carry no links today, so
+// this adds no finding on the real tree; see the header for the count).
+// ---------------------------------------------------------------------------
+
+test('scope widening: a bare old-name label planted under output-styles/ is caught', () => {
+  const { root, cleanup } = buildSyntheticRoot('output-styles-widening', {
+    [GIZMO_PAGE]: GIZMO_PAGE_CONTENT,
+    'output-styles/some-style.md': 'See [gizmo](../docs/reference/skills/acme-gizmo.md) for details.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 1, 'must exit 1 on a planted label defect under output-styles/; got: ' + result.combined);
+    assert.match(result.combined, /output-styles\/some-style\.md:1:/, 'message must name the planted file and line');
+  } finally {
+    cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Real-repo integration: proves the mechanism against the actual scan scope.
 // ---------------------------------------------------------------------------
 

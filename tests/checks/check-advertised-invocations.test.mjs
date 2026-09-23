@@ -230,6 +230,20 @@ test('widened scope: a phantom invocation in a root-level .md file is caught', (
   }
 });
 
+test('scope widening: a phantom invocation under output-styles/ is caught', () => {
+  const { root, cleanup } = buildSyntheticRoot('widened-output-styles', {
+    'output-styles/some-style.md': 'This style invokes `/nonfiction-studio:phantom-tool`.\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 1, 'must exit 1 on a phantom invocation under output-styles/; got: ' + result.combined);
+    assert.match(result.combined, /output-styles\/some-style\.md:1:/, 'message must name the planted file and line');
+    assert.match(result.combined, /phantom-tool/, 'message must name the phantom name verbatim');
+  } finally {
+    cleanup();
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Real-repo integration: proves the mechanism against the actual scan scope.
 // The first test here is RED until CHANGELOG.md's revise-pass line is

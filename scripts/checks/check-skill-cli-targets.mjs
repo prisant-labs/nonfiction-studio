@@ -12,18 +12,32 @@
 //               spelled correctly. Checking for the ".cmd" Windows shim is scripts/checks/
 //               check-inventory.mjs's job (component inventory equality); this checker only
 //               ever asserts the extensionless bin/ns-<name> target a document actually invokes.
-//               Scope 1, Markdown: every git-tracked .md file under agents/, docs/, examples/,
-//               skills/, templates/, plus root-level .md files. Byte-identical to the scope this
-//               checker has run since PF-22 (checker coverage shapes) widening 1.
+//               Scope 1, Markdown: every git-tracked .md file under agents/, bin/, docs/,
+//               evals/, examples/, hooks/, output-styles/, scripts/, skills/, templates/, plus
+//               root-level .md files. Grown twice since the scope was first widened from
+//               skills/**/SKILL.md only: once to cover every shipped Markdown location, and
+//               again in two further pieces, both closing the same class of gap rather than
+//               opening a new one - output-styles/ is a shipped plugin folder made only of
+//               Markdown (its review.md carries live bin/ns-<name> routing targets in ordinary
+//               prose, exactly like a SKILL.md would), and .md files under scripts/, hooks/,
+//               bin/, and evals/ previously matched NEITHER this scope nor scope 2 below (scope
+//               2 rejects any .md file outright, and this scope's prefix list did not yet name
+//               those four directories), so a stale routing target named inside one of them had
+//               nothing to catch it at all - not a defect ever found live, but a real gap in
+//               coverage, not only in intent.
 //               Scope 2, non-Markdown: every git-tracked NON-.md file under hooks/, bin/,
 //               scripts/, agents/, templates/, evals/, examples/, plus root-level non-.md files
-//               (settings.json carries one live reference today) - PF-22 (checker coverage
-//               shapes) widening 2. A hook module's own comment, a scripts/ helper, or a
-//               root-level config file can name a stale bin/ns-<name> routing target exactly as
-//               easily as a SKILL.md can, and nothing previously read any of them. docs/ and
-//               skills/ are deliberately NOT part of this second scope: their Markdown files are
-//               already covered by scope 1, and widening to their non-Markdown files too was not
-//               part of this pass. A file matching EITHER scope is scanned exactly once.
+//               (settings.json carries one live reference today). A hook module's own comment, a
+//               scripts/ helper, or a root-level config file can name a stale bin/ns-<name>
+//               routing target exactly as easily as a SKILL.md can, and nothing previously read
+//               any of them. docs/, output-styles/, and skills/ are deliberately NOT part of this
+//               second scope: their Markdown files are already covered by scope 1, and widening
+//               to their non-Markdown files too was not part of this pass. A file matching EITHER
+//               scope is scanned exactly once - the two scopes are structurally disjoint by file
+//               extension (scope 1 requires .md, scope 2 rejects it), regardless of how much their
+//               prefix lists overlap, so naming the same directory in both lists (as agents/,
+//               bin/, evals/, examples/, hooks/, scripts/, and templates/ all now do) can never
+//               double-count a file.
 //               EXCLUDED from both scopes: files under docs/adr/ and docs/gates/ - dated,
 //               point-in-time historical records (an ADR's own Date: field fixes what it
 //               describes to that date; a gate doc records what was true at a named past gate),
@@ -72,7 +86,14 @@
 //               2 closes that: the non-Markdown scope described above. A probe run before this
 //               widening found 56 non-Markdown bin/ns-<name> references already in the newly
 //               scanned scope on the real tree, all resolving, so this widening lands green with
-//               no live defect to fix.
+//               no live defect to fix. Two further Markdown-scope additions closed remaining
+//               gaps in the same spirit, both landing green with no live defect: output-styles/,
+//               a shipped plugin folder that carries the same bin/ns-<name> prose shape (its
+//               review.md names three routing targets) and was scanned by neither scope at all;
+//               and .md files under scripts/, hooks/, bin/, and evals/, which - because those
+//               four directories were only ever named in the non-Markdown prefix list, and the
+//               non-Markdown scope rejects any .md file outright - fell between both scopes and
+//               were scanned by neither, the same coverage gap in miniature.
 // exit taxonomy: 0 = every referenced CLI target resolves; 1 = named finding(s) (a document
 //               names a bin/ns-<name> target that does not exist under bin/); 2 = operational
 //               error (zero files matched either scan scope, which means a broken checkout or a
@@ -92,18 +113,26 @@ const PREFIX = '[check-skill-cli-targets]';
 const BIN_DIR = join(REPO_ROOT, 'bin');
 
 // ---------------------------------------------------------------------------
-// Scan scope. Two independent scopes, both excluding docs/adr/ and
-// docs/gates/ (dated historical records - see header comment):
-//   - Markdown: every .md file under agents/, docs/, examples/, skills/,
-//     templates/, plus root-level .md files. Byte-identical to the scope
-//     this checker ran before PF-22 (checker coverage shapes) widening 2.
+// Scan scope. Two scopes, split by file extension (so they can never
+// double-count a file regardless of prefix overlap), both excluding
+// docs/adr/ and docs/gates/ (dated historical records - see header comment):
+//   - Markdown: every .md file under agents/, bin/, docs/, evals/, examples/,
+//     hooks/, output-styles/, scripts/, skills/, templates/, plus root-level
+//     .md files.
 //   - non-Markdown: every NON-.md file under hooks/, bin/, scripts/,
 //     agents/, templates/, evals/, examples/, plus root-level non-.md
 //     files. tests/ is never one of these prefixes, so a fixture planted
 //     there is simply never enumerated - no separate exclusion needed.
+// The two lists overlap on purpose (agents/, bin/, evals/, examples/,
+// hooks/, scripts/, templates/ all appear in both): a directory in both
+// lists gets its .md files scanned by the Markdown scope and its non-.md
+// files scanned by the non-Markdown scope, never both for the same file.
+// docs/, output-styles/, and skills/ appear only in the Markdown list,
+// since none of the three ship a non-Markdown file this checker has reason
+// to scan.
 // ---------------------------------------------------------------------------
 
-const MD_SCAN_DIR_PREFIXES = ['agents/', 'docs/', 'examples/', 'skills/', 'templates/'];
+const MD_SCAN_DIR_PREFIXES = ['agents/', 'bin/', 'docs/', 'evals/', 'examples/', 'hooks/', 'output-styles/', 'scripts/', 'skills/', 'templates/'];
 const NON_MD_SCAN_DIR_PREFIXES = ['hooks/', 'bin/', 'scripts/', 'agents/', 'templates/', 'evals/', 'examples/'];
 const HISTORICAL_RECORD_PREFIXES = ['docs/adr/', 'docs/gates/'];
 
@@ -144,17 +173,24 @@ function inNonMdScope(rel) {
 //     `git ls-files` already includes tracked files under a dot-directory
 //     regardless of the directory name.
 //   - Markdown: keeps the OLD behavior (skips any dot-prefixed entry
-//     entirely) unchanged. Checked against the real tree before making
-//     this change: agents/, docs/, examples/, skills/, and templates/
-//     collectively carry real .md files under dot-directories today
-//     (five gate-snapshot files under examples/*/.studio/snapshots/), so
-//     descending into dot-directories for the Markdown scope too would
-//     have changed which files degraded mode counts as Markdown - the
-//     one thing this task's own widening promised to keep byte-identical.
-//     Because agents/, templates/, and examples/ are scanned by BOTH
-//     scopes, this requires two separate walks over those directories in
-//     degraded mode (one per scope, each with its own dot-directory
-//     policy), not one shared walk feeding both scopes' filters.
+//     entirely) unchanged - the non-Markdown widening that introduced this
+//     split promised to keep the Markdown scope's degraded-mode file set
+//     byte-identical, and later additions to the Markdown prefix list
+//     (output-styles/, and scripts/, hooks/, bin/, evals/ for their .md
+//     files) kept that same skip behavior rather than changing it. Checked
+//     against the real tree: agents/, docs/, examples/, skills/, and
+//     templates/ collectively carry real .md files under dot-directories
+//     today (five gate-snapshot files under examples/*/.studio/snapshots/),
+//     so descending into dot-directories for the Markdown scope too would
+//     change which files degraded mode counts as Markdown; the newer
+//     Markdown prefixes carry no dot-directory .md files today, so this is
+//     currently a distinction without a difference for them, but the rule
+//     stays the same for all ten prefixes rather than special-casing some.
+//     Because agents/, bin/, evals/, examples/, hooks/, scripts/, and
+//     templates/ are scanned by BOTH scopes, this requires two separate
+//     walks over those directories in degraded mode (one per scope, each
+//     with its own dot-directory policy), not one shared walk feeding both
+//     scopes' filters.
 // ---------------------------------------------------------------------------
 
 function getGitTrackedFiles(repoRoot) {
@@ -249,10 +285,10 @@ if (trackedFiles) {
 
 if (filesToScan.length === 0) {
   process.stderr.write(
-    PREFIX + ' FATAL: zero files matched either scan scope (Markdown: agents/, docs/, ' +
-    'examples/, skills/, templates/, root-level .md files; non-Markdown: hooks/, bin/, ' +
-    'scripts/, agents/, templates/, evals/, examples/, root-level non-.md files; excluding ' +
-    'tests/, docs/adr/, docs/gates/) under ' + REPO_ROOT +
+    PREFIX + ' FATAL: zero files matched either scan scope (Markdown: agents/, bin/, docs/, ' +
+    'evals/, examples/, hooks/, output-styles/, scripts/, skills/, templates/, root-level .md ' +
+    'files; non-Markdown: hooks/, bin/, scripts/, agents/, templates/, evals/, examples/, ' +
+    'root-level non-.md files; excluding tests/, docs/adr/, docs/gates/) under ' + REPO_ROOT +
     '. This indicates a broken checkout or a resolution bug, not a clean pass.\n'
   );
   process.exit(2);
@@ -321,9 +357,10 @@ if (degradedReason) {
 } else {
   process.stdout.write(
     PREFIX + ' mode: git-tracked (' + filesToScan.length + ' file(s) in scope: ' + mdCount +
-    ' Markdown under agents/, docs/, examples/, skills/, templates/, root-level .md files; ' +
-    nonMdCount + ' non-Markdown under hooks/, bin/, scripts/, agents/, templates/, evals/, ' +
-    'examples/, root-level non-.md files; excluding tests/, docs/adr/, docs/gates/)\n'
+    ' Markdown under agents/, bin/, docs/, evals/, examples/, hooks/, output-styles/, scripts/, ' +
+    'skills/, templates/, root-level .md files; ' + nonMdCount + ' non-Markdown under hooks/, ' +
+    'bin/, scripts/, agents/, templates/, evals/, examples/, root-level non-.md files; ' +
+    'excluding tests/, docs/adr/, docs/gates/)\n'
   );
 }
 

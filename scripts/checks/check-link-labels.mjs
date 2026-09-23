@@ -1,7 +1,7 @@
 // scripts/checks/check-link-labels.mjs
 // what-it-is:   link-label agreement checker
-// what-it-does: scans every git-tracked .md file under agents/, docs/, examples/, skills/,
-//               templates/, plus root-level .md files, for an inline Markdown link
+// what-it-does: scans every git-tracked .md file under agents/, docs/, examples/, output-styles/,
+//               skills/, templates/, plus root-level .md files, for an inline Markdown link
 //               ("[label](href)", never an image "![alt](href)") whose href, resolved relative to
 //               the linking file's own directory, is a COMPONENT PAGE - a file whose repo-relative
 //               path matches one of a fixed set of shapes:
@@ -16,11 +16,15 @@
 //               describes to that date; a gate doc records what was true at a named past gate),
 //               not living documents that track the current tree. Same rationale and the same
 //               path-prefix-skip mechanism as scripts/checks/check-advertised-invocations.mjs and
-//               check-component-counts.mjs's HISTORICAL_RECORD_PREFIXES. `output-styles/<name>.md`
-//               and `docs/reference/output-styles.md` are deliberately NOT component pages: a
-//               survey of the live tree found only four links to the single output-styles
-//               reference page and none to either individual style file, too thin a shape to
-//               justify a third named page-kind, so this checker leaves that page out of scope.
+//               check-component-counts.mjs's HISTORICAL_RECORD_PREFIXES. Two separate output-styles
+//               questions, kept distinct: as a link TARGET, `output-styles/<name>.md` and
+//               `docs/reference/output-styles.md` are deliberately NOT component pages (a survey of
+//               the live tree found only four links to the single output-styles reference page and
+//               none to either individual style file, too thin a shape to justify a third named
+//               page-kind, so neither is in COMPONENT_PAGE_MAP below); as a scan SOURCE, however,
+//               `output-styles/` is in scope like any other shipped Markdown location - added for
+//               consistency with the sibling Markdown-scope checkers, landing green with no live
+//               finding, since the two shipped output styles carry no links at all today.
 //               The rule (href-to-label): once an href resolves to a component page, the LABEL
 //               text (the raw string between "[" and "]") must contain that component's <name> as
 //               a whole token - not preceded or followed by a lowercase letter, digit, or hyphen
@@ -50,7 +54,7 @@
 //               whitespace - is stripped before the destination is resolved, so a titled link
 //               (ordinary, spec-legal Markdown used for hover text) resolves exactly like its
 //               untitled equivalent instead of failing to match any component-page shape.
-//               Two shapes are DELIBERATELY out of scope, both precedented by the existing
+//               Four shapes are DELIBERATELY out of scope, all precedented by the existing
 //               scripts/check-links.mjs, which uses the identical single-line
 //               "\[([^\]]*)\]\(([^)]+)\)" link-extraction regex and has never handled them either:
 //               reference-style links ("[label][ref]"), angle-bracket destinations
@@ -125,13 +129,14 @@ const REPO_ROOT = resolve(__dirname, '..', '..');
 const PREFIX = '[check-link-labels]';
 
 // ---------------------------------------------------------------------------
-// Scan scope: every .md file under agents/, docs/, examples/, skills/,
-// templates/, plus root-level .md files, except docs/adr/ and docs/gates/
-// (dated historical records - see header comment). Identical shape to
-// scripts/checks/check-advertised-invocations.mjs's own Markdown scan scope.
+// Scan scope: every .md file under agents/, docs/, examples/, output-styles/,
+// skills/, templates/, plus root-level .md files, except docs/adr/ and
+// docs/gates/ (dated historical records - see header comment). Identical
+// shape to scripts/checks/check-advertised-invocations.mjs's own Markdown
+// scan scope.
 // ---------------------------------------------------------------------------
 
-const SCAN_DIR_PREFIXES = ['agents/', 'docs/', 'examples/', 'skills/', 'templates/'];
+const SCAN_DIR_PREFIXES = ['agents/', 'docs/', 'examples/', 'output-styles/', 'skills/', 'templates/'];
 const HISTORICAL_RECORD_PREFIXES = ['docs/adr/', 'docs/gates/'];
 
 function isRootLevelFile(rel) {
@@ -224,8 +229,9 @@ const filesToScan = trackedFiles.filter(inScope).sort();
 
 if (filesToScan.length === 0) {
   process.stderr.write(
-    PREFIX + ' FATAL: zero files matched the scan scope (agents/, docs/, examples/, skills/, ' +
-    'templates/, root-level .md files; excluding docs/adr/, docs/gates/) under ' + REPO_ROOT +
+    PREFIX + ' FATAL: zero files matched the scan scope (agents/, docs/, examples/, ' +
+    'output-styles/, skills/, templates/, root-level .md files; excluding docs/adr/, ' +
+    'docs/gates/) under ' + REPO_ROOT +
     '. This indicates a broken checkout or a resolution bug, not a clean pass.\n'
   );
   process.exit(2);
@@ -464,7 +470,7 @@ for (const rel of filesToScan) {
 if (degradedReason) {
   process.stdout.write(PREFIX + ' NOTE: degraded mode, scanning the filesystem directly instead of the git-tracked set (' + degradedReason + ')\n');
 } else {
-  process.stdout.write(PREFIX + ' mode: git-tracked (' + filesToScan.length + ' file(s) in scope: agents/, docs/, examples/, skills/, templates/, root-level .md files; excluding docs/adr/, docs/gates/)\n');
+  process.stdout.write(PREFIX + ' mode: git-tracked (' + filesToScan.length + ' file(s) in scope: agents/, docs/, examples/, output-styles/, skills/, templates/, root-level .md files; excluding docs/adr/, docs/gates/)\n');
 }
 
 if (findings.length === 0) {
