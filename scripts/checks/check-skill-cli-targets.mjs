@@ -44,6 +44,13 @@
 //               Binary files are skipped entirely in both scopes: a file is treated as binary,
 //               and never read as text, when a NUL byte (0x00) appears anywhere in its first
 //               8 KB - the same shape of heuristic git itself uses to classify a blob as binary.
+//               Dot-directories (e.g. templates/book-scaffold/.studio/): the degraded (no-git)
+//               fallback walk descends into them for the non-Markdown scope, matching
+//               git-tracked mode, which never skipped them (git ls-files does not care about a
+//               dot-prefixed directory name, only .gitignore). The Markdown scope's fallback
+//               walk deliberately still skips them, unchanged from before this fix - see the
+//               comment above the discovery functions below for why descending there too would
+//               have changed which files degraded mode counts as Markdown.
 // why:          F-CI-07 (dispatcher and CLI-wrapper skills uncovered) - nothing previously
 //               asserted that a CLI-wrapper skill's named routing target is a real, shipped
 //               file, so a typo'd or renamed CLI reference would ship silently and surface only
@@ -127,6 +134,27 @@ function inNonMdScope(rel) {
 // fallback walk mirrors check-component-counts.mjs's own two-part shape: a
 // recursive walk of each scan-prefix directory, plus a separate, non-
 // recursive pass over root-level files only.
+//
+// Dot-directory handling in the fallback walk deliberately differs between
+// the two scopes, to keep git-tracked mode and degraded mode in agreement
+// for each scope separately:
+//   - non-Markdown: descends into dot-directories (e.g.
+//     templates/book-scaffold/.studio/), skipping only .git and
+//     node_modules by name - matching git-tracked mode, where
+//     `git ls-files` already includes tracked files under a dot-directory
+//     regardless of the directory name.
+//   - Markdown: keeps the OLD behavior (skips any dot-prefixed entry
+//     entirely) unchanged. Checked against the real tree before making
+//     this change: agents/, docs/, examples/, skills/, and templates/
+//     collectively carry real .md files under dot-directories today
+//     (five gate-snapshot files under examples/*/.studio/snapshots/), so
+//     descending into dot-directories for the Markdown scope too would
+//     have changed which files degraded mode counts as Markdown - the
+//     one thing this task's own widening promised to keep byte-identical.
+//     Because agents/, templates/, and examples/ are scanned by BOTH
+//     scopes, this requires two separate walks over those directories in
+//     degraded mode (one per scope, each with its own dot-directory
+//     policy), not one shared walk feeding both scopes' filters.
 // ---------------------------------------------------------------------------
 
 function getGitTrackedFiles(repoRoot) {
@@ -154,7 +182,7 @@ function getGitTrackedFiles(repoRoot) {
   return listing.toString('utf8').split('\0').filter(Boolean);
 }
 
-function walkDirRecursive(dir, baseDir, out = []) {
+function walkDirRecursive(dir, baseDir, opts, out = []) {
   let entries;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
@@ -162,10 +190,11 @@ function walkDirRecursive(dir, baseDir, out = []) {
     return out;
   }
   for (const e of entries) {
-    if (e.name.startsWith('.')) continue;
+    if (e.name === '.git' || e.name === 'node_modules') continue;
+    if (!opts.descendDotDirs && e.name.startsWith('.')) continue;
     const full = join(dir, e.name);
     if (e.isDirectory()) {
-      walkDirRecursive(full, baseDir, out);
+      walkDirRecursive(full, baseDir, opts, out);
     } else if (e.isFile()) {
       out.push(full.slice(baseDir.length + 1).replace(/\\/g, '/'));
     }
@@ -186,24 +215,37 @@ function walkRootLevelFiles(baseDir, out = []) {
   return out;
 }
 
-// Union of both scopes' directory prefixes, deduplicated (agents/,
-// templates/, and examples/ appear in both lists) - walking a directory
-// twice would otherwise duplicate its files in the degraded-mode fallback.
-const ALL_SCAN_DIR_PREFIXES = Array.from(new Set([...MD_SCAN_DIR_PREFIXES, ...NON_MD_SCAN_DIR_PREFIXES]));
-
-let trackedFiles = getGitTrackedFiles(REPO_ROOT);
+let filesToScan;
+let mdCount;
+let nonMdCount;
 let degradedReason = null;
-if (!trackedFiles) {
-  degradedReason = 'git unavailable or ' + REPO_ROOT + ' is not a git repository';
-  trackedFiles = walkRootLevelFiles(REPO_ROOT);
-  for (const prefix of ALL_SCAN_DIR_PREFIXES) {
-    walkDirRecursive(join(REPO_ROOT, prefix.slice(0, -1)), REPO_ROOT, trackedFiles);
-  }
-}
 
-const filesToScan = trackedFiles.filter((rel) => inMdScope(rel) || inNonMdScope(rel)).sort();
-const mdCount = filesToScan.filter(inMdScope).length;
-const nonMdCount = filesToScan.length - mdCount;
+const trackedFiles = getGitTrackedFiles(REPO_ROOT);
+if (trackedFiles) {
+  filesToScan = trackedFiles.filter((rel) => inMdScope(rel) || inNonMdScope(rel)).sort();
+  mdCount = filesToScan.filter(inMdScope).length;
+  nonMdCount = filesToScan.length - mdCount;
+} else {
+  degradedReason = 'git unavailable or ' + REPO_ROOT + ' is not a git repository';
+
+  const rootFiles = walkRootLevelFiles(REPO_ROOT);
+
+  const mdCandidates = [...rootFiles];
+  for (const prefix of MD_SCAN_DIR_PREFIXES) {
+    walkDirRecursive(join(REPO_ROOT, prefix.slice(0, -1)), REPO_ROOT, { descendDotDirs: false }, mdCandidates);
+  }
+
+  const nonMdCandidates = [...rootFiles];
+  for (const prefix of NON_MD_SCAN_DIR_PREFIXES) {
+    walkDirRecursive(join(REPO_ROOT, prefix.slice(0, -1)), REPO_ROOT, { descendDotDirs: true }, nonMdCandidates);
+  }
+
+  const mdFiles = mdCandidates.filter(inMdScope);
+  const nonMdFiles = nonMdCandidates.filter(inNonMdScope);
+  filesToScan = [...mdFiles, ...nonMdFiles].sort();
+  mdCount = mdFiles.length;
+  nonMdCount = nonMdFiles.length;
+}
 
 if (filesToScan.length === 0) {
   process.stderr.write(

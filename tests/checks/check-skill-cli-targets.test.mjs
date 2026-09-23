@@ -7,9 +7,10 @@
 //               tests/checks/check-workspace-refs.test.mjs's own established split:
 //                 (1) synthetic fixtures (buildSyntheticRoot below): a from-scratch temp
 //                     directory carrying only a fresh copy of this repo's CURRENT on-disk
-//                     checker script plus invented bin/ and skills/ content, so detection and
-//                     the false-positive guard can be proven without depending on this repo's
-//                     real shipped skills at all;
+//                     checker script plus invented content under whichever of hooks/, bin/,
+//                     scripts/, agents/, templates/, evals/, examples/, skills/, or root-level
+//                     files a given test needs, so detection and the false-positive guard can
+//                     be proven without depending on this repo's real shipped content at all;
 //                 (2) real-repo clones (clone-helper.mjs's cloneRepoToTemp), which exercise the
 //                     checker against the actual Markdown and non-Markdown scan scopes together
 //                     (see the checker's own header for both scopes' exact shape), proving the
@@ -63,9 +64,9 @@ function copyFromRepo(fixtureRoot, relPath) {
 
 /**
  * Builds a from-scratch temp directory carrying a fresh copy of this repo's CURRENT on-disk
- * checker script, plus caller-supplied bin/ and skills/ content. Not derived from the real
- * tracked tree at all, so assertions here are never contaminated by anything already present
- * in this repo.
+ * checker script, plus caller-supplied content at whatever repo-relative paths a test names.
+ * Not derived from the real tracked tree at all, so assertions here are never contaminated by
+ * anything already present in this repo.
  */
 function buildSyntheticRoot(label, files) {
   const root = mkdtempSync(join(tmpdir(), 'nonfiction-skill-cli-targets-synth-' + label + '-'));
@@ -436,6 +437,44 @@ test('non-Markdown scope boundary: a non-Markdown file under docs/ or skills/ is
     const result = runClonedChecker(root, SCRIPT);
     assert.equal(result.status, 0, 'a non-Markdown file under docs/ or skills/ must not be scanned; got: ' + result.combined);
     assert.doesNotMatch(result.combined, /ns-nonexistent/, 'the planted references under docs/ and skills/ must never appear as findings');
+  } finally {
+    cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Fix round 1: a follow-up review found that the degraded (no-git) fallback
+// walk previously skipped every dot-prefixed directory entirely, unlike
+// git-tracked mode, which never skipped them (git ls-files does not care
+// about a dot-prefixed directory name). The two tests below prove the fix
+// per scope: the non-Markdown scope now descends into a dot-directory in
+// degraded mode (matching git-tracked mode), while the Markdown scope's
+// degraded-mode behavior stays exactly as it was before this fix round.
+// ---------------------------------------------------------------------------
+
+test('non-Markdown scope: a broken bin/ns-<name> reference under a dot-directory is caught in the degraded (no-git) fallback', () => {
+  const { root, cleanup } = buildSyntheticRoot('nonmd-dotdir', {
+    'templates/book-scaffold/.studio/notes.mjs': '// bin/ns-nonexistent\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 1, 'must exit 1 on a broken routing target under a dot-directory in the degraded fallback; got: ' + result.combined);
+    assert.match(result.combined, /templates\/book-scaffold\/\.studio\/notes\.mjs:1:/, 'message must name the planted file and line');
+    assert.match(result.combined, /ns-nonexistent/, 'message must name the bogus CLI name verbatim');
+  } finally {
+    cleanup();
+  }
+});
+
+test('Markdown scope: a dot-directory stays unscanned in the degraded (no-git) fallback (unchanged from before this fix round)', () => {
+  const { root, cleanup } = buildSyntheticRoot('md-dotdir-unchanged', {
+    'docs/.hidden/notes.md': 'bin/ns-nonexistent\n',
+    'hooks/lib/clean.mjs': '// nothing interesting here\n',
+  });
+  try {
+    const result = runClonedChecker(root, SCRIPT);
+    assert.equal(result.status, 0, 'a .md file under a dot-directory in a Markdown-only prefix must stay unscanned in degraded mode; got: ' + result.combined);
+    assert.doesNotMatch(result.combined, /ns-nonexistent/, 'the dot-directory Markdown fixture\'s planted reference must never appear as a finding');
   } finally {
     cleanup();
   }
