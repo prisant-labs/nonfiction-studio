@@ -125,6 +125,28 @@ test('loadSettings: invalid YAML frontmatter -> empty settings, one-sentence war
   }
 });
 
+test('loadSettings: a duplicated routing_enforce key in the same mapping -> whole-file failure warning, routing_enforce taken from neither duplicate', () => {
+  const root = makeTempRoot();
+  try {
+    writeSettingsFile(root, '---\nrouting_enforce: warn\nrouting_enforce: block\n---\nBody text survives.\n');
+    const result = loadSettings(root);
+    assert.deepStrictEqual(result.settings, {}, 'a duplicate key must default to empty settings, not last-wins');
+    assert.strictEqual(result.settings.routing_enforce, undefined, 'routing_enforce must not be silently taken from either duplicate');
+    assert.ok(result.warning, 'a duplicate key must produce a warning');
+    assert.ok(
+      result.warning.includes(join(root, '.claude', 'nonfiction-studio.local.md')),
+      'warning must name the settings file path; got: ' + result.warning
+    );
+    assert.ok(
+      result.warning.includes('invalid YAML frontmatter'),
+      'a duplicate key is a whole-file parse failure, using the same warning sentence as any other invalid YAML; got: ' + result.warning
+    );
+    assert.deepStrictEqual(result.droppedKeys, [], 'a whole-file failure never attributes the drop to one key');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('loadSettings: frontmatter block that is empty (every key commented out) parses to null -> valid empty settings, no warning', () => {
   const root = makeTempRoot();
   try {

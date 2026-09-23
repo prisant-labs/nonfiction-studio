@@ -60,7 +60,7 @@ const { checkAgentWriteConstraint } = await import('../../hooks/lib/agent-identi
 // actual use inside the shipped hook, the chain reader, and the namespace-guard mutation proof -
 // is exercised only through the spawned hook (runHook), proving the WIRING, not just the isolated
 // function, matching this suite's existing convention.
-const { modelMismatchMessage, readAgentModel, clearRoutingCaches } = await import('../../hooks/lib/routing.mjs');
+const { modelMismatchMessage, readAgentModel, clearRoutingCaches, readChainPermitted } = await import('../../hooks/lib/routing.mjs');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1820,6 +1820,48 @@ test('Task 8 (p) fail-open: an unreadable agents/_chain-permitted.yaml produces 
   assert.equal(
     result.stdout.trim(), '',
     'an unreadable chain contract fails open to silence, even though this edge would otherwise be undeclared'
+  );
+});
+
+test('readChainPermitted on a chain file with a duplicated caller key fails open with a descriptive error, never throws', () => {
+  const agentsDir = mkdtempSync(join(tmpdir(), 'ns-chain-dupe-key-'));
+  writeFileSync(
+    join(agentsDir, '_chain-permitted.yaml'),
+    'drafting-partner:\n  - line-editor\ndrafting-partner:\n  - research-librarian\n',
+    'utf8'
+  );
+
+  const result = readChainPermitted(agentsDir);
+
+  assert.strictEqual(result.contract, null, 'a duplicate-key chain file yields no usable contract, not a guessed merge');
+  assert.ok(result.error, 'the reader must carry a descriptive error string for this failure');
+  assert.ok(result.error.includes('not valid YAML'), 'got: ' + result.error);
+  assert.ok(result.error.includes('drafting-partner'), 'the error names the duplicated key; got: ' + result.error);
+});
+
+test('a chain file with a duplicated caller key fails open to silence at the dispatch hook, exactly like any other unparseable chain contract', () => {
+  const agentsDir = mkdtempSync(join(tmpdir(), 'ns-t8-agents-'));
+  writeFileSync(join(agentsDir, 'line-editor.md'), '---\nmodel: sonnet\n---\nbody\n', 'utf8');
+  writeFileSync(
+    join(agentsDir, '_chain-permitted.yaml'),
+    'drafting-partner:\n  - line-editor\ndrafting-partner:\n  - research-librarian\n',
+    'utf8'
+  );
+  const dir = makeTmpDir('chain-dupe-key-dispatch');
+
+  const result = runHook(
+    makeDispatchEvent(dir, {
+      subagentType: 'nonfiction-studio:line-editor',
+      model: 'sonnet', // matches the fixture's declared model: isolates this case to the chain rule
+      dispatcherType: 'nonfiction-studio:drafting-partner'
+    }),
+    { NS_AGENTS_DIR: agentsDir }
+  );
+
+  assert.equal(result.status, 0, 'exit code is 0');
+  assert.equal(
+    result.stdout.trim(), '',
+    'a duplicate-key chain contract fails open to silence, never a deny and never a lockout'
   );
 });
 

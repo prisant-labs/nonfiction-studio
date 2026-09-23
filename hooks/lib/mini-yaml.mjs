@@ -6,7 +6,14 @@
 //               agents/_chain-permitted.yaml (a flat map of scalar keys to string sequences). Not a
 //               general YAML implementation: no flow collections (`[...]` / `{...}`), no anchors,
 //               aliases, tags, or multi-document streams. Anything outside this subset throws
-//               MiniYamlError rather than silently misparsing.
+//               MiniYamlError rather than silently misparsing. Two further shapes are rejected the
+//               same way rather than guessed at: a repeated key within one mapping (the real
+//               "yaml" package this module replaces throws here; silently taking either value
+//               would let a stray duplicate line change behavior with no warning), and a nested
+//               child line whose leading indentation mixes spaces and tabs (indentOf below only
+//               counts spaces, so a mixed prefix under-measures the child's indent width and the
+//               line goes on to be misparsed as some other shape instead of raising a clear error).
+//               Both throws name the 1-based line number.
 // why:          C1 (Wave 1 exit final review) -- hooks/lib/settings.mjs and hooks/lib/routing.mjs
 //               both lazily required the "yaml" npm package, a real runtime dependency. Nothing
 //               installs dependencies for an installed plugin (hooks run as
@@ -40,6 +47,22 @@ function indentOf(line) {
 function isBlankOrComment(line) {
   const t = line.trim();
   return t === '' || t.startsWith('#');
+}
+
+/** Throws when a line about to be parsed as a nested child's own indentation mixes spaces and
+ * tabs. Called only at the two points where a deeper-indented line is identified as a child node
+ * (a mapping value or sequence item that continues onto following lines) -- indentOf only counts
+ * leading spaces, so a spaces-then-tab prefix under-measures that child's indent width and its
+ * content, still carrying the tab, goes on to fail every known node shape and fall through to
+ * being misparsed as a bare scalar (see this module's own header). Pure spaces or pure tabs are
+ * left alone; only a MIX within the one leading run is rejected. */
+function checkChildIndent(line, lineIndex) {
+  const leading = /^[ \t]*/.exec(line)[0];
+  if (leading.includes(' ') && leading.includes('\t')) {
+    throw new MiniYamlError(
+      'mixed spaces and tabs in indentation at line ' + (lineIndex + 1) + ': ' + JSON.stringify(line)
+    );
+  }
 }
 
 /** Advances past blank and full-line-comment lines; returns the index of the next real content
@@ -132,6 +155,7 @@ function parseSequence(lines, start, indent) {
     if (itemText === '') {
       const j = skipIgnorable(lines, i + 1);
       if (j < lines.length && indentOf(lines[j]) > indent) {
+        checkChildIndent(lines[j], j);
         const child = parseNode(lines, j, indentOf(lines[j]));
         items.push(child.value);
         i = child.next;
@@ -168,11 +192,17 @@ function parseMapping(lines, start, indent) {
     if (!m) throw new MiniYamlError('expected a "key: value" mapping entry, got: ' + content);
     const key = m[1].trim();
     const rest = m[2].trim();
+    const keyLine = i;
     i++;
+
+    if (Object.prototype.hasOwnProperty.call(result, key)) {
+      throw new MiniYamlError('duplicate key "' + key + '" at line ' + (keyLine + 1));
+    }
 
     if (rest === '') {
       const j = skipIgnorable(lines, i);
       if (j < lines.length && indentOf(lines[j]) > indent) {
+        checkChildIndent(lines[j], j);
         const child = parseNode(lines, j, indentOf(lines[j]));
         result[key] = child.value;
         i = child.next;
