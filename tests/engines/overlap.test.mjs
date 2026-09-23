@@ -285,6 +285,38 @@ test('corpus discovery: a missing context/prior-work/ directory contributes noth
 });
 
 // =====================================================================================
+// Part 6b: findings order is stable code-unit order, never locale-collated order. On this
+// machine's ICU, 'a-chapter.md'.localeCompare('B-chapter.md') is negative (collation
+// compares base letters before case, so lowercase "a" sorts before uppercase "B"), while
+// plain code-unit order places 'B-chapter.md' first (0x42 < 0x61). Two chapters that each
+// independently overlap the same corpus source let the finding order stand in for the
+// comparator directly, exercising the public findOverlaps output rather than an internal
+// sort function.
+// =====================================================================================
+
+test('findings order: two chapters whose names collate one way under locale rules and the other way under code-unit order sort by code unit', () => {
+  assert.ok(
+    'a-chapter.md'.localeCompare('B-chapter.md') < 0,
+    'fixture precondition: this Node build\'s ICU collates lowercase "a" before uppercase "B"'
+  );
+
+  const lift = LIFT_15;
+  const chapters = [
+    { file: 'a-chapter.md', text: 'Some prose precedes this: ' + lift + ' and prose follows it too.' },
+    { file: 'B-chapter.md', text: 'Different framing entirely: ' + lift + ' closes out the paragraph.' },
+  ];
+  const corpora = [{ source: 'src/shared.md', text: 'Reference: ' + lift + ' documented here for the record.' }];
+
+  const { findings } = findOverlaps(chapters, corpora);
+  assert.equal(findings.length, 2);
+  assert.deepEqual(
+    findings.map(f => f.chapter),
+    ['B-chapter.md', 'a-chapter.md'],
+    'code-unit order places the capital-letter filename first, opposite of locale-collated order'
+  );
+});
+
+// =====================================================================================
 // Part 7: CLI anatomy - spawns the real binary.
 // =====================================================================================
 

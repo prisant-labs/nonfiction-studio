@@ -196,6 +196,16 @@ function buildExcerpt(tokens, start, words) {
   return words > EXCERPT_WORD_CAP ? text + ' ...' : text;
 }
 
+// ---- deterministic sort helper -----------------------------------------------------
+
+// Plain code-unit comparison, never localeCompare -- the same idiom as asciiCompare in
+// hooks/lib/apparatus-engine.mjs (see that module's own comment, near its "deterministic,
+// locale-independent sort helpers" section): sort order must be stable across whatever ICU
+// data happens to ship with a given Node build, which localeCompare does not guarantee.
+function codeUnitCompare(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 // ---- findOverlaps ------------------------------------------------------------------
 
 /**
@@ -266,8 +276,8 @@ export function findOverlaps(chapters, corpora, { minWords = DEFAULT_MIN_WORDS }
   }
 
   findings.sort((a, b) =>
-    a.chapter.localeCompare(b.chapter) ||
-    a.source.localeCompare(b.source) ||
+    codeUnitCompare(a.chapter, b.chapter) ||
+    codeUnitCompare(a.source, b.source) ||
     a.chapterSpan.start - b.chapterSpan.start
   );
 
@@ -309,7 +319,7 @@ export function discoverCorpora(root) {
     const entries = parseEvidenceLog(readFileSync(ledgerPath, 'utf8'));
     const withVerbatim = entries
       .filter(e => e.verbatim != null && e.verbatim !== '')
-      .sort((a, b) => a.id.localeCompare(b.id));
+      .sort((a, b) => codeUnitCompare(a.id, b.id));
     for (const e of withVerbatim) {
       corpora.push({
         source: 'research/evidence-log.md#' + e.id,
