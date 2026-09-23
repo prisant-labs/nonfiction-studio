@@ -76,10 +76,10 @@ Nonfiction Studio is listed in the [prisant-labs marketplace](https://github.com
 
 ```
 /plugin marketplace add prisant-labs/agent-plugins
-/plugin install nonfiction-studio@agent-plugins
+/plugin install nonfiction-studio@prisant-labs
 ```
 
-You **add** the marketplace by its repo path and **install** by the marketplace identity (`@agent-plugins`): the path is the address, the identity is the catalog. Add the marketplace once and every plugin published there becomes available, including ones added later.
+You **add** the marketplace by its repo path and **install** by the marketplace's registered name (`@prisant-labs`): the path is the address, the registered name is the catalog. Add the marketplace once and every plugin published there becomes available, including ones added later.
 
 **From a local clone** (what works today):
 
@@ -88,7 +88,7 @@ claude plugin marketplace add /path/to/nonfiction-studio
 claude plugin install nonfiction-studio@nonfiction-studio
 ```
 
-Replace `/path/to/nonfiction-studio` with wherever you cloned or unzipped it. The plugin carries a self-marketplace in its own repository, which is what makes the local directory install work; that is why the identity differs between the two paths.
+Replace `/path/to/nonfiction-studio` with wherever you cloned or unzipped it. The plugin carries a self-marketplace in its own repository, which is what makes the local directory install work; that is why the marketplace name after the @ differs between the two paths.
 
 > **Availability.** The marketplace listing exists and is live, but this repository is not public yet, so the marketplace path will fail to resolve until the public flip. The local-clone path is the supported route in the meantime. Requires Node 22.12 or later.
 
@@ -312,7 +312,7 @@ If you try Nonfiction Studio in Cowork, treat it as "should work" rather than "p
 | **Components** | 14 skills, 8 subagents, 9 CLIs, 2 output styles, hooks on six events |
 | **Conformance** | `universal` (Bronze) at Standard 0.12 |
 | **Agent targets** | Claude Code (Cowork pending verification; chat is skills-only) |
-| **Runtime** | Node 22.12 or later; one runtime dependency (a YAML parser) |
+| **Runtime** | Node 22.12 or later; nothing to install at runtime (hooks and CLIs parse YAML with a vendored subset parser, `hooks/lib/mini-yaml.mjs`; the `yaml` package in `package.json` is used only by the repository's CI checkers) |
 | **CI** | Two tiers. Tier A is keyless and deterministic and runs on every pull request across two operating systems; Tier B is model-integration, manual-dispatch, and advisory only. |
 | **Install** | [`prisant-labs/agent-plugins`](https://github.com/prisant-labs/agent-plugins) marketplace, or a local clone |
 | **License** | [MIT](LICENSE) |
@@ -369,10 +369,10 @@ Contributions are welcome. Pull requests run a fully keyless, deterministic CI c
 Before opening a pull request:
 
 1. Run the suites: `node scripts/test-engines.mjs` and `node scripts/test-fixtures.mjs`.
-2. Run the validation spine: `node scripts/check.mjs --profile plain-plugin`, plus the individual checks under `scripts/checks/`. CI runs the same set.
+2. Run the validation spine: `node scripts/check.mjs --profile plain-plugin`, plus the individual checks under `scripts/checks/` and the `scripts/check-*.mjs` checkers. The canonical battery is the list of run steps in [`.github/workflows/tier-a.yml`](.github/workflows/tier-a.yml).
 3. Add a `CHANGELOG.md` entry under `Unreleased`. The changelog is written from what actually landed, not from what was planned.
 
-A fuller contributing guide will follow. For now, open an [issue](https://github.com/prisant-labs/nonfiction-studio/issues) or a pull request.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the fuller guide, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for the standards this project expects, and [SECURITY.md](SECURITY.md) for how to report a vulnerability. Or just open an [issue](https://github.com/prisant-labs/nonfiction-studio/issues) or a pull request.
 
 <div align="right">(<a href="#readme-top">back to top</a>)</div>
 
