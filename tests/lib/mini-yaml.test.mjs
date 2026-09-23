@@ -4,7 +4,9 @@
 //               callers actually feed it (flat settings frontmatter, an agent's full frontmatter
 //               including a folded description scalar and nested metadata, and
 //               agents/_chain-permitted.yaml's flat map-of-sequences), plus its error paths (flow
-//               collections, mis-indented siblings) and the empty/comments-only success case.
+//               collections, mis-indented siblings, a repeated key within one mapping, and a
+//               nested child line whose indentation mixes spaces and tabs) and the
+//               empty/comments-only success case.
 // runner:       node --test tests/lib/mini-yaml.test.mjs
 
 import { test } from 'node:test';
@@ -167,7 +169,7 @@ test('a sequence item\'s own nested child indented with a mix of spaces and a ta
   );
 });
 
-test('indentation of spaces only, or tabs only, is unaffected by the mixed-indentation check', () => {
+test('indentation of spaces only is unaffected by the mixed-indentation check', () => {
   assert.deepStrictEqual(
     parseMiniYaml('thresholds:\n  overlap_min_words: 20\n'),
     { thresholds: { overlap_min_words: 20 } }
