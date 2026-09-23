@@ -89,7 +89,9 @@ jobs:
         run: node scripts/checks/check-inventory.mjs
 
       # Live step 11: workspace-reference guard - a shipped file must not point at a path that
-      # does not survive a clean checkout (this wave's own scratch workspace included).
+      # does not survive a clean checkout (this wave's own scratch workspace included). The
+      # bare-filename form reads a committed, hashed manifest (no clear-text names), so this
+      # runner - with no scratch tree on disk at all - still enforces it, not only a local run.
       - name: Workspace reference guard
         run: node scripts/checks/check-workspace-refs.mjs
 
