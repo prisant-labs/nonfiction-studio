@@ -158,4 +158,4 @@ Reports are retained and pruned to the last 10 per chapter slug by `bin/ns-gate`
 
 ## Worked Example
 
-See [nfs-check-chapter.example.md](./nfs-check-chapter.example.md) for a condensed transcript of a `nfs-check-chapter` session over the committed Chapter 2 of the sample book "The Quiet Network" (see `examples/sample-book/`). The example is a baseline-absent run (voice drift skipped) that demonstrates the pre-check mechanism and the degraded four-check pass; the gate exits 0 with verdict `pass`. This example is grounded in a live temp-clone gate run at `<temp-dir>` on 2026-07-19.
+See [nfs-check-chapter.example.md](./nfs-check-chapter.example.md) for a condensed transcript of a `nfs-check-chapter` session over the committed Chapter 2 of the sample book "The Quiet Network" (see `examples/sample-book/`). The example is a baseline-absent run (voice drift skipped) that demonstrates the pre-check mechanism and the degraded four-check pass; the gate exits 0 with verdict `pass`. This example is grounded in a live temp-clone gate run in a temporary directory outside the repository on 2026-07-19.

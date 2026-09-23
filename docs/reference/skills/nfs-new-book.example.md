@@ -22,7 +22,7 @@ This is a condensed transcript of a complete `nfs-new-book` run. It shows the bl
 >
 > No existing book project found. Proceeding.
 >
-> Finding the plugin root... found at <repo-root>.
+> Finding the plugin root... found at <plugin-root>.
 >
 > Stamping flat bible tree from templates/book-scaffold/ and copying project-init template:
 

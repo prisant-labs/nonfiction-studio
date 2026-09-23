@@ -10,7 +10,7 @@ tags: ["skill", "gate", "quality", "deterministic", "claims", "scrub", "example"
 
 This is a condensed transcript of a `nfs-check-chapter` session over Chapter 2 (Finding Your Network, slug `02-finding-your-network`) of the sample book "The Quiet Network" (see `examples/sample-book/`). The example follows the flow specified in S-06 3.8 (skills and invocation surface) and the adjudications recorded in TSK-051 (run-quality-gate skill).
 
-**Session provenance note.** This example is grounded in a live gate run executed 2026-07-19 over a temp clone of the committed `examples/sample-book/` baseline at `<temp-dir>`. The run was performed by removing `context/style-profile.md` from the temp clone before invoking the gate, so the skill's baseline pre-check triggers the degraded four-check subset (`claims,scrub,continuity-quick,coherence`). The gate was invoked, after resolving the plugin root per Step 4 below, as `node "<plugin-root>/bin/ns-gate" --chapter=02-finding-your-network --check=claims,scrub,continuity-quick,coherence --json`; it exited 0 with verdict `pass`. The JSON output is quoted verbatim. The committed sample-book fixture is never modified by a gate run; the report was written to the temp-clone's `.studio/gate/` directory (not to the committed fixture).
+**Session provenance note.** This example is grounded in a live gate run executed 2026-07-19 over a temp clone of the committed `examples/sample-book/` baseline, placed in a temporary directory outside the repository. The run was performed by removing `context/style-profile.md` from the temp clone before invoking the gate, so the skill's baseline pre-check triggers the degraded four-check subset (`claims,scrub,continuity-quick,coherence`). The gate was invoked, after resolving the plugin root per Step 4 below, as `node "<plugin-root>/bin/ns-gate" --chapter=02-finding-your-network --check=claims,scrub,continuity-quick,coherence --json`; it exited 0 with verdict `pass`. The JSON output is quoted verbatim. The committed sample-book fixture is never modified by a gate run; the report was written to the temp-clone's `.studio/gate/` directory (not to the committed fixture).
 
 Any scenario showing a `block` verdict or exit 1 is explicitly synthetic and does not reflect the committed fixture or the live run output.
 
@@ -178,7 +178,7 @@ Gate exit code: 0. Parse stdout as JSON report. Top-level `verdict: pass`.
 
 - **The skill writes no `.studio/` state.** Only `bin/ns-gate` wrote a file (the gate report at `.studio/gate/02-finding-your-network.<ts>.json` inside the temp clone). No `progress.json` write occurred; the `last_gate` per-chapter field is reserved and unpopulated in v1.
 
-- **Gate runs write reports; never run against committed fixtures.** The run was performed over a temp clone at `<temp-dir>`, not against `examples/sample-book/` in place. The committed fixture is never touched by a gate run.
+- **Gate runs write reports; never run against committed fixtures.** The run was performed over a temp clone at a temporary directory outside the repository, not against `examples/sample-book/` in place. The committed fixture is never touched by a gate run.
 
 - **Voice drift warning is non-halting.** The absence of `context/style-profile.md` did not stop the gate run; it changed the check subset and added a warning. The four remaining checks all passed.
 

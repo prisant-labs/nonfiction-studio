@@ -3,7 +3,7 @@
 - Task: TSK-057 (Phase 1 gate verification)
 - Date: 2026-07-19
 - Verifier: independent cold re-run (opus), no inherited build context
-- Repo: <repo-root>
+- Repo: this repository (maintainer's Windows workstation)
 - Branch: build/phase-1 at 5c0381e, 78 commits from merge-base 6f5596b
 - Method: every verdict below was re-run by the verifier on this Windows machine; the working tree was used directly, temp clones were kept outside the repo, and the tree was left clean.
 - Acceptance source: X-02 (task catalog) TSK-057 acceptance line and Q-02 (CI pipeline) section 1.1.
