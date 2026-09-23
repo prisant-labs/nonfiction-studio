@@ -655,6 +655,44 @@ test('a malformed manifest entry (non-hex) fails loudly (exit 2)', () => {
   }
 });
 
+test('--write-manifest mode: a missing manifest file starts from an empty set (not a fatal), reports so, and writes one', () => {
+  const { root, cleanup } = buildSyntheticRoot('write-no-manifest', ['node_modules/'], {
+    'docs/example.md': 'Ordinary prose with nothing gitignored-related.\n',
+  });
+  try {
+    const manifestPath = join(root, ...MANIFEST_REL.split('/'));
+    rmSync(manifestPath, { force: true });
+
+    const result = runClonedChecker(root, SCRIPT, ['--write-manifest']);
+    assert.equal(result.status, 0, '--write-manifest must tolerate a missing file, not fatal; got: ' + result.combined);
+    assert.match(result.combined, /no existing manifest at .*; starting from an empty set/);
+
+    const written = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    assert.deepEqual(written, { version: 1, algorithm: 'sha256', hashes: [] });
+  } finally {
+    cleanup();
+  }
+});
+
+test('--write-manifest mode: a malformed manifest entry (non-hex) is still fatal (exit 2), never silently overwritten', () => {
+  const { root, cleanup } = buildSyntheticRoot('write-malformed-manifest', ['node_modules/'], {
+    'docs/example.md': 'Ordinary prose with nothing gitignored-related.\n',
+  });
+  try {
+    const manifestPath = join(root, ...MANIFEST_REL.split('/'));
+    writeFileSync(manifestPath, JSON.stringify({ version: 1, algorithm: 'sha256', hashes: ['not-a-hex-digest'] }, null, 2) + '\n');
+    const before = readFileSync(manifestPath, 'utf8');
+
+    const result = runClonedChecker(root, SCRIPT, ['--write-manifest']);
+    assert.equal(result.status, 2, 'a malformed manifest entry must stay fatal even in --write-manifest mode; got: ' + result.combined);
+
+    const after = readFileSync(manifestPath, 'utf8');
+    assert.equal(after, before, 'a fatal malformed-manifest run must never overwrite the file');
+  } finally {
+    cleanup();
+  }
+});
+
 test('committed manifest: every entry is a lowercase hex sha256 digest, never a clear-text basename', () => {
   const manifestPath = join(REPO_ROOT, ...MANIFEST_REL.split('/'));
   const data = JSON.parse(readFileSync(manifestPath, 'utf8'));

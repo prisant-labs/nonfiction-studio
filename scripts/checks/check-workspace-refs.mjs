@@ -501,17 +501,22 @@ for (const h of liveTokenShapedHashSet) {
  * This reproduces exactly what the old literal alternation regex found,
  * including a case its own design depends on: the alternation tries its
  * longest alternative TEXTUALLY first and can still fail the lookahead (an
- * alternative "foo.md.b" would match the text of token "foo.md.bak" up to
- * that point, but the next character "a" is a letter, so the lookahead
- * rejects it), in which case the engine backtracks to the next-longest
- * alternative at the SAME position. This matcher never needs to backtrack
- * across a failed literal match, because it only ever proposes a boundary at
- * the token's own end or at an internal "." - exactly the positions the
- * lookahead would ever accept - so a candidate like "foo.md.b" (ending
- * mid-word, before an ordinary letter) is never proposed at all; only
- * lookahead-legal positions are tried, in the same longest-first order, so
- * the first (longest) one whose hash is forbidden is always the same match
- * the regex would have found.
+ * alternative "zzz-example-9x.md.b" would match the text of token
+ * "zzz-example-9x.md.bak" up to that point, but the next character "a" is a
+ * letter, so the lookahead rejects it), in which case the engine backtracks
+ * to the next-longest alternative at the SAME position. This matcher never
+ * needs to backtrack across a failed literal match, because it only ever
+ * proposes a boundary at the token's own end or at an internal "." -
+ * exactly the positions the lookahead would ever accept - so a candidate
+ * like "zzz-example-9x.md.b" (ending mid-word, before an ordinary letter)
+ * is never proposed at all; only lookahead-legal positions are tried, in
+ * the same longest-first order, so the first (longest) one whose hash is
+ * forbidden is always the same match the regex would have found.
+ *
+ * (The worked-example names above are deliberately invented - see the test
+ * file's own "self-matching discipline" note - since forms 1 and 2, unlike
+ * form 3, carry no self-source exemption: a plausible real basename quoted
+ * here could someday enter the manifest and start flagging this comment.)
  */
 const TOKEN_RE = /[A-Za-z0-9_.-]+/g;
 
