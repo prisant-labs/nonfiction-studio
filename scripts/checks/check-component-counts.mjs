@@ -46,10 +46,10 @@
 //                   all; a gate doc's already-stale-today count table). The same genre applies at
 //                   SECTION scope, not file scope, to CHANGELOG.md and RELEASE-NOTES.md: a dated
 //                   release section in either file is skipped, but neither file is skipped
-//                   wholesale, because both always carry a live, non-dated section too (CHANGELOG.
-//                   md's "## Unreleased"; RELEASE-NOTES.md's "## Format of a release entry" and
-//                   "## Cutting a release (maintainer runbook)"), and RELEASE-NOTES.md is
-//                   published verbatim as the GitHub release body. See the dedicated comment
+//                   wholesale, because both carry live, non-dated text too (CHANGELOG.md's "##
+//                   Unreleased"; RELEASE-NOTES.md's intro above its first dated section), and
+//                   RELEASE-NOTES.md is published verbatim as the GitHub release body. See the
+//                   dedicated comment
 //                   block above the scan loop below for the exact toggle mechanism.
 //               A third construction, "the other N CLIs" (a claim about the complement of the
 //               subject, not the total itself), is a genuine live claim and IS checked, against
@@ -438,9 +438,8 @@ function buildPrecedingWindow(lines, i) {
 // docs/adr/ and docs/gates/ (see header comment) - but unlike those two
 // directories, neither file can be path-exempted wholesale: CHANGELOG.md
 // always carries a live "## Unreleased" section, and RELEASE-NOTES.md
-// always carries two live, non-dated sections ("## Format of a release
-// entry", "## Cutting a release (maintainer runbook)") that document
-// current, live procedure and are never replaced by a release. RELEASE-
+// carries a live intro above its first dated section (its release-entry
+// template and runbook moved to docs/releasing.md at 0.1.0). RELEASE-
 // NOTES.md is additionally published verbatim as the GitHub release body by
 // .github/workflows/release.yml, so a blanket path exemption would blind
 // this checker on the most public artifact of a release. Instead, only the
@@ -458,9 +457,8 @@ function buildPrecedingWindow(lines, i) {
 // match would fail OPEN (the rest of the file goes silently exempt), so
 // this side is deliberately the more general, harder-to-miss pattern.
 // Fenced code blocks are tracked and never toggle this state, so a fenced
-// worked example that itself documents a dated heading shape - RELEASE-
-// NOTES.md's own "Format of a release entry" section does exactly this,
-// lines 11-32 - cannot silently exempt the real content that follows it.
+// worked example that itself documents a dated heading shape cannot
+// silently exempt the real content that follows it.
 // Only these two root-level files carry this state; every other scanned
 // file is unaffected.
 // ---------------------------------------------------------------------------

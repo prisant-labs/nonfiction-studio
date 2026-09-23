@@ -1,0 +1,91 @@
+name: Bug report
+description: Something in Nonfiction Studio did not work the way it should.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. If you have found a security vulnerability instead, please
+        do not open a public issue - use GitHub's private vulnerability reporting on this
+        repository's Security tab, or see SECURITY.md.
+
+        Running `/nonfiction-studio:nfs-doctor` first often narrows down what is actually wrong,
+        and its output is one of the fields below.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: A clear description of what went wrong.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+      description: What should have happened.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The exact skill or CLI you ran, and any relevant input.
+      placeholder: |
+        1. Ran `/nonfiction-studio:nfs-check-chapter`
+        2. On chapter ...
+        3. Saw ...
+    validations:
+      required: true
+
+  - type: input
+    id: claude-code-version
+    attributes:
+      label: Claude Code version
+      description: Output of `claude --version`.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      description: Where you were running the plugin.
+      options:
+        - Claude Code CLI
+        - Cowork
+        - claude.ai chat
+    validations:
+      required: true
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Nonfiction Studio version
+      description: The `version` field in your installed plugin's `.claude-plugin/plugin.json`, or the tag you installed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor-output
+    attributes:
+      label: nfs-doctor output
+      description: Run `/nonfiction-studio:nfs-doctor` in the affected project and paste its report here.
+      render: text
+    validations:
+      required: false

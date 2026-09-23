@@ -2,7 +2,7 @@
 
 This file documents Nonfiction Studio's bible-schema compatibility story: what changes between plugin versions, what an author must do when their book's schema falls behind the installed plugin, and exactly how much of that is automated today versus intended for later. F-DX-13 (no shipped versioning policy) asks for this file to exist before the first schema bump, precisely so this honesty happens in advance rather than after an author's book is already affected.
 
-For the mechanical sequence of steps a maintainer follows to cut a plugin release (as opposed to a book's own schema compatibility, which is this file's subject), see `RELEASE-NOTES.md`'s maintainer runbook.
+For the mechanical sequence of steps a maintainer follows to cut a plugin release (as opposed to a book's own schema compatibility, which is this file's subject), see [`docs/releasing.md`](docs/releasing.md).
 
 ## Where the schema version lives
 

@@ -17,7 +17,7 @@ Most AI writing tools generate plausible prose and leave the verification to you
 </p>
 
 <p>
-  <img src="https://img.shields.io/badge/status-pre--release-orange?style=flat-square" alt="Status: pre-release">
+  <img src="https://img.shields.io/badge/status-pre--1.0-orange?style=flat-square" alt="Status: pre-1.0">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/version-0.1.0-blue?style=flat-square" alt="Version 0.1.0">
   <img src="https://img.shields.io/badge/tier-universal%20(Bronze)-CD7F32?style=flat-square" alt="Conformance tier: universal (Bronze)">
@@ -72,25 +72,25 @@ Most AI writing tools generate plausible prose and leave the verification to you
 
 Nonfiction Studio is listed in the [prisant-labs marketplace](https://github.com/prisant-labs/agent-plugins), which catalogs every plugin published under [prisant-labs](https://github.com/prisant-labs).
 
-**From the marketplace** (once this repository is public):
+**From the marketplace** (recommended):
 
 ```
 /plugin marketplace add prisant-labs/agent-plugins
-/plugin install nonfiction-studio@agent-plugins
+/plugin install nonfiction-studio@prisant-labs
 ```
 
-You **add** the marketplace by its repo path and **install** by the marketplace identity (`@agent-plugins`): the path is the address, the identity is the catalog. Add the marketplace once and every plugin published there becomes available, including ones added later.
+You **add** the marketplace by its repo path and **install** by the marketplace's registered name (`@prisant-labs`): the path is the address, the registered name is the catalog. Add the marketplace once and every plugin published there becomes available, including ones added later.
 
-**From a local clone** (what works today):
+**From a local clone** (for a fork or an offline install):
 
 ```
 claude plugin marketplace add /path/to/nonfiction-studio
 claude plugin install nonfiction-studio@nonfiction-studio
 ```
 
-Replace `/path/to/nonfiction-studio` with wherever you cloned or unzipped it. The plugin carries a self-marketplace in its own repository, which is what makes the local directory install work; that is why the identity differs between the two paths.
+Replace `/path/to/nonfiction-studio` with wherever you cloned or unzipped it. The plugin carries a self-marketplace in its own repository, which is what makes the local directory install work; that is why the marketplace name after the @ differs between the two paths.
 
-> **Availability.** The marketplace listing exists and is live, but this repository is not public yet, so the marketplace path will fail to resolve until the public flip. The local-clone path is the supported route in the meantime. Requires Node 22.12 or later.
+> **Availability.** The repository is public and the marketplace listing is live, so `/plugin marketplace add prisant-labs/agent-plugins` now resolves. The local-clone path above remains available too. Requires Node 22.12 or later.
 
 <div align="right">(<a href="#readme-top">back to top</a>)</div>
 
@@ -301,18 +301,18 @@ If you try Nonfiction Studio in Cowork, treat it as "should work" rather than "p
 
 ## Project status
 
-**`v0.1.0`, pre-release, under construction.** Phase 1, the core authoring workflow, is complete and exercised. Later work (deeper research tooling, a revision pass, manuscript export, and further publishing-compliance features) is still being built, and rough edges are expected. No version has been tagged yet.
+**`v0.1.0`, the first tagged release, pre-1.0.** Phase 1, the core authoring workflow, is complete and exercised. Later work (deeper research tooling, a revision pass, manuscript export, and further publishing-compliance features) is still being built, and rough edges are expected.
 
 ### At a glance
 
 |  |  |
 |---|---|
 | **Current version** | `0.1.0` (source of truth: [`library.json`](library.json)) |
-| **Status** | Pre-release; Phase 1 complete, later phases in progress |
+| **Status** | Pre-1.0; Phase 1 complete, later phases in progress |
 | **Components** | 14 skills, 8 subagents, 9 CLIs, 2 output styles, hooks on six events |
 | **Conformance** | `universal` (Bronze) at Standard 0.12 |
 | **Agent targets** | Claude Code (Cowork pending verification; chat is skills-only) |
-| **Runtime** | Node 22.12 or later; one runtime dependency (a YAML parser) |
+| **Runtime** | Node 22.12 or later; nothing to install at runtime (hooks and CLIs parse YAML with a vendored subset parser, `hooks/lib/mini-yaml.mjs`; the `yaml` package in `package.json` is used only by the repository's CI checkers) |
 | **CI** | Two tiers. Tier A is keyless and deterministic and runs on every pull request across two operating systems; Tier B is model-integration, manual-dispatch, and advisory only. |
 | **Install** | [`prisant-labs/agent-plugins`](https://github.com/prisant-labs/agent-plugins) marketplace, or a local clone |
 | **License** | [MIT](LICENSE) |
@@ -338,7 +338,7 @@ nonfiction-studio/
 
 ### Changelog
 
-Full technical detail in [`CHANGELOG.md`](CHANGELOG.md); curated, author-facing highlights in [`RELEASE-NOTES.md`](RELEASE-NOTES.md). Everything currently sits under `Unreleased`, because no version has been tagged.
+Full technical detail in [`CHANGELOG.md`](CHANGELOG.md); curated, author-facing highlights in [`RELEASE-NOTES.md`](RELEASE-NOTES.md). `0.1.0`, tagged 2026-09-23, is the first release; changes since then accumulate under `Unreleased` in `CHANGELOG.md` until the next version is cut.
 
 <div align="right">(<a href="#readme-top">back to top</a>)</div>
 
@@ -369,10 +369,10 @@ Contributions are welcome. Pull requests run a fully keyless, deterministic CI c
 Before opening a pull request:
 
 1. Run the suites: `node scripts/test-engines.mjs` and `node scripts/test-fixtures.mjs`.
-2. Run the validation spine: `node scripts/check.mjs --profile plain-plugin`, plus the individual checks under `scripts/checks/`. CI runs the same set.
+2. Run the validation spine: `node scripts/check.mjs --profile plain-plugin`, plus the individual checks under `scripts/checks/` and the `scripts/check-*.mjs` checkers. The canonical battery is the list of run steps in [`.github/workflows/tier-a.yml`](.github/workflows/tier-a.yml).
 3. Add a `CHANGELOG.md` entry under `Unreleased`. The changelog is written from what actually landed, not from what was planned.
 
-A fuller contributing guide will follow. For now, open an [issue](https://github.com/prisant-labs/nonfiction-studio/issues) or a pull request.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the fuller guide, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for the standards this project expects, and [SECURITY.md](SECURITY.md) for how to report a vulnerability. Or just open an [issue](https://github.com/prisant-labs/nonfiction-studio/issues) or a pull request.
 
 <div align="right">(<a href="#readme-top">back to top</a>)</div>
 

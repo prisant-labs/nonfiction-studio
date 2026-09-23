@@ -25,7 +25,7 @@ Three observations, each recorded in RESULTS-TEMPLATE.md:
 **Step 1 - Open a terminal and navigate to the repo.**
 
 ```
-cd <repo-root>
+cd <path-to-your-clone>
 ```
 
 **Step 2 - Create a temporary test branch.**
@@ -58,7 +58,7 @@ Launch the Cowork desktop application.
 **Step 5 - Add the repo as a plugin marketplace.**
 
 In Cowork's plugin panel (Settings or Plugin Manager; panel names vary by Cowork version):
-- Add a local marketplace pointing to: `<repo-root>`
+- Add a local marketplace pointing to: `<path-to-your-clone>`
 - The marketplace name should appear as `nonfiction-studio`.
 
 **Step 6 - Install the nonfiction-studio plugin.**
@@ -115,7 +115,7 @@ Note in RESULTS-TEMPLATE.md:
 
 In Cowork (panel names vary by Cowork version):
 - Uninstall the `nonfiction-studio` plugin.
-- Remove the local marketplace (the `<repo-root>` entry).
+- Remove the local marketplace (the `<path-to-your-clone>` entry).
 
 Close the Cowork session.
 
