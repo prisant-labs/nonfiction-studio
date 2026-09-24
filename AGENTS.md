@@ -124,7 +124,7 @@ Every new file must obey these; several are CI-enforced.
   resolve (`scripts/check-links.mjs`).
 - Any `bin/ns-<name>` you write must be a real, shipped CLI. Any `/nonfiction-studio:<name>`
   invocation you write must be a real, shipped skill.
-- The maintainer's public identity is "JP Prisant" / `@jprisant` / `prisant-labs`. Never write
+- The maintainer's public identity is "Jonathan Prisant" / `@jprisant` / `prisant-labs`. Never write
   a personal email address, workstation path, OS username, or machine name into a committed
   file. There is no public contact email: a security report goes through GitHub private
   vulnerability reporting on the repository's Security tab; a conduct report goes through the
