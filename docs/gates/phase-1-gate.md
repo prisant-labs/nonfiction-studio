@@ -4,7 +4,7 @@
 - Date: 2026-07-19
 - Verifier: independent cold re-run (opus), no inherited build context
 - Repo: this repository (maintainer's Windows workstation)
-- Branch: build/phase-1 at 5c0381e, 78 commits from merge-base 6f5596b
+- Branch: build/phase-1 at 55d48fb, 78 commits from merge-base 6b837af
 - Method: every verdict below was re-run by the verifier on this Windows machine; the working tree was used directly, temp clones were kept outside the repo, and the tree was left clean.
 - Acceptance source: X-02 (task catalog) TSK-057 acceptance line and Q-02 (CI pipeline) section 1.1.
 
@@ -179,7 +179,7 @@ Seam 3 - a CLI reference page against its binary's real flags. `docs/reference/c
 
 ## OVERALL
 
-What is proven, cold, on this Windows machine at 5c0381e:
+What is proven, cold, on this Windows machine at 55d48fb:
 
 - The deterministic engine layer is sound: 261 unit tests green across four suites, and the bidirectional fixture matrix passes with a clean-tree assertion (checklist 1).
 - The Stop gate works end-to-end, live: it passes the golden book silently and catches the planted-unsourced-claim fixture as non-passing, with the session-write flag consumed and re-fires correctly short-circuited; the literal hard-block path is proven under a block-mode config (checklist 2).
@@ -207,7 +207,7 @@ The verifier's recommendation: the Phase 1 build meets its gate on every criteri
 
 ## Addendum: post-push verification (2026-08-07)
 
-The original report above was written at `5c0381e` on a machine with no git remote. Two of its six verdicts were qualified for that reason. This addendum records what changed once the branch was actually pushed and CI ran, and it is written by the session that pushed it, not by an independent verifier.
+The original report above was written at `55d48fb` on a machine with no git remote. Two of its six verdicts were qualified for that reason. This addendum records what changed once the branch was actually pushed and CI ran, and it is written by the session that pushed it, not by an independent verifier.
 
 ### Checklist 4 (Tier A on Windows and Linux) is now PASS
 
@@ -215,10 +215,10 @@ The original verdict was "Windows PASS; Linux BLOCKED-until-push". It is now gre
 
 | Run | Head | Result |
 |---|---|---|
-| 31153116392 | `2e7352c` | FAIL, step 7 Link check, both legs |
-| 31153304696 | `683b2cd` | FAIL, step 8 Engine unit tests, both legs |
-| 31153637026 | `2fca9f4` | PASS, both legs |
-| 31221687880 | `2c630e2` | PASS, both legs, all nine steps |
+| 31153116392 | `81aefb4` | FAIL, step 7 Link check, both legs |
+| 31153304696 | `d457d38` | FAIL, step 8 Engine unit tests, both legs |
+| 31153637026 | `e5cbfbf` | PASS, both legs |
+| 31221687880 | `d4d5b20` | PASS, both legs, all nine steps |
 
 The `claude plugin validate --strict` caveat recorded in the original report is also closed: the binary is installed by an inert scaffolding step (`npm install -g @anthropic-ai/claude-code`) and the validate step passes unauthenticated on both `ubuntu-latest` and `windows-latest`.
 
@@ -226,11 +226,11 @@ The `claude plugin validate --strict` caveat recorded in the original report is 
 
 The original report was honest and its checks were correctly run. It could not have caught the following, and that is the finding worth recording.
 
-**1. Neither workflow could ever fire.** `tier-a.yml` triggered on pull requests targeting `main` while the repository default branch was `master`. A push would have produced silence rather than an error. The deferred item ("the ubuntu leg proves on first push") was recorded as a waiting state rather than a work item, so nothing inspected the artifact that would run once unblocked. Fixed in `2e7352c` by renaming the default branch to `main`.
+**1. Neither workflow could ever fire.** `tier-a.yml` triggered on pull requests targeting `main` while the repository default branch was `master`. A push would have produced silence rather than an error. The deferred item ("the ubuntu leg proves on first push") was recorded as a waiting state rather than a work item, so nothing inspected the artifact that would run once unblocked. Fixed in `81aefb4` by renaming the default branch to `main`.
 
-**2. `check-links` validated the filesystem, not the tracked file set.** ADR-0006 (manifest authority split) carried four markdown links into gitignored `_local/`. Those targets exist in a working tree and vanish in a clean checkout, so the check returned a truthful exit 0 locally and failed on the first CI run. Links converted to code spans in `683b2cd`; the checker itself hardened to validate against `git ls-files` in `dc865a9`.
+**2. `check-links` validated the filesystem, not the tracked file set.** ADR-0006 (manifest authority split) carried four markdown links into gitignored `_local/`. Those targets exist in a working tree and vanish in a clean checkout, so the check returned a truthful exit 0 locally and failed on the first CI run. Links converted to code spans in `d457d38`; the checker itself hardened to validate against `git ls-files` in `7ba8536`.
 
-**3. Seven fixtures depended on empty directories git cannot store.** `hooks/lib/bible.mjs` `isBookRoot` requires a `chapters/` sibling. Seven doctor fixtures carried an empty `chapters/`, present locally and absent on clone, so `findBookRoot` walked to the filesystem root and the CLI exited 2 before running any check. Seven of 261 tests failed in CI while passing locally. Fixed in `2fca9f4` with `.gitkeep` files. A repo-wide sweep for directories holding zero tracked files found exactly those seven and no others.
+**3. Seven fixtures depended on empty directories git cannot store.** `hooks/lib/bible.mjs` `isBookRoot` requires a `chapters/` sibling. Seven doctor fixtures carried an empty `chapters/`, present locally and absent on clone, so `findBookRoot` walked to the filesystem root and the CLI exited 2 before running any check. Seven of 261 tests failed in CI while passing locally. Fixed in `e5cbfbf` with `.gitkeep` files. A repo-wide sweep for directories holding zero tracked files found exactly those seven and no others.
 
 All three share one cause: **the local gate validates the working tree while CI validates the tracked file set.** Anything present locally but uncommitted is invisible to local verification, and no amount of local rigor closes that gap. The cheap general defense, which reproduced both CI failures in seconds, is to clone the repository to a temp directory and run the suite there.
 
@@ -242,7 +242,7 @@ The original report recorded Tier B as dry-run only. It has now executed live fo
 
 **Live mode gated on the wrong precondition.** It required `ANTHROPIC_API_KEY`, which forced dry-run on every developer machine and meant `runLiveMode()` had never executed. That is why the inert budget was unobservable, and why the TSK-056 (Tier B integration and eval files) review could record the budget mechanism as live-verified without contradiction.
 
-An API key is not what live mode needs. It needs working model access, which an authenticated claude CLI provides from the active account. A key is required only where no account is logged in, which is a CI runner and nowhere else. Both fixed in `2c630e2`; a response carrying no cost field is now a hard error rather than a silent zero.
+An API key is not what live mode needs. It needs working model access, which an authenticated claude CLI provides from the active account. A key is required only where no account is logged in, which is a CI runner and nowhere else. Both fixed in `d4d5b20`; a response carrying no cost field is now a hard error rather than a silent zero.
 
 The first live run proves both fixes and the cap firing correctly:
 
@@ -261,11 +261,11 @@ Closed since the original report:
 
 | Item | Commit |
 |---|---|
-| EV-0003 scholarly mis-pairing, plus the nine-pairing sweep | `5980718` |
-| Corrupt-config empty state on session-start | `893de92` |
-| Local and CI parity gap in `check-links` | `dc865a9` |
-| SPK-02 protocol steps that deleted `hooks/hooks.json` and returned to a stale branch | `f9b9dba` |
-| Dead budget cap and the unnecessary API-key gate | `2c630e2` |
+| EV-0003 scholarly mis-pairing, plus the nine-pairing sweep | `ea2f4a5` |
+| Corrupt-config empty state on session-start | `78e09a4` |
+| Local and CI parity gap in `check-links` | `7ba8536` |
+| SPK-02 protocol steps that deleted `hooks/hooks.json` and returned to a stale branch | `d170849` |
+| Dead budget cap and the unnecessary API-key gate | `d4d5b20` |
 
 The EV-0003 correction proved larger than the original triage assumed. A ledger-only fix left `production/back-matter.md` still crediting Hart 2015 with the Bibliography missing Lave and Wenger entirely, and left the `.studio/ai-use-log.jsonl` final record asserting a five-record registry. Adding SRC-0006 also collided with three worked examples that had already allocated that ID to different works while demonstrating sole-allocator ID discipline. Every `SRC-0006` and `SRC-0007` binding in the repository was enumerated and adjudicated before the fix was accepted.
 
