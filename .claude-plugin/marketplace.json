@@ -2,7 +2,7 @@
   "name": "nonfiction-studio",
   "description": "Self-marketplace for the nonfiction-studio plugin.",
   "owner": {
-    "name": "JP Prisant"
+    "name": "Jonathan Prisant"
   },
   "plugins": [
     {

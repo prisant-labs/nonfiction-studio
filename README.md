@@ -378,7 +378,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the fuller guide, [CODE_OF_CONDUCT.md
 
 ## License
 
-Distributed under the **[MIT License](LICENSE)**. Copyright 2026 JP Prisant.
+Distributed under the **[MIT License](LICENSE)**. Copyright 2026 Jonathan Prisant.
 
 The validation tooling vendored under `scripts/` is licensed separately under the Apache License 2.0; see [`scripts/LICENSE-APACHE`](scripts/LICENSE-APACHE) and [`scripts/ATTRIBUTION.md`](scripts/ATTRIBUTION.md).
 
@@ -386,9 +386,9 @@ The validation tooling vendored under `scripts/` is licensed separately under th
 
 ## About the maintainer
 
-<a href="https://github.com/jprisant"><img src="https://img.shields.io/badge/Maintained_by-JP_Prisant-blue?style=for-the-badge&logo=github" alt="Maintained by JP Prisant"></a>
+<a href="https://github.com/jprisant"><img src="https://img.shields.io/badge/Maintained_by-Jonathan_Prisant-blue?style=for-the-badge&logo=github" alt="Maintained by Jonathan Prisant"></a>
 
-Built and maintained by **JP Prisant** ([@jprisant](https://github.com/jprisant)). Nonfiction Studio started from a simple frustration: AI writes fluent non-fiction very fast, and fluent non-fiction with unsourced claims and a borrowed voice is worse than no draft at all. The fix is not a better prompt. It is governance the author controls and can audit: measured voice, anchored claims, a gate with a named verdict, and a terminal status nobody but you can grant.
+Built and maintained by **Jonathan Prisant** ([@jprisant](https://github.com/jprisant)). Nonfiction Studio started from a simple frustration: AI writes fluent non-fiction very fast, and fluent non-fiction with unsourced claims and a borrowed voice is worse than no draft at all. The fix is not a better prompt. It is governance the author controls and can audit: measured voice, anchored claims, a gate with a named verdict, and a terminal status nobody but you can grant.
 
 *If this plugin has kept you from shipping a claim you could not source, consider starring the repo.*
 
