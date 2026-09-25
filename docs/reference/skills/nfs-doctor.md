@@ -80,7 +80,7 @@ flow (Steps A-D) that never invokes `bin/ns-doctor` at all; see "Install-statusl
 
 1. **Argument parsing (no tool call).** Extracts the mode from the supplied argument. Default is `report`. Recognizes `report`, `migrate`, `packs`, `install-statusline`, and `validate` (treated as `report`). Declines `fix` as Phase 2+ scope and halts without any tool calls. Declines unknown tokens and halts. An `install-statusline` mode skips straight to its own flow, below.
 
-2. **Resolve the plugin root.** Before the engine is invoked, the skill resolves the plugin's installed path: a primary lookup against `extraKnownMarketplaces['nonfiction-studio'].source.path` in `~/.claude/settings.json`, a `~/.claude/plugins/cache` search fallback, and a dev-mode fallback that checks for `bin/ns-doctor` in the current directory. This is the same three-tier convention `nfs-new-book` uses to locate its scaffold templates; it exists because a literal relative `bin/ns-doctor` path resolves against the invoking shell's working directory, not the installed plugin, and would silently fail for a marketplace-installed author. If all three lookups fail, the skill halts and names the settings.json and cache paths it attempted. (`install-statusline` reuses this same resolution as its own Step A, but for a different purpose: composing the command string it proposes to install, not for locating `bin/ns-doctor`.)
+2. **Resolve the plugin root.** Before the engine is invoked, the skill resolves the plugin's installed path: reads `installed_plugins.json` in the Claude config directory first (a marketplace install, verified by confirming `bin/ns-stylometry` exists under the candidate path; the newest installed version wins if more than one is present), then a local self-marketplace entry in `settings.json`, then a plugins-cache scan (versioned and legacy layouts), then the current working directory. This is the same resolver `nfs-new-book` uses to locate its scaffold templates; it exists because a literal relative `bin/ns-doctor` path resolves against the invoking shell's working directory, not the installed plugin, and would silently fail for a marketplace-installed author. If nothing resolves, the skill halts and names the config directory and the `installed_plugins.json` path it attempted. (`install-statusline` reuses this same resolution as its own Step A, but for a different purpose: composing the command string it proposes to install, not for locating `bin/ns-doctor`.)
 
 3. **Single Bash invocation (one call per mode).** Runs one Bash call: `node "<plugin-root>/bin/ns-doctor" --project=. [--report|--migrate|--validate-packs] --json`. Captures exit code, stdout (JSON), and stderr. No individual sub-CLI calls are made; the engine composes its checks internally.
 
@@ -167,7 +167,7 @@ cannot ship a main status line itself (only `agent` and `subagentStatusLine` are
 
 Four steps, none of which invoke `bin/ns-doctor`:
 
-- **Step A - resolve the plugin root.** The same three-tier lookup as the `report`/`migrate`/`packs`
+- **Step A - resolve the plugin root.** The same resolver as the `report`/`migrate`/`packs`
   flow's own Step 2, used here to compose the command string this mode proposes to install:
   `node "<plugin-root>/bin/ns-statusline"`. The `CLAUDE_PLUGIN_ROOT` plugin-system interpolation
   placeholder is never used for this value: that token interpolates only inside a plugin's own manifest files
@@ -215,7 +215,7 @@ The doctor skill works identically on all three surfaces per D-14 (three-surface
 
 **Project root not found.** `findBookRoot` exits 2 with a `BibleError` on stderr when `.studio/meta.json` is not found at or above the current directory. The skill surfaces the error and notes that `.studio/meta.json` must be present at the project root.
 
-**`install-statusline`: plugin root cannot be resolved.** Step A halts before any read or write; the skill names the settings.json and cache paths it attempted.
+**`install-statusline`: plugin root cannot be resolved.** Step A halts before any read or write; the skill names the config directory and the `installed_plugins.json` path it attempted.
 
 **`install-statusline`: existing `~/.claude/settings.json` is not valid JSON.** Step B halts before writing; the skill directs the author to fix or back up the file, or to use `/statusline` instead.
 

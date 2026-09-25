@@ -58,7 +58,7 @@ Chapter file confirmed present. Continue to Step 2.
 
 **Studio (Step 2 - Resolve the plugin root):**
 
-The skill uses the Bash tool to look up the `nonfiction-studio` marketplace source path in `~/.claude/settings.json`. The primary lookup resolves the plugin's installed path on the first try; the plugins-cache and dev-mode fallbacks are not needed for this run. Continue to Step 3.
+The skill uses the Bash tool to run the resolver. `installed_plugins.json` in the Claude config directory resolves the plugin's installed path on the first tier, verified against `bin/ns-stylometry`; the settings.json, cache-scan, and dev-mode tiers are not needed for this run. Continue to Step 3.
 
 **Studio (Step 3 - Engine-backed marker inventory):**
 

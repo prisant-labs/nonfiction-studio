@@ -67,10 +67,9 @@ exists or should exist, and why a plugin cannot ship this itself.
 
 ### Step A - Resolve the plugin root
 
-Use the same three-tier resolution as Step 2 below (settings.json lookup, plugins-cache search,
-dev-mode fallback) to obtain `<plugin-root>`. If all three lookups fail, halt exactly as Step 2
-describes: report the settings.json path and cache path attempted, write nothing, and ask the
-author how to proceed.
+Use the same resolver as Step 2 below to obtain `<plugin-root>`. If it prints `not-found`, halt
+exactly as Step 2 describes: report the config directory and the `installed_plugins.json` path
+attempted, write nothing, and ask the author how to proceed.
 
 ### Step B - Read the author's existing settings
 
@@ -89,7 +88,10 @@ Compose the exact command string this mode proposes: `node "<plugin-root>/bin/ns
 using the plugin root resolved in Step A as a literal resolved path - NOT the `CLAUDE_PLUGIN_ROOT`
 plugin-system placeholder, which has no meaning inside a user's own top-level
 `~/.claude/settings.json` (that token interpolates only inside a plugin's own manifest files; see
-ADR-0008).
+ADR-0008). This path is versioned (for example `.../nonfiction-studio/0.1.1/bin/ns-statusline`):
+after a future `/plugin update`, once Claude Code removes the old version's folder, the status
+line silently breaks until this mode is run again. Re-run `/nonfiction-studio:nfs-doctor
+install-statusline` after updating the plugin to refresh it.
 
 - **If the parsed settings object from Step B already has a `statusLine` key:** state its current
   value verbatim, state the proposed new value verbatim, and ask: "Your
@@ -136,26 +138,31 @@ built-in `/statusline` command and describing what to show, or by running
 
 ## Step 2 - Resolve the plugin root
 
-Use the Bash tool to run the primary lookup:
+Use the Bash tool to run the resolver:
 ```
-node -e "const s=require('fs').readFileSync(require('os').homedir()+'/.claude/settings.json','utf8');const m=JSON.parse(s).extraKnownMarketplaces;const ns=m&&m['nonfiction-studio'];console.log(ns&&ns.source&&ns.source.path||'not-found')"
-```
-
-The output is the plugin root. If it prints `not-found`, run the platform cache fallback:
-```
-find "$HOME/.claude/plugins/cache" -maxdepth 3 -type d -name "nonfiction-studio*" 2>/dev/null | head -1
+node -e "(function(){ var fs=require('fs'),path=require('path'),os=require('os'); function rj(p){try{return JSON.parse(fs.readFileSync(p,'utf8'));}catch(e){return null;}} function has(p){try{return fs.existsSync(path.join(p,'bin','ns-stylometry'));}catch(e){return false;}} function ld(p){try{return fs.readdirSync(p,{withFileTypes:true}).filter(function(e){return e.isDirectory();}).map(function(e){return e.name;}).sort();}catch(e){return [];}} function cmp(a,b){var pa=String(a).split('.').map(function(n){return parseInt(n,10)||0;});var pb=String(b).split('.').map(function(n){return parseInt(n,10)||0;});for(var i=0;i<3;i++){var d=(pa[i]||0)-(pb[i]||0);if(d)return d;}return 0;} function norm(x){var s=path.resolve(x);return process.platform==='win32'?s.toLowerCase():s;} function inProj(pp){if(pp==null||pp==='')return true;var a=norm(pp);var c=norm(process.cwd());return c===a||c.indexOf(a+path.sep)===0;} var cfg=process.env.CLAUDE_CONFIG_DIR||path.join(os.homedir(),'.claude'); var ip=rj(path.join(cfg,'plugins','installed_plugins.json')); if(ip!=null&&ip.plugins){ var best=null; var keys=Object.keys(ip.plugins).sort(); for(var i=0;i<keys.length;i++){ var key=keys[i]; if(key.indexOf('nonfiction-studio@')!==0)continue; var arr=Array.isArray(ip.plugins[key])?ip.plugins[key]:[]; for(var j=0;j<arr.length;j++){ var entry=arr[j]; var p=entry&&entry.installPath; if(p==null||has(p)===false)continue; var scope=(entry&&entry.scope)||''; if((scope==='project'||scope==='local')&&inProj(entry&&entry.projectPath)===false)continue; var v=(entry&&entry.version)||'0.0.0'; var better=best===null||cmp(v,best.v)>0||(cmp(v,best.v)===0&&best.scope!=='user'&&scope==='user'); if(better){best={root:p,v:v,scope:scope};} } } if(best!==null){console.log(best.root);process.exit(0);} } var st=rj(path.join(cfg,'settings.json')); if(st!=null&&st.extraKnownMarketplaces&&st.extraKnownMarketplaces['nonfiction-studio']){ var src=st.extraKnownMarketplaces['nonfiction-studio'].source; var sp=src&&src.path; if(sp&&has(sp)){console.log(sp);process.exit(0);} } var cacheRoot=path.join(cfg,'plugins','cache'); var bestC=null; var mps=ld(cacheRoot); for(var m=0;m<mps.length;m++){ var nsDir=path.join(cacheRoot,mps[m],'nonfiction-studio'); var vers=ld(nsDir); for(var k=0;k<vers.length;k++){ var root=path.join(nsDir,vers[k]); if(has(root)){ if(bestC===null||cmp(vers[k],bestC.v)>0){bestC={root:root,v:vers[k]};} } } } if(bestC!==null){console.log(bestC.root);process.exit(0);} for(var n=0;n<mps.length;n++){ if(mps[n].indexOf('nonfiction-studio')===0){ var lroot=path.join(cacheRoot,mps[n]); if(has(lroot)){console.log(lroot);process.exit(0);} } } if(has(process.cwd())){console.log(process.cwd());process.exit(0);} console.error(cfg); console.log('not-found'); })();"
 ```
 
-If that also returns nothing, run the dev-mode fallback:
-```
-test -f bin/ns-doctor && pwd || echo not-found
-```
+The output is `<plugin-root>` on stdout, or the literal string `not-found`. The resolver
+checks, in order: `installed_plugins.json` in the Claude config directory (`$CLAUDE_CONFIG_DIR`
+when that variable is set, otherwise `$HOME/.claude` - `%USERPROFILE%\.claude` on Windows) - a
+marketplace install, verified by confirming `bin/ns-stylometry` exists under the candidate
+path; a project- or local-scope entry is skipped unless the current working directory is its
+own `projectPath` or a descendant of it, so another project's install can never shadow this
+one; the newest installed version wins among what remains when more than one is present - then
+a local self-marketplace entry in `settings.json` (dev-workflow installs, same verification),
+then a scan of the plugins cache (the versioned marketplace-cache layout and the legacy flat
+layout), then the current working directory (dev-mode checkout).
 
-If all three lookups fail: halt immediately. Report the settings.json path attempted (`$HOME/.claude/settings.json`) and the cache path attempted (`$HOME/.claude/plugins/cache`). Do not invoke ns-doctor. Ask the author how to proceed (verify plugin installation or provide the path manually).
+If the output is `not-found`: halt immediately. On this path, the resolver also printed the
+config directory it checked on stderr; report that value (do not re-derive
+`$CLAUDE_CONFIG_DIR` versus `$HOME/.claude` yourself) and the `installed_plugins.json` path
+checked within it (`<config-dir>/plugins/installed_plugins.json`). Do not invoke ns-doctor. Ask
+the author how to proceed (verify plugin installation or provide the path manually).
 
 Carry the resolved path forward as `<plugin-root>` for Step 3.
 
-**Shared plugin-root convention.** This three-tier resolution (settings.json lookup, plugins-cache search, dev-mode fallback) is the same routine as `skills/nfs-new-book/SKILL.md` Step 4; a future wave extracts it to a shared reference.
+**Shared plugin-root convention.** This resolver is the same command as `skills/nfs-new-book/SKILL.md` Step 4 and every other CLI-backed skill; `tests/checks/plugin-root-resolver.test.mjs` guards byte-for-byte parity across all eight.
 
 ---
 
@@ -278,7 +285,7 @@ If the stderr message contains "requires migration", also suggest:
 
 **Project root not found.** If `findBookRoot` cannot locate `.studio/meta.json` from the current directory, the CLI exits 2 with a `BibleError` message on stderr. Surface it: "Doctor error: [BibleError message]. Ensure this skill is invoked from within a Nonfiction Studio project bible (`.studio/meta.json` must be present at or above the current directory)."
 
-**`install-statusline`: plugin root cannot be resolved.** Step A halts before any read or write, exactly as Step 2's own failure behavior below: report the settings.json path and cache path attempted, and ask the author how to proceed.
+**`install-statusline`: plugin root cannot be resolved.** Step A halts before any read or write, exactly as Step 2's own failure behavior below: report the config directory and the `installed_plugins.json` path attempted, and ask the author how to proceed.
 
 **`install-statusline`: existing `~/.claude/settings.json` is not valid JSON.** Step B halts before writing anything; the author is told to fix or back up the file first, or to use the built-in `/statusline` command instead.
 

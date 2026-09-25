@@ -90,38 +90,59 @@ Check whether the author's message contains the word "guided" or "blank".
 
 ## Step 4 - Find the plugin root
 
-Use the Bash tool to run the primary lookup:
+Use the Bash tool to run the resolver:
 ```
-node -e "const s=require('fs').readFileSync(require('os').homedir()+'/.claude/settings.json','utf8');const m=JSON.parse(s).extraKnownMarketplaces;const ns=m&&m['nonfiction-studio'];console.log(ns&&ns.source&&ns.source.path||'not-found')"
-```
-
-The output is PLUGIN_ROOT. If it prints `not-found`, run the platform cache fallback:
-```
-find "$HOME/.claude/plugins/cache" -maxdepth 3 -type d -name "nonfiction-studio*" 2>/dev/null | head -1
+node -e "(function(){ var fs=require('fs'),path=require('path'),os=require('os'); function rj(p){try{return JSON.parse(fs.readFileSync(p,'utf8'));}catch(e){return null;}} function has(p){try{return fs.existsSync(path.join(p,'bin','ns-stylometry'));}catch(e){return false;}} function ld(p){try{return fs.readdirSync(p,{withFileTypes:true}).filter(function(e){return e.isDirectory();}).map(function(e){return e.name;}).sort();}catch(e){return [];}} function cmp(a,b){var pa=String(a).split('.').map(function(n){return parseInt(n,10)||0;});var pb=String(b).split('.').map(function(n){return parseInt(n,10)||0;});for(var i=0;i<3;i++){var d=(pa[i]||0)-(pb[i]||0);if(d)return d;}return 0;} function norm(x){var s=path.resolve(x);return process.platform==='win32'?s.toLowerCase():s;} function inProj(pp){if(pp==null||pp==='')return true;var a=norm(pp);var c=norm(process.cwd());return c===a||c.indexOf(a+path.sep)===0;} var cfg=process.env.CLAUDE_CONFIG_DIR||path.join(os.homedir(),'.claude'); var ip=rj(path.join(cfg,'plugins','installed_plugins.json')); if(ip!=null&&ip.plugins){ var best=null; var keys=Object.keys(ip.plugins).sort(); for(var i=0;i<keys.length;i++){ var key=keys[i]; if(key.indexOf('nonfiction-studio@')!==0)continue; var arr=Array.isArray(ip.plugins[key])?ip.plugins[key]:[]; for(var j=0;j<arr.length;j++){ var entry=arr[j]; var p=entry&&entry.installPath; if(p==null||has(p)===false)continue; var scope=(entry&&entry.scope)||''; if((scope==='project'||scope==='local')&&inProj(entry&&entry.projectPath)===false)continue; var v=(entry&&entry.version)||'0.0.0'; var better=best===null||cmp(v,best.v)>0||(cmp(v,best.v)===0&&best.scope!=='user'&&scope==='user'); if(better){best={root:p,v:v,scope:scope};} } } if(best!==null){console.log(best.root);process.exit(0);} } var st=rj(path.join(cfg,'settings.json')); if(st!=null&&st.extraKnownMarketplaces&&st.extraKnownMarketplaces['nonfiction-studio']){ var src=st.extraKnownMarketplaces['nonfiction-studio'].source; var sp=src&&src.path; if(sp&&has(sp)){console.log(sp);process.exit(0);} } var cacheRoot=path.join(cfg,'plugins','cache'); var bestC=null; var mps=ld(cacheRoot); for(var m=0;m<mps.length;m++){ var nsDir=path.join(cacheRoot,mps[m],'nonfiction-studio'); var vers=ld(nsDir); for(var k=0;k<vers.length;k++){ var root=path.join(nsDir,vers[k]); if(has(root)){ if(bestC===null||cmp(vers[k],bestC.v)>0){bestC={root:root,v:vers[k]};} } } } if(bestC!==null){console.log(bestC.root);process.exit(0);} for(var n=0;n<mps.length;n++){ if(mps[n].indexOf('nonfiction-studio')===0){ var lroot=path.join(cacheRoot,mps[n]); if(has(lroot)){console.log(lroot);process.exit(0);} } } if(has(process.cwd())){console.log(process.cwd());process.exit(0);} console.error(cfg); console.log('not-found'); })();"
 ```
 
-If that also returns nothing, run the dev-mode fallback (current working repo checkout):
-```
-test -d templates/book-scaffold && pwd || echo not-found
-```
+The output is `<plugin-root>` on stdout, or the literal string `not-found`. The resolver
+checks, in order: `installed_plugins.json` in the Claude config directory (`$CLAUDE_CONFIG_DIR`
+when that variable is set, otherwise `$HOME/.claude` - `%USERPROFILE%\.claude` on Windows) - a
+marketplace install, verified by confirming `bin/ns-stylometry` exists under the candidate
+path; a project- or local-scope entry is skipped unless the current working directory is its
+own `projectPath` or a descendant of it, so another project's install can never shadow this
+one; the newest installed version wins among what remains when more than one is present - then
+a local self-marketplace entry in `settings.json` (dev-workflow installs, same verification),
+then a scan of the plugins cache (the versioned marketplace-cache layout and the legacy flat
+layout), then the current working directory (dev-mode checkout).
 
-If all three lookups fail: halt immediately. Report the settings.json path attempted (`$HOME/.claude/settings.json`) and the cache path attempted (`$HOME/.claude/plugins/cache`). Do not write any files. Ask the author how to proceed (verify plugin installation or provide the path manually).
+If the output is `not-found`: halt immediately. On this path, the resolver also printed the
+config directory it checked on stderr; report that value (do not re-derive
+`$CLAUDE_CONFIG_DIR` versus `$HOME/.claude` yourself) and the `installed_plugins.json` path
+checked within it (`<config-dir>/plugins/installed_plugins.json`). Do not write any
+files. Ask the author how to proceed (verify plugin installation or provide the path
+manually).
 
-Once PLUGIN_ROOT is resolved, verify it is correct:
+Once PLUGIN_ROOT is resolved (the resolver's output), verify it is correct:
 ```
 test -f "PLUGIN_ROOT/templates/book-scaffold/context/brief.md" && echo OK || echo TEMPLATE_NOT_FOUND
 ```
 
 If the output is `TEMPLATE_NOT_FOUND`: halt. Report the exact path that was not readable and ask the author to verify the plugin installation. Do not write any files.
 
+**Shared plugin-root convention.** This resolver is the same command as every other
+CLI-backed skill (`skills/nfs-build-apparatus/SKILL.md` Step 1 and the rest);
+`tests/checks/plugin-root-resolver.test.mjs` guards byte-for-byte parity across all eight.
+
 ### Step 4b - Confirm the working directory (uncertain surface only)
 
 This is the S-06 chat safeguard: on chat, no hooks or `bin/` are available and the author has less visibility into where files land than on CLI or Cowork, where the terminal or workspace already makes the working directory unambiguous. Skip this step silently and continue to Step 5 when either applies:
 
-- PLUGIN_ROOT above resolved via the primary settings.json lookup or the platform cache fallback (the normal installed-plugin path on CLI and Cowork), and the working directory is not otherwise in doubt.
+- PLUGIN_ROOT above did not resolve to the current working directory (the normal
+  installed-plugin path on CLI and Cowork - via `installed_plugins.json`, `settings.json`, or
+  a cache scan), and the working directory is not otherwise in doubt.
 - This is a non-interactive session (headless `-p`): there is no author present to answer, so proceed the same as the rest of this skill does in non-interactive mode.
 
-Otherwise, confirm before writing. This covers both signals named in the S-06 requirement: PLUGIN_ROOT resolved only via the dev-mode fallback (the third lookup, `test -d templates/book-scaffold && pwd`), which means no settings.json entry or plugins cache match was found and hooks and `bin/` are typically unavailable in that same session; or the working directory is not otherwise confirmed by any completed tool call. State the absolute directory about to receive the new book tree (the path the dev-mode fallback already returned, or the result of running `pwd` via the Bash tool if that path is not yet known) and ask: "This will create the new book project in `<path>`. Shall I proceed? (yes/no)" Wait for an explicit "yes" before continuing to Step 5. Any other answer, or inability to confirm a path at all, halts here; no files are written.
+Otherwise, confirm before writing. This covers both signals named in the S-06 requirement:
+PLUGIN_ROOT resolved to the current working directory itself (the resolver's dev-mode tier,
+meaning no `installed_plugins.json` entry, `settings.json` self-marketplace entry, or cache
+match was found, and hooks and `bin/` are typically unavailable in that same session); or the
+working directory is not otherwise confirmed by any completed tool call. State the absolute
+directory about to receive the new book tree (PLUGIN_ROOT, if it equals the working directory,
+or the result of running `pwd` via the Bash tool if that path is not yet known) and ask: "This
+will create the new book project in `<path>`. Shall I proceed? (yes/no)" Wait for an explicit
+"yes" before continuing to Step 5. Any other answer, or inability to confirm a path at all,
+halts here; no files are written.
 
 ## Step 5 - Stamp the flat bible tree
 
@@ -336,7 +357,7 @@ Then: "The next step is nfs-interview. Invoke it with `/nonfiction-studio:nfs-in
 
 ## Failure behavior
 
-- **Plugin root unresolved.** If all three lookups in Step 4 fail, halt before writing any file. Report the settings.json path attempted and the cache path attempted. Ask the author how to proceed (verify plugin installation or provide the path manually).
+- **Plugin root unresolved.** If the Step 4 resolver prints `not-found`, halt before writing any file. Report the config directory and the `installed_plugins.json` path attempted. Ask the author how to proceed (verify plugin installation or provide the path manually).
 - **Working directory not confirmed (Step 4b).** If the author does not answer yes, or no path can be confirmed at all, halt before Step 5. No files are written.
 - **Read or write error.** On any file operation failure, stop immediately. Name the exact path and operation that failed. Never continue stamping remaining files after a failure.
 - **Missing template.** If a template file is not readable after PLUGIN_ROOT is confirmed, halt. Name the exact template path and ask the author to verify the plugin installation.

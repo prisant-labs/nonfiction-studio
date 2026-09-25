@@ -35,7 +35,7 @@ Note: `progress.json`'s per-chapter `drift_score` field (`10.86` for chapter 01,
 
 **Studio (Step 1 - Resolve the plugin root):**
 
-The skill uses the Bash tool to look up the `nonfiction-studio` marketplace source path in `~/.claude/settings.json`. The primary lookup resolves the plugin's installed path on the first try; the plugins-cache and dev-mode fallbacks are not needed for this run. Continue to Step 2.
+The skill uses the Bash tool to run the resolver. `installed_plugins.json` in the Claude config directory resolves the plugin's installed path on the first tier, verified against `bin/ns-stylometry`; the settings.json, cache-scan, and dev-mode tiers are not needed for this run. Continue to Step 2.
 
 **Studio (Step 2 - Single Bash invocation):**
 

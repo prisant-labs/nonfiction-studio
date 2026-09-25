@@ -54,7 +54,7 @@ The skill writes no files itself. All writes are performed by `bin/ns-notes`, al
 
 The skill runs three steps.
 
-1. **Resolve the plugin root.** A primary lookup against `extraKnownMarketplaces['nonfiction-studio'].source.path` in `~/.claude/settings.json`, a `~/.claude/plugins/cache` search fallback, and a dev-mode fallback that checks for `bin/ns-notes` in the current directory. The same three-tier convention `nfs-new-book` and `nfs-check-chapter` use. If all three lookups fail, the skill halts and names the settings.json and cache paths it attempted.
+1. **Resolve the plugin root.** Reads `installed_plugins.json` in the Claude config directory first (a marketplace install, verified by confirming `bin/ns-stylometry` exists under the candidate path; the newest installed version wins if more than one is present), then a local self-marketplace entry in `settings.json`, then a plugins-cache scan (versioned and legacy layouts), then the current working directory. The same resolver `nfs-new-book` and every other CLI-backed skill uses. If nothing resolves, the skill halts and names the config directory and the `installed_plugins.json` path it attempted.
 
 2. **Single Bash invocation.** Runs one Bash call: `node "<plugin-root>/bin/ns-notes" --project=. --json`. Captures the exit code, stdout (the JSON report), and stderr. No individual sub-steps; the engine composes the read, compute, and write internally.
 
@@ -86,7 +86,7 @@ The Chicago style itself lives in `hooks/lib/citation-styles/chicago.json`, not 
 
 ## Failure Behavior
 
-**Plugin root cannot be resolved.** Step 1 halts before any Bash call to `ns-notes`. Reports the settings.json path and cache path attempted, and asks the author how to proceed.
+**Plugin root cannot be resolved.** Step 1 halts before any Bash call to `ns-notes`. Reports the config directory and the `installed_plugins.json` path attempted, and asks the author how to proceed.
 
 **Exit 2 from `ns-notes`.** Step 3 surfaces the stderr error and halts. Never treated as a pass, and never presented as if any `production/` file changed. Routes to `nfs-doctor` for a broader structural diagnosis.
 

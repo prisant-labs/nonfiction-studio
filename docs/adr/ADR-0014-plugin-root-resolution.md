@@ -1,0 +1,46 @@
+# ADR-0014: Plugin-Root Resolution - `installed_plugins.json` Is the Authoritative Source
+
+**TL;DR:** Every CLI-backed skill resolves its own plugin install directory (`<plugin-root>`, the path a Bash call needs to invoke `bin/ns-<name>`) with one shared, byte-identical `node -e "..."` line. The line reads `<config>/plugins/installed_plugins.json` first - the platform's own install record - verifies each candidate by confirming `bin/ns-stylometry` exists under it, and only then falls through to a local self-marketplace entry in `settings.json` and a filesystem scan of the plugins cache. A project- or local-scope install record is honored only when the current working directory is its own `projectPath` or a descendant of it. The line runs inside a double-quoted `node -e "..."` shell string on every supported shell, so it is also held to a stricter character set than ordinary shipped code: no double quote, backtick, or backslash (breaks the wrapper), and no `$` or bare `!` immediately followed by a word character or `(` (interpolation and interactive-shell history-expansion hazards).
+
+- Status: Accepted
+- Date: 2026-09-24
+- Supersedes: the pre-0.1.1 three-tier lookup (`settings.json` local self-marketplace, then a `find <cache> -maxdepth 3 -name "nonfiction-studio*" | head -1` cache scan, then a dev-mode cwd check) that this hotfix replaced
+- Related: ADR-0005 (bin PATH on Windows) explains why a resolved absolute path is required at all (the plugin system does not add `bin/` to PATH); this ADR is the design for computing that path, not a restatement of ADR-0005
+- Decision: `installed_plugins.json` FIRST, VERIFIED BY `bin/ns-stylometry`, THEN self-marketplace, THEN cache scan, THEN cwd; PROJECT/LOCAL-SCOPE ENTRIES SCOPED BY `projectPath`; a RESTRICTED CHARACTER SET for the shared resolver line
+
+---
+
+## Context
+
+The post-release clean-install test (2026-09-24) found that every one of the eight CLI-backed skills failed for a marketplace-installed author. A marketplace install lives at `<config>/plugins/cache/<marketplace>/nonfiction-studio/<version>/`, but the old cache-fallback tier's `find ... -maxdepth 3 -name "nonfiction-studio*" | head -1` matched the marketplace-name-then-`nonfiction-studio` directory one level above the real install root - the directory before the version folder - where `bin/ns-stylometry` does not exist. `CLAUDE_CONFIG_DIR` was also ignored entirely, so a non-default config directory broke every tier at once.
+
+A fix has to answer three questions: what is the authoritative source for "where is this plugin actually installed", how does a candidate get trusted before being handed back, and what happens when more than one install record exists at once (multiple versions, multiple scopes, multiple projects).
+
+## Decision
+
+### `installed_plugins.json` is the authoritative source, verified, not trusted blindly
+
+`<config>/plugins/installed_plugins.json` (`<config>` is `$CLAUDE_CONFIG_DIR` when set, otherwise `$HOME/.claude` / `%USERPROFILE%\.claude`) is the platform's own record of every installed plugin, keyed `"<plugin>@<marketplace>"` to an array of install records (`scope`, `installPath`, `version`, and, for `project`/`local` scope, `projectPath`). This is read first, ahead of the local self-marketplace and cache-scan tiers that used to run first. A record's `installPath` is never trusted on its own: `has(p)` confirms `bin/ns-stylometry` actually exists under it before it becomes a candidate, so a stale record (a wiped cache, or a version listed but never unpacked) cannot win. When more than one verified record remains, the newest `version` wins; a tie between a non-`user` scope and a `user` scope prefers `user`.
+
+Falling through to the pre-existing self-marketplace (`settings.json`) and cache-scan tiers stays as a fallback for the case `installed_plugins.json` is absent, malformed, or carries no matching entry - the layouts those tiers were originally built for (dev-workflow self-marketplace installs, a legacy flat cache layout) still occur and still need to resolve.
+
+### Project- and local-scope entries are isolated by `projectPath`
+
+A real `installed_plugins.json` on a working machine carries several `local`-scope entries for the same plugin at different versions, one per project (confirmed by inspection during this fix, on the maintainer's own machine, read-only, for plugins unrelated to this one - never modified). Without scoping, the newest-version-wins rule above would let another project's `local`-scope install - potentially at a newer version - silently outrank the correct `user`-scope (or same-project) install for every invocation, in every project, including writing the wrong path into `~/.claude/settings.json` if `nfs-doctor install-statusline` picked it up. The resolver therefore skips a `project`- or `local`-scope entry unless the current working directory equals its `projectPath` or is a descendant of it (case-insensitive, separator-normalized on Windows, exact on POSIX - the same "trust the platform's own native form" posture as `installPath` itself; see the Windows-backslash fixture in `tests/checks/plugin-root-resolver.test.mjs`). A `user`-scope entry, or an entry with no `projectPath` at all, is never scoped.
+
+This scoping applies only to the `installed_plugins.json` tier. The filesystem cache-scan fallback tier has no concept of `installed_plugins.json`'s scope metadata at all - it just walks the cache directory for a real, verified directory - so a directory that legitimately exists on disk can still be found through that tier regardless of which project installed it. Extending scope-awareness into the cache-scan tier was considered and rejected as out of scope for this fix: that tier is the dev-workflow / legacy-layout fallback, not the primary marketplace-install path this bug is about, and giving it its own notion of "whose project is this" would need information (which entry it corresponds to) it does not have.
+
+### The resolver line's character set is restricted, beyond this repo's general ASCII rule
+
+The line ships inside a double-quoted `node -e "..."` shell invocation, copy-pasted verbatim into a Bash tool call. Three characters were already forbidden because they break that wrapper outright: a double quote, a backtick, or a backslash. Two more are forbidden for portability rather than correctness: a `!` immediately followed by a word character or `(` (`!p`, `!has(x)`) triggers history expansion in an interactive bash or zsh with `histexpand` on - the shell used to develop and test this fix - producing `event not found` before `node` ever runs, confirmed empirically with `history -p` under `set -H`; `!==` and `!=` are unaffected (bash's own history-expansion rule excludes `!` followed by `=`) and remain allowed. A bare `$` is forbidden outright, even though the current line has no case where one would actually be interpolated today, because it is a latent hazard inside a double-quoted wrapper and the line has no legitimate use for shell interpolation. `tests/checks/plugin-root-resolver.test.mjs`'s shell-safety tests hold both the original three-character rule and this addition as static assertions against the extracted line, not just "it happened to work in the fixture runs."
+
+### A `not-found` result also reports the config directory it checked
+
+The resolver's stdout contract is unchanged: `<plugin-root>` or the literal string `not-found`, and nothing else - every fixture test that asserts on stdout still holds. On a `not-found` result specifically, the resolver also prints the config directory it checked, on stderr (`$CLAUDE_CONFIG_DIR` when set, otherwise `$HOME/.claude` / `%USERPROFILE%\.claude`) - not on every run, only alongside `not-found`, so a normal successful resolution stays silent on stderr. A skill halting on `not-found` cannot otherwise know which form applied without a second call or guessing, and guessing is wrong on Windows when `$CLAUDE_CONFIG_DIR` is unset and Git Bash's own `$HOME` differs from `%USERPROFILE%`. Every skill's halt wording now says to report the value printed on stderr, not to re-derive it.
+
+## Consequences
+
+- Every one of the eight CLI-backed skills carries the identical resolver line; `tests/checks/plugin-root-resolver.test.mjs`'s parity tests fail the build if a future edit lands on fewer than all eight or introduces a byte-level divergence.
+- A future ninth CLI-backed skill must carry this same line under a `## Step <n> - (Resolve|Find) the plugin root` heading, per the growth-policy pattern ADR-0009 (apparatus CLI) established for CLI count.
+- The cache-scan fallback tier's own lack of project-scope awareness (documented above) is a known, accepted gap, not a defect: it only matters when `installed_plugins.json` itself is absent, malformed, or has no matching entry, which is already the degraded case those tiers exist for.
+- `install-statusline` (`nfs-doctor`) still writes a versioned path into `~/.claude/settings.json`; a future `/plugin update` that removes the old version folder still silently breaks that status line until the mode is re-run. This ADR does not change that behavior - see `skills/nfs-doctor/SKILL.md`'s own known-limitation note - because the fix belongs to the statusline-install design (ADR-0008), not to plugin-root resolution.

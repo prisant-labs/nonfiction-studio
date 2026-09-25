@@ -17,7 +17,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { cloneRepoToTemp, runClonedChecker, cleanupGoldenClone } from './clone-helper.mjs';
+import { cloneRepoToTemp, runClonedChecker, cleanupGoldenClone, REPO_ROOT } from './clone-helper.mjs';
 
 const SCRIPT = 'scripts/check-release-tag.mjs';
 
@@ -25,13 +25,22 @@ after(() => {
   cleanupGoldenClone();
 });
 
+// Read the live tree's actual version from its own source of truth rather than hardcoding it,
+// so this suite never goes stale the moment a release bumps library.json - the same "name the
+// constant, do not restate the value" discipline tests/checks/version-literals.test.mjs
+// enforces on shipped prose, applied here to a test file's own fixture data.
+const LIVE_VERSION = JSON.parse(readFileSync(join(REPO_ROOT, 'library.json'), 'utf8')).version;
+const LIVE_TAG = 'v' + LIVE_VERSION;
+// A value guaranteed to differ from LIVE_VERSION, used wherever a test needs a manifest to
+// disagree with the rest of the tree (never a hand-picked literal that could coincidentally
+// equal a future LIVE_VERSION).
+const DRIFTED_VERSION = LIVE_VERSION + '-drift-test';
+
 test('tag matches all three manifests -> pass, exit 0', () => {
   const { root, cleanup } = cloneRepoToTemp('release-tag-match');
   try {
-    // The real tracked tree is at version 0.1.0 across library.json, package.json, and
-    // .claude-plugin/plugin.json (verified by this task's own research); a "v" prefix on the
-    // tag is stripped before comparison.
-    const result = runClonedChecker(root, SCRIPT, ['v0.1.0']);
+    // A "v" prefix on the tag is stripped before comparison.
+    const result = runClonedChecker(root, SCRIPT, [LIVE_TAG]);
     assert.equal(result.status, 0, 'must exit 0; got: ' + result.combined);
     assert.match(result.combined, /pass/i);
   } finally {
@@ -42,7 +51,7 @@ test('tag matches all three manifests -> pass, exit 0', () => {
 test('tag without a "v" prefix also matches -> pass, exit 0', () => {
   const { root, cleanup } = cloneRepoToTemp('release-tag-no-prefix');
   try {
-    const result = runClonedChecker(root, SCRIPT, ['0.1.0']);
+    const result = runClonedChecker(root, SCRIPT, [LIVE_VERSION]);
     assert.equal(result.status, 0, 'must exit 0; got: ' + result.combined);
   } finally {
     cleanup();
@@ -66,10 +75,10 @@ test('one manifest edited out of step with the others -> named failure, exit 1',
   try {
     const pkgPath = join(root, 'package.json');
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-    pkg.version = '0.1.1';
+    pkg.version = DRIFTED_VERSION;
     writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
 
-    const result = runClonedChecker(root, SCRIPT, ['v0.1.0']);
+    const result = runClonedChecker(root, SCRIPT, [LIVE_TAG]);
     assert.equal(result.status, 1, 'must exit 1; got: ' + result.combined);
     assert.match(result.combined, /package\.json/, 'must name the drifted manifest');
     assert.doesNotMatch(result.combined, /library\.json.*MISMATCH|MISMATCH.*library\.json/s, 'must not falsely accuse the manifest that still agrees');

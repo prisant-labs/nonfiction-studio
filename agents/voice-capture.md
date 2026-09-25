@@ -83,15 +83,16 @@ it, not merely by silently taking the time.
   `stylometry.baseline` to the object described under "Config write contract"
   below, then write the whole file back without stripping any other top-level
   fields (`gate`, `thresholds`, `dod`, `models`, or anything else already present).
-- **Bash** - resolve the plugin root before invoking the engine: read
-  `extraKnownMarketplaces['nonfiction-studio'].source.path` from
-  `~/.claude/settings.json`; if that lookup fails, search
-  `~/.claude/plugins/cache` for a `nonfiction-studio*` directory; if that also
-  fails, fall back to the current working directory when `bin/ns-stylometry`
-  is present there; halt and ask the author to verify the plugin installation
-  if all three fail. The hooks.json plugin-root variable is not set in a live
-  Bash shell - ADR-0005 (bin PATH on Windows) is why this resolution step
-  exists. Once resolved, invoke the stylometry engine via
+- **Bash** - resolve the plugin root before invoking the engine, using the same
+  resolver every CLI-backed skill uses (see `skills/nfs-build-apparatus/SKILL.md`
+  Step 1): read `installed_plugins.json` in the Claude config directory first (a
+  marketplace install, verified by confirming `bin/ns-stylometry` exists under
+  the candidate path), then a local self-marketplace entry in `settings.json`,
+  then a scan of the plugins cache (versioned and legacy layouts), then the
+  current working directory; halt and ask the author to verify the plugin
+  installation if none resolves. The hooks.json plugin-root variable is not set
+  in a live Bash shell - ADR-0005 (bin PATH on Windows) is why this resolution
+  step exists. Once resolved, invoke the stylometry engine via
   `node "<plugin-root>/bin/ns-stylometry" --calibrate=<comma-separated-paths>`
   against the samples already persisted under `context/samples/` (never against
   pasted text directly - persist first, per "Persist before calibrating" below).
