@@ -6,6 +6,31 @@ This file is written from the commit history of the branch it ships from, not fr
 
 ## Unreleased
 
+## [0.1.1] - 2026-09-24
+
+### Fixed
+
+- **Marketplace installs: skills could not find their CLIs.** All eight CLI-backed skills
+  (`nfs-build-apparatus`, `nfs-check-chapter`, `nfs-doctor`, `nfs-fact-check`, `nfs-new-book`,
+  `nfs-quick-scan`, `nfs-status-dashboard`, `nfs-tour`) resolved the plugin root with a
+  three-step lookup whose cache fallback (`find ... -maxdepth 3 -name "nonfiction-studio*" |
+  head -1`) matched the marketplace-name-then-`nonfiction-studio` directory two levels above a
+  real marketplace install's actual root - the directory before the version folder - where
+  `bin/ns-stylometry` does not exist. Every CLI-backed skill failed for a marketplace-installed
+  author; `CLAUDE_CONFIG_DIR` was also ignored entirely. Found by the post-release clean-install
+  test, 2026-09-24. Plugin-root resolution now reads `installed_plugins.json` in the Claude
+  config directory first (the authoritative install record; the newest installed version wins
+  when more than one is present), then a local self-marketplace entry in `settings.json`, then a
+  plugins-cache scan (both the versioned marketplace-cache layout and the legacy flat layout),
+  then the current working directory for a dev-mode checkout - every candidate verified by
+  confirming `bin/ns-stylometry` actually exists under it, and `CLAUDE_CONFIG_DIR` honored
+  throughout. `tests/checks/plugin-root-resolver.test.mjs` is a layout-simulation test suite that
+  guards it: it extracts the resolver line from all eight skills (byte-for-byte parity across
+  all eight), executes it against fixture layouts covering a marketplace install, multiple
+  installed versions, project/user install scope, a missing `installed_plugins.json`, the legacy
+  cache layout, a local self-marketplace, dev mode, malformed JSON, and `CLAUDE_CONFIG_DIR`
+  precedence, and proves the old maxdepth-3 scan fails on exactly the layout this bug describes.
+
 ## [0.1.0] - 2026-09-23
 
 ### Added

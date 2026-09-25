@@ -19,7 +19,7 @@ Most AI writing tools generate plausible prose and leave the verification to you
 <p>
   <img src="https://img.shields.io/badge/status-pre--1.0-orange?style=flat-square" alt="Status: pre-1.0">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/version-0.1.0-blue?style=flat-square" alt="Version 0.1.0">
+  <img src="https://img.shields.io/badge/version-0.1.1-blue?style=flat-square" alt="Version 0.1.1">
   <img src="https://img.shields.io/badge/tier-universal%20(Bronze)-CD7F32?style=flat-square" alt="Conformance tier: universal (Bronze)">
   <a href="#the-catalog"><img src="https://img.shields.io/badge/skills-14-brightgreen?style=flat-square" alt="14 skills"></a>
   <a href="#subagents"><img src="https://img.shields.io/badge/subagents-8-brightgreen?style=flat-square" alt="Subagents: 8"></a>
@@ -301,13 +301,13 @@ If you try Nonfiction Studio in Cowork, treat it as "should work" rather than "p
 
 ## Project status
 
-**`v0.1.0`, the first tagged release, pre-1.0.** Phase 1, the core authoring workflow, is complete and exercised. Later work (deeper research tooling, a revision pass, manuscript export, and further publishing-compliance features) is still being built, and rough edges are expected.
+**`v0.1.1`, pre-1.0.** `v0.1.0` was the first tagged release. Phase 1, the core authoring workflow, is complete and exercised. Later work (deeper research tooling, a revision pass, manuscript export, and further publishing-compliance features) is still being built, and rough edges are expected.
 
 ### At a glance
 
 |  |  |
 |---|---|
-| **Current version** | `0.1.0` (source of truth: [`library.json`](library.json)) |
+| **Current version** | `0.1.1` (source of truth: [`library.json`](library.json)) |
 | **Status** | Pre-1.0; Phase 1 complete, later phases in progress |
 | **Components** | 14 skills, 8 subagents, 9 CLIs, 2 output styles, hooks on six events |
 | **Conformance** | `universal` (Bronze) at Standard 0.12 |
@@ -338,7 +338,7 @@ nonfiction-studio/
 
 ### Changelog
 
-Full technical detail in [`CHANGELOG.md`](CHANGELOG.md); curated, author-facing highlights in [`RELEASE-NOTES.md`](RELEASE-NOTES.md). `0.1.0`, tagged 2026-09-23, is the first release; changes since then accumulate under `Unreleased` in `CHANGELOG.md` until the next version is cut.
+Full technical detail in [`CHANGELOG.md`](CHANGELOG.md); curated, author-facing highlights in [`RELEASE-NOTES.md`](RELEASE-NOTES.md). `0.1.0`, tagged 2026-09-23, was the first release; `0.1.1`, tagged 2026-09-24, is the latest. Changes since then accumulate under `Unreleased` in `CHANGELOG.md` until the next version is cut.
 
 <div align="right">(<a href="#readme-top">back to top</a>)</div>
 
