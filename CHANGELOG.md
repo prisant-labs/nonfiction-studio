@@ -30,6 +30,11 @@ This file is written from the commit history of the branch it ships from, not fr
   installed versions, project/user install scope, a missing `installed_plugins.json`, the legacy
   cache layout, a local self-marketplace, dev mode, malformed JSON, and `CLAUDE_CONFIG_DIR`
   precedence, and proves the old maxdepth-3 scan fails on exactly the layout this bug describes.
+- `tests/checks/check-release-tag.test.mjs` hardcoded `v0.1.0` as its passing fixture and `0.1.1`
+  as its drifted-manifest fixture; both assertions would have inverted the moment the tree
+  crossed 0.1.1. It now reads `library.json`'s own version at test time and derives a
+  guaranteed-different value for the drift case, so it cannot go stale against its own subject
+  again.
 
 ## [0.1.0] - 2026-09-23
 

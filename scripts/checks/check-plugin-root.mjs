@@ -23,8 +23,12 @@
 //               command string.
 // why:          F-SK-01 (broken bin invocation) and F-ST-01 (unbraced env form) -
 //               the house plugin-root convention (skills/nfs-new-book/SKILL.md
-//               Step 4: settings.json lookup, plugins-cache search, dev-mode
-//               fallback) is the only form that resolves for an installed user;
+//               Step 4: installed_plugins.json first, verified against
+//               bin/ns-stylometry, then a settings.json self-marketplace entry, a
+//               plugins-cache scan, then a dev-mode fallback; see
+//               tests/checks/plugin-root-resolver.test.mjs) is the only form that
+//               resolves for an installed user (a prior settings.json-plus-find
+//               form broke for marketplace installs - fixed in v0.1.1);
 //               this check guards the fix against regression. Widened to README.md,
 //               docs/formats/, and examples/ per F7 (scan-set blind spots): the
 //               original three-directory scope missed the single most-copied surface
