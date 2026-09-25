@@ -8,7 +8,7 @@ A hotfix for marketplace installs: skills that shell out to a CLI could not find
 
 ### What this means for you
 
-- If you installed 0.1.0 from the marketplace, skills such as `nfs-quick-scan` and `nfs-tour` could stop mid-run and ask you for the plugin path instead of finding their own CLI. Update to 0.1.1 with `/plugin update nonfiction-studio@prisant-labs` and this goes away. A dev-mode checkout (running the plugin from a cloned repository) was never affected.
+- If you installed 0.1.0 from the marketplace, skills such as `nfs-quick-scan` and `nfs-tour` did not ask for help - they resolved a real but wrong directory (one level above the actual install) and then failed with a Node "Cannot find module .../nonfiction-studio/bin/ns-..." error partway through, or, for `nfs-tour`, could not find `examples/sample-book`. Update to 0.1.1 with `/plugin update nonfiction-studio@prisant-labs` and this goes away. A dev-mode checkout (running the plugin from a cloned repository) was never affected.
 - No project files, book bibles, or `.studio/` state are touched by this update; it changes only how the plugin locates its own installed files.
 
 ### Install

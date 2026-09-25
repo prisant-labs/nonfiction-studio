@@ -21,10 +21,14 @@
 //               the marketplace-name-then-nonfiction-studio directory two levels up from the
 //               actual install root, before the version folder - a directory that never
 //               contains bin/ns-stylometry. The new resolver reads
-//               <config>/plugins/installed_plugins.json (the authoritative source: format
-//               documented at the top of the resolver line) first, verifies every candidate by
-//               checking for bin/ns-stylometry, and only then falls through to the local
-//               self-marketplace (settings.json) and cache-scan tiers.
+//               <config>/plugins/installed_plugins.json (the authoritative source; its shape is
+//               not documented in the resolver line itself, only here and in ADR-0014) first,
+//               verifies every candidate by checking for bin/ns-stylometry, ignores a
+//               project/local-scope entry whose own projectPath is not the cwd or one of its
+//               ancestors (so another project's install can never shadow this one), and only
+//               then falls through to the local self-marketplace (settings.json) and cache-scan
+//               tiers. A not-found result also prints the config directory it checked, on
+//               stderr, so a halting skill can report it without a second resolver call.
 // runner:       node --test "tests/checks/*.test.mjs" (picked up by scripts/test-engines.mjs's
 //               tests/checks/*.test.mjs glob - no registration needed elsewhere)
 
@@ -108,6 +112,23 @@ test('shell-safety: the resolver line contains no double quote, backtick, or bac
   const line = extractResolverLine('nfs-tour');
   assert.ok(line, 'nfs-tour must carry the resolver line for this test to mean anything');
   assert.doesNotMatch(line, /["`\\]/, 'a double quote, backtick, or backslash in the resolver line breaks the surrounding node -e "..." wrapper on at least one shell');
+});
+
+// A bare "!" is also a portability hazard, but narrower than the three characters above: an
+// INTERACTIVE bash or zsh with history expansion on (the default in a login shell) treats
+// "!" followed directly by a word character as a history-event reference and aborts with
+// "event not found" before node ever runs - confirmed with `history -p` under `set -H` for
+// forms like "!p" and "!best", never for "!==" or "!='user'" (bash's own history-expansion
+// rule excludes "!" immediately followed by "="). Neither non-interactive bash (what the Bash
+// tool actually runs) nor PowerShell is affected either way; this test exists for an author who
+// copies the documented command into their own interactive shell. "$" is also forbidden: this
+// resolver never needs shell interpolation, and a stray "$" inside the double-quoted node -e
+// wrapper is a latent variable-expansion hazard even where it happens not to fire today.
+test('shell-safety: the resolver line contains no "$", and no "!" immediately followed by a word character or "("', () => {
+  const line = extractResolverLine('nfs-tour');
+  assert.ok(line, 'nfs-tour must carry the resolver line for this test to mean anything');
+  assert.doesNotMatch(line, /\$/, 'a "$" in the resolver line is a shell-interpolation hazard inside the double-quoted node -e wrapper');
+  assert.doesNotMatch(line, /![\w(]/, 'a "!" directly followed by a word character or "(" triggers bash/zsh history expansion ("event not found") when pasted into an interactive shell; "!==" and "!=" are unaffected and remain allowed');
 });
 
 // ---------------------------------------------------------------------------
@@ -376,6 +397,163 @@ test('fixture: CLAUDE_CONFIG_DIR is honored over HOME/USERPROFILE when both poin
   assert.notEqual(real(stdout), real(homeRoot));
 });
 
+test('fixture: a stale installed_plugins.json entry (its version folder missing) never shadows a real, older entry', () => {
+  // A wiped cache, or a newer version merely listed but not yet unpacked, must not win the
+  // version comparison just because it sorts higher - has() is the gate, not the version string
+  // alone. Mutating the resolver to drop the has(p) check on this tier (leaving only "if(p==null)
+  // continue;") leaves every other fixture in this file green; only this one goes red.
+  const home = mktemp('stale-entry');
+  const cfg = join(home, '.claude');
+  const staleNewer = join(cfg, 'plugins', 'cache', 'prisant-labs', 'nonfiction-studio', '0.1.2'); // never created
+  const realOlder = join(cfg, 'plugins', 'cache', 'prisant-labs', 'nonfiction-studio', '0.1.1');
+  touchStylometry(realOlder);
+  mkdirSync(join(cfg, 'plugins'), { recursive: true });
+  writeFileSync(join(cfg, 'plugins', 'installed_plugins.json'), JSON.stringify({
+    version: 2,
+    plugins: {
+      'nonfiction-studio@prisant-labs': [
+        { scope: 'user', installPath: staleNewer, version: '0.1.2' },
+        { scope: 'user', installPath: realOlder, version: '0.1.1' },
+      ],
+    },
+  }));
+
+  const { stdout, status } = runResolver(RESOLVER_JS, { home });
+  assert.equal(status, 0);
+  assert.equal(real(stdout), real(realOlder));
+});
+
+// ---------------------------------------------------------------------------
+// F5: project/local-scope entries are ignored unless the current working directory is the
+// entry's own projectPath or a descendant of it. Without this, a "local"-scope install for one
+// project could out-version and shadow a "user"-scope (or another project's) install everywhere
+// the resolver runs, which is exactly the shape this machine's own real installed_plugins.json
+// carries for several other plugins (several "local"-scope entries at different versions for
+// different projects).
+// ---------------------------------------------------------------------------
+
+test('fixture: a local-scope entry for a DIFFERENT project is ignored even though its version is newer', () => {
+  const home = mktemp('f5-diff-project');
+  const cwdA = mktemp('f5-project-a');
+  const projectBPath = mktemp('f5-project-b');
+  const cfg = join(home, '.claude');
+  const userRoot = join(cfg, 'plugins', 'cache', 'prisant-labs', 'nonfiction-studio', '0.1.1');
+  const localRootForB = join(cfg, 'plugins', 'cache', 'prisant-labs', 'nonfiction-studio', '0.1.2');
+  touchStylometry(userRoot);
+  touchStylometry(localRootForB);
+  mkdirSync(join(cfg, 'plugins'), { recursive: true });
+  writeFileSync(join(cfg, 'plugins', 'installed_plugins.json'), JSON.stringify({
+    version: 2,
+    plugins: {
+      'nonfiction-studio@prisant-labs': [
+        { scope: 'user', installPath: userRoot, version: '0.1.1' },
+        { scope: 'local', installPath: localRootForB, version: '0.1.2', projectPath: projectBPath },
+      ],
+    },
+  }));
+
+  const { stdout, status } = runResolver(RESOLVER_JS, { home, cwd: cwdA });
+  assert.equal(status, 0);
+  assert.equal(real(stdout), real(userRoot), 'must resolve to the user-scope 0.1.1, not another project\'s local-scope 0.1.2');
+});
+
+test('fixture: a local-scope entry for the CURRENT project (cwd matches projectPath) is honored and wins on version', () => {
+  const home = mktemp('f5-same-project');
+  const projectPath = mktemp('f5-project-self');
+  const cfg = join(home, '.claude');
+  const userRoot = join(cfg, 'plugins', 'cache', 'prisant-labs', 'nonfiction-studio', '0.1.1');
+  const localRoot = join(cfg, 'plugins', 'cache', 'prisant-labs', 'nonfiction-studio', '0.1.2');
+  touchStylometry(userRoot);
+  touchStylometry(localRoot);
+  mkdirSync(join(cfg, 'plugins'), { recursive: true });
+  writeFileSync(join(cfg, 'plugins', 'installed_plugins.json'), JSON.stringify({
+    version: 2,
+    plugins: {
+      'nonfiction-studio@prisant-labs': [
+        { scope: 'user', installPath: userRoot, version: '0.1.1' },
+        { scope: 'local', installPath: localRoot, version: '0.1.2', projectPath: projectPath },
+      ],
+    },
+  }));
+
+  const { stdout, status } = runResolver(RESOLVER_JS, { home, cwd: projectPath });
+  assert.equal(status, 0);
+  assert.equal(real(stdout), real(localRoot), 'the newer local-scope install must win when cwd is that project');
+});
+
+test('fixture: cwd is a SUBDIRECTORY of the project path -> the local-scope entry still matches (ancestor check)', () => {
+  const home = mktemp('f5-subdir');
+  const projectPath = mktemp('f5-project-parent');
+  const subdir = join(projectPath, 'chapters', 'ch01');
+  mkdirSync(subdir, { recursive: true });
+  const cfg = join(home, '.claude');
+  const localRoot = join(cfg, 'plugins', 'cache', 'prisant-labs', 'nonfiction-studio', '0.1.2');
+  touchStylometry(localRoot);
+  mkdirSync(join(cfg, 'plugins'), { recursive: true });
+  writeFileSync(join(cfg, 'plugins', 'installed_plugins.json'), JSON.stringify({
+    version: 2,
+    plugins: {
+      'nonfiction-studio@prisant-labs': [
+        { scope: 'local', installPath: localRoot, version: '0.1.2', projectPath: projectPath },
+      ],
+    },
+  }));
+
+  const { stdout, status } = runResolver(RESOLVER_JS, { home, cwd: subdir });
+  assert.equal(status, 0);
+  assert.equal(real(stdout), real(localRoot));
+});
+
+test('fixture: a foreign-project local-scope entry with no backing directory anywhere else -> the entries tier skips it, not-found', () => {
+  // installPath verifies (has() would pass), and nothing separately matches the cache-scan
+  // fallback tier's own naming convention, so a resolve here could only come from the
+  // entries-tier match this test proves is skipped.
+  const home = mktemp('f5-foreign-no-fallback');
+  const cwdA = mktemp('f5-cwd-a2');
+  const projectBPath = mktemp('f5-project-b2');
+  const cfg = join(home, '.claude');
+  const outsideCacheLayout = join(home, 'elsewhere', 'not-in-cache-layout');
+  touchStylometry(outsideCacheLayout);
+  mkdirSync(join(cfg, 'plugins'), { recursive: true });
+  writeFileSync(join(cfg, 'plugins', 'installed_plugins.json'), JSON.stringify({
+    version: 2,
+    plugins: {
+      'nonfiction-studio@prisant-labs': [
+        { scope: 'local', installPath: outsideCacheLayout, version: '0.1.2', projectPath: projectBPath },
+      ],
+    },
+  }));
+
+  const { stdout, status } = runResolver(RESOLVER_JS, { home, cwd: cwdA });
+  assert.equal(status, 0);
+  assert.equal(stdout, 'not-found');
+});
+
+// ---------------------------------------------------------------------------
+// F9: a not-found result also prints the config directory the resolver actually checked, on
+// stderr, so a halting skill can report it without deriving CLAUDE_CONFIG_DIR-vs-HOME itself
+// (which it cannot do reliably: the resolver's own stdout carries only the sentinel).
+// ---------------------------------------------------------------------------
+
+test('fixture: not-found also prints the config dir checked, on stderr', () => {
+  const home = mktemp('f9-home');
+  const cwd = mktemp('f9-cwd');
+  const { stdout, status, stderr } = runResolver(RESOLVER_JS, { home, cwd });
+  assert.equal(status, 0);
+  assert.equal(stdout, 'not-found');
+  assert.equal(stderr.trim(), join(home, '.claude'));
+});
+
+test('fixture: not-found stderr honors CLAUDE_CONFIG_DIR over HOME', () => {
+  const home = mktemp('f9-home2');
+  const cwd = mktemp('f9-cwd2');
+  const altConfig = mktemp('f9-altcfg');
+  const { stdout, status, stderr } = runResolver(RESOLVER_JS, { home, cwd, configDir: altConfig });
+  assert.equal(status, 0);
+  assert.equal(stdout, 'not-found');
+  assert.equal(stderr.trim(), altConfig);
+});
+
 // ---------------------------------------------------------------------------
 // Regression proof: the OLD design (documented in scripts/checks/check-plugin-root.mjs's own
 // header before this fix, and in this fix's commit history) fails against exactly the layout
@@ -422,7 +600,7 @@ test('regression proof: the OLD cache-fallback shape (maxdepth 3, first match) r
   assert.equal(
     existsSync(join(oldResolved, 'bin', 'ns-stylometry')),
     false,
-    'RED: the OLD resolution lands one directory above the real install root and bin/ns-stylometry does not exist there - this is F-##, the marketplace-install bug this hotfix fixes'
+    'RED: the OLD resolution lands one directory above the real install root and bin/ns-stylometry does not exist there - this is the marketplace-install bug this hotfix fixes'
   );
 
   // The NEW resolver, run against the identical fixture, must succeed.

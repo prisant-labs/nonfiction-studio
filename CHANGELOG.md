@@ -19,22 +19,32 @@ This file is written from the commit history of the branch it ships from, not fr
   `bin/ns-stylometry` does not exist. Every CLI-backed skill failed for a marketplace-installed
   author; `CLAUDE_CONFIG_DIR` was also ignored entirely. Found by the post-release clean-install
   test, 2026-09-24. Plugin-root resolution now reads `installed_plugins.json` in the Claude
-  config directory first (the authoritative install record; the newest installed version wins
-  when more than one is present), then a local self-marketplace entry in `settings.json`, then a
-  plugins-cache scan (both the versioned marketplace-cache layout and the legacy flat layout),
-  then the current working directory for a dev-mode checkout - every candidate verified by
-  confirming `bin/ns-stylometry` actually exists under it, and `CLAUDE_CONFIG_DIR` honored
-  throughout. `tests/checks/plugin-root-resolver.test.mjs` is a layout-simulation test suite that
-  guards it: it extracts the resolver line from all eight skills (byte-for-byte parity across
-  all eight), executes it against fixture layouts covering a marketplace install, multiple
-  installed versions, project/user install scope, a missing `installed_plugins.json`, the legacy
-  cache layout, a local self-marketplace, dev mode, malformed JSON, and `CLAUDE_CONFIG_DIR`
-  precedence, and proves the old maxdepth-3 scan fails on exactly the layout this bug describes.
+  config directory first (the authoritative install record; a project- or local-scope entry is
+  skipped unless the current working directory is its own `projectPath` or a descendant of it,
+  so one project's install can never shadow another's; the newest installed version wins among
+  what remains when more than one is present), then a local self-marketplace entry in
+  `settings.json`, then a plugins-cache scan (both the versioned marketplace-cache layout and the
+  legacy flat layout), then the current working directory for a dev-mode checkout - every
+  candidate verified by confirming `bin/ns-stylometry` actually exists under it, and
+  `CLAUDE_CONFIG_DIR` honored throughout. A `not-found` result also prints the config directory
+  checked on stderr, so a halting skill can report it without a second resolver call. See
+  ADR-0014 (plugin-root resolution) for the design.
+  `tests/checks/plugin-root-resolver.test.mjs` is a layout-simulation test suite that guards it:
+  it extracts the resolver line from all eight skills (byte-for-byte parity across all eight),
+  executes it against fixture layouts covering a marketplace install, multiple installed
+  versions, project/user install scope, a stale `installed_plugins.json` entry whose version
+  folder is missing, cross-project isolation for project/local-scope entries, a missing
+  `installed_plugins.json`, the legacy cache layout, a local self-marketplace, dev mode,
+  malformed JSON, and `CLAUDE_CONFIG_DIR` precedence, and proves the old maxdepth-3 scan fails on
+  exactly the layout this bug describes.
 - `tests/checks/check-release-tag.test.mjs` hardcoded `v0.1.0` as its passing fixture and `0.1.1`
   as its drifted-manifest fixture; both assertions would have inverted the moment the tree
   crossed 0.1.1. It now reads `library.json`'s own version at test time and derives a
   guaranteed-different value for the drift case, so it cannot go stale against its own subject
-  again.
+  again. Its `after(cleanupGoldenClone)` hook was also dropped in the same edit as that fixture
+  change and is restored here: every other `clone-helper.mjs`-based test file keeps it, and its
+  absence here left a full tracked-tree copy behind in the OS temp directory on every run of this
+  file.
 
 ## [0.1.0] - 2026-09-23
 

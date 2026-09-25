@@ -21,6 +21,10 @@ import { cloneRepoToTemp, runClonedChecker, cleanupGoldenClone, REPO_ROOT } from
 
 const SCRIPT = 'scripts/check-release-tag.mjs';
 
+after(() => {
+  cleanupGoldenClone();
+});
+
 // Read the live tree's actual version from its own source of truth rather than hardcoding it,
 // so this suite never goes stale the moment a release bumps library.json - the same "name the
 // constant, do not restate the value" discipline tests/checks/version-literals.test.mjs
