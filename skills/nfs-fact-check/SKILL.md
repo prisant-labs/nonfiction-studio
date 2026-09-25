@@ -57,26 +57,28 @@ Once the slug is resolved, take the ai-use-log.jsonl count snapshot described in
 
 ## Step 2 - Resolve the plugin root
 
-Use the Bash tool to run the primary lookup:
+Use the Bash tool to run the resolver:
 ```
-node -e "const s=require('fs').readFileSync(require('os').homedir()+'/.claude/settings.json','utf8');const m=JSON.parse(s).extraKnownMarketplaces;const ns=m&&m['nonfiction-studio'];console.log(ns&&ns.source&&ns.source.path||'not-found')"
-```
-
-The output is the plugin root. If it prints `not-found`, run the platform cache fallback:
-```
-find "$HOME/.claude/plugins/cache" -maxdepth 3 -type d -name "nonfiction-studio*" 2>/dev/null | head -1
+node -e "(function(){ var fs=require('fs'),path=require('path'),os=require('os'); function rj(p){try{return JSON.parse(fs.readFileSync(p,'utf8'));}catch(e){return null;}} function has(p){try{return fs.existsSync(path.join(p,'bin','ns-stylometry'));}catch(e){return false;}} function ld(p){try{return fs.readdirSync(p,{withFileTypes:true}).filter(function(e){return e.isDirectory();}).map(function(e){return e.name;}).sort();}catch(e){return [];}} function cmp(a,b){var pa=String(a).split('.').map(function(n){return parseInt(n,10)||0;});var pb=String(b).split('.').map(function(n){return parseInt(n,10)||0;});for(var i=0;i<3;i++){var d=(pa[i]||0)-(pb[i]||0);if(d)return d;}return 0;} var cfg=process.env.CLAUDE_CONFIG_DIR||path.join(os.homedir(),'.claude'); var ip=rj(path.join(cfg,'plugins','installed_plugins.json')); if(ip&&ip.plugins){ var best=null; var keys=Object.keys(ip.plugins).sort(); for(var i=0;i<keys.length;i++){ var key=keys[i]; if(key.indexOf('nonfiction-studio@')!==0)continue; var arr=Array.isArray(ip.plugins[key])?ip.plugins[key]:[]; for(var j=0;j<arr.length;j++){ var entry=arr[j]; var p=entry&&entry.installPath; if(!p||!has(p))continue; var v=(entry&&entry.version)||'0.0.0'; var scope=(entry&&entry.scope)||''; if(!best||cmp(v,best.v)>0||(cmp(v,best.v)===0&&best.scope!=='user'&&scope==='user')){best={root:p,v:v,scope:scope};} } } if(best){console.log(best.root);process.exit(0);} } var st=rj(path.join(cfg,'settings.json')); if(st&&st.extraKnownMarketplaces&&st.extraKnownMarketplaces['nonfiction-studio']){ var src=st.extraKnownMarketplaces['nonfiction-studio'].source; var sp=src&&src.path; if(sp&&has(sp)){console.log(sp);process.exit(0);} } var cacheRoot=path.join(cfg,'plugins','cache'); var bestC=null; var mps=ld(cacheRoot); for(var m=0;m<mps.length;m++){ var nsDir=path.join(cacheRoot,mps[m],'nonfiction-studio'); var vers=ld(nsDir); for(var k=0;k<vers.length;k++){ var root=path.join(nsDir,vers[k]); if(has(root)){ if(!bestC||cmp(vers[k],bestC.v)>0){bestC={root:root,v:vers[k]};} } } } if(bestC){console.log(bestC.root);process.exit(0);} for(var n=0;n<mps.length;n++){ if(mps[n].indexOf('nonfiction-studio')===0){ var lroot=path.join(cacheRoot,mps[n]); if(has(lroot)){console.log(lroot);process.exit(0);} } } if(has(process.cwd())){console.log(process.cwd());process.exit(0);} console.log('not-found'); })();"
 ```
 
-If that also returns nothing, run the dev-mode fallback:
-```
-test -f bin/ns-claims && pwd || echo not-found
-```
+The output is `<plugin-root>`, or the literal string `not-found`. The resolver checks, in
+order: `installed_plugins.json` in the Claude config directory (a marketplace install,
+verified by confirming `bin/ns-stylometry` exists under the candidate path; the newest
+installed version wins when more than one is present), then a local self-marketplace entry
+in `settings.json` (dev-workflow installs, same verification), then a scan of the plugins
+cache (the versioned marketplace-cache layout and the legacy flat layout), then the current
+working directory (dev-mode checkout). The Claude config directory is `$CLAUDE_CONFIG_DIR`
+when that variable is set, otherwise `$HOME/.claude` (`%USERPROFILE%\.claude` on Windows).
 
-If all three lookups fail: halt immediately. Report the settings.json path attempted (`$HOME/.claude/settings.json`) and the cache path attempted (`$HOME/.claude/plugins/cache`). Do not invoke ns-claims. Ask the author how to proceed (verify plugin installation or provide the path manually).
+If the output is `not-found`: halt immediately. Report the config directory used
+(`$CLAUDE_CONFIG_DIR` if set, `$HOME/.claude` otherwise) and the `installed_plugins.json`
+path checked within it (`<config-dir>/plugins/installed_plugins.json`). Do not invoke ns-claims. Ask
+the author how to proceed (verify plugin installation or provide the path manually).
 
 Carry the resolved path forward as `<plugin-root>` for Step 3.
 
-**Shared plugin-root convention.** This three-tier resolution (settings.json lookup, plugins-cache search, dev-mode fallback) is the same routine as `skills/nfs-new-book/SKILL.md` Step 4; a future wave extracts it to a shared reference.
+**Shared plugin-root convention.** This resolver is the same command as `skills/nfs-new-book/SKILL.md` Step 4 and every other CLI-backed skill; `tests/checks/plugin-root-resolver.test.mjs` guards byte-for-byte parity across all eight.
 
 ---
 
