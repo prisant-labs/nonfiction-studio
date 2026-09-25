@@ -57,7 +57,7 @@ The rendered Markdown table appears in the conversation only.
 
 The skill runs three steps.
 
-1. **Resolve the plugin root.** The same three-tier lookup every CLI-wrapper skill in this plugin uses: a primary lookup against `extraKnownMarketplaces['nonfiction-studio'].source.path` in `~/.claude/settings.json`, a `~/.claude/plugins/cache` search fallback, and a dev-mode fallback that checks for `bin/ns-status` in the current directory (the same routine as `skills/nfs-new-book/SKILL.md` Step 4). If all three lookups fail, the skill halts and names the settings.json and cache paths it attempted; `bin/ns-status` is never invoked.
+1. **Resolve the plugin root.** The same resolver every CLI-wrapper skill in this plugin uses: reads `installed_plugins.json` in the Claude config directory first (a marketplace install, verified by confirming `bin/ns-stylometry` exists under the candidate path; the newest installed version wins if more than one is present), then a local self-marketplace entry in `settings.json`, then a plugins-cache scan (versioned and legacy layouts), then the current working directory (the same routine as `skills/nfs-new-book/SKILL.md` Step 4). If nothing resolves, the skill halts and names the config directory and the `installed_plugins.json` path it attempted; `bin/ns-status` is never invoked.
 
 2. **Single Bash invocation.** Runs exactly one Bash call: `node "<plugin-root>/bin/ns-status" --project=. --json`. Captures the exit code, stdout (JSON), and stderr. No directory listing, no separate Read calls, and no other CLI invocation happen anywhere in this skill.
 
@@ -122,7 +122,7 @@ The dashboard renders identically on all three surfaces per D-14 (three-surface 
 
 ## Failure Behavior
 
-**Plugin root cannot be resolved.** Step 1 halts before invoking `bin/ns-status`. Reports the settings.json path and cache path attempted. No table is rendered.
+**Plugin root cannot be resolved.** Step 1 halts before invoking `bin/ns-status`. Reports the config directory and the `installed_plugins.json` path attempted. No table is rendered.
 
 **No book root found.** Step 3 halts on the "No book root found" stderr message with the not-initialized message and routes to `/nonfiction-studio:nfs-new-book`. No table is rendered.
 

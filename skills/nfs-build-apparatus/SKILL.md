@@ -86,7 +86,7 @@ Surface the stderr content and halt. This exit is never treated as a pass.
 
 ## Failure behavior
 
-**Plugin root cannot be resolved.** Step 1 halts before any Bash call to `ns-notes`. Report the settings.json path and cache path attempted, and ask the author how to proceed.
+**Plugin root cannot be resolved.** Step 1 halts before any Bash call to `ns-notes`. Report the config directory and the `installed_plugins.json` path attempted, and ask the author how to proceed.
 
 **Exit 2 from `ns-notes`.** Step 3 surfaces the stderr and halts. Never treated as a pass, and never presented as if any `production/` file changed.
 

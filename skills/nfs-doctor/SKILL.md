@@ -67,10 +67,9 @@ exists or should exist, and why a plugin cannot ship this itself.
 
 ### Step A - Resolve the plugin root
 
-Use the same three-tier resolution as Step 2 below (settings.json lookup, plugins-cache search,
-dev-mode fallback) to obtain `<plugin-root>`. If all three lookups fail, halt exactly as Step 2
-describes: report the settings.json path and cache path attempted, write nothing, and ask the
-author how to proceed.
+Use the same resolver as Step 2 below to obtain `<plugin-root>`. If it prints `not-found`, halt
+exactly as Step 2 describes: report the config directory and the `installed_plugins.json` path
+attempted, write nothing, and ask the author how to proceed.
 
 ### Step B - Read the author's existing settings
 
@@ -280,7 +279,7 @@ If the stderr message contains "requires migration", also suggest:
 
 **Project root not found.** If `findBookRoot` cannot locate `.studio/meta.json` from the current directory, the CLI exits 2 with a `BibleError` message on stderr. Surface it: "Doctor error: [BibleError message]. Ensure this skill is invoked from within a Nonfiction Studio project bible (`.studio/meta.json` must be present at or above the current directory)."
 
-**`install-statusline`: plugin root cannot be resolved.** Step A halts before any read or write, exactly as Step 2's own failure behavior below: report the settings.json path and cache path attempted, and ask the author how to proceed.
+**`install-statusline`: plugin root cannot be resolved.** Step A halts before any read or write, exactly as Step 2's own failure behavior below: report the config directory and the `installed_plugins.json` path attempted, and ask the author how to proceed.
 
 **`install-statusline`: existing `~/.claude/settings.json` is not valid JSON.** Step B halts before writing anything; the author is told to fix or back up the file first, or to use the built-in `/statusline` command instead.
 

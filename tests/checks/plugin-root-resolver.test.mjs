@@ -89,7 +89,7 @@ test('parity: every one of the 8 CLI-backed skills carries the resolver line', (
   assert.deepEqual(missing, [], 'skill(s) missing the "node -e" resolver line under a "Resolve/Find the plugin root" step: ' + missing.join(', '));
 });
 
-test('parity: the resolver line is byte-identical across all 8 skills', () => {
+test('parity: the resolver line is byte-identical across all 8 CLI-backed skills', () => {
   const lines = SKILLS.map((name) => ({ name, line: extractResolverLine(name) }));
   const present = lines.filter((l) => l.line !== null);
   assert.ok(present.length > 0, 'no skill carried a resolver line at all; run the parity presence test first');

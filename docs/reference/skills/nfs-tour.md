@@ -51,7 +51,7 @@ Alternate entry points:
 
 The skill runs nine steps:
 
-1. **Resolve the plugin root.** The same three-tier lookup every skill in this plugin uses, needed here to locate both `examples/sample-book` and `bin/ns-gate`.
+1. **Resolve the plugin root.** The same resolver every skill in this plugin uses (`installed_plugins.json`, then `settings.json`, then a plugins-cache scan, then the working directory, each candidate verified against `bin/ns-stylometry`), needed here to locate both `examples/sample-book` and `bin/ns-gate`.
 2. **Copy the sample book to a disposable location.** Chooses a destination (temp directory by default, or the author's supplied folder), appends a timestamp for a fresh collision-free name, and copies with `fs.cpSync`, mirroring the temp-clone pattern in `scripts/test-fixtures.mjs`. States plainly where the copy is and that the shipped example is untouched.
 3. **Opt the copy into block mode.** Edits the copy's `.studio/config.json` top-level `gate.mode` from `warn` to `block`, explaining why: the shipped default only warns, and this is the same setting any author can choose for their own project.
 4. **Run the gate and watch it pass.** A full, unscoped `ns-gate` run against the copy, in block mode, with nothing planted yet; presents a genuine pass, including the stylometry check's honest advice-only reporting at the sample book's word count.

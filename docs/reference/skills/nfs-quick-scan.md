@@ -49,7 +49,7 @@ Alternate entry points:
 The skill runs seven steps:
 
 1. **Receive the pasted prose.** Asks for it if none was supplied yet; otherwise proceeds immediately.
-2. **Resolve the plugin root.** The same three-tier lookup (settings.json, plugins cache, dev-mode fallback) every skill in this plugin uses to locate `bin/ns-stylometry`.
+2. **Resolve the plugin root.** The same resolver (`installed_plugins.json`, then `settings.json`, then a plugins-cache scan, then the working directory) every skill in this plugin uses to locate `bin/ns-stylometry`.
 3. **Write the pasted text to a temp file and measure it.** Gets the OS temp directory, writes the prose there, invokes `ns-stylometry --measure=<path>` through the resolved plugin root, then deletes the temp file immediately, success or failure.
 4. **Word-count banding.** Reads `totalWords` from the measurement and branches: under 500 words gets a noisy-measurement caveat with the option to proceed anyway or paste more; 500 to 1000 needs no caveat; over 1000 is measured in full (never truncated) with a note stating the actual count measured.
 5. **Present the voice profile (measured).** All eight markers by name, in plain language, labeled explicitly as coming from the engine.

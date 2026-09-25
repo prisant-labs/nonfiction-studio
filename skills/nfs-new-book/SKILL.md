@@ -354,7 +354,7 @@ Then: "The next step is nfs-interview. Invoke it with `/nonfiction-studio:nfs-in
 
 ## Failure behavior
 
-- **Plugin root unresolved.** If all three lookups in Step 4 fail, halt before writing any file. Report the settings.json path attempted and the cache path attempted. Ask the author how to proceed (verify plugin installation or provide the path manually).
+- **Plugin root unresolved.** If the Step 4 resolver prints `not-found`, halt before writing any file. Report the config directory and the `installed_plugins.json` path attempted. Ask the author how to proceed (verify plugin installation or provide the path manually).
 - **Working directory not confirmed (Step 4b).** If the author does not answer yes, or no path can be confirmed at all, halt before Step 5. No files are written.
 - **Read or write error.** On any file operation failure, stop immediately. Name the exact path and operation that failed. Never continue stamping remaining files after a failure.
 - **Missing template.** If a template file is not readable after PLUGIN_ROOT is confirmed, halt. Name the exact template path and ask the author to verify the plugin installation.

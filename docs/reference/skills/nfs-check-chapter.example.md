@@ -78,7 +78,7 @@ Check subset set to `claims,scrub,continuity-quick,coherence`. Continue to Step 
 
 **Studio (Step 4 - Resolve the plugin root):**
 
-The skill uses the Bash tool to look up the `nonfiction-studio` marketplace source path in `~/.claude/settings.json`. The primary lookup resolves the plugin's installed path on the first try; the plugins-cache and dev-mode fallbacks are not needed for this run. Continue to Step 5.
+The skill uses the Bash tool to run the resolver. `installed_plugins.json` in the Claude config directory resolves the plugin's installed path on the first tier, verified against `bin/ns-stylometry`; the settings.json, cache-scan, and dev-mode tiers are not needed for this run. Continue to Step 5.
 
 **Studio (Step 5 - Gate invocation):**
 

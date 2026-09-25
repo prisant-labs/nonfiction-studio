@@ -73,8 +73,10 @@ used for emphasis, direct address as the dominant opener pattern.
 > measure natural same-voice variation; this run takes a few seconds to about a
 > minute.
 
-The agent resolves the plugin root (the `nonfiction-studio` entry in
-`~/.claude/settings.json`; per ADR-0005 (bin PATH on Windows), the hooks.json
+The agent resolves the plugin root (the same resolver every CLI-backed skill
+uses: `installed_plugins.json` in the Claude config directory first, then a
+local self-marketplace entry in `settings.json`, then a plugins-cache scan,
+then the working directory; per ADR-0005 (bin PATH on Windows), the hooks.json
 plugin-root variable is not available in a live Bash shell) and invokes:
 
 ```

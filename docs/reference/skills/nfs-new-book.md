@@ -154,7 +154,7 @@ Immediately after the output style offer, `nfs-new-book` offers to generate a pr
 
 ## Failure behavior
 
-**Plugin root unresolved.** If all resolution attempts fail (settings.json lookup, platform cache search, dev-mode fallback), the skill halts before writing any file. It reports both locations it tried and asks the author how to proceed.
+**Plugin root unresolved.** If the resolver (`installed_plugins.json`, then `settings.json`, then a plugins-cache scan, then the working directory) finds nothing, the skill halts before writing any file. It reports the config directory and the `installed_plugins.json` path it tried and asks the author how to proceed.
 
 **Read or write error.** On any file operation failure the skill stops immediately, names the exact path and operation that failed, and does not continue writing remaining files.
 

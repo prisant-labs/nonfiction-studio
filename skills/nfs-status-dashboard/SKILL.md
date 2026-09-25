@@ -116,7 +116,7 @@ If no entry in `chapters` has `highlighted: true`, state "No rows flagged." afte
 
 ## Failure behavior
 
-**Plugin root cannot be resolved.** Step 1 halts before invoking `bin/ns-status`. Reports the settings.json path and cache path attempted. No table is rendered.
+**Plugin root cannot be resolved.** Step 1 halts before invoking `bin/ns-status`. Reports the config directory and the `installed_plugins.json` path attempted. No table is rendered.
 
 **No book root found.** Step 3 halts on the "No book root found" stderr message with the not-initialized message and routes to `nfs-new-book`. No table is rendered.
 
