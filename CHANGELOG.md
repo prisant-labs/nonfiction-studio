@@ -14,7 +14,7 @@ This file is written from the commit history of the branch it ships from, not fr
   (`nfs-build-apparatus`, `nfs-check-chapter`, `nfs-doctor`, `nfs-fact-check`, `nfs-new-book`,
   `nfs-quick-scan`, `nfs-status-dashboard`, `nfs-tour`) resolved the plugin root with a
   three-step lookup whose cache fallback (`find ... -maxdepth 3 -name "nonfiction-studio*" |
-  head -1`) matched the marketplace-name-then-`nonfiction-studio` directory two levels above a
+  head -1`) matched the marketplace-name-then-`nonfiction-studio` directory one level above a
   real marketplace install's actual root - the directory before the version folder - where
   `bin/ns-stylometry` does not exist. Every CLI-backed skill failed for a marketplace-installed
   author; `CLAUDE_CONFIG_DIR` was also ignored entirely. Found by the post-release clean-install
@@ -26,7 +26,7 @@ This file is written from the commit history of the branch it ships from, not fr
   `settings.json`, then a plugins-cache scan (both the versioned marketplace-cache layout and the
   legacy flat layout), then the current working directory for a dev-mode checkout - every
   candidate verified by confirming `bin/ns-stylometry` actually exists under it, and
-  `CLAUDE_CONFIG_DIR` honored throughout. A `not-found` result also prints the config directory
+  `CLAUDE_CONFIG_DIR` honored throughout plugin-root resolution. A `not-found` result also prints the config directory
   checked on stderr, so a halting skill can report it without a second resolver call. See
   ADR-0014 (plugin-root resolution) for the design.
   `tests/checks/plugin-root-resolver.test.mjs` is a layout-simulation test suite that guards it:

@@ -18,7 +18,7 @@
 //               install (living at <config>/plugins/cache/<marketplace>/nonfiction-studio/
 //               <version>/) broke every CLI-backed skill, because the old resolver's cache
 //               fallback (`find ... -maxdepth 3 -name "nonfiction-studio*" | head -1`) matches
-//               the marketplace-name-then-nonfiction-studio directory two levels up from the
+//               the marketplace-name-then-nonfiction-studio directory one level up from the
 //               actual install root, before the version folder - a directory that never
 //               contains bin/ns-stylometry. The new resolver reads
 //               <config>/plugins/installed_plugins.json (the authoritative source; its shape is
@@ -504,6 +504,58 @@ test('fixture: cwd is a SUBDIRECTORY of the project path -> the local-scope entr
   assert.equal(real(stdout), real(localRoot));
 });
 
+test('fixture: a sibling project whose path merely shares a prefix (proj vs proj-2) does NOT match a local-scope entry', () => {
+  const home = mktemp('f5-sibling');
+  const projectPath = mktemp('f5-proj');
+  const siblingCwd = projectPath + '-2';
+  mkdirSync(siblingCwd, { recursive: true });
+  const cfg = join(home, '.claude');
+  const userRoot = join(cfg, 'plugins', 'cache', 'prisant-labs', 'nonfiction-studio', '0.1.1');
+  const localRoot = join(cfg, 'plugins', 'cache', 'prisant-labs', 'nonfiction-studio', '0.1.2');
+  touchStylometry(userRoot);
+  touchStylometry(localRoot);
+  mkdirSync(join(cfg, 'plugins'), { recursive: true });
+  writeFileSync(join(cfg, 'plugins', 'installed_plugins.json'), JSON.stringify({
+    version: 2,
+    plugins: {
+      'nonfiction-studio@prisant-labs': [
+        { scope: 'user', installPath: userRoot, version: '0.1.1' },
+        { scope: 'local', installPath: localRoot, version: '0.1.2', projectPath: projectPath },
+      ],
+    },
+  }));
+
+  const { stdout, status } = runResolver(RESOLVER_JS, { home, cwd: siblingCwd });
+  assert.equal(status, 0);
+  assert.equal(real(stdout), real(userRoot), 'a cwd that only shares a string prefix with projectPath is a different project; the user-scope install must win');
+});
+
+test('fixture: on Windows, a projectPath recorded with a different drive-letter case still matches the current project', { skip: process.platform !== 'win32' }, () => {
+  const home = mktemp('f5-case');
+  const projectPath = mktemp('f5-proj-case');
+  const first = projectPath.charAt(0);
+  const swapped = (first === first.toUpperCase() ? first.toLowerCase() : first.toUpperCase()) + projectPath.slice(1);
+  const cfg = join(home, '.claude');
+  const userRoot = join(cfg, 'plugins', 'cache', 'prisant-labs', 'nonfiction-studio', '0.1.1');
+  const localRoot = join(cfg, 'plugins', 'cache', 'prisant-labs', 'nonfiction-studio', '0.1.2');
+  touchStylometry(userRoot);
+  touchStylometry(localRoot);
+  mkdirSync(join(cfg, 'plugins'), { recursive: true });
+  writeFileSync(join(cfg, 'plugins', 'installed_plugins.json'), JSON.stringify({
+    version: 2,
+    plugins: {
+      'nonfiction-studio@prisant-labs': [
+        { scope: 'user', installPath: userRoot, version: '0.1.1' },
+        { scope: 'local', installPath: localRoot, version: '0.1.2', projectPath: swapped },
+      ],
+    },
+  }));
+
+  const { stdout, status } = runResolver(RESOLVER_JS, { home, cwd: projectPath });
+  assert.equal(status, 0);
+  assert.equal(real(stdout), real(localRoot), 'Windows paths are case-insensitive; the in-project local-scope install must still be recognized');
+});
+
 test('fixture: a foreign-project local-scope entry with no backing directory anywhere else -> the entries tier skips it, not-found', () => {
   // installPath verifies (has() would pass), and nothing separately matches the cache-scan
   // fallback tier's own naming convention, so a resolve here could only come from the
@@ -562,7 +614,7 @@ test('fixture: not-found stderr honors CLAUDE_CONFIG_DIR over HOME', () => {
 // guaranteed on a Windows Tier A runner outside a bash invocation) and stays fully
 // deterministic. Mirrors `find "$config/plugins/cache" -maxdepth 3 -type d -name
 // "nonfiction-studio*" | head -1` closely enough to prove the point: it matches the
-// marketplace-name-then-nonfiction-studio directory two levels above the real install root,
+// marketplace-name-then-nonfiction-studio directory one level above the real install root,
 // which never contains bin/ns-stylometry.
 // ---------------------------------------------------------------------------
 
