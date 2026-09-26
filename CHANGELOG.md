@@ -6,6 +6,23 @@ This file is written from the commit history of the branch it ships from, not fr
 
 ## Unreleased
 
+### Fixed
+
+- **The SPK-02 Cowork execution probe could not produce a valid result.** Three defects, each a
+  guaranteed false negative that would have fired a fail branch of ADR-0002 (Cowork hook
+  execution) for reasons unrelated to Cowork, were corrected before the probe's first run:
+  - The probe hook printed its context marker at the top level of its JSON output, which Claude
+    Code silently ignores for SessionStart. It now nests the marker under
+    `hookSpecificOutput.additionalContext`, the form the production hook already uses.
+  - The subagent target, the `spike-memory` stub, was removed with the Phase 0 spike stubs.
+    A dedicated stub, `examples/spikes/spk-02/spk02-probe-agent.md`, replaces it; the protocol
+    copies it into `agents/` for the probe's duration and deletes it at cleanup.
+  - The protocol branched from `build/phase-1`, which no longer exists; it now uses `main`.
+
+  A Claude Code CLI run showed the original probe missing its context marker and the corrected
+  probe passing all three observations. ADR-0002 records the corrections in a dated section;
+  its decision rule is unchanged.
+
 ## [0.1.1] - 2026-09-24
 
 ### Fixed

@@ -3,6 +3,7 @@
 **Task:** TSK-008 (SPK-02 Cowork execution)
 **ADR:** docs/adr/ADR-0002-cowork-hook-execution.md
 **Results template:** examples/spikes/spk-02/RESULTS-TEMPLATE.md
+**Probe corrections:** 2026-09-25, before the first execution - see the "Probe corrections (2026-09-25)" section of ADR-0002 (Cowork hook execution).
 
 This protocol is executed by a human with access to the Cowork desktop app. It takes roughly 10 minutes. Fill in RESULTS-TEMPLATE.md as you go, then paste the completed template into the ADR to update its status.
 
@@ -12,9 +13,11 @@ This protocol is executed by a human with access to the Cowork desktop app. It t
 
 Three observations, each recorded in RESULTS-TEMPLATE.md:
 
-- **Hook context injection (O1):** Whether `SPK02-CONTEXT-INJECTED` appears in the Claude response when you ask about context markers. This tests whether the SessionStart hook's stdout JSON block is injected into the session context.
+- **Hook context injection (O1):** Whether `SPK02-CONTEXT-INJECTED` appears in the Claude response when you ask about context markers. This tests whether the SessionStart hook's `hookSpecificOutput.additionalContext` is injected into the session context.
 - **Hook command execution (O2):** Whether `SPK02-SESSIONSTART-FIRED` was appended to `examples/spikes/spk-02/spk02-evidence.log`. This tests whether the hook command itself ran.
-- **Subagent execution (O3):** Whether the `spike-memory` agent spawned and reported results. This tests whether agents declared in the plugin are spawnable in Cowork.
+- **Subagent execution (O3):** Whether the `spk02-probe-agent` stub agent spawned and replied `SPK02-AGENT-RAN`. This tests whether agents declared in the plugin are spawnable in Cowork.
+
+The three probes were checked in the Claude Code CLI on 2026-09-25 (all three positive there), so a negative result in Cowork reflects Cowork, not a broken probe.
 
 ---
 
@@ -30,26 +33,31 @@ cd <path-to-your-clone>
 
 **Step 2 - Create a temporary test branch.**
 
-Create this branch from `build/phase-1` so the installed plugin reflects the complete Phase 1 wiring. If you are not already on `build/phase-1`, check it out first.
+Create this branch from an up-to-date `main`, so the installed plugin is the current release.
 
 ```
-git checkout build/phase-1
+git checkout main
+git pull
 git checkout -b spike/cowork-probe
 ```
 
-**Step 3 - Copy the probe hooks file into place.**
+**Step 3 - Copy the probe hooks file and the probe agent into place.**
 
 Windows (PowerShell or CMD):
 ```
 copy examples\spikes\spk-02\hooks.json hooks\hooks.json
+copy examples\spikes\spk-02\spk02-probe-agent.md agents\spk02-probe-agent.md
 ```
 
 Git Bash:
 ```
 cp examples/spikes/spk-02/hooks.json hooks/hooks.json
+cp examples/spikes/spk-02/spk02-probe-agent.md agents/spk02-probe-agent.md
 ```
 
-Do NOT commit this file. It is a temporary spike copy only.
+Do NOT commit either file. They are temporary spike copies only.
+
+The probe hooks file replaces the plugin's production hooks for the whole probe. That is deliberate, and it is also why the stub agent needs no entry in `agents/_chain-permitted.yaml`: the production routing hook that reads that file is not wired while the probe is in place. Do not add one.
 
 **Step 4 - Open Cowork.**
 
@@ -81,17 +89,17 @@ Read the response. Note in RESULTS-TEMPLATE.md:
 - Whether `SPK02-CONTEXT-INJECTED` appears in the response or in any displayed context block.
 - PRESENT or ABSENT.
 
-**Step 10 - Ask Claude to spawn the spike-memory agent.**
+**Step 10 - Ask Claude to spawn the probe agent.**
 
 In the same session, send:
 
-> Please spawn the spike-memory agent (the agent is named spike-memory and is declared in the nonfiction-studio plugin) and report exactly what it says.
+> Please spawn the spk02-probe-agent agent (it is declared in the nonfiction-studio plugin) and report exactly what it says.
 
 **Step 11 - Record O3 (subagent execution).**
 
 Note in RESULTS-TEMPLATE.md:
 - Whether the subagent spawned (YES or NO).
-- If YES, paste the two-line report the subagent produced (one line for what it found in memory, one line for what it wrote).
+- If YES, paste what the subagent replied. The expected reply is the single line `SPK02-AGENT-RAN`.
 
 **Step 12 - Check the evidence log.**
 
@@ -101,7 +109,7 @@ Back in your terminal (do not close the Cowork session yet):
 cat examples/spikes/spk-02/spk02-evidence.log
 ```
 
-If the file is not found at that path, the hook may have written to the installed plugin root instead (a versioned cache directory, not the repo checkout), since the hook command resolves its write path through the hooks.json plugin-root interpolation variable (ADR-0005, bin PATH on Windows). To find that root, run `claude plugin list` or check the Cowork plugin panel for the installed path of `nonfiction-studio`, then look for `examples/spikes/spk-02/spk02-evidence.log` beneath it. Record whichever path held the file when filling in O2.
+If the file is not found at that path, the hook may have written to the installed plugin root instead (a versioned cache directory, not the repo checkout), since the hook command resolves its write path through the hooks.json plugin-root interpolation variable (ADR-0005, bin PATH on Windows). To find that root, run `claude plugin list` or check the Cowork plugin panel for the installed path of `nonfiction-studio`, then look for `examples/spikes/spk-02/spk02-evidence.log` beneath it. If you cannot reach that folder from your terminal, ask Claude in the Cowork session to print the file instead. Record whichever path held the file when filling in O2.
 
 Because the hook appends rather than overwrites, this file only counts as fresh evidence if you cleared or noted it in "Before you start." If you skipped that step, check the timestamp on each line against the time you ran Step 7 (session open) before treating a `SPK02-SESSIONSTART-FIRED` line as this run's result.
 
@@ -119,29 +127,33 @@ In Cowork (panel names vary by Cowork version):
 
 Close the Cowork session.
 
-**Step 15 - Cleanup: restore the hooks file and the branch.**
+**Step 15 - Cleanup: restore the hooks file, remove the probe agent, restore the branch.**
 
-`hooks/hooks.json` is a tracked production file that wires five real hooks (confirm with `git ls-files hooks/`). Step 3 overwrote it in the working tree with the temporary spike copy but never committed that change, so cleanup restores the tracked version from git. Do NOT delete it.
+`hooks/hooks.json` is a tracked production file that wires the plugin's real hooks (confirm with `git ls-files hooks/`). Step 3 overwrote it in the working tree with the temporary spike copy but never committed that change, so cleanup restores the tracked version from git. Do NOT delete it.
+
+`agents/spk02-probe-agent.md` is untracked, so `git checkout --` does not remove it. Delete it explicitly.
 
 In the terminal:
 
 PowerShell:
 ```
 git checkout -- hooks/hooks.json
-git checkout build/phase-1
+Remove-Item agents\spk02-probe-agent.md
+git checkout main
 git branch -d spike/cowork-probe
 ```
 
 Git Bash:
 ```
 git checkout -- hooks/hooks.json
-git checkout build/phase-1
+rm agents/spk02-probe-agent.md
+git checkout main
 git branch -d spike/cowork-probe
 ```
 
-Verify `hooks/hooks.json` is restored to the tracked production version (clean, no diff) and that `hooks/` still contains the full set of production hook files, not just `.gitkeep`:
+Verify the working tree is clean (no modified `hooks/hooks.json`, no untracked `agents/spk02-probe-agent.md`) and that `hooks/` still contains the full set of production hook files, not just `.gitkeep`:
 ```
-git status hooks/
+git status
 ls hooks/
 ```
 

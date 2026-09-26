@@ -51,11 +51,11 @@ Note: A file absent at BOTH the repo checkout path and the installed plugin root
 
 ## O3: Subagent execution
 
-**Question:** Did the `spike-memory` agent spawn and report results when asked?
+**Question:** Did the `spk02-probe-agent` stub agent spawn and reply `SPK02-AGENT-RAN` when asked?
 
 **Result:** <!-- YES or NO -->
 
-**Agent output (paste the two-line report the subagent produced, or error/refusal if it did not run):**
+**Agent output (paste what the subagent replied, or the error/refusal if it did not run):**
 
 ```
 <!-- paste agent output here -->
