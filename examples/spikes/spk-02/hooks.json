@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"const fs=require('fs');const ts=new Date().toISOString();fs.appendFileSync('${CLAUDE_PLUGIN_ROOT}/examples/spikes/spk-02/spk02-evidence.log',ts+' SPK02-SESSIONSTART-FIRED\\n');process.stdout.write(JSON.stringify({additionalContext:'SPK02-CONTEXT-INJECTED'})+'\\n');\""
+            "command": "node -e \"const fs=require('fs');const ts=new Date().toISOString();fs.appendFileSync('${CLAUDE_PLUGIN_ROOT}/examples/spikes/spk-02/spk02-evidence.log',ts+' SPK02-SESSIONSTART-FIRED\\n');process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:'SessionStart',additionalContext:'SPK02-CONTEXT-INJECTED'}})+'\\n');\""
           }
         ]
       }

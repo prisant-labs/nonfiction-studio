@@ -24,7 +24,7 @@ The build session cannot drive the Cowork desktop application. SPK-02 therefore 
 
 - ADR-0001 (hooks.json schema): the wrapper-object form (`{"hooks": {"EventName": [...]}}`) is confirmed by official docs. The probe hooks.json uses Form A (wrapper) exclusively.
 - ADR-0005 (bin PATH on Windows): bare CLI invocation fails in Bash tool on Windows; hook commands must use `node ${CLAUDE_PLUGIN_ROOT}/...` or inline `-e` forms. The probe hook uses `node -e` with a `${CLAUDE_PLUGIN_ROOT}`-interpolated log path, not a bare CLI name.
-- TSK-010 (SPK-04 memory and skills preload): the `spike-memory` agent is still in tree at `agents/spike-memory.md`. The protocol uses it as the subagent execution target.
+- TSK-010 (SPK-04 memory and skills preload): the `spike-memory` agent is still in tree at `agents/spike-memory.md`. The protocol uses it as the subagent execution target. (Superseded 2026-09-25: that stub was removed on 2026-08-08; see "Probe corrections (2026-09-25)" below.)
 
 ---
 
@@ -34,14 +34,15 @@ All probe artifacts live under `examples/spikes/spk-02/` and are not wired into 
 
 | File | Purpose |
 |------|---------|
-| `examples/spikes/spk-02/hooks.json` | Probe hooks file in ADR-0001 Form A (wrapper). One SessionStart command hook: appends `SPK02-SESSIONSTART-FIRED` to the evidence log and echoes `{"additionalContext":"SPK02-CONTEXT-INJECTED"}` to stdout. |
+| `examples/spikes/spk-02/hooks.json` | Probe hooks file in ADR-0001 Form A (wrapper). One SessionStart command hook: appends `SPK02-SESSIONSTART-FIRED` to the evidence log and echoes `{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"SPK02-CONTEXT-INJECTED"}}` to stdout. |
+| `examples/spikes/spk-02/spk02-probe-agent.md` | Stub agent, the O3 target. Copied into `agents/` for the probe's duration only; replies with the fixed line `SPK02-AGENT-RAN`. |
 | `examples/spikes/spk-02/README.md` | Numbered user protocol (15 steps including cleanup). |
 | `examples/spikes/spk-02/RESULTS-TEMPLATE.md` | Fill-in template for all three observations plus execution metadata. |
 
 ### Probe hook command (verbatim from hooks.json)
 
 ```
-node -e "const fs=require('fs');const ts=new Date().toISOString();fs.appendFileSync('${CLAUDE_PLUGIN_ROOT}/examples/spikes/spk-02/spk02-evidence.log',ts+' SPK02-SESSIONSTART-FIRED\n');process.stdout.write(JSON.stringify({additionalContext:'SPK02-CONTEXT-INJECTED'})+'\n');"
+node -e "const fs=require('fs');const ts=new Date().toISOString();fs.appendFileSync('${CLAUDE_PLUGIN_ROOT}/examples/spikes/spk-02/spk02-evidence.log',ts+' SPK02-SESSIONSTART-FIRED\n');process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:'SessionStart',additionalContext:'SPK02-CONTEXT-INJECTED'}})+'\n');"
 ```
 
 `${CLAUDE_PLUGIN_ROOT}` is plugin-system interpolation, substituted before the command reaches the shell (per ADR-0005 analysis).
@@ -53,17 +54,17 @@ node -e "const fs=require('fs');const ts=new Date().toISOString();fs.appendFileS
 Full protocol: `examples/spikes/spk-02/README.md`.
 
 Steps at a glance:
-1. Create a temporary branch (`spike/cowork-probe`).
-2. Copy probe hooks.json to `hooks/hooks.json` (do not commit).
+1. Create a temporary branch (`spike/cowork-probe`) from `main`.
+2. Copy probe hooks.json to `hooks/hooks.json` and the stub agent to `agents/spk02-probe-agent.md` (do not commit either).
 3. Add the repo as a Cowork plugin marketplace.
 4. Install the nonfiction-studio plugin in Cowork.
 5. Open a new Cowork session on any folder.
 6. Send "what context markers do you see in your context?" and record O1.
-7. Ask Claude to spawn the `spike-memory` agent and record O3.
+7. Ask Claude to spawn the `spk02-probe-agent` agent and record O3.
 8. Check `examples/spikes/spk-02/spk02-evidence.log` and record O2.
 9. Fill in RESULTS-TEMPLATE.md.
 10. Uninstall the plugin and remove the marketplace in Cowork.
-11. Delete `hooks/hooks.json`, switch back to `build/phase-0`, delete the test branch.
+11. Restore the tracked `hooks/hooks.json` from git, delete the stub agent copy, switch back to `main`, delete the test branch.
 
 ---
 
@@ -73,7 +74,7 @@ Steps at a glance:
 |----|-------|----------------|---------------|
 | O1 | Hook context injection | Claude response to context-marker query | `SPK02-CONTEXT-INJECTED` present |
 | O2 | Hook command execution | `examples/spikes/spk-02/spk02-evidence.log` | `SPK02-SESSIONSTART-FIRED` line present |
-| O3 | Subagent execution | Claude response to spawn request | `spike-memory` agent ran and reported |
+| O3 | Subagent execution | Claude response to spawn request | `spk02-probe-agent` ran and replied `SPK02-AGENT-RAN` |
 
 ---
 
@@ -115,6 +116,18 @@ O1 (context marker) and O2 (log evidence) are the HOOK observations. O3 (subagen
 
 ---
 
+## Probe corrections (2026-09-25)
+
+The decision rule and its clarification above are unchanged. Before the probe's first execution, three defects were found that would each have produced a false negative, firing a fail branch for reasons unrelated to Cowork. The probe artifacts were corrected, and the original versions remain in git history.
+
+1. **O1 output shape.** The probe hook printed `{"additionalContext":...}` at the top level of its JSON output. Claude Code reads SessionStart context only from `hookSpecificOutput.additionalContext` and silently ignores the top-level form; the plugin's production `hooks/session-start.mjs` already uses the nested form, and ADR-0013 (wave 1 exit surfaces) records the live probe that found a top-level SessionStart field silently ignored. A Claude Code CLI run of the original probe (loaded with `--plugin-dir`, 2026-09-25) confirmed the defect: the hook ran and wrote its log line, but the injected context was empty, so O1 would have read ABSENT on every surface. The probe now prints `{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"SPK02-CONTEXT-INJECTED"}}`.
+2. **O3 target.** The `spike-memory` agent this ADR named was removed with the other Phase 0 spike stubs on 2026-08-08, so O3 would have read NO regardless of the surface. A dedicated stub now lives with the other probe artifacts at `examples/spikes/spk-02/spk02-probe-agent.md`. The protocol copies it into `agents/` for the probe's duration and deletes it at cleanup. It replies with the fixed line `SPK02-AGENT-RAN`, a marker as unambiguous as O1's and O2's.
+3. **Branch.** The protocol branched from `build/phase-1`, and this ADR's summary from `build/phase-0`; neither exists in the published repository. Both now use `main`, and cleanup restores the tracked `hooks/hooks.json` from git instead of deleting it (it has been a production file since the Phase 1 wiring).
+
+After the corrections, the same CLI run showed all three observations positive: the injected context carried `SPK02-CONTEXT-INJECTED`, the log gained a `SPK02-SESSIONSTART-FIRED` line, and `nonfiction-studio:spk02-probe-agent` spawned and replied `SPK02-AGENT-RAN`. This proves the probe works where hooks and plugin agents are known to work. It says nothing yet about Cowork, which is what the protocol is for.
+
+---
+
 ## Evidence
 
 *To be filled in by the human executor after completing the protocol.*
@@ -152,7 +165,7 @@ See `examples/spikes/spk-02/RESULTS-TEMPLATE.md` for the fill-in format.
 - `examples/spikes/spk-02/README.md` - user protocol (15 steps)
 - `examples/spikes/spk-02/RESULTS-TEMPLATE.md` - results fill-in template
 - `examples/spikes/spk-02/spk02-evidence.log` - created at runtime if hook fires
-- `agents/spike-memory.md` - subagent execution target (SPK-04 stub)
+- `examples/spikes/spk-02/spk02-probe-agent.md` - subagent execution target, copied into `agents/` for the probe's duration (replaced `agents/spike-memory.md`, the SPK-04 stub, on 2026-09-25)
 - `docs/adr/ADR-0001-hooks-json-schema.md` - confirms Form A (wrapper) hooks.json schema
 - `docs/adr/ADR-0005-bin-path-windows.md` - confirms `node ${CLAUDE_PLUGIN_ROOT}/...` form required; bare invocation fails
 - Task text: TSK-008 (SPK-02 Cowork execution) in the task catalog (X-02)
