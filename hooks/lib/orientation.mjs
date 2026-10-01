@@ -10,7 +10,7 @@
 
 import { readFileSync, appendFileSync, mkdirSync, statSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { readProgress } from './bible.mjs';
+import { readProgress, stateDirOf } from './bible.mjs';
 import { parseEvidenceLog, resolvedStatuses } from './ledger.mjs';
 
 /**
@@ -24,7 +24,7 @@ import { parseEvidenceLog, resolvedStatuses } from './ledger.mjs';
  */
 function logError(root, hookName, msg, err) {
   try {
-    const logsDir = join(root, '.studio', 'logs');
+    const logsDir = join(stateDirOf(root), 'logs');
     mkdirSync(logsDir, { recursive: true });
     const record = JSON.stringify({
       ts: new Date().toISOString(),
@@ -71,7 +71,7 @@ export function buildOrientation(root, meta, hookName) {
   // Debt is present when last-gate.json is absent (gateTsMs 0) or its newest ts
   // is older than the most recent chapters/*.md mtime.
   try {
-    const lastGatePath = join(root, '.studio', 'gate', 'last-gate.json');
+    const lastGatePath = join(stateDirOf(root), 'gate', 'last-gate.json');
     const chaptersDir = join(root, 'chapters');
 
     let gateTsMs = 0; // 0 means absent, unreadable, or wrong type

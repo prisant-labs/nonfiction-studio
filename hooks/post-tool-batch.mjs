@@ -64,7 +64,7 @@
 import { readFileSync, appendFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, resolve, sep, relative, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findBookRoot, readProgress, writeProgressAtomic } from './lib/bible.mjs';
+import { findBookRoot, readProgress, writeProgressAtomic, stateDirOf } from './lib/bible.mjs';
 import { countWords } from './lib/stylometry-engine.mjs';
 import { resolveAgentLabel, foldForCompare } from './lib/agent-identity.mjs';
 import { DEMOTION_FALLBACK_STATUS, parseDecisionsLog, isEligibleForFinal } from './lib/status-engine.mjs';
@@ -146,7 +146,7 @@ try {
 // ---------------------------------------------------------------------------
 function logError(msg, err) {
   try {
-    const logsDir = join(bookRoot, '.studio', 'logs');
+    const logsDir = join(stateDirOf(bookRoot), 'logs');
     mkdirSync(logsDir, { recursive: true });
     appendFileSync(
       join(logsDir, 'errors.jsonl'),
@@ -170,7 +170,7 @@ function logError(msg, err) {
 function appendAiUseLog(record) {
   try {
     appendFileSync(
-      join(bookRoot, '.studio', 'ai-use-log.jsonl'),
+      join(stateDirOf(bookRoot), 'ai-use-log.jsonl'),
       JSON.stringify(record) + '\n',
       'utf8'
     );
@@ -211,7 +211,7 @@ function isChapterPath(absPath) {
 // status to `final`) must also be recognized, even though it carries no
 // chapters/ path, so the eligibility sweep below runs for a batch that
 // contains ONLY a progress.json edit and no chapter file write at all.
-const progressJsonPathNorm = foldForCompare(resolve(bookRoot, '.studio', 'progress.json'));
+const progressJsonPathNorm = foldForCompare(resolve(stateDirOf(bookRoot), 'progress.json'));
 
 function isProgressJsonPath(absPath) {
   return foldForCompare(absPath) === progressJsonPathNorm;

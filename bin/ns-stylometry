@@ -11,7 +11,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
-import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
+import { findBookRoot, BibleError, stateDirOf, stateDirNameOf } from '../hooks/lib/bible.mjs';
 import {
   measureChapter, measureBook, computeDrift, countWords, CURRENT_MARKER_SET_VERSION,
   compareRegister, locateWorstWindow,
@@ -212,7 +212,7 @@ if (opts.baseline) {
   thresholds = (bData && bData.thresholds) ? bData.thresholds : null;
 } else {
   // Default: read from .studio/config.json
-  const configPath = join(root, '.studio', 'config.json');
+  const configPath = join(stateDirOf(root), 'config.json');
   if (!existsSync(configPath)) {
     process.stderr.write(
       'ns-stylometry: config.json not found at ' + configPath +
@@ -247,7 +247,7 @@ if (opts.baseline) {
 // carries no blocking verdict, never a reason to fail the whole scoring run.
 let registers = null;
 if (opts['by-register']) {
-  const registersConfigPath = join(root, '.studio', 'config.json');
+  const registersConfigPath = join(stateDirOf(root), 'config.json');
   if (existsSync(registersConfigPath)) {
     try {
       const registersConfig = JSON.parse(readFileSync(registersConfigPath, 'utf8'));
@@ -435,7 +435,7 @@ if (opts['by-register'] && registers) {
   }
 }
 const NO_REGISTERS_NOTE =
-  'no stylometry.registers configured in .studio/config.json; register-aware comparison is ' +
+  'no stylometry.registers configured in ' + stateDirNameOf(root) + '/config.json; register-aware comparison is ' +
   'unavailable until nfs-capture-voice\'s optional register bucketing runs';
 
 // Build findings array: one entry per flagged marker.

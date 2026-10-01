@@ -81,7 +81,7 @@ import { readFileSync, appendFileSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { findBookRoot } from './lib/bible.mjs';
+import { findBookRoot, stateDirOf } from './lib/bible.mjs';
 import { scanInjection } from './lib/scrub-engine.mjs';
 
 // ---------------------------------------------------------------------------
@@ -401,7 +401,7 @@ if (isMain) {
   function logError(msg, err) {
     if (!bookRoot) return;
     try {
-      const logsDir = join(bookRoot, '.studio', 'logs');
+      const logsDir = join(stateDirOf(bookRoot), 'logs');
       mkdirSync(logsDir, { recursive: true });
       appendFileSync(
         join(logsDir, 'errors.jsonl'),
@@ -470,7 +470,7 @@ if (isMain) {
     // -----------------------------------------------------------------------
     if (bookRoot) {
       try {
-        const logsDir = join(bookRoot, '.studio', 'logs');
+        const logsDir = join(stateDirOf(bookRoot), 'logs');
         mkdirSync(logsDir, { recursive: true });
         appendFileSync(
           join(logsDir, 'fetches.jsonl'),

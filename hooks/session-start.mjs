@@ -35,7 +35,7 @@
 import { readFileSync, appendFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findBookRoot } from './lib/bible.mjs';
+import { findBookRoot, stateDirOf } from './lib/bible.mjs';
 import { buildOrientation } from './lib/orientation.mjs';
 import { loadSettings } from './lib/settings.mjs';
 
@@ -183,7 +183,7 @@ try {
   }
 } catch (err) {
   try {
-    const logsDir = join(bookRoot, '.studio', 'logs');
+    const logsDir = join(stateDirOf(bookRoot), 'logs');
     mkdirSync(logsDir, { recursive: true });
     appendFileSync(
       join(logsDir, 'errors.jsonl'),

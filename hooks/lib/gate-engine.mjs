@@ -25,6 +25,7 @@ import {
   readdirSync, unlinkSync
 } from 'node:fs';
 import { join, relative } from 'node:path';
+import { stateDirOf, stateDirNameOf } from './bible.mjs';
 import { computeCoverage, scanChapter, scanQuoteAnchors, computeQuoteFindings } from './claims-engine.mjs';
 import { measureBook, measureChapter, countWords, computeDrift } from './stylometry-engine.mjs';
 import { scrub } from './scrub-engine.mjs';
@@ -159,7 +160,7 @@ export function loadGateConfig(root, stderrFn) {
   const stderr = stderrFn || (s => process.stderr.write(s));
 
   let rawConfig = null;
-  const configPath = join(root, '.studio', 'config.json');
+  const configPath = join(stateDirOf(root), 'config.json');
   if (existsSync(configPath)) {
     rawConfig = JSON.parse(readFileSync(configPath, 'utf8'));
   }
@@ -361,7 +362,7 @@ export function runGate(root, opts = {}) {
 
   // Read the full config once for stylometry baseline (needed when chapters exist)
   let fullConfig = null;
-  const configPath = join(root, '.studio', 'config.json');
+  const configPath = join(stateDirOf(root), 'config.json');
   if (existsSync(configPath)) {
     try {
       fullConfig = JSON.parse(readFileSync(configPath, 'utf8'));
@@ -781,7 +782,7 @@ export function runGate(root, opts = {}) {
           evidence = coherenceFindings
             .filter(f => f.path)
             .map(f => f.path);
-          evidence.push('.studio/progress.json');
+          evidence.push(stateDirNameOf(root) + '/progress.json');
           next = 'Run ns-doctor to diagnose the word-count incoherence and update progress.json.';
         }
 
@@ -862,7 +863,7 @@ export function runGate(root, opts = {}) {
   // ---- SESSION WRITE FLAG (always evaluated; ns-gate never blocks on this check) ----
   {
     const reportName = 'session_write_flag';
-    const flagPath = join(root, '.studio', 'gate', '.session-write-flag');
+    const flagPath = join(stateDirOf(root), 'gate', '.session-write-flag');
 
     if (existsSync(flagPath)) {
       // Present: pass with the flag path as evidence
@@ -870,7 +871,7 @@ export function runGate(root, opts = {}) {
         reportName,
         'pass',
         'session write flag present',
-        ['.studio/gate/.session-write-flag'],
+        [stateDirNameOf(root) + '/gate/.session-write-flag'],
         null
       ));
     } else {
@@ -967,7 +968,7 @@ function toUTCSeconds(d) {
  * @returns {{ reportPath: string }} bible-relative path of the written report
  */
 export function writeGateReport(root, report) {
-  const gateDir = join(root, '.studio', 'gate');
+  const gateDir = join(stateDirOf(root), 'gate');
   mkdirSync(gateDir, { recursive: true });
 
   const slug = report.chapter || 'all';

@@ -46,7 +46,7 @@ import {
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { findBookRoot } from './lib/bible.mjs';
+import { findBookRoot, stateDirOf, stateDirNameOf } from './lib/bible.mjs';
 import { ALL_FLAGS } from './lib/gate-engine.mjs';
 
 // ---------------------------------------------------------------------------
@@ -122,7 +122,7 @@ try {
 // The flag is written by pre-tool-use.mjs when a chapter file is written; its absence
 // means no gate-worthy writes occurred.
 // ---------------------------------------------------------------------------
-const flagPath = join(bookRoot, '.studio', 'gate', '.session-write-flag');
+const flagPath = join(stateDirOf(bookRoot), 'gate', '.session-write-flag');
 if (!existsSync(flagPath)) {
   process.exit(0);
 }
@@ -136,7 +136,7 @@ if (!existsSync(flagPath)) {
 // operational failures; it must never suppress the primary output.
 function logError(msg, err) {
   try {
-    const logsDir = join(bookRoot, '.studio', 'logs');
+    const logsDir = join(stateDirOf(bookRoot), 'logs');
     mkdirSync(logsDir, { recursive: true });
     appendFileSync(
       join(logsDir, 'errors.jsonl'),
@@ -218,7 +218,7 @@ if (!gateResult.error) {
 // The verbatim copy preserves the ts field session-start's gate-debt check reads.
 if (report !== null) {
   try {
-    const gateDir = join(bookRoot, '.studio', 'gate');
+    const gateDir = join(stateDirOf(bookRoot), 'gate');
     mkdirSync(gateDir, { recursive: true });
     const tmpPath = join(gateDir, 'last-gate.tmp.json');
     const stablePath = join(gateDir, 'last-gate.json');
@@ -288,7 +288,7 @@ if (gateExitCode === 1) {
     : [];
   const reason = blockingChecks.length > 0
     ? blockingChecks.map(c => c.check + ': ' + c.detail).join('\n')
-    : 'gate blocked; see .studio/gate/last-gate.json for details';
+    : 'gate blocked; see ' + stateDirNameOf(bookRoot) + '/gate/last-gate.json for details';
   process.stdout.write(
     JSON.stringify({
       hookSpecificOutput: {
@@ -312,7 +312,7 @@ if (verdict === 'warn') {
     : [];
   const summary = warnChecks.length > 0
     ? warnChecks.map(c => c.check + ': ' + c.detail).join('\n')
-    : 'gate warn; see .studio/gate/last-gate.json for details';
+    : 'gate warn; see ' + stateDirNameOf(bookRoot) + '/gate/last-gate.json for details';
   process.stdout.write(
     JSON.stringify({
       hookSpecificOutput: {

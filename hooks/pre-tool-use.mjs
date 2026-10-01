@@ -48,7 +48,7 @@ import {
 } from 'node:fs';
 import { join, resolve, sep, basename, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findBookRoot } from './lib/bible.mjs';
+import { findBookRoot, stateDirOf, stateDirNameOf } from './lib/bible.mjs';
 import {
   resolveActiveAgent,
   checkAgentWriteConstraint,
@@ -230,7 +230,7 @@ function emitDeny(reason) {
 // ---------------------------------------------------------------------------
 function logError(root, msg, err) {
   try {
-    const logsDir = join(root, '.studio', 'logs');
+    const logsDir = join(stateDirOf(root), 'logs');
     mkdirSync(logsDir, { recursive: true });
     appendFileSync(
       join(logsDir, 'errors.jsonl'),
@@ -259,7 +259,7 @@ function logError(root, msg, err) {
 // boolean true; an absent key, the string "true", false, and null all leave
 // the gate CLOSED.
 // ---------------------------------------------------------------------------
-function checkWebGateConstraint(agentSlug, bookRootError, bookConfig) {
+function checkWebGateConstraint(agentSlug, bookRootError, bookConfig, stateDirName) {
   if (bookRootError) {
     return (
       'Web gate closed for agent ' + agentSlug + ': ' +
@@ -267,8 +267,8 @@ function checkWebGateConstraint(agentSlug, bookRootError, bookConfig) {
         ? 'no book root could be found'
         : 'bible files are corrupt (' + bookRootError.message + ')') +
       ', so research.web_enabled cannot be verified. Set research.web_enabled to the boolean ' +
-      'true in .studio/config.json once the book project is available. Denied per D-13 ' +
-      '(security posture, fail-closed).'
+      "true in the config.json inside the book's state folder once the book project is " +
+      'available. Denied per D-13 (security posture, fail-closed).'
     );
   }
 
@@ -279,8 +279,8 @@ function checkWebGateConstraint(agentSlug, bookRootError, bookConfig) {
 
   return (
     'Web gate closed for agent ' + agentSlug + ': research.web_enabled must be exactly the ' +
-    'boolean true in .studio/config.json (got ' + JSON.stringify(webEnabled) + '). Denied per ' +
-    'D-13 (security posture, fail-closed).'
+    'boolean true in ' + stateDirName + '/config.json (got ' + JSON.stringify(webEnabled) +
+    '). Denied per D-13 (security posture, fail-closed).'
   );
 }
 
@@ -489,7 +489,9 @@ if (isMain) {
   if (toolName === 'WebSearch' || toolName === 'WebFetch') {
     const webGateAgent = resolveActiveAgent(event);
     if (isWebGatedAgent(webGateAgent)) {
-      const webGateDenyReason = checkWebGateConstraint(webGateAgent, bookRootError, bookConfig);
+      const webGateDenyReason = checkWebGateConstraint(
+        webGateAgent, bookRootError, bookConfig, bookRoot ? stateDirNameOf(bookRoot) : null
+      );
       if (webGateDenyReason) {
         emitDeny(webGateDenyReason);
       }
@@ -516,7 +518,7 @@ if (isMain) {
       if (WRITE_TOOLS.has(toolName)) {
         emitDeny(
           'Cannot verify write safety: bible files are corrupt (' + bookRootError.message + '). ' +
-          'Repair .studio/config.json then retry; bin/ns-doctor reports the parse error. ' +
+          'Repair the file named there, then retry; bin/ns-doctor reports the problem. ' +
           'Denied per D-13 (security posture, fail-closed).'
         );
       }
@@ -698,12 +700,10 @@ if (isMain) {
     emitDeny(agentDenyReason);
   }
 
-  // Step 3c: .studio/ targets are machine state.
+  // Step 3c: state-folder targets are machine state.
   // Allowed with no snapshot and no session-write flag (S-07 no-op row).
-  if (
-    targetNorm === rootNorm + sep + '.studio' ||
-    targetNorm.startsWith(rootNorm + sep + '.studio' + sep)
-  ) {
+  const stateDirNorm = rootNorm + sep + foldForCompare(stateDirNameOf(resolvedRoot));
+  if (targetNorm === stateDirNorm || targetNorm.startsWith(stateDirNorm + sep)) {
     process.exit(0);
   }
 
@@ -716,7 +716,7 @@ if (isMain) {
     // Atomic write-then-rename; creating .studio/gate/ if needed.
     // Fail-open: flag write error is logged and the write is still allowed.
     try {
-      const gateDir = join(resolvedRoot, '.studio', 'gate');
+      const gateDir = join(stateDirOf(resolvedRoot), 'gate');
       mkdirSync(gateDir, { recursive: true });
       const tmpFlagPath = join(gateDir, '.session-write-flag.tmp');
       writeFileSync(tmpFlagPath, new Date().toISOString() + '\n', 'utf8');
@@ -730,7 +730,7 @@ if (isMain) {
     // pruned after creation to the newest 10 per slug.
     if (existsSync(resolvedTarget)) {
       try {
-        const snapshotsDir = join(resolvedRoot, '.studio', 'snapshots');
+        const snapshotsDir = join(stateDirOf(resolvedRoot), 'snapshots');
         mkdirSync(snapshotsDir, { recursive: true });
 
         const fileBase = basename(resolvedTarget);

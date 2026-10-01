@@ -50,6 +50,7 @@
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { stateDirOf } from './bible.mjs';
 
 /**
  * Parses a .studio/gate/ filename against the two significant patterns documented in
@@ -304,7 +305,7 @@ export function isHighlighted(row) {
  * }}
  */
 export function computeStatusBoard(root, progress, config) {
-  const gateDir = join(root, '.studio', 'gate');
+  const gateDir = join(stateDirOf(root), 'gate');
   let filenames = [];
   if (existsSync(gateDir)) {
     try {

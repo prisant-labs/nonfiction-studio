@@ -57,6 +57,7 @@ import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { decideCredentialMode } from './lib/credential-mode.mjs';
+import { DEFAULT_STATE_DIR } from '../hooks/lib/bible.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -263,7 +264,7 @@ function runStructuralAssertions(projectDir, label) {
   assertions.push(assertDirExists(join(projectDir, 'chapters'), label + ':chapters/'));
   assertions.push(assertDirExists(join(projectDir, 'research'), label + ':research/'));
   assertions.push(assertDirExists(join(projectDir, 'production'), label + ':production/'));
-  assertions.push(assertDirExists(join(projectDir, '.studio'), label + ':.studio/'));
+  assertions.push(assertDirExists(join(projectDir, DEFAULT_STATE_DIR), label + ':' + DEFAULT_STATE_DIR + '/'));
   // Q-01 section 7: "File contains a DRAFT: block" applies during the active interview.
   // For a seeded clone (post-interview), the brief is finalized with section headers (## N.).
   // The assertion is: brief.md is non-empty and populated (has at least one ## section).
@@ -283,7 +284,7 @@ function runStructuralAssertions(projectDir, label) {
     join(projectDir, 'structure', 'outline.md'), /\S/, label + ':outline.md non-empty'
   ));
   assertions.push(assertAiUseLogHasAgent(
-    join(projectDir, '.studio', 'ai-use-log.jsonl'), label + ':ai-use-log agent field'
+    join(projectDir, DEFAULT_STATE_DIR, 'ai-use-log.jsonl'), label + ':ai-use-log agent field'
   ));
   return assertions;
 }
@@ -343,7 +344,7 @@ function runDryMode(model) {
     join(SAMPLE_BOOK, 'context', 'brief.md'),
     join(SAMPLE_BOOK, 'structure', 'outline.md'),
     join(SAMPLE_BOOK, 'research', 'evidence-log.md'),
-    join(SAMPLE_BOOK, '.studio', 'ai-use-log.jsonl'),
+    join(SAMPLE_BOOK, DEFAULT_STATE_DIR, 'ai-use-log.jsonl'),
     join(FIXTURES_DIR, 'unsourced-claim'),
     NS_DOCTOR,
     NS_GATE,
@@ -430,7 +431,7 @@ function runLiveMode(model) {
 
     const scaffoldPrompt =
       'I am running a Tier B integration test on this Nonfiction Studio project. ' +
-      'List which of these directories exist at the project root: context, structure, chapters, research, production, .studio. ' +
+      'List which of these directories exist at the project root: context, structure, chapters, research, production, ' + DEFAULT_STATE_DIR + '. ' +
       'Reply with SCAFFOLD_OK if all six directories are present, or SCAFFOLD_MISSING followed by the names of any absent directories.';
 
     const scaffoldResult = callClaude(scaffoldPrompt, model, tempDir);
@@ -455,7 +456,7 @@ function runLiveMode(model) {
       assertDirExists(join(tempDir, 'chapters'), 'step1:chapters/'),
       assertDirExists(join(tempDir, 'research'), 'step1:research/'),
       assertDirExists(join(tempDir, 'production'), 'step1:production/'),
-      assertDirExists(join(tempDir, '.studio'), 'step1:.studio/'),
+      assertDirExists(join(tempDir, DEFAULT_STATE_DIR), 'step1:' + DEFAULT_STATE_DIR + '/'),
     ];
     for (const a of step1Assertions) {
       log('  ' + a.message);

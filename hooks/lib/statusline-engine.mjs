@@ -23,7 +23,7 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { findBookRoot } from './bible.mjs';
+import { findBookRoot, stateDirOf } from './bible.mjs';
 
 // Matches .claude-plugin/plugin.json's "name" field and the PLUGIN_NAMESPACE constant in
 // hooks/lib/agent-identity.mjs (ADR-0007, agent identity resolution). Duplicated as a literal
@@ -315,8 +315,8 @@ export function buildMainStatusLine(event) {
 
   try {
     const { root, meta, config } = found;
-    const progress = readJsonSafe(join(root, '.studio', 'progress.json'));
-    const lastGate = readJsonSafe(join(root, '.studio', 'gate', 'last-gate.json'));
+    const progress = readJsonSafe(join(stateDirOf(root), 'progress.json'));
+    const lastGate = readJsonSafe(join(stateDirOf(root), 'gate', 'last-gate.json'));
     return renderStatusLine({ meta, progress, config, lastGate });
   } catch {
     return '';
@@ -365,8 +365,8 @@ export function buildSubagentLines(event) {
     if (!found) continue;
 
     try {
-      const progress = readJsonSafe(join(found.root, '.studio', 'progress.json'));
-      const lastGate = readJsonSafe(join(found.root, '.studio', 'gate', 'last-gate.json'));
+      const progress = readJsonSafe(join(stateDirOf(found.root), 'progress.json'));
+      const lastGate = readJsonSafe(join(stateDirOf(found.root), 'gate', 'last-gate.json'));
       const chapter = deriveActiveChapter(progress);
       const { gateToken } = deriveGateInfo(lastGate);
 
