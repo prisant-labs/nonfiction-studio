@@ -6,6 +6,18 @@ This file is written from the commit history of the branch it ships from, not fr
 
 ## Unreleased
 
+### Added
+
+- **ADR-0015 (state folder name), accepted 2026-09-30.** The record decides that each book's
+  machine-managed state folder defaults to `_nonfiction-studio/` instead of `.studio/`. The new
+  name identifies the plugin that owns the folder and stays visible in file browsers, and the
+  folder gains a short README that explains it. An author can choose a different name, which is
+  recorded in a committed, visible pointer file, `nonfiction-studio.json`, at the book root. A
+  bad pointer never falls back to the default, and no flow creates a second state folder beside
+  an existing book.
+  The `nfs-doctor` skill performs every move with the author's consent. No code changes yet;
+  the change lands in its own pull request.
+
 ### Fixed
 
 - **The SPK-02 Cowork execution probe could not produce a valid result.** Three defects, each a
