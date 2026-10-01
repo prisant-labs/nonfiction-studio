@@ -35,11 +35,12 @@ Every command below is one line of `.github/workflows/tier-a.yml`, in the order 
 13. `node scripts/checks/check-link-labels.mjs` - once a Markdown link's target resolves to a component's own reference page, `SKILL.md`, agent page, or `bin/` CLI, the link's label has to name that component.
 14. `node scripts/checks/check-component-counts.mjs` - a stated component count (skills, CLIs) has to match the tree's true count. See "Writing prose that survives this checker," below.
 15. `node scripts/checks/check-compliance-stanza.mjs` - every agent-dispatching skill (a skill whose frontmatter `chain:` list is non-empty) carries the byte-identical shared compliance stanza.
-16. `node scripts/test-engines.mjs` - the engine, lib, hook, and schema unit test suites, **and** the checker unit tests under `tests/checks/`, all in one `node --test` invocation.
-17. `node scripts/test-fixtures.mjs` - the bidirectional fixture matrix, run against temp clones so committed fixtures are never touched.
-18. `node scripts/verify-sample-book.mjs` - sample-book integrity: marker-to-ledger-to-source resolution.
+16. `node scripts/checks/check-state-folder-stanza.mjs` - every skill that names `<state-dir>` carries the byte-identical "Locate the state folder" stanza before its first step, and no skill or agent names the state folder literally (ADR-0015, state folder name).
+17. `node scripts/test-engines.mjs` - the engine, lib, hook, and schema unit test suites, **and** the checker unit tests under `tests/checks/`, all in one `node --test` invocation.
+18. `node scripts/test-fixtures.mjs` - the bidirectional fixture matrix, run against temp clones so committed fixtures are never touched.
+19. `node scripts/verify-sample-book.mjs` - sample-book integrity: marker-to-ledger-to-source resolution.
 
-`tier-a.yml` has twenty `run:` lines. Its comments number nineteen of them "Live step 1" through "Live step 19", and Live step 1 is `npm ci` (see Setup). The twentieth, `npm install -g @anthropic-ai/claude-code`, is marked inert scaffolding. Each item above is therefore numbered one lower than its "Live step" label in the workflow; installing the `claude` binary is a prerequisite already covered by "Prerequisites." Open a pull request only once every numbered step above passes locally.
+`tier-a.yml` has twenty-one `run:` lines. Its comments number twenty of them "Live step 1" through "Live step 20", and Live step 1 is `npm ci` (see Setup). The twenty-first, `npm install -g @anthropic-ai/claude-code`, is marked inert scaffolding. Each item above is therefore numbered one lower than its "Live step" label in the workflow; installing the `claude` binary is a prerequisite already covered by "Prerequisites." Open a pull request only once every numbered step above passes locally.
 
 ### The two suites, named directly
 

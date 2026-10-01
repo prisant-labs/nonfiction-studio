@@ -27,7 +27,20 @@ Skill chain edges:
 
 ---
 
-## Step 1 - Confirmed-brief probe (mandatory first tool call, all scopes)
+## Locate the state folder
+
+This book keeps its machine-managed records in one state folder at the book root, the folder that holds `context/` and `chapters/`. In this skill, `<state-dir>` stands for that folder's name. Resolve it once, before any step below.
+
+1. Use the Read tool on `nonfiction-studio.json` at the book root. This Read is the skill's first tool call. If the file does not exist, `<state-dir>` is `_nonfiction-studio`; continue at item 4.
+2. If the file exists, it must hold a JSON object with a `state_dir` key whose value is a string that matches `^[A-Za-z0-9._-]{1,64}$`. The value may not be `.` or `..`. It may not be `context`, `structure`, `research`, `chapters`, `production`, `.git` or `.claude`; on Windows, compare these names without regard to case. The folder that it names must exist at the book root and hold `meta.json`. When every condition holds, `<state-dir>` is that value.
+3. If the file exists but any condition in item 2 fails, stop. Tell the author which condition failed, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never fall back to `_nonfiction-studio`.
+4. If the file does not exist and `_nonfiction-studio/meta.json` does not exist either, list the folders at the book root, hidden folders included. If one of them holds both `meta.json` and `progress.json`, stop. Name that folder, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never create a second state folder beside it.
+
+Before you run a command or open a path below, replace `<state-dir>` with the resolved name. When this skill dispatches an agent, name the resolved state folder in the dispatch brief, because agents never resolve it themselves.
+
+---
+
+## Step 1 - Confirmed-brief probe (first tool call after the state folder is located, all scopes)
 
 Use the Bash tool to run:
 ```
@@ -96,7 +109,7 @@ The agent performs all structure file writes:
 - `structure/chapter-list.md` (the slug registry per the agent's format contract)
 - Appends evidence-needed items to `research/open-questions.md` in the same invocation
 
-Do not instruct the agent to write `.studio/progress.json` or any other `.studio/` path. Craft-model selection questions belong to `structure-architect`; the skill does not present model options.
+Do not instruct the agent to write `<state-dir>/progress.json` or any other `<state-dir>/` path. Craft-model selection questions belong to `structure-architect`; the skill does not present model options.
 
 ---
 
@@ -114,7 +127,7 @@ After `structure-architect` completes, present the outline to the author and ask
 
 ### Compliance append (verify-then-append)
 
-This flow's writes may already be logged automatically by a hook on this surface; this skill never assumes which surfaces do or do not fire that hook, and it never assumes the flow is running on any particular surface. Before this flow's first write, read `.studio/ai-use-log.jsonl` and count how many records currently target each file this flow is about to write (the file's path appearing in that record's `targets` array). Hold that starting count per file. After this flow's writes complete, re-read `.studio/ai-use-log.jsonl` and count the records targeting each of those files again. For each file: if the count increased between the two reads, a hook already appended a record for this write on this surface, and this skill appends nothing further for that file. If the count did not increase, append the flow's record or records for that file to `.studio/ai-use-log.jsonl`, per the record template below, using the six-field shape in `docs/formats/ai-use-log.md` (S-08 section 5): `ts`, `agent`, `surface`, `scope`, `targets`, `summary` - with `surface` set honestly to the surface this flow is actually running on. A record already sitting in the log before this flow started, from an earlier session, does not by itself suppress the append; only a count increase observed between this flow's own two reads does. This skill never appends twice for the same write.
+This flow's writes may already be logged automatically by a hook on this surface; this skill never assumes which surfaces do or do not fire that hook, and it never assumes the flow is running on any particular surface. Before this flow's first write, read `<state-dir>/ai-use-log.jsonl` and count how many records currently target each file this flow is about to write (the file's path appearing in that record's `targets` array). Hold that starting count per file. After this flow's writes complete, re-read `<state-dir>/ai-use-log.jsonl` and count the records targeting each of those files again. For each file: if the count increased between the two reads, a hook already appended a record for this write on this surface, and this skill appends nothing further for that file. If the count did not increase, append the flow's record or records for that file to `<state-dir>/ai-use-log.jsonl`, per the record template below, using the six-field shape in `docs/formats/ai-use-log.md` (S-08 section 5): `ts`, `agent`, `surface`, `scope`, `targets`, `summary` - with `surface` set honestly to the surface this flow is actually running on. A record already sitting in the log before this flow started, from an earlier session, does not by itself suppress the append; only a count increase observed between this flow's own two reads does. This skill never appends twice for the same write.
 
 **Record template for this flow.** One record per agent that wrote in this invocation (per the count-delta check above):
 
@@ -135,7 +148,7 @@ Use the Read tool on `structure/outline.md` and `structure/chapter-list.md` to c
 - If either file is missing or empty: report the gap clearly. Name the missing file and ask the author to re-run from Step 3.
 - If both files are present: continue.
 
-State: "The chapter list in `structure/chapter-list.md` is the locked chapter registry. The slug rows in that file are the authoritative identifiers for all downstream work: drafting, fact-checking, and the quality gate all resolve chapters by slug. The skill writes no `.studio/` state; the PostToolBatch hook creates progress entries the first time each chapter file is written."
+State: "The chapter list in `structure/chapter-list.md` is the locked chapter registry. The slug rows in that file are the authoritative identifiers for all downstream work: drafting, fact-checking, and the quality gate all resolve chapters by slug. The skill writes no `<state-dir>/` state; the PostToolBatch hook creates progress entries the first time each chapter file is written."
 
 Offer optional next steps:
 - If `context/style-profile.md` is absent: suggest `nfs-capture-voice` to build the voice baseline before drafting.

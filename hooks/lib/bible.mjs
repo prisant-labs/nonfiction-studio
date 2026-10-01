@@ -53,12 +53,12 @@ export const LEGACY_STATE_DIR = '.studio';
 export const POINTER_FILE = 'nonfiction-studio.json';
 
 // One folder name: ASCII letters, digits, "_", "-", "."; 1 to 64 characters.
-const STATE_DIR_NAME_RE = /^[A-Za-z0-9._-]{1,64}$/;
+export const STATE_DIR_NAME_RE = /^[A-Za-z0-9._-]{1,64}$/;
 
 // Names a state folder may never take. The research-librarian's write scope follows the state
 // folder (hooks/lib/agent-identity.mjs), so a pointer naming a bible folder would widen that
 // scope into the manuscript, and one naming .claude would let it plant a project skill.
-const RESERVED_STATE_DIR_NAMES = ['context', 'structure', 'research', 'chapters', 'production', '.git', '.claude'];
+export const RESERVED_STATE_DIR_NAMES = ['context', 'structure', 'research', 'chapters', 'production', '.git', '.claude'];
 
 /**
  * Checks a candidate state-folder name. Returns null when valid, or a one-clause reason.

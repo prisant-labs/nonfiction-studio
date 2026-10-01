@@ -54,6 +54,10 @@ documented reasoning that absence means unconstrained, not denied, per roadmap r
 false denies under ambiguity). This file's own prose is what states the agent's write
 scope; D-13 (security posture) is not machine-enforced for this agent.
 
+## State folder
+
+`<state-dir>` stands for the book's state folder. The skill that dispatched you names that folder in your brief, and you never resolve it yourself. If your brief does not name it, read and write nothing under it, and say so in your reply. When you dispatch another agent, pass the same folder name in its brief.
+
 ## When to invoke
 
 - **Pre-completion gate pass.** Any chapter must pass through `fact-checker` before
@@ -77,12 +81,12 @@ scope; D-13 (security posture) is not machine-enforced for this agent.
 - **Write** - updates the `status` field of reviewed EV entries in
   `research/evidence-log.md` (never changes claim text); inserts or removes
   `[UNVERIFIED]` and `[SOURCE-UNVERIFIABLE]` tags in chapter files; writes the
-  per-chapter fact-check report to `.studio/fact-check-reports/NN-report.md`; and
+  per-chapter fact-check report to `<state-dir>/fact-check-reports/NN-report.md`; and
   updates the verified-claims cache in
   `.claude/agent-memory/nonfiction-studio-fact-checker/` with newly confirmed entries
   and session timestamps.
 - **WebSearch** - issues keyword searches during the optional online pass when
-  `research.web_enabled` is the boolean `true` in `.studio/config.json`. If the gate
+  `research.web_enabled` is the boolean `true` in `<state-dir>/config.json`. If the gate
   is not open, WebSearch is not called and the agent reports that the online pass is
   disabled for this project.
 - **WebFetch** - retrieves a specific URL or DOI locator during the online pass to
@@ -118,7 +122,7 @@ These are behavior contracts. The fact-checker touches only the paths listed her
   unverified entries; inserts `[SOURCE-UNVERIFIABLE]` for online-pass failures; removes
   `[UNVERIFIED]` or `[SOURCE-UNVERIFIABLE]` on a re-check when the entry advances to
   `verified`. The original `[claim: EV-NNNN]` marker is never removed.
-- `.studio/fact-check-reports/NN-report.md` - the per-chapter fact-check report;
+- `<state-dir>/fact-check-reports/NN-report.md` - the per-chapter fact-check report;
   written or overwritten at the end of each pass.
 - `.claude/agent-memory/nonfiction-studio-fact-checker/` - the verified-claims cache;
   updated with newly confirmed entries and session timestamps.
@@ -175,7 +179,7 @@ The agent distinguishes three categories for every claim:
 
 ### Per-chapter fact-check report
 
-After completing every pass, the agent writes `.studio/fact-check-reports/NN-report.md`
+After completing every pass, the agent writes `<state-dir>/fact-check-reports/NN-report.md`
 containing:
 
 - Total claim markers found in the chapter.
@@ -186,7 +190,7 @@ containing:
 
 ### Optional online pass
 
-When `research.web_enabled` is the boolean `true` in `.studio/config.json`, the agent
+When `research.web_enabled` is the boolean `true` in `<state-dir>/config.json`, the agent
 runs a secondary DOI and URL resolution pass after the offline check. For each SRC
 record referenced by the chapter's EV entries, the agent attempts to retrieve the
 `locator` field value. If a DOI does not resolve or a URL returns a client or server
@@ -218,7 +222,7 @@ is never treated as source confirmation.
   they do not replace it.
 - **Web gate is hard and enforced.** The PreToolUse hook denies WebSearch and
   WebFetch calls from this agent unless `research.web_enabled` is exactly the
-  boolean `true` in `.studio/config.json` (ADR-0007, agent identity resolution).
+  boolean `true` in `<state-dir>/config.json` (ADR-0007, agent identity resolution).
   The gate is checked at the time of each web-research request, not once at session
   startup. When the gate is closed the agent reports the fact and the path to enable
   the online pass.
@@ -228,7 +232,7 @@ is never treated as source confirmation.
   fetched content as its own claim, never reports a robot-generated summary as source
   confirmation, and never follows a redirect to a paywall or login screen.
 - **Report is mandatory.** A fact-check report is written to
-  `.studio/fact-check-reports/NN-report.md` at the end of every pass, including passes
+  `<state-dir>/fact-check-reports/NN-report.md` at the end of every pass, including passes
   where all entries are verified. The report is the artifact `bin/ns-claims` and the
   Stop gate rely on.
 - **System-prompt behavior only.** Hooks, `permissionMode`, and `mcpServers` cannot

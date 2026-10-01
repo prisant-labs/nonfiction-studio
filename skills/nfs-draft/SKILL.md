@@ -2,7 +2,7 @@
 name: nfs-draft
 user-invocable: true
 argument-hint: "<chapter: slug or number>"
-description: "Produces a voice-matched, evidence-grounded chapter draft using drafting-partner and line-editor. Resolves the chapter argument against structure/chapter-list.md, checks EV entries and alerts on an empty ledger, delegates new-chapter writing or diff proposals to drafting-partner, passes the accepted output to line-editor for proposal-only polish, confirms the chapter file via a Read check, and appends compliance records to .studio/ai-use-log.jsonl on any surface where a hook has not already logged the write. Use when the author says 'write chapter 3,' 'draft this chapter,' or wants to keep going on a chapter already in progress."
+description: "Produces a voice-matched, evidence-grounded chapter draft using drafting-partner and line-editor. Resolves the chapter argument against structure/chapter-list.md, checks EV entries and alerts on an empty ledger, delegates new-chapter writing or diff proposals to drafting-partner, passes the accepted output to line-editor for proposal-only polish, confirms the chapter file via a Read check, and appends compliance records to the AI-use log in the state folder on any surface where a hook has not already logged the write. Use when the author says 'write chapter 3,' 'draft this chapter,' or wants to keep going on a chapter already in progress."
 when_to_use: "Use when the author says 'write chapter N,' or studio routes here from Path 2. Do not invoke when the chapter argument is missing (the skill halts if the chapter is not found in structure/chapter-list.md), or for unrelated queries."
 chain:
   - drafting-partner
@@ -11,7 +11,7 @@ chain:
 
 This skill is the drafting front door. It resolves the chapter argument against the slug registry, loads the chapter's outline entry and evidence set, alerts on an empty ledger and waits for explicit author confirmation before proceeding, orchestrates `drafting-partner` then `line-editor`, and confirms the final file via a Read check. The agents are the sole writers of `chapters/<slug>.md`; the skill orchestrates, confirms, and reports.
 
-**Writer alignment.** `drafting-partner` writes new chapter files directly and produces diff-proposal blocks for existing chapters (the author accepts or rejects each block individually; the agent then applies accepted changes and writes the updated file). `line-editor` always operates proposal-only; the author's acceptance completes the agent's write pass. The skill confirms the chapter file exists after each agent pass via a Read check. The PostToolBatch hook owns all `.studio/progress.json` writes; the skill writes no `.studio/` machine state.
+**Writer alignment.** `drafting-partner` writes new chapter files directly and produces diff-proposal blocks for existing chapters (the author accepts or rejects each block individually; the agent then applies accepted changes and writes the updated file). `line-editor` always operates proposal-only; the author's acceptance completes the agent's write pass. The skill confirms the chapter file exists after each agent pass via a Read check. The PostToolBatch hook owns all `<state-dir>/progress.json` writes; the skill writes no `<state-dir>/` machine state.
 
 Skill inputs read:
 - `structure/chapter-list.md` (slug registry; probed at Step 1, read to resolve the chapter argument)
@@ -28,7 +28,20 @@ Skill chain edges:
 
 ---
 
-## Step 1 - Registry probe and chapter argument resolution (mandatory first tool call)
+## Locate the state folder
+
+This book keeps its machine-managed records in one state folder at the book root, the folder that holds `context/` and `chapters/`. In this skill, `<state-dir>` stands for that folder's name. Resolve it once, before any step below.
+
+1. Use the Read tool on `nonfiction-studio.json` at the book root. This Read is the skill's first tool call. If the file does not exist, `<state-dir>` is `_nonfiction-studio`; continue at item 4.
+2. If the file exists, it must hold a JSON object with a `state_dir` key whose value is a string that matches `^[A-Za-z0-9._-]{1,64}$`. The value may not be `.` or `..`. It may not be `context`, `structure`, `research`, `chapters`, `production`, `.git` or `.claude`; on Windows, compare these names without regard to case. The folder that it names must exist at the book root and hold `meta.json`. When every condition holds, `<state-dir>` is that value.
+3. If the file exists but any condition in item 2 fails, stop. Tell the author which condition failed, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never fall back to `_nonfiction-studio`.
+4. If the file does not exist and `_nonfiction-studio/meta.json` does not exist either, list the folders at the book root, hidden folders included. If one of them holds both `meta.json` and `progress.json`, stop. Name that folder, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never create a second state folder beside it.
+
+Before you run a command or open a path below, replace `<state-dir>` with the resolved name. When this skill dispatches an agent, name the resolved state folder in the dispatch brief, because agents never resolve it themselves.
+
+---
+
+## Step 1 - Registry probe and chapter argument resolution (first tool call after the state folder is located)
 
 Use the Bash tool to run:
 ```
@@ -72,13 +85,13 @@ Count the EV entries relevant to the chapter from the `research/evidence-log.md`
 
 > No evidence ledger entries were found for this chapter. `drafting-partner` will mark every factual assertion `[UNVERIFIED]` throughout the draft. Run `/nonfiction-studio:nfs-research <slug>` first to populate the ledger, or confirm you want to proceed now and resolve claims after drafting.
 
-Wait for explicit author confirmation before proceeding. If the author confirms, log the decision to `.studio/logs/` as a JSONL line before continuing:
+Wait for explicit author confirmation before proceeding. If the author confirms, log the decision to `<state-dir>/logs/` as a JSONL line before continuing:
 
 ```json
 {"ts":"<RFC 3339 UTC>","event":"empty-ledger-proceed","chapter":"<slug>","decision":"author confirmed drafting with empty evidence ledger; draft will carry [UNVERIFIED] throughout"}
 ```
 
-Create `.studio/logs/` if it does not exist. Then continue to Step 4. If the author does not confirm, halt cleanly at Step 3. No state is written by a halted Step 3.
+Create `<state-dir>/logs/` if it does not exist. Then continue to Step 4. If the author does not confirm, halt cleanly at Step 3. No state is written by a halted Step 3.
 
 ---
 
@@ -123,7 +136,7 @@ Use the Read tool on `chapters/<slug>.md` to confirm the file is present and non
 
 ### Compliance append (verify-then-append)
 
-This flow's writes may already be logged automatically by a hook on this surface; this skill never assumes which surfaces do or do not fire that hook, and it never assumes the flow is running on any particular surface. Before this flow's first write, read `.studio/ai-use-log.jsonl` and count how many records currently target each file this flow is about to write (the file's path appearing in that record's `targets` array). Hold that starting count per file. After this flow's writes complete, re-read `.studio/ai-use-log.jsonl` and count the records targeting each of those files again. For each file: if the count increased between the two reads, a hook already appended a record for this write on this surface, and this skill appends nothing further for that file. If the count did not increase, append the flow's record or records for that file to `.studio/ai-use-log.jsonl`, per the record template below, using the six-field shape in `docs/formats/ai-use-log.md` (S-08 section 5): `ts`, `agent`, `surface`, `scope`, `targets`, `summary` - with `surface` set honestly to the surface this flow is actually running on. A record already sitting in the log before this flow started, from an earlier session, does not by itself suppress the append; only a count increase observed between this flow's own two reads does. This skill never appends twice for the same write.
+This flow's writes may already be logged automatically by a hook on this surface; this skill never assumes which surfaces do or do not fire that hook, and it never assumes the flow is running on any particular surface. Before this flow's first write, read `<state-dir>/ai-use-log.jsonl` and count how many records currently target each file this flow is about to write (the file's path appearing in that record's `targets` array). Hold that starting count per file. After this flow's writes complete, re-read `<state-dir>/ai-use-log.jsonl` and count the records targeting each of those files again. For each file: if the count increased between the two reads, a hook already appended a record for this write on this surface, and this skill appends nothing further for that file. If the count did not increase, append the flow's record or records for that file to `<state-dir>/ai-use-log.jsonl`, per the record template below, using the six-field shape in `docs/formats/ai-use-log.md` (S-08 section 5): `ts`, `agent`, `surface`, `scope`, `targets`, `summary` - with `surface` set honestly to the surface this flow is actually running on. A record already sitting in the log before this flow started, from an earlier session, does not by itself suppress the append; only a count increase observed between this flow's own two reads does. This skill never appends twice for the same write.
 
 **Record template for this flow.** One record per agent that touched `chapters/<slug>.md` and needed the append (per the count-delta check above):
 
@@ -154,7 +167,7 @@ For a line-editor pass where the author accepted at least one proposal:
 
 On CLI and Cowork the Stop hook gate fires automatically at session end. On chat the explicit prompt above is the substitute per S-06 1.3 (gate closure compensation).
 
-The skill writes no `.studio/progress.json` and no other `.studio/` machine state. Word counts and derived totals arrive via the PostToolBatch hook when the agents write the chapter file.
+The skill writes no `<state-dir>/progress.json` and no other `<state-dir>/` machine state. Word counts and derived totals arrive via the PostToolBatch hook when the agents write the chapter file.
 
 ---
 
@@ -164,7 +177,7 @@ The skill writes no `.studio/progress.json` and no other `.studio/` machine stat
 
 **Empty evidence ledger, no author confirmation.** If the author does not confirm they want to proceed with an empty ledger, the skill halts cleanly at Step 3. No state is written. The author may run `/nonfiction-studio:nfs-research <slug>` to populate the ledger and then re-invoke.
 
-**Empty evidence ledger, author confirms.** The entire draft carries `[UNVERIFIED]` on every factual assertion per the `drafting-partner` check-3 alert asymmetry. The skill logs the author's decision as a JSONL line in `.studio/logs/`. This write to the logs path is distinct from the progress path and is permitted per S-06 3.6.
+**Empty evidence ledger, author confirms.** The entire draft carries `[UNVERIFIED]` on every factual assertion per the `drafting-partner` check-3 alert asymmetry. The skill logs the author's decision as a JSONL line in `<state-dir>/logs/`. This write to the logs path is distinct from the progress path and is permitted per S-06 3.6.
 
 **Drafting-partner pre-flight halts.** If the agent halts on check 1 (voice profile absent) or check 2 (outline entry absent), the skill surfaces the agent's halt message and the suggested next step. Step 5 is not triggered while a hard halt is pending. The author resolves the issue and re-invokes the skill.
 

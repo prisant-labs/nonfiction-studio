@@ -150,14 +150,21 @@ jobs:
       - name: Compliance stanza parity
         run: node scripts/checks/check-compliance-stanza.mjs
 
-      # Live step 17: engine, lib, hook, and schema unit test suites (no API key required).
+      # Live step 17: state-folder stanza parity checker (ADR-0015, state folder name) - every
+      # skill that names <state-dir> carries the byte-identical "Locate the state folder" stanza,
+      # whose sentinels derive from hooks/lib/bible.mjs, and no skill or agent names the state
+      # folder literally.
+      - name: State-folder stanza parity
+        run: node scripts/checks/check-state-folder-stanza.mjs
+
+      # Live step 18: engine, lib, hook, and schema unit test suites (no API key required).
       - name: Engine unit tests
         run: node scripts/test-engines.mjs
 
-      # Live step 18: bidirectional fixture matrix with temp-clone discipline.
+      # Live step 19: bidirectional fixture matrix with temp-clone discipline.
       - name: Fixture tests
         run: node scripts/test-fixtures.mjs
 
-      # Live step 19: sample book integrity - verifies resolution through marker-to-ledger-to-SRC chains.
+      # Live step 20: sample book integrity - verifies resolution through marker-to-ledger-to-SRC chains.
       - name: Sample book integrity
         run: node scripts/verify-sample-book.mjs

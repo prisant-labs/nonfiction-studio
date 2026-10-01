@@ -8,7 +8,7 @@ chain:
   - fact-checker
 ---
 
-This skill is the verification front door. It resolves the chapter argument, runs an engine-backed marker inventory via `bin/ns-claims`, states the web gate status, delegates the authoritative verification pass to the `fact-checker` agent, confirms agent writes via Read checks, and formats the three counts from the agent's per-chapter report. The `fact-checker` agent is the sole writer of chapter markers and EV status transitions; the skill orchestrates, confirms, and reports. The skill writes no `.studio/progress.json` - the open-claims total is maintained by the PostToolBatch hook per D-06 (single-writer state discipline).
+This skill is the verification front door. It resolves the chapter argument, runs an engine-backed marker inventory via `bin/ns-claims`, states the web gate status, delegates the authoritative verification pass to the `fact-checker` agent, confirms agent writes via Read checks, and formats the three counts from the agent's per-chapter report. The `fact-checker` agent is the sole writer of chapter markers and EV status transitions; the skill orchestrates, confirms, and reports. The skill writes no `<state-dir>/progress.json` - the open-claims total is maintained by the PostToolBatch hook per D-06 (single-writer state discipline).
 
 **Writer alignment.** `fact-checker` writes all claim markers in `chapters/<slug>.md` (inserting `[UNVERIFIED]` or `[SOURCE-UNVERIFIABLE]` adjacent to unresolved markers and removing stale tags on re-checks that advance to `verified`; the `[claim: EV-nnnn]` marker is never removed) and all EV status transitions in `research/evidence-log.md`. The skill confirms both files via Read checks after the agent pass. It never eyeballs markers itself: the ns-claims engine is the deterministic inventory source.
 
@@ -19,14 +19,27 @@ Skill inputs read:
 - `chapters/<slug>.md` (target chapter; file-existence probed at Step 1, confirmed via Read after agent pass)
 - `research/evidence-log.md` (evidence ledger; passed to fact-checker, confirmed via Read after agent pass)
 - `research/sources.md` (source registry; passed to fact-checker for the session-start changed-flag scan and online pass)
-- `.studio/config.json` (web gate check at Step 4)
+- `<state-dir>/config.json` (web gate check at Step 4)
 - `.claude/agent-memory/nonfiction-studio-fact-checker/` (verified-claims cache; read by fact-checker at session start per D-09)
 
 Skill chain edge: `nfs-fact-check -> fact-checker` per `agents/_chain-permitted.yaml`.
 
 ---
 
-## Step 1 - Chapter argument resolution and file probe (mandatory first tool call)
+## Locate the state folder
+
+This book keeps its machine-managed records in one state folder at the book root, the folder that holds `context/` and `chapters/`. In this skill, `<state-dir>` stands for that folder's name. Resolve it once, before any step below.
+
+1. Use the Read tool on `nonfiction-studio.json` at the book root. This Read is the skill's first tool call. If the file does not exist, `<state-dir>` is `_nonfiction-studio`; continue at item 4.
+2. If the file exists, it must hold a JSON object with a `state_dir` key whose value is a string that matches `^[A-Za-z0-9._-]{1,64}$`. The value may not be `.` or `..`. It may not be `context`, `structure`, `research`, `chapters`, `production`, `.git` or `.claude`; on Windows, compare these names without regard to case. The folder that it names must exist at the book root and hold `meta.json`. When every condition holds, `<state-dir>` is that value.
+3. If the file exists but any condition in item 2 fails, stop. Tell the author which condition failed, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never fall back to `_nonfiction-studio`.
+4. If the file does not exist and `_nonfiction-studio/meta.json` does not exist either, list the folders at the book root, hidden folders included. If one of them holds both `meta.json` and `progress.json`, stop. Name that folder, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never create a second state folder beside it.
+
+Before you run a command or open a path below, replace `<state-dir>` with the resolved name. When this skill dispatches an agent, name the resolved state folder in the dispatch brief, because agents never resolve it themselves.
+
+---
+
+## Step 1 - Chapter argument resolution and file probe (first tool call after the state folder is located)
 
 Use the Bash tool to check whether the chapter-list registry is present:
 ```
@@ -109,10 +122,10 @@ The ns-claims count is the deterministic pre-count the skill presents. The `fact
 
 ## Step 4 - Web gate check and delegate to fact-checker
 
-Use the Read tool on `.studio/config.json` to check whether `research.web_enabled` is exactly the boolean `true`. State the gate status before spawning the agent:
+Use the Read tool on `<state-dir>/config.json` to check whether `research.web_enabled` is exactly the boolean `true`. State the gate status before spawning the agent:
 
 - **Gate open** (`research.web_enabled: true`, running on CLI or Cowork): "Online pass enabled. The agent will attempt DOI and URL resolution for SRC records referenced by the chapter's EV entries."
-- **Gate closed** (field absent, `false`, or any other value): "Online pass is not enabled for this project (`research.web_enabled` is not `true` in `.studio/config.json`). To enable it, add `\"research\": { \"web_enabled\": true }` to `.studio/config.json`. For claims that remain unresolved, source text can be pasted; the agent analyzes pasted content with the same quote-and-attribute discipline per D-13 (security posture)."
+- **Gate closed** (field absent, `false`, or any other value): "Online pass is not enabled for this project (`research.web_enabled` is not `true` in `<state-dir>/config.json`). To enable it, add `\"research\": { \"web_enabled\": true }` to `<state-dir>/config.json`. For claims that remain unresolved, source text can be pasted; the agent analyzes pasted content with the same quote-and-attribute discipline per D-13 (security posture)."
 - **On chat** (even when gate is open): "Note: WebSearch and WebFetch may not be available on the chat surface. Paste source content for any claims the agent cannot resolve from the evidence ledger alone."
 
 Spawn `fact-checker` via the `nfs-fact-check -> fact-checker` chain edge, passing:
@@ -128,9 +141,9 @@ The `fact-checker` agent runs its authoritative five-step pass per its contract:
 4. Inserts `[UNVERIFIED]` adjacent to unverified markers in `chapters/<slug>.md`; removes stale `[UNVERIFIED]` or `[SOURCE-UNVERIFIABLE]` tags when an entry advances to `verified` on a re-check; never removes the original `[claim: EV-nnnn]` marker
 5. Runs the optional online DOI/URL pass when `research.web_enabled` is exactly the boolean `true`; inserts `[SOURCE-UNVERIFIABLE]` paired with the existing `[claim: EV-nnnn]` for online-pass failures; reports the gate as closed and the path to enable it when the gate is off
 
-The agent writes `.studio/fact-check-reports/<NN>-report.md` at the end of every pass, including passes where all entries are verified.
+The agent writes `<state-dir>/fact-check-reports/<NN>-report.md` at the end of every pass, including passes where all entries are verified.
 
-The skill writes no chapter files, no ledger files, and no `.studio/` machine state.
+The skill writes no chapter files, no ledger files, and no `<state-dir>/` machine state.
 
 ---
 
@@ -139,7 +152,7 @@ The skill writes no chapter files, no ledger files, and no `.studio/` machine st
 After the agent completes its pass, use the Read tool to confirm:
 - `chapters/<slug>.md` is present and non-empty
 - `research/evidence-log.md` is readable
-- `.studio/fact-check-reports/<NN>-report.md` exists (the report the agent writes at the end of every pass)
+- `<state-dir>/fact-check-reports/<NN>-report.md` exists (the report the agent writes at the end of every pass)
 
 If any file is missing, report the gap, name the last successful step, and offer to re-run from Step 4. Idempotency is guaranteed by the agent's cache-skip semantics and status-field update model: re-running starts from current state and repeats only the work not yet reflected on disk.
 
@@ -149,7 +162,7 @@ If any file is missing, report the gap, name the last successful step, and offer
 
 ### Compliance append (verify-then-append)
 
-This flow's writes may already be logged automatically by a hook on this surface; this skill never assumes which surfaces do or do not fire that hook, and it never assumes the flow is running on any particular surface. Before this flow's first write, read `.studio/ai-use-log.jsonl` and count how many records currently target each file this flow is about to write (the file's path appearing in that record's `targets` array). Hold that starting count per file. After this flow's writes complete, re-read `.studio/ai-use-log.jsonl` and count the records targeting each of those files again. For each file: if the count increased between the two reads, a hook already appended a record for this write on this surface, and this skill appends nothing further for that file. If the count did not increase, append the flow's record or records for that file to `.studio/ai-use-log.jsonl`, per the record template below, using the six-field shape in `docs/formats/ai-use-log.md` (S-08 section 5): `ts`, `agent`, `surface`, `scope`, `targets`, `summary` - with `surface` set honestly to the surface this flow is actually running on. A record already sitting in the log before this flow started, from an earlier session, does not by itself suppress the append; only a count increase observed between this flow's own two reads does. This skill never appends twice for the same write.
+This flow's writes may already be logged automatically by a hook on this surface; this skill never assumes which surfaces do or do not fire that hook, and it never assumes the flow is running on any particular surface. Before this flow's first write, read `<state-dir>/ai-use-log.jsonl` and count how many records currently target each file this flow is about to write (the file's path appearing in that record's `targets` array). Hold that starting count per file. After this flow's writes complete, re-read `<state-dir>/ai-use-log.jsonl` and count the records targeting each of those files again. For each file: if the count increased between the two reads, a hook already appended a record for this write on this surface, and this skill appends nothing further for that file. If the count did not increase, append the flow's record or records for that file to `<state-dir>/ai-use-log.jsonl`, per the record template below, using the six-field shape in `docs/formats/ai-use-log.md` (S-08 section 5): `ts`, `agent`, `surface`, `scope`, `targets`, `summary` - with `surface` set honestly to the surface this flow is actually running on. A record already sitting in the log before this flow started, from an earlier session, does not by itself suppress the append; only a count increase observed between this flow's own two reads does. This skill never appends twice for the same write.
 
 **Record template for this flow.** Up to two records, one per file the `fact-checker` agent touched and that needed the append (per the count-delta check above):
 
@@ -165,7 +178,7 @@ For the evidence-ledger status transitions:
 
 `surface` is `claude-code`, `cowork`, or `chat` per `docs/formats/ai-use-log.md` - whichever this flow is actually running on. On CLI and Cowork the PostToolBatch hook normally covers `chapters/<slug>.md` already (it watches Edit calls into `chapters/`), so the count-delta check above typically finds no append needed for that file there; `research/evidence-log.md` is outside the hook's watch on every surface, so this skill's own append is typically the only record for that file.
 
-Format and present the three counts from the agent's per-chapter report at `.studio/fact-check-reports/<NN>-report.md`:
+Format and present the three counts from the agent's per-chapter report at `<state-dir>/fact-check-reports/<NN>-report.md`:
 
 - **Verified:** EV entries advanced to `verified` or `interpretation` in this pass (including cache hits, which required no network call)
 - **Unresolved:** entries remaining at `unverified` or `pending` after the pass (open claims)
@@ -173,9 +186,9 @@ Format and present the three counts from the agent's per-chapter report at `.stu
 
 Name the report path explicitly:
 
-> Fact-check report: `.studio/fact-check-reports/<NN>-report.md`
+> Fact-check report: `<state-dir>/fact-check-reports/<NN>-report.md`
 
-Note: the per-chapter `open_claim_count` in `.studio/progress.json` is maintained by the PostToolBatch hook, not by this skill. The hook updates the open-claims total when the agent writes chapter files. The three counts above are conversation-level reporting only.
+Note: the per-chapter `open_claim_count` in `<state-dir>/progress.json` is maintained by the PostToolBatch hook, not by this skill. The hook updates the open-claims total when the agent writes chapter files. The three counts above are conversation-level reporting only.
 
 Suggest next steps based on the counts:
 - Unresolved or source-unverifiable entries remain: run `/nonfiction-studio:nfs-research <slug>` to add source material, or paste source content and re-run `/nonfiction-studio:nfs-fact-check <slug>`.

@@ -11,19 +11,32 @@ This skill is the guided front door and dispatcher for the Nonfiction Studio plu
 **Skills routed to (by path).** Path 1: `nfs-new-book`, then `nfs-interview`. Path 2: `nfs-outline` (no chapter-list) or `nfs-draft` (chapter in progress or next unstarted). Path 3: `nfs-research` or `nfs-fact-check`. Path 4: `nfs-status-dashboard`, then `nfs-check-chapter`. Path 5: `nfs-doctor` (structural problems) or direct answer from inline-loaded bible context (general questions). Path 6: `nfs-quick-scan` or `nfs-tour`, neither of which reads or requires a project. No skill or agent is invoked for Path 5 general questions.
 
 Skill inputs read:
-- `.studio/progress.json` (project state; required for project-exists probe and chapter inspection)
-- `.studio/meta.json` (book title for greeting; read after project presence is confirmed)
+- `<state-dir>/progress.json` (project state; required for project-exists probe and chapter inspection)
+- `<state-dir>/meta.json` (book title for greeting; read after project presence is confirmed)
 - `structure/chapter-list.md` (chapter registry; read in Path 2 chapter inspection)
 - Bible context files as needed for Path 5 general questions: `context/brief.md`, `context/style-profile.md`, `structure/thesis.md`, `structure/outline.md`
 
 ---
 
-## Step 1 - Progress file probe (mandatory first tool call)
+## Locate the state folder
+
+This book keeps its machine-managed records in one state folder at the book root, the folder that holds `context/` and `chapters/`. In this skill, `<state-dir>` stands for that folder's name. Resolve it once, before any step below.
+
+1. Use the Read tool on `nonfiction-studio.json` at the book root. This Read is the skill's first tool call. If the file does not exist, `<state-dir>` is `_nonfiction-studio`; continue at item 4.
+2. If the file exists, it must hold a JSON object with a `state_dir` key whose value is a string that matches `^[A-Za-z0-9._-]{1,64}$`. The value may not be `.` or `..`. It may not be `context`, `structure`, `research`, `chapters`, `production`, `.git` or `.claude`; on Windows, compare these names without regard to case. The folder that it names must exist at the book root and hold `meta.json`. When every condition holds, `<state-dir>` is that value.
+3. If the file exists but any condition in item 2 fails, stop. Tell the author which condition failed, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never fall back to `_nonfiction-studio`.
+4. If the file does not exist and `_nonfiction-studio/meta.json` does not exist either, list the folders at the book root, hidden folders included. If one of them holds both `meta.json` and `progress.json`, stop. Name that folder, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never create a second state folder beside it.
+
+Before you run a command or open a path below, replace `<state-dir>` with the resolved name. When this skill dispatches an agent, name the resolved state folder in the dispatch brief, because agents never resolve it themselves.
+
+---
+
+## Step 1 - Progress file probe (first tool call after the state folder is located)
 
 Use the Bash tool to check whether a project exists in this directory:
 
 ```
-test -f .studio/progress.json && echo HAS_PROGRESS || echo NO_PROGRESS
+test -f <state-dir>/progress.json && echo HAS_PROGRESS || echo NO_PROGRESS
 ```
 
 **NO_PROGRESS:** A project does not exist here. Paths 2 through 5 all assume an existing project and do not apply yet; only Path 1 (start a new book) and Path 6 (quick preview) work without one. Present both, leading with the lower-commitment option since a first-time arrival is most likely to be standing at exactly this prompt, then skip straight to Step 4 for whichever the author picks (skip Step 3's full six-path greeting; it does not apply here):
@@ -36,13 +49,13 @@ test -f .studio/progress.json && echo HAS_PROGRESS || echo NO_PROGRESS
 
 ## Step 2 - Parse progress.json and read book title
 
-Use the Read tool on `.studio/progress.json`. If the file is present but unreadable or the JSON is malformed, route directly to Path 5 without loading further context. Name `nfs-doctor` as the recommended tool:
+Use the Read tool on `<state-dir>/progress.json`. If the file is present but unreadable or the JSON is malformed, route directly to Path 5 without loading further context. Name `nfs-doctor` as the recommended tool:
 
-> The project state file (`.studio/progress.json`) could not be read or parsed. This is a structural problem. The `nfs-doctor` skill can diagnose and repair it (Path 5).
+> The project state file (`<state-dir>/progress.json`) could not be read or parsed. This is a structural problem. The `nfs-doctor` skill can diagnose and repair it (Path 5).
 
 Then confirm and proceed with Path 5.
 
-If the file parses successfully, use the Read tool on `.studio/meta.json` to obtain `book_title` for the greeting. If `meta.json` is absent or `book_title` is missing, use the label "your book" as a fallback.
+If the file parses successfully, use the Read tool on `<state-dir>/meta.json` to obtain `book_title` for the greeting. If `meta.json` is absent or `book_title` is missing, use the label "your book" as a fallback.
 
 Continue to Step 3.
 
@@ -93,7 +106,7 @@ On confirmation, proceed with `nfs-outline`.
 
 **Step 4.2b - Chapter state inspection.**
 
-Inspect the `chapters` array already read from `.studio/progress.json` (the alive progress layer) and the chapter-list registry at `structure/chapter-list.md`:
+Inspect the `chapters` array already read from `<state-dir>/progress.json` (the alive progress layer) and the chapter-list registry at `structure/chapter-list.md`:
 
 1. Scan the `progress.json` chapters array for any entry with status `drafting`. If found, that chapter is in progress. Offer to continue it with `nfs-draft <slug>`.
 2. If no chapter is `drafting`, use the Read tool on `structure/chapter-list.md` to find the first chapter with status `empty` or `outlined` (not yet drafted). Offer to start it with `nfs-draft <slug>`.
@@ -147,7 +160,7 @@ Ask the author to clarify:
 
 **Confirm-before-handoff:** State the skill: "Ready to proceed with `[nfs-quick-scan|nfs-tour]`. Confirm?"
 
-On confirmation, proceed with the named skill. Neither skill reads or requires `.studio/progress.json`, `.studio/meta.json`, or any other project file; both work identically whether or not a project exists in this directory, which is why this path is also offered directly from Step 1's `NO_PROGRESS` branch before any project exists.
+On confirmation, proceed with the named skill. Neither skill reads or requires `<state-dir>/progress.json`, `<state-dir>/meta.json`, or any other project file; both work identically whether or not a project exists in this directory, which is why this path is also offered directly from Step 1's `NO_PROGRESS` branch before any project exists.
 
 ---
 

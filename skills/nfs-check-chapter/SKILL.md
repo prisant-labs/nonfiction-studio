@@ -6,20 +6,33 @@ description: "Runs the surface-independent deterministic quality gate over a cha
 when_to_use: "Use when the author invokes explicitly on chat after any chapter-writing flow, nfs-draft or revise-pass prompts for it on completion, or wants an explicit deterministic gate verdict. Do not invoke for project status overviews (use nfs-status-dashboard for that), to re-trigger the Stop hook gate (automatic on CLI and Cowork), in deep mode (Phase 2, not yet available), or for unrelated queries."
 ---
 
-This skill is the surface-independent quality gate. It resolves the chapter argument, pre-checks the voice baseline to determine which check set to run, invokes `bin/ns-gate` in a single Bash call, and maps the exit code to a presented verdict: exit 0 presents the pass or warn summary from the report JSON, exit 1 presents the block verdict with per-check details and next actions, and exit 2 surfaces an error that is never treated as a pass. The `bin/ns-gate` orchestrator is the sole writer of `.studio/gate/<slug>.<ts>.json` reports and handles its own prune policy; the skill writes no `.studio/` state.
+This skill is the surface-independent quality gate. It resolves the chapter argument, pre-checks the voice baseline to determine which check set to run, invokes `bin/ns-gate` in a single Bash call, and maps the exit code to a presented verdict: exit 0 presents the pass or warn summary from the report JSON, exit 1 presents the block verdict with per-check details and next actions, and exit 2 surfaces an error that is never treated as a pass. The `bin/ns-gate` orchestrator is the sole writer of `<state-dir>/gate/<slug>.<ts>.json` reports and handles its own prune policy; the skill writes no `<state-dir>/` state.
 
 **Judgment honesty note.** The verdict this skill presents is the deterministic layer only. On CLI and Cowork the Stop hook additionally runs a thesis-alignment judgment prompt (warn-only, never blocks in Phase 1 per D-03 (layered Stop gate)). That judgment layer is not available when invoking this skill directly; on chat it does not exist in v1 and the skill states this fact when presenting the verdict.
 
 **No agents invoked.** This is a deterministic-CLI-only skill. No chain edges exist. The Phase 2 deep mode, which would add `fact-checker`, `voice-guardian`, and `continuity-checker` as background subagents, is not implemented in v1.
 
 Skill inputs read:
-- `.studio/progress.json` (chapter resolution at Step 2 when no chapter argument is supplied; the progress layer is alive per TSK-050b (progress entry ownership))
+- `<state-dir>/progress.json` (chapter resolution at Step 2 when no chapter argument is supplied; the progress layer is alive per TSK-050b (progress entry ownership))
 - `structure/chapter-list.md` (slug registry; probed at Step 2 to resolve a chapter argument to a canonical slug)
 - `chapters/<slug>.md` (target chapter; file-existence probed at Step 2)
 - `context/style-profile.md` (baseline pre-check at Step 3; absence triggers the degraded check subset)
-- `.studio/config.json` (baseline pre-check at Step 3; `stylometry.baseline.markers` absence, or a `stylometry.baseline.marker_set_version` that is absent or does not match the engine's current version, also triggers the degraded check subset)
+- `<state-dir>/config.json` (baseline pre-check at Step 3; `stylometry.baseline.markers` absence, or a `stylometry.baseline.marker_set_version` that is absent or does not match the engine's current version, also triggers the degraded check subset)
 
 No skill chain edges exist for this skill.
+
+---
+
+## Locate the state folder
+
+This book keeps its machine-managed records in one state folder at the book root, the folder that holds `context/` and `chapters/`. In this skill, `<state-dir>` stands for that folder's name. Resolve it once, before any step below.
+
+1. Use the Read tool on `nonfiction-studio.json` at the book root. This Read is the skill's first tool call. If the file does not exist, `<state-dir>` is `_nonfiction-studio`; continue at item 4.
+2. If the file exists, it must hold a JSON object with a `state_dir` key whose value is a string that matches `^[A-Za-z0-9._-]{1,64}$`. The value may not be `.` or `..`. It may not be `context`, `structure`, `research`, `chapters`, `production`, `.git` or `.claude`; on Windows, compare these names without regard to case. The folder that it names must exist at the book root and hold `meta.json`. When every condition holds, `<state-dir>` is that value.
+3. If the file exists but any condition in item 2 fails, stop. Tell the author which condition failed, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never fall back to `_nonfiction-studio`.
+4. If the file does not exist and `_nonfiction-studio/meta.json` does not exist either, list the folders at the book root, hidden folders included. If one of them holds both `meta.json` and `progress.json`, stop. Name that folder, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never create a second state folder beside it.
+
+Before you run a command or open a path below, replace `<state-dir>` with the resolved name. When this skill dispatches an agent, name the resolved state folder in the dispatch brief, because agents never resolve it themselves.
 
 ---
 
@@ -37,7 +50,7 @@ The chapter token (if any) is the first non-`deep` argument token. Carry it forw
 
 ---
 
-## Step 2 - Chapter resolution (mandatory first tool call)
+## Step 2 - Chapter resolution (first tool call after the state folder is located)
 
 **Branch A - Chapter argument was supplied.** Use the Bash tool to check whether the chapter-list registry is present:
 
@@ -63,11 +76,11 @@ test -f chapters/<slug>.md && echo HAS_CHAPTER || echo NO_CHAPTER
 **Branch B - No chapter argument supplied.** Use the Bash tool to check whether the progress file is present:
 
 ```
-test -f .studio/progress.json && echo HAS_PROGRESS || echo NO_PROGRESS
+test -f <state-dir>/progress.json && echo HAS_PROGRESS || echo NO_PROGRESS
 ```
 
 - `NO_PROGRESS`: ask the author directly. State: "No chapter argument was supplied and no `progress.json` was found. Which chapter would you like to gate? Supply the slug or number, for example `/nonfiction-studio:nfs-check-chapter 02-finding-your-network`." Halt until the author supplies an argument; then restart from Step 2 Branch A.
-- `HAS_PROGRESS`: use the Read tool on `.studio/progress.json`. Select the most-recently-modified chapter using these criteria in order:
+- `HAS_PROGRESS`: use the Read tool on `<state-dir>/progress.json`. Select the most-recently-modified chapter using these criteria in order:
   1. The chapter with the most recent `last_gate.ts` (the one that was gated most recently and may need re-gating after revision).
   2. If no chapters have a gate record, the last chapter in the array with `status: drafted` or `status: drafting`.
   3. If still ambiguous (no chapters at either status, or multiple candidates with equal recency), ask the author which chapter to gate and halt until they reply.
@@ -94,17 +107,17 @@ test -f context/style-profile.md && echo HAS_PROFILE || echo NO_PROFILE
 
 Continue to Step 4 to resolve the plugin root; the gate invocation in Step 5 uses check subset `claims,scrub,continuity-quick,coherence`.
 
-**If `HAS_PROFILE`:** use the Read tool on `.studio/config.json` to check whether `stylometry.baseline.markers` is present and non-null. If the field is absent or null, treat this the same as the `NO_PROFILE` case: set the check subset to `claims,scrub,continuity-quick,coherence` and present:
+**If `HAS_PROFILE`:** use the Read tool on `<state-dir>/config.json` to check whether `stylometry.baseline.markers` is present and non-null. If the field is absent or null, treat this the same as the `NO_PROFILE` case: set the check subset to `claims,scrub,continuity-quick,coherence` and present:
 
-> Voice drift check skipped: `context/style-profile.md` is present but `stylometry.baseline.markers` is absent or null in `.studio/config.json`. Run `/nonfiction-studio:nfs-capture-voice` to populate the baseline and enable voice drift detection.
+> Voice drift check skipped: `context/style-profile.md` is present but `stylometry.baseline.markers` is absent or null in `<state-dir>/config.json`. Run `/nonfiction-studio:nfs-capture-voice` to populate the baseline and enable voice drift detection.
 
 If `stylometry.baseline.markers` is present and non-null, also check `stylometry.baseline.marker_set_version` in that same read. If it is absent, null, or different from the value of `CURRENT_MARKER_SET_VERSION` exported by `hooks/lib/stylometry-engine.mjs`, read that constant rather than comparing against a number written here, the stored baseline predates the current engine and `ns-gate` will reject it. Route this the same as the case above: set the check subset to `claims,scrub,continuity-quick,coherence` and present:
 
-> Voice drift check skipped: the stored baseline in `.studio/config.json` was captured under an earlier version of the stylometry engine (`stylometry.baseline.marker_set_version` is missing or does not match the engine's current version). Run `/nonfiction-studio:nfs-capture-voice` to re-capture the baseline with the corrected engine and enable voice drift detection.
+> Voice drift check skipped: the stored baseline in `<state-dir>/config.json` was captured under an earlier version of the stylometry engine (`stylometry.baseline.marker_set_version` is missing or does not match the engine's current version). Run `/nonfiction-studio:nfs-capture-voice` to re-capture the baseline with the corrected engine and enable voice drift detection.
 
 If `stylometry.baseline.markers` is present and non-null AND `marker_set_version` matches, also check `stylometry.baseline.calibration` in that same read. A v5 baseline must carry a complete `calibration` object: `spans`, `noise_scales`, `block_thresholds`, and `regime` all present. An incomplete one is what `ns-gate` will reject. Route this the same as the two cases above: set the check subset to `claims,scrub,continuity-quick,coherence` and present:
 
-> Voice drift check skipped: the stored baseline in `.studio/config.json` is missing calibration data (`stylometry.baseline.calibration` is absent or incomplete). Run `/nonfiction-studio:nfs-capture-voice` to re-capture the baseline with a full calibration ladder and enable voice drift detection.
+> Voice drift check skipped: the stored baseline in `<state-dir>/config.json` is missing calibration data (`stylometry.baseline.calibration` is absent or incomplete). Run `/nonfiction-studio:nfs-capture-voice` to re-capture the baseline with a full calibration ladder and enable voice drift detection.
 
 Only when `stylometry.baseline.markers` is present and non-null, `marker_set_version` matches the engine's current version, AND `calibration` is complete, run the full gate. Set no check subset (all seven checks - claim coverage, quote fidelity, voice drift, prompt scrub, continuity, state coherence, and overlap - will be included by ns-gate's default).
 
@@ -200,7 +213,7 @@ If stdout also contains output (partial JSON or other text), include it verbatim
 
 **`deep` argument supplied.** Step 1 halts with the Phase 2 decline message. No file reads, no tool calls, no gate invocation.
 
-**Chapter argument not matched.** Step 2 halts with the supplied value, the registry file path, and the list of valid slugs. No gate invocation and no `.studio/` writes occur.
+**Chapter argument not matched.** Step 2 halts with the supplied value, the registry file path, and the list of valid slugs. No gate invocation and no `<state-dir>/` writes occur.
 
 **Chapter file missing.** The Step 2 Bash probe halts on `NO_CHAPTER`. The halt message names the file path and routes to `nfs-draft`. No gate invocation occurs.
 

@@ -2,8 +2,8 @@
 name: nfs-new-book
 user-invocable: true
 argument-hint: "[book title] [guided|blank]"
-description: "Scaffolds the flat bible tree (context/, structure/, chapters/, research/, production/) and creates .studio/ state files for a new nonfiction book project. Use when an author starts a new book or follows the studio Path 1 prompt."
-when_to_use: "Use when the author explicitly wants to initialize, start, or set up a new book project, says 'create a new book', or is routed here from the studio dispatcher Path 1 prompt. Do not invoke for authors with an existing book project layout (.studio/ or context/brief.md) unless they explicitly ask to re-initialize only the missing pieces."
+description: "Scaffolds the flat bible tree (context/, structure/, chapters/, research/, production/) and creates the state folder's files for a new nonfiction book project. Use when an author starts a new book or follows the studio Path 1 prompt."
+when_to_use: "Use when the author explicitly wants to initialize, start, or set up a new book project, says 'create a new book', or is routed here from the studio dispatcher Path 1 prompt. Do not invoke for authors with an existing book project layout (<state-dir>/ or context/brief.md) unless they explicitly ask to re-initialize only the missing pieces."
 ---
 
 This skill scaffolds a new nonfiction book project. It is surface-independent: no hooks or subagents are needed.
@@ -21,14 +21,32 @@ Skill inputs read:
 - `context/brief.md`, `context/style-profile.md`, `structure/outline.md` (Step 7a content-assembly sources)
 - `bin/ns-claims` (Step 7a, invoked via the Bash tool for the open-claims count)
 
-## Step 1 - Run the existence check (mandatory first tool call)
+## Locate the state folder
+
+This book keeps its machine-managed records in one state folder at the book root, the folder that holds `context/` and `chapters/`. In this skill, `<state-dir>` stands for that folder's name. Resolve it once, before any step below.
+
+1. Use the Read tool on `nonfiction-studio.json` at the book root. This Read is the skill's first tool call. If the file does not exist, `<state-dir>` is `_nonfiction-studio`; continue at item 4.
+2. If the file exists, it must hold a JSON object with a `state_dir` key whose value is a string that matches `^[A-Za-z0-9._-]{1,64}$`. The value may not be `.` or `..`. It may not be `context`, `structure`, `research`, `chapters`, `production`, `.git` or `.claude`; on Windows, compare these names without regard to case. The folder that it names must exist at the book root and hold `meta.json`. When every condition holds, `<state-dir>` is that value.
+3. If the file exists but any condition in item 2 fails, stop. Tell the author which condition failed, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never fall back to `_nonfiction-studio`.
+4. If the file does not exist and `_nonfiction-studio/meta.json` does not exist either, list the folders at the book root, hidden folders included. If one of them holds both `meta.json` and `progress.json`, stop. Name that folder, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never create a second state folder beside it.
+
+Before you run a command or open a path below, replace `<state-dir>` with the resolved name. When this skill dispatches an agent, name the resolved state folder in the dispatch brief, because agents never resolve it themselves.
+
+---
+
+## Step 1 - Run the existence check (first tool call after the state folder is located)
 
 Use the Bash tool to run:
 ```
-if [ -d .studio ] || [ -f context/brief.md ]; then echo REINIT; else echo NEWINIT; fi
+for d in */ .*/; do d="${d%/}"; case "$d" in .|..|'*'|'.*'|<state-dir>) continue;; esac; [ -f "$d/meta.json" ] && [ -f "$d/progress.json" ] && echo "UNPOINTED: $d"; done
+if [ -d <state-dir> ] || [ -f context/brief.md ]; then echo REINIT; else echo NEWINIT; fi
 ```
 
-The output will be exactly one of two values:
+The first line checks for a second state folder: any other folder at the book root, hidden folders included, that holds both `meta.json` and `progress.json`. **If any line starts with `UNPOINTED:`, stop.** Write nothing, and output:
+
+> This book already keeps its records in [each folder named on an `UNPOINTED:` line], not in `<state-dir>/`. Starting a new book here would split those records across two folders, so nothing was written. Run /nonfiction-studio:nfs-doctor to rename the folder or to record its name in `nonfiction-studio.json`.
+
+Otherwise the last line of the output is exactly one of two values:
 - `REINIT` - this directory already contains a book project
 - `NEWINIT` - no book project found yet
 
@@ -45,17 +63,17 @@ for f in \
   research/evidence-log.md research/sources.md research/open-questions.md \
   production/exports/.gitkeep production/README.md \
   production/front-matter.md production/back-matter.md \
-  .studio/meta.json .studio/config.json .studio/progress.json \
-  .studio/progress.schema.json .studio/ai-use-log.jsonl \
-  .studio/snapshots/.gitkeep .studio/gate/.gitkeep .studio/logs/.gitkeep; do
+  <state-dir>/meta.json <state-dir>/config.json <state-dir>/progress.json \
+  <state-dir>/progress.schema.json <state-dir>/ai-use-log.jsonl \
+  <state-dir>/snapshots/.gitkeep <state-dir>/gate/.gitkeep <state-dir>/logs/.gitkeep; do
   [ -e "$f" ] || printf "MISSING: %s\n" "$f"
 done
 printf "SCAN_DONE\n"
 ```
 
-**If the output is only `SCAN_DONE` (no MISSING lines):** Output this verbatim. Do not stamp, read, or write any bible or `.studio/` file in this branch:
+**If the output is only `SCAN_DONE` (no MISSING lines):** Output this verbatim. Do not stamp, read, or write any bible or `<state-dir>/` file in this branch:
 
-> Warning: This directory already contains a book project. All 24 expected scaffold files are present. No bible or `.studio/` files were written. Run /nonfiction-studio:nfs-interview to continue setting up your project.
+> Warning: This directory already contains a book project. All 24 expected scaffold files are present. No bible or `<state-dir>/` files were written. Run /nonfiction-studio:nfs-interview to continue setting up your project.
 
 Then run the output style offer (Step 7) followed by the book-context skill generation step (Step 7a); this REINIT run stops after Step 7a. This is the one reachable path for a legitimate re-offer against a fully-scaffolded existing project: Step 7 self-gates on an already-recorded `output_style` value and on non-interactive context, and Step 7a self-gates on the generated skill file's existence, so either adds a write here only when its own outcome has never been recorded for this project and the author actually consents or declines in this interaction.
 
@@ -67,7 +85,7 @@ Then:
 - **Non-interactive context (headless -p session):** State "Proceeding automatically in non-interactive context." Then resolve the plugin root (Step 4, plugin root resolution), stamp the missing files (Step 5, scaffold stamping), and fill state placeholders (Step 6, state files) below, but write ONLY the paths that appeared in the MISSING list. Do not read or write any other file. For `context/project-init.md` if it is in the missing list, use blank mode. After writing, report which files were stamped, then run the output style offer (Step 7 - its own non-interactive branch applies here, since this whole branch is non-interactive) followed by the book-context skill generation step (Step 7a - also non-interactive here, so it skips the same way), and STOP.
 - **Interactive context:** Ask "May I stamp only these missing files? (yes/no)" and wait for author confirmation before writing anything. On confirmation, resolve the plugin root (Step 4, plugin root resolution), confirm the working directory if Step 4b applies, stamp the missing files (Step 5, scaffold stamping), and fill state placeholders (Step 6, state files), writing ONLY the missing paths. After writing, report which files were stamped, then run the output style offer (Step 7 - this is the reachable path for a legitimate re-offer on a REINIT run whose earlier offer outcome was never recorded) followed by the book-context skill generation step (Step 7a - the same reachable-path logic applies to it), and STOP.
 
-**Note on .studio/meta.json:** If .studio/meta.json is in the missing list, first acquire the book title (from the argument, or by asking the author; in non-interactive contexts reuse the title recorded in context/brief.md if present, otherwise report that the title is required) before filling its placeholders.
+**Note on <state-dir>/meta.json:** If <state-dir>/meta.json is in the missing list, first acquire the book title (from the argument, or by asking the author; in non-interactive contexts reuse the title recorded in context/brief.md if present, otherwise report that the title is required) before filling its placeholders.
 
 ### Step 1b - If the output is NEWINIT
 
@@ -179,16 +197,16 @@ Token substitutions for prose files:
 
 On any Read or Write error: stop immediately. Name the exact path that failed and the operation attempted (Read or Write). Do not stamp any additional files.
 
-## Step 6 - Write .studio/ state files
+## Step 6 - Write <state-dir>/ state files
 
-Create `.studio/` at the bible root alongside `context/` and `chapters/`.
+Create `<state-dir>/` at the bible root alongside `context/` and `chapters/`.
 
 Token substitutions for state files:
 - Replace `{{DATETIME}}` with the current UTC date-time in RFC 3339 format (example: `2026-07-18T14:22:07Z`). This is a full timestamp, not a calendar date.
 - Replace `{{BOOK_TITLE}}` with the title from Step 2.
 - Replace `{{PLUGIN_VERSION}}` with the `version` field read from `PLUGIN_ROOT/.claude-plugin/plugin.json` (PLUGIN_ROOT was already resolved in Step 4). Read the file and use its current value; never write a version number from memory or from an earlier run.
 
-**`.studio/meta.json`** - write with all placeholders filled:
+**`<state-dir>/meta.json`** - write with all placeholders filled:
 ```json
 {
   "schema_version": "2",
@@ -199,9 +217,9 @@ Token substitutions for state files:
 ```
 Note: `created` uses `{{DATETIME}}` (RFC 3339 UTC), not `{{DATE}}` (YYYY-MM-DD). Do not write a calendar date here.
 
-**`.studio/config.json`**: read `PLUGIN_ROOT/templates/config-defaults.json`, write verbatim.
+**`<state-dir>/config.json`**: read `PLUGIN_ROOT/templates/config-defaults.json`, write verbatim.
 
-**`.studio/progress.json`**:
+**`<state-dir>/progress.json`**:
 ```json
 {
   "version": 2,
@@ -217,14 +235,14 @@ Note: `created` uses `{{DATETIME}}` (RFC 3339 UTC), not `{{DATE}}` (YYYY-MM-DD).
 ```
 Note: `updated` uses `{{DATETIME}}` (RFC 3339 UTC), not `{{DATE}}` (YYYY-MM-DD).
 
-**`.studio/progress.schema.json`**: read `PLUGIN_ROOT/templates/book-scaffold/.studio/progress.schema.json`, write verbatim.
+**`<state-dir>/progress.schema.json`**: read `PLUGIN_ROOT/templates/book-scaffold/_nonfiction-studio/progress.schema.json`, write verbatim.
 
-**`.studio/ai-use-log.jsonl`**: write as an empty file.
+**`<state-dir>/ai-use-log.jsonl`**: write as an empty file.
 
 **Empty directory sentinels** (write empty files):
-- `.studio/snapshots/.gitkeep`
-- `.studio/gate/.gitkeep`
-- `.studio/logs/.gitkeep`
+- `<state-dir>/snapshots/.gitkeep`
+- `<state-dir>/gate/.gitkeep`
+- `<state-dir>/logs/.gitkeep`
 
 On any Read or Write error: stop immediately. Name the exact path that failed and the operation attempted. Do not write any additional state files.
 
@@ -304,7 +322,7 @@ Wait for an explicit `yes` or `no`. Any other reply is not an answer - ask again
 
 **On `yes` (consent):** assemble the four items below, each citing the source path it was read from, then write the skill file.
 
-1. **Book title.** On the NEWINIT origin, use the title resolved in Step 2. On the REINIT origin (Step 2 never ran), read `book_title` from `.studio/meta.json`; if that file is unreadable or the field is absent, ask the author for the title.
+1. **Book title.** On the NEWINIT origin, use the title resolved in Step 2. On the REINIT origin (Step 2 never ran), read `book_title` from `<state-dir>/meta.json`; if that file is unreadable or the field is absent, ask the author for the title.
 2. **Thesis one-liner.** Use the Read tool on `context/brief.md`. Extract the first non-empty, non-heading, non-comment line under the `## 2. Thesis` heading (the same extraction rule `hooks/lib/orientation.mjs` uses for the SessionStart orientation block). If the heading is missing, the section is empty, or it holds only a `<!-- DRAFT: 2 - thesis -->` placeholder comment, write "Not yet recorded - run `nfs-interview`." Cite the source as `context/brief.md`.
 3. **Top style rules.** Use the Read tool on `context/style-profile.md`. Extract up to three bullet lines (`- `) from the `## Do` and `## Do not` sections, in document order (the same rule `hooks/lib/orientation.mjs` uses). If none are found (an unfilled style profile), write "Not yet captured - run `nfs-capture-voice`." Cite the source as `context/style-profile.md`.
 4. **Chapter map.** Use the Read tool on `structure/outline.md`. Extract every `### Chapter N: Title` heading line, in document order. If none are found, write "Not yet outlined - run `nfs-outline`." Cite the source as `structure/outline.md`.
@@ -349,7 +367,7 @@ After writing, report: "`.claude/skills/book-context/SKILL.md` has been generate
 
 List all files created. Output:
 
-> Book project '{title}' has been initialized. The bible tree and .studio/ state files are ready.
+> Book project '{title}' has been initialized. The bible tree and <state-dir>/ state files are ready.
 
 Then: "The next step is nfs-interview. Invoke it with `/nonfiction-studio:nfs-interview` to conduct the structured intake interview and build your project brief. The interview typically takes 45-90 minutes and produces a confirmed context/brief.md."
 

@@ -72,9 +72,9 @@ If the copy fails for any reason (unwritable destination, disk error): halt. Rep
 
 ## Step 3 - Opt the copy into block mode
 
-The shipped default (`gate.mode: "warn"` in `.studio/config.json`) means the gate always reports every check but never actually stops a session until an author opts in; that is why the same finding that would print `BLOCK` in an opted-in project only prints `warn` by default. To make the block in Step 6 real (not merely a warning), opt this disposable copy into block mode:
+The shipped default (`gate.mode: "warn"` in the state folder's `config.json`) means the gate always reports every check but never actually stops a session until an author opts in; that is why the same finding that would print `BLOCK` in an opted-in project only prints `warn` by default. To make the block in Step 6 real (not merely a warning), opt this disposable copy into block mode:
 
-Use the Read tool on `<tour-dir>/.studio/config.json`, then the Edit tool to change the top-level gate mode line (the one immediately inside `"gate": {`, not any of the per-check `"mode"` entries below it) from:
+Use the Read tool on `<tour-dir>/_nonfiction-studio/config.json`, then the Edit tool to change the top-level gate mode line (the one immediately inside `"gate": {`, not any of the per-check `"mode"` entries below it) from:
 ```
 "mode": "warn",
 ```
@@ -83,7 +83,7 @@ to:
 "mode": "block",
 ```
 
-State to the author: "This copy now runs in block mode, the same setting you can choose for your own project's `.studio/config.json` any time you want the gate to actually stop a session instead of only warning."
+State to the author: "This copy now runs in block mode, the same setting you can choose for your own project's `config.json`, in its state folder, any time you want the gate to actually stop a session instead of only warning."
 
 ---
 

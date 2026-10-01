@@ -6,7 +6,7 @@ description: "Generates publisher-ready back matter from the evidence ledger in 
 when_to_use: "Use when the author types /nfs-build-apparatus, asks to generate or regenerate the bibliography or endnotes, wants to prepare back matter for a publisher or agent submission, or asks what in the ledger still needs a locator or source before the book can go out. Do not invoke for claim-coverage or quote-fidelity checks (use nfs-fact-check), for the deterministic quality gate (use nfs-check-chapter), or for editing chapter prose directly."
 ---
 
-This skill fronts the read-only-over-the-ledger `bin/ns-notes` engine in a single Bash call and presents its verdict. `bin/ns-notes` never writes to `research/evidence-log.md`, `research/sources.md`, or `chapters/*.md` (OPP-D05, apparatus generator: read-then-emit only); it writes exactly four files under `production/` - `endnotes.md`, `bibliography.md`, `index-candidates.md`, and `apparatus-attention.md` - the author-facing directory that already holds `front-matter.md` and `back-matter.md`. `production/` is not `.studio/` machine state, so D-06 (single-writer state discipline) is not implicated. Regeneration is deterministic: running this skill twice over an unchanged ledger reproduces byte-identical files, so it is always safe to re-run.
+This skill fronts the read-only-over-the-ledger `bin/ns-notes` engine in a single Bash call and presents its verdict. `bin/ns-notes` never writes to `research/evidence-log.md`, `research/sources.md`, or `chapters/*.md` (OPP-D05, apparatus generator: read-then-emit only); it writes exactly four files under `production/` - `endnotes.md`, `bibliography.md`, `index-candidates.md`, and `apparatus-attention.md` - the author-facing directory that already holds `front-matter.md` and `back-matter.md`. `production/` is not state-folder machine state, so D-06 (single-writer state discipline) is not implicated. Regeneration is deterministic: running this skill twice over an unchanged ledger reproduces byte-identical files, so it is always safe to re-run.
 
 **No agents invoked.** This is a deterministic-CLI-only skill. No chain edges exist.
 
@@ -83,7 +83,7 @@ Parse stdout as JSON. Group the `findings` array by the `file` field (the chapte
 
 Surface the stderr content and halt. This exit is never treated as a pass.
 
-> Apparatus error (exit 2): [first non-empty line of stderr, or "ns-notes exited with code 2 with no message on stderr" if stderr is empty]. The apparatus run did not complete; no `production/` files were written or updated by this invocation. Check that this is a valid project bible (`.studio/meta.json`, `research/evidence-log.md`, `research/sources.md`, and a `chapters/` directory must all be present). Run `/nonfiction-studio:nfs-doctor` to diagnose a broader structural problem.
+> Apparatus error (exit 2): [first non-empty line of stderr, or "ns-notes exited with code 2 with no message on stderr" if stderr is empty]. The apparatus run did not complete; no `production/` files were written or updated by this invocation. Check that this is a valid project bible (the state folder's `meta.json`, `research/evidence-log.md`, `research/sources.md`, and a `chapters/` directory must all be present). Run `/nonfiction-studio:nfs-doctor` to diagnose a broader structural problem.
 
 ---
 
@@ -93,6 +93,6 @@ Surface the stderr content and halt. This exit is never treated as a pass.
 
 **Exit 2 from `ns-notes`.** Step 3 surfaces the stderr and halts. Never treated as a pass, and never presented as if any `production/` file changed.
 
-**Project root not found.** If `findBookRoot` cannot locate `.studio/meta.json` from the current directory, the CLI exits 2 with a `BibleError` message on stderr. Surface it: "Apparatus error: [BibleError message]. Ensure this skill is invoked from within a Nonfiction Studio project bible (`.studio/meta.json` must be present at or above the current directory)."
+**Project root not found.** If `findBookRoot` cannot locate the state folder's `meta.json` from the current directory, the CLI exits 2 with a `BibleError` message on stderr. Surface it: "Apparatus error: [BibleError message]. Ensure this skill is invoked from within a Nonfiction Studio project bible (the state folder's `meta.json` must be present at or above the current directory)."
 
 **Evidence log, sources registry, or chapters/ missing.** The CLI exits 2 naming the missing path on stderr. Surface it verbatim; do not guess at a fix.

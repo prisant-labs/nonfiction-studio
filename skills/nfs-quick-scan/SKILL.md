@@ -12,7 +12,7 @@ Two of the three outputs have different authority, and the output must keep that
 - The **voice profile** is a measurement from `bin/ns-stylometry --measure`, the same deterministic engine this plugin uses everywhere else for voice-drift scoring.
 - The **claim scan** is this skill reading the prose itself. No engine backs it. Presenting it with the same confidence as the voice profile would be exactly the enforcement-theater failure this plugin's credibility depends on avoiding.
 
-Skill inputs read: none. No `.studio/` file, no `context/` file, nothing under any project tree is read or required.
+Skill inputs read: none. No state-folder file, no `context/` file, nothing under any project tree is read or required.
 
 ---
 
