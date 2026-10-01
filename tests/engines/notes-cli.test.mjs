@@ -4,7 +4,7 @@
 //               sample book (never the committed tree itself) to prove: exit-code mapping against
 //               real data, byte-identical regeneration at the file level (both a same-run-twice
 //               proof and a proof against the committed examples/sample-book/production/ output),
-//               that nothing is written under .studio/, that a source cited only through a
+//               that nothing is written under _nonfiction-studio/, that a source cited only through a
 //               blank-locator entry still reaches the bibliography, the clean (exit 0) path, and
 //               CLI-level argument and operational-error handling
 // runner:       node --test tests/engines/notes-cli.test.mjs
@@ -119,16 +119,16 @@ test('regenerating the sample book reproduces the committed production/ files by
   }
 });
 
-// ---- D-06 (single-writer state discipline): .studio/ is never touched -----------------
+// ---- D-06 (single-writer state discipline): _nonfiction-studio/ is never touched -----------------
 
-test('.studio/ is never written', () => {
+test('_nonfiction-studio/ is never written', () => {
   const tmp = makeTempClone(GOLDEN);
   try {
-    const before = readFileSync(join(tmp, '.studio', 'config.json'), 'utf8');
+    const before = readFileSync(join(tmp, '_nonfiction-studio', 'config.json'), 'utf8');
     const result = spawnNotes(tmp, []);
     assert.strictEqual(result.status, 1, 'stderr: ' + result.stderr);
-    const after = readFileSync(join(tmp, '.studio', 'config.json'), 'utf8');
-    assert.strictEqual(before, after, '.studio/config.json is untouched');
+    const after = readFileSync(join(tmp, '_nonfiction-studio', 'config.json'), 'utf8');
+    assert.strictEqual(before, after, '_nonfiction-studio/config.json is untouched');
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

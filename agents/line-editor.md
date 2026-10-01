@@ -63,7 +63,7 @@ to `voice-guardian`.
   (security posture): it denies any write outside `chapters/` once it identifies
   `line-editor` from the `agent_type` slug the platform reports in the hook
   envelope (ADR-0007, agent identity resolution). The agent does not write to
-  `context/`, `structure/`, `research/`, or `.studio/`.
+  `context/`, `structure/`, `research/`, or the state folder.
 
 Read and Write are the minimum tool set for sentence-level editing. No web
 access is needed; the agent works from the chapter and the style profile.

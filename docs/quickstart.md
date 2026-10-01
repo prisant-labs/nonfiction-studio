@@ -21,7 +21,7 @@ In an empty folder, or any folder, run:
 /nonfiction-studio:nfs-quick-scan
 ```
 
-Paste 500 to 1000 words of your own prose - a book excerpt, an essay draft, anything you actually wrote. No project setup, no `.studio/` folder, nothing to scaffold first. You get back:
+Paste 500 to 1000 words of your own prose - a book excerpt, an essay draft, anything you actually wrote. No project setup, no `_nonfiction-studio/` folder, nothing to scaffold first. You get back:
 
 1. **A voice profile, measured.** `nfs-quick-scan` writes your pasted text to a temporary file and runs it through `bin/ns-stylometry`, the same deterministic engine this plugin uses everywhere else for voice-drift scoring. Eight named markers, by number: function-word rate, contraction rate, first- and second-person rate, type-token ratio, average word length, average sentence length, punctuation rate.
 2. **A claim scan, read by the model.** Sentences that assert a fact a reader would want a source for. This part carries no engine behind it, and the skill says so explicitly: it is a first pass, not a verdict.

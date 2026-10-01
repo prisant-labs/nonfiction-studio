@@ -24,13 +24,17 @@ This is a condensed transcript of a `nfs-fact-check` session over Chapter 2 (Fin
 - `[claim: EV-0009]` - Source diversity and knowledge retention (SRC-0004, p. 8)
 - `[claim: EV-0010]` - Pacing recommendation for new connections (SRC-0001, p. 78)
 
-All 5 EV entries in `research/evidence-log.md` are at `status: verified`. A prior fact-check session (not shown here) advanced all 5 entries and populated the verified-claims cache at `.claude/agent-memory/nonfiction-studio-fact-checker/`. The web gate is closed (`research.web_enabled` is absent from `.studio/config.json`).
+All 5 EV entries in `research/evidence-log.md` are at `status: verified`. A prior fact-check session (not shown here) advanced all 5 entries and populated the verified-claims cache at `.claude/agent-memory/nonfiction-studio-fact-checker/`. The web gate is closed (`research.web_enabled` is absent from `_nonfiction-studio/config.json`).
 
 ---
 
 ## Session: Chapter 2 clean verification, web gate closed, all entries previously verified
 
 **Author:** `/nonfiction-studio:nfs-fact-check 02-finding-your-network`
+
+**Studio (Locate the state folder):**
+
+The skill uses the Read tool on `nonfiction-studio.json` at the book root. This is the skill's first tool call. The file does not exist, so the state folder is `_nonfiction-studio/`, and `_nonfiction-studio/meta.json` exists, so no other folder needs checking.
 
 **Studio (Step 1 - Chapter argument resolution and file probe):**
 
@@ -95,11 +99,11 @@ Output (abbreviated):
 
 **Studio (Step 4 - Web gate check and delegate to fact-checker):**
 
-The skill uses the Read tool on `.studio/config.json`. The field `research.web_enabled` is absent.
+The skill uses the Read tool on `_nonfiction-studio/config.json`. The field `research.web_enabled` is absent.
 
 **Studio:**
 
-> Online pass is not enabled for this project (`research.web_enabled` is not `true` in `.studio/config.json`). The offline verification pass will use the evidence ledger and source registry. To enable DOI and URL resolution, add `"research": { "web_enabled": true }` to `.studio/config.json`.
+> Online pass is not enabled for this project (`research.web_enabled` is not `true` in `_nonfiction-studio/config.json`). The offline verification pass will use the evidence ledger and source registry. To enable DOI and URL resolution, add `"research": { "web_enabled": true }` to `_nonfiction-studio/config.json`.
 >
 > Spawning fact-checker for Chapter 2.
 
@@ -143,15 +147,15 @@ The skill spawns `fact-checker` via the `nfs-fact-check -> fact-checker` chain e
 
 **fact-checker (online pass):**
 
-> Web gate is closed (`research.web_enabled` is not `true` in `.studio/config.json`). Skipping DOI/URL resolution. To enable the online pass, set `"research": { "web_enabled": true }` in `.studio/config.json`.
+> Web gate is closed (`research.web_enabled` is not `true` in `_nonfiction-studio/config.json`). Skipping DOI/URL resolution. To enable the online pass, set `"research": { "web_enabled": true }` in `_nonfiction-studio/config.json`.
 
 **fact-checker (per-chapter report write):**
 
-> Writing `.studio/fact-check-reports/02-report.md`.
+> Writing `_nonfiction-studio/fact-check-reports/02-report.md`.
 
 ---
 
-## .studio/fact-check-reports/02-report.md (written by fact-checker)
+## _nonfiction-studio/fact-check-reports/02-report.md (written by fact-checker)
 
 ```markdown
 # Fact-check report: 02-finding-your-network
@@ -179,7 +183,7 @@ Chapter: chapters/02-finding-your-network.md
 
 ## Online pass
 
-Skipped - `research.web_enabled` is not `true` in `.studio/config.json`.
+Skipped - `research.web_enabled` is not `true` in `_nonfiction-studio/config.json`.
 
 ## Recommended actions
 
@@ -195,7 +199,7 @@ The skill uses the Read tool on `chapters/02-finding-your-network.md`. The file 
 
 The skill uses the Read tool on `research/evidence-log.md`. The file is readable. All 5 entries remain at `status: verified` (the agent made no status writes because cache hits require no re-check and no status change).
 
-The skill uses the Read tool on `.studio/fact-check-reports/02-report.md`. The file is present. Continue to Step 6.
+The skill uses the Read tool on `_nonfiction-studio/fact-check-reports/02-report.md`. The file is present. Continue to Step 6.
 
 **Studio (Step 6 - Report three counts from the agent's per-chapter report):**
 
@@ -203,12 +207,12 @@ The skill uses the Read tool on `.studio/fact-check-reports/02-report.md`. The f
 
 > Fact-check pass complete for `chapters/02-finding-your-network.md`.
 >
-> Counts from `.studio/fact-check-reports/02-report.md`:
+> Counts from `_nonfiction-studio/fact-check-reports/02-report.md`:
 > - Verified: 5 (EV-0006 through EV-0010, all via cache hits)
 > - Unresolved: 0
 > - Source-unverifiable: 0
 >
-> Fact-check report: `.studio/fact-check-reports/02-report.md`
+> Fact-check report: `_nonfiction-studio/fact-check-reports/02-report.md`
 >
 > Coverage is 100% and no open claims remain. Run the quality gate:
 > `/nonfiction-studio:nfs-check-chapter 02-finding-your-network`
@@ -227,13 +231,13 @@ The skill uses the Read tool on `.studio/fact-check-reports/02-report.md`. The f
 
 - **Cache protocol skips known-good entries.** All 5 EV entries had valid cache hits with no invalidated SRC dependencies. The agent confirmed their `verified` status via cache and skipped re-verification per D-09 (learning checker agents). This is the cost-reduction mechanism for long books where most evidence is stable.
 
-- **No chapter or ledger writes for a clean pass.** Because all entries were verified cache hits, the agent needed no marker insertions, no stale-tag removals, and no status-field updates. The chapter file and `research/evidence-log.md` are unchanged. Only `.studio/fact-check-reports/02-report.md` was written.
+- **No chapter or ledger writes for a clean pass.** Because all entries were verified cache hits, the agent needed no marker insertions, no stale-tag removals, and no status-field updates. The chapter file and `research/evidence-log.md` are unchanged. Only `_nonfiction-studio/fact-check-reports/02-report.md` was written.
 
-- **Three counts from the agent's report, not from ns-claims.** The skill formats the three counts (5 verified, 0 unresolved, 0 source-unverifiable) from the agent's per-chapter report at `.studio/fact-check-reports/02-report.md`. The skill reads the report to confirm it exists, then presents the counts the agent recorded; it does not independently recount markers.
+- **Three counts from the agent's report, not from ns-claims.** The skill formats the three counts (5 verified, 0 unresolved, 0 source-unverifiable) from the agent's per-chapter report at `_nonfiction-studio/fact-check-reports/02-report.md`. The skill reads the report to confirm it exists, then presents the counts the agent recorded; it does not independently recount markers.
 
-- **No progress.json write.** The skill wrote no `.studio/progress.json`. On CLI or Cowork, the PostToolBatch hook updates the `open_claim_count` for `02-finding-your-network` when the agent writes the chapter file; because the agent made no chapter writes in this clean pass, the hook had no trigger and the existing `open_claim_count: 0` in `progress.json` is already correct.
+- **No progress.json write.** The skill wrote no `_nonfiction-studio/progress.json`. On CLI or Cowork, the PostToolBatch hook updates the `open_claim_count` for `02-finding-your-network` when the agent writes the chapter file; because the agent made no chapter writes in this clean pass, the hook had no trigger and the existing `open_claim_count: 0` in `progress.json` is already correct.
 
-- **Web gate stated honestly.** The skill read `.studio/config.json` before delegation and stated the gate status explicitly: the online pass is not enabled for this project. The agent confirmed the gate and skipped all WebSearch and WebFetch calls.
+- **Web gate stated honestly.** The skill read `_nonfiction-studio/config.json` before delegation and stated the gate status explicitly: the online pass is not enabled for this project. The agent confirmed the gate and skipped all WebSearch and WebFetch calls.
 
 - **Idempotency demonstrated.** Re-running this skill on Chapter 2 would produce the same outcome: the cache still holds all 5 entries (no SRC changes), the agent skips re-verification, and the report is overwritten with the same result. No state accumulates across re-runs.
 
@@ -243,12 +247,12 @@ The skill uses the Read tool on `.studio/fact-check-reports/02-report.md`. The f
 
 The following is explicitly a synthetic illustration and does NOT reflect the committed sample-book fixture. It shows what Step 6 would report if a hypothetical chapter carried one unresolved claim after an offline pass:
 
-> Counts from `.studio/fact-check-reports/03-report.md`:
+> Counts from `_nonfiction-studio/fact-check-reports/03-report.md`:
 > - Verified: 3
 > - Unresolved: 1 (EV-0013 at `status: unverified` - source text does not support the claim as written; see report for detail)
 > - Source-unverifiable: 0
 >
-> Fact-check report: `.studio/fact-check-reports/03-report.md`
+> Fact-check report: `_nonfiction-studio/fact-check-reports/03-report.md`
 >
 > 1 open claim remains. To resolve it:
 > - Paste the relevant source text and re-run: `/nonfiction-studio:nfs-fact-check 03-your-curation-practice`

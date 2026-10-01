@@ -284,7 +284,7 @@ Status: open
   `structure/chapter-list.md`, and the `research/open-questions.md` appends are
   all written in the same invocation. The appends are never deferred.
 - **Chapter-list has no word-count column.** Word counts are owned by the
-  `PostToolBatch` hook and written to `.studio/progress.json` per D-06 (single-writer
+  `PostToolBatch` hook and written to `_nonfiction-studio/progress.json` per D-06 (single-writer
   state discipline). The chapter list carries only number, working title, slug, and
   promise.
 - **Slugs match the pattern.** Every slug in the chapter-list matches

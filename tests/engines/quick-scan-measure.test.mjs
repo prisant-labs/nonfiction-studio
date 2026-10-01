@@ -105,7 +105,7 @@ test('nfs-quick-scan mechanism: markers key set matches the golden config baseli
     const out = JSON.parse(result.stdout);
 
     const config = JSON.parse(readFileSync(
-      join(REPO_ROOT, 'examples', 'sample-book', '.studio', 'config.json'), 'utf8'
+      join(REPO_ROOT, 'examples', 'sample-book', '_nonfiction-studio', 'config.json'), 'utf8'
     ));
     const goldenKeys = Object.keys(config.stylometry.baseline.markers).sort();
     assert.deepStrictEqual(Object.keys(out.markers).sort(), goldenKeys,

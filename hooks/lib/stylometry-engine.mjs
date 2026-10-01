@@ -110,7 +110,7 @@ const SENTENCE_END_RE = /[.!?]+(?:\s|$)/g;
 
 // Moving-average type-token ratio window size, in tokens (Correction A, roadmap row 1.7,
 // voice registers). A single named constant, not a literal scattered through the code.
-// Fixed for this task; not read from .studio/config.json (deferred scope). Text shorter
+// Fixed for this task; not read from _nonfiction-studio/config.json (deferred scope). Text shorter
 // than or equal to one window falls back to the plain ratio over the whole text -- see
 // movingAverageTypeTokenRatio.
 const TTR_WINDOW_SIZE = 100;
@@ -744,7 +744,7 @@ export function computeDrift(measured, baseline, thresholds, opts) {
  * voice verdict scope, Decision 4 -- registers are advisory-only, closing roadmap row 1.7,
  * voice registers). A
  * register carries no calibration ladder (the schema is deliberately a bare marker vector plus
- * sample_count -- see docs/formats/style-profile.md's sibling, .studio/config.json's
+ * sample_count -- see docs/formats/style-profile.md's sibling, _nonfiction-studio/config.json's
  * stylometry.registers), so unlike computeDrift there is no noise scale to standardize against
  * and therefore no z: only the same signed relative deviation formula computeDrift uses for its
  * own honest deviationPct (signedRelativeDeviationPct, above), per marker, with no combining rule

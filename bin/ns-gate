@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // what-it-is:   the ns-gate orchestrator CLI (thin shell over hooks/lib/gate-engine.mjs)
 // what-it-does: parses arguments, locates the book root, delegates to gate-engine.mjs,
-//               writes the gate report under .studio/gate/, emits to stdout, and exits
+//               writes the gate report under _nonfiction-studio/gate/, emits to stdout, and exits
 //               with the policy exit code; mode-DEPENDENT exit taxonomy (0/1/2) per TSK-029
 // why:          the CLI is the public surface; all logic lives in gate-engine.mjs so
 //               hooks/stop-gate.mjs and CI can share the same computation path per S-07 section 4

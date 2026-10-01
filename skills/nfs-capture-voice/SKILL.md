@@ -16,7 +16,20 @@ Skill inputs read:
 
 Skill chain edge: `nfs-capture-voice -> voice-capture` per `agents/_chain-permitted.yaml`.
 
-## Step 1 - Existing-profile check and profile orientation (mandatory first tool call)
+## Locate the state folder
+
+This book keeps its machine-managed records in one state folder at the book root, the folder that holds `context/` and `chapters/`. In this skill, `<state-dir>` stands for that folder's name. Resolve it once, before any step below.
+
+1. Use the Read tool on `nonfiction-studio.json` at the book root. This Read is the skill's first tool call. If the file does not exist, `<state-dir>` is `_nonfiction-studio`; continue at item 4.
+2. If the file exists, it must hold a JSON object with a `state_dir` key whose value is a string that matches `^[A-Za-z0-9._-]{1,64}$`. The value may not be `.` or `..`. It may not be `context`, `structure`, `research`, `chapters`, `production`, `.git` or `.claude`; on Windows, compare these names without regard to case. The folder that it names must exist at the book root and hold `meta.json`. When every condition holds, `<state-dir>` is that value.
+3. If the file exists but any condition in item 2 fails, stop. Tell the author which condition failed, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never fall back to `_nonfiction-studio`.
+4. If the file does not exist and `_nonfiction-studio/meta.json` does not exist either, list the folders at the book root, hidden folders included. If one of them holds both `meta.json` and `progress.json`, stop. Name that folder, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never create a second state folder beside it.
+
+Before you run a command or open a path below, replace `<state-dir>` with the resolved name. When this skill dispatches an agent, name the resolved state folder in the dispatch brief, because agents never resolve it themselves.
+
+---
+
+## Step 1 - Existing-profile check and profile orientation (first tool call after the state folder is located)
 
 Use the Bash tool to run:
 ```
@@ -29,7 +42,7 @@ Branch on the output:
 
 In both cases, state in plain terms what the voice profile does: it is the numeric baseline the drift scorer uses to detect when a chapter has moved away from the author's natural style. It is a description of how the author writes, not a prescriptive set of rules. Authors can edit the written do and do-not rules directly in `context/style-profile.md` at any time.
 
-Before this flow's first write (Step 3's delegation), take the ai-use-log.jsonl count snapshot described in Step 6's Compliance append section for `context/style-profile.md` and `.studio/config.json`.
+Before this flow's first write (Step 3's delegation), take the ai-use-log.jsonl count snapshot described in Step 6's Compliance append section for `context/style-profile.md` and `<state-dir>/config.json`.
 
 ## Step 2 - Collect samples and assess word count (mandatory Bash tool call after submission)
 
@@ -66,10 +79,10 @@ The agent handles all computation and all file writes:
 - The agent persists every sample used for calibration to `context/samples/voice-sample-NN.md` before calibrating, so the profile's `Exemplars` paths resolve
 - `bin/ns-stylometry --calibrate` computes and prints the eight-marker vector, `marker_set_version`, and the five-rung calibration ladder (ADR-0012, voice verdict scope); the agent reads all of it from stdout, plus two plain-language regime-disclosure sentences from stderr
 - The agent writes `context/style-profile.md` in the seven-section grammar (`docs/formats/style-profile.md`)
-- The agent writes the full baseline - `markers`, `marker_set_version`, `calibration`, `captured`, `sample_count`, and `method` - into `.studio/config.json` `stylometry.baseline` via read-modify-write semantics. A baseline missing any of `marker_set_version`, `calibration`, `captured`, or `sample_count` is one the drift scorer or the doctor will reject or flag.
+- The agent writes the full baseline - `markers`, `marker_set_version`, `calibration`, `captured`, `sample_count`, and `method` - into `<state-dir>/config.json` `stylometry.baseline` via read-modify-write semantics. A baseline missing any of `marker_set_version`, `calibration`, `captured`, or `sample_count` is one the drift scorer or the doctor will reject or flag.
 - When eligible register groupings were forwarded, the agent additionally measures each group and writes `stylometry.registers` as an optional addendum, strictly after the baseline write above succeeds. This never gates, delays, or replaces the baseline or profile writes; its absence changes nothing else in this skill's flow.
 
-This skill writes neither file. Do not instruct the agent to write `.studio/progress.json` or any other `.studio/` path beyond `config.json` and `context/samples/`.
+This skill writes neither file. Do not instruct the agent to write `<state-dir>/progress.json` or any other `<state-dir>/` path beyond `config.json` and `context/samples/`.
 
 ## Step 4 - Confirm output files and relay the regime disclosure (two Read checks, mandatory tool calls)
 
@@ -77,7 +90,7 @@ After the agent completes, use the Read tool twice:
 
 1. Read `context/style-profile.md`. If the file is absent or empty, report that the profile was not written. Note that no partial profile exists: the agent's no-profile-without-baseline guardrail ensures `context/style-profile.md` is not committed unless `bin/ns-stylometry --calibrate` ran and returned the full baseline. Ask the author to re-run from Step 2.
 
-2. Read `.studio/config.json`. Confirm `stylometry.baseline.markers`, `stylometry.baseline.marker_set_version`, `stylometry.baseline.calibration`, `stylometry.baseline.captured`, and `stylometry.baseline.sample_count` are all present. If any is absent, report the missing or incomplete baseline and ask the author to re-run: a baseline missing `calibration` or either of the two agent-supplied fields looks complete at a glance but will be rejected or flagged the first time anything scores against it or the doctor checks it.
+2. Read `<state-dir>/config.json`. Confirm `stylometry.baseline.markers`, `stylometry.baseline.marker_set_version`, `stylometry.baseline.calibration`, `stylometry.baseline.captured`, and `stylometry.baseline.sample_count` are all present. If any is absent, report the missing or incomplete baseline and ask the author to re-run: a baseline missing `calibration` or either of the two agent-supplied fields looks complete at a glance but will be rejected or flagged the first time anything scores against it or the doctor checks it.
 
 Once both checks pass, relay the two regime-disclosure sentences the agent reported (which regime the baseline supports - chapter-scale or book-scale verdicts - and why) to the author VERBATIM. This skill never re-derives the regime call from the calibration numbers; it only relays what the engine's own stderr disclosure said, as carried forward by the agent's completion report.
 
@@ -85,7 +98,7 @@ Continue to Step 5 only when both Read checks pass.
 
 ## Step 5 - Preview the baseline
 
-Using the marker values already present in the `.studio/config.json` read in Step 4, describe two or three markers in plain language. No additional engine run; no scoring of a single sentence.
+Using the marker values already present in the `<state-dir>/config.json` read in Step 4, describe two or three markers in plain language. No additional engine run; no scoring of a single sentence.
 
 State the specific numeric values and say what they characterize. Examples of the form to use:
 - "Mean sentence length: 13.2 words. That places the prose at the shorter, more direct end of the trade non-fiction range."
@@ -97,15 +110,15 @@ Choose the markers that best represent this author's measured style. The goal is
 
 ### Compliance append (verify-then-append)
 
-This flow's writes may already be logged automatically by a hook on this surface; this skill never assumes which surfaces do or do not fire that hook, and it never assumes the flow is running on any particular surface. Before this flow's first write, read `.studio/ai-use-log.jsonl` and count how many records currently target each file this flow is about to write (the file's path appearing in that record's `targets` array). Hold that starting count per file. After this flow's writes complete, re-read `.studio/ai-use-log.jsonl` and count the records targeting each of those files again. For each file: if the count increased between the two reads, a hook already appended a record for this write on this surface, and this skill appends nothing further for that file. If the count did not increase, append the flow's record or records for that file to `.studio/ai-use-log.jsonl`, per the record template below, using the six-field shape in `docs/formats/ai-use-log.md` (S-08 section 5): `ts`, `agent`, `surface`, `scope`, `targets`, `summary` - with `surface` set honestly to the surface this flow is actually running on. A record already sitting in the log before this flow started, from an earlier session, does not by itself suppress the append; only a count increase observed between this flow's own two reads does. This skill never appends twice for the same write.
+This flow's writes may already be logged automatically by a hook on this surface; this skill never assumes which surfaces do or do not fire that hook, and it never assumes the flow is running on any particular surface. Before this flow's first write, read `<state-dir>/ai-use-log.jsonl` and count how many records currently target each file this flow is about to write (the file's path appearing in that record's `targets` array). Hold that starting count per file. After this flow's writes complete, re-read `<state-dir>/ai-use-log.jsonl` and count the records targeting each of those files again. For each file: if the count increased between the two reads, a hook already appended a record for this write on this surface, and this skill appends nothing further for that file. If the count did not increase, append the flow's record or records for that file to `<state-dir>/ai-use-log.jsonl`, per the record template below, using the six-field shape in `docs/formats/ai-use-log.md` (S-08 section 5): `ts`, `agent`, `surface`, `scope`, `targets`, `summary` - with `surface` set honestly to the surface this flow is actually running on. A record already sitting in the log before this flow started, from an earlier session, does not by itself suppress the append; only a count increase observed between this flow's own two reads does. This skill never appends twice for the same write.
 
 **Record template for this flow.** One record covering both files the `voice-capture` agent wrote (per the count-delta check above):
 
 ```json
-{"ts":"<RFC 3339 UTC>","agent":"voice-capture","surface":"<actual surface>","scope":"mechanical","targets":["context/style-profile.md",".studio/config.json"],"summary":"Captured the author's stylometric voice baseline into the style profile and config.json."}
+{"ts":"<RFC 3339 UTC>","agent":"voice-capture","surface":"<actual surface>","scope":"mechanical","targets":["context/style-profile.md","<state-dir>/config.json"],"summary":"Captured the author's stylometric voice baseline into the style profile and config.json."}
 ```
 
-`surface` is `claude-code`, `cowork`, or `chat` per `docs/formats/ai-use-log.md` - whichever this flow is actually running on. Neither `context/style-profile.md` nor `.studio/config.json` is watched by the PostToolBatch hook (it watches only `chapters/`), so the count-delta check above finds no prior coverage on any surface and this skill appends the record every time.
+`surface` is `claude-code`, `cowork`, or `chat` per `docs/formats/ai-use-log.md` - whichever this flow is actually running on. Neither `context/style-profile.md` nor `<state-dir>/config.json` is watched by the PostToolBatch hook (it watches only `chapters/`), so the count-delta check above finds no prior coverage on any surface and this skill appends the record every time.
 
 State that the voice baseline is in place. If the agent reported writing any `stylometry.registers` buckets, name them here in one plain sentence (for example, "anecdotal and instructional register vectors were also captured, for diagnostic `--by-register` comparisons only - they carry no blocking verdict"). If register bucketing did not run, say nothing about it: this is a silent skip, not a reported gap.
 

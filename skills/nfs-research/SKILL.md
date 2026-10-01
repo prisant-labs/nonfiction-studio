@@ -8,9 +8,9 @@ chain:
   - research-librarian
 ---
 
-This skill is the research front door. It confirms the chapter outline is present via a deterministic Bash guard, resolves any chapter scope argument against the slug registry, presents the research agenda with the web gate status, delegates all ledger writes to the `research-librarian` agent, and reports the three counts from the agent's session output. The `research-librarian` agent is the sole allocator of EV and SRC identifiers and the sole writer of the ledger files; the skill writes no ledger files and no `.studio/` state.
+This skill is the research front door. It confirms the chapter outline is present via a deterministic Bash guard, resolves any chapter scope argument against the slug registry, presents the research agenda with the web gate status, delegates all ledger writes to the `research-librarian` agent, and reports the three counts from the agent's session output. The `research-librarian` agent is the sole allocator of EV and SRC identifiers and the sole writer of the ledger files; the skill writes no ledger files and no `<state-dir>/` state.
 
-**Web gate.** Web research is config-conditional everywhere, not a surface-level limitation. The agent checks `research.web_enabled` in `.studio/config.json` before every WebSearch or WebFetch call. When the gate is closed (the default) or when running on chat, source material arrives as pasted text or author-provided files. The agent applies the same quote-and-attribute discipline per D-13 (security posture) in both modes.
+**Web gate.** Web research is config-conditional everywhere, not a surface-level limitation. The agent checks `research.web_enabled` in `<state-dir>/config.json` before every WebSearch or WebFetch call. When the gate is closed (the default) or when running on chat, source material arrives as pasted text or author-provided files. The agent applies the same quote-and-attribute discipline per D-13 (security posture) in both modes.
 
 Skill inputs read:
 - `structure/outline.md` (chapter evidence requirements; presence probed at Step 1, content read at Step 3)
@@ -18,12 +18,25 @@ Skill inputs read:
 - `research/open-questions.md` (unresolved research items for the scope; read at Steps 3 and 5)
 - `research/evidence-log.md` (current highest EV ID noted at Step 3 and passed to the agent)
 - `research/sources.md` (current highest SRC ID noted at Step 3 and passed to the agent)
-- `.studio/config.json` (web gate check at Step 3)
+- `<state-dir>/config.json` (web gate check at Step 3)
 - `context/brief.md` (project context passed to the agent at Step 4)
 
 Skill chain edge: `nfs-research -> research-librarian` per `agents/_chain-permitted.yaml`.
 
-## Step 1 - Outline probe (mandatory first tool call)
+## Locate the state folder
+
+This book keeps its machine-managed records in one state folder at the book root, the folder that holds `context/` and `chapters/`. In this skill, `<state-dir>` stands for that folder's name. Resolve it once, before any step below.
+
+1. Use the Read tool on `nonfiction-studio.json` at the book root. This Read is the skill's first tool call. If the file does not exist, `<state-dir>` is `_nonfiction-studio`; continue at item 4.
+2. If the file exists, it must hold a JSON object with a `state_dir` key whose value is a string that matches `^[A-Za-z0-9._-]{1,64}$`. The value may not be `.` or `..`. It may not be `context`, `structure`, `research`, `chapters`, `production`, `.git` or `.claude`; on Windows, compare these names without regard to case. The folder that it names must exist at the book root and hold `meta.json`. When every condition holds, `<state-dir>` is that value.
+3. If the file exists but any condition in item 2 fails, stop. Tell the author which condition failed, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never fall back to `_nonfiction-studio`.
+4. If the file does not exist and `_nonfiction-studio/meta.json` does not exist either, list the folders at the book root, hidden folders included. If one of them holds both `meta.json` and `progress.json`, stop. Name that folder, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never create a second state folder beside it.
+
+Before you run a command or open a path below, replace `<state-dir>` with the resolved name. When this skill dispatches an agent, name the resolved state folder in the dispatch brief, because agents never resolve it themselves.
+
+---
+
+## Step 1 - Outline probe (first tool call after the state folder is located)
 
 Use the Bash tool to run:
 ```
@@ -57,7 +70,7 @@ Use the Read tool on `structure/outline.md` to load the evidence-needed items fo
 
 Use the Read tool on `research/evidence-log.md` to note the current highest EV ID. Use the Read tool on `research/sources.md` to note the current highest SRC ID. These are passed to the agent in Step 4 as informational context; the agent reads both files again before any allocation.
 
-**Web gate check.** Use the Read tool on `.studio/config.json` to check whether `research.web_enabled` is exactly the boolean `true`. State the gate status explicitly as part of the agenda:
+**Web gate check.** Use the Read tool on `<state-dir>/config.json` to check whether `research.web_enabled` is exactly the boolean `true`. State the gate status explicitly as part of the agenda:
 
 - **Gate open** (`research.web_enabled: true`, running on CLI or Cowork): "Web research is enabled. The agent will search for and fetch sources, announcing search terms before every call."
 - **Gate closed** (field absent, `false`, or any other value): "Web research is not enabled for this project. Paste the text of any sources you want registered. The agent will analyze pasted content with the same quote-and-attribute discipline it applies to fetched content."
@@ -87,7 +100,7 @@ The skill writes no ledger files. The `research-librarian` agent is the sole wri
 
 ### Compliance append (verify-then-append)
 
-This flow's writes may already be logged automatically by a hook on this surface; this skill never assumes which surfaces do or do not fire that hook, and it never assumes the flow is running on any particular surface. Before this flow's first write, read `.studio/ai-use-log.jsonl` and count how many records currently target each file this flow is about to write (the file's path appearing in that record's `targets` array). Hold that starting count per file. After this flow's writes complete, re-read `.studio/ai-use-log.jsonl` and count the records targeting each of those files again. For each file: if the count increased between the two reads, a hook already appended a record for this write on this surface, and this skill appends nothing further for that file. If the count did not increase, append the flow's record or records for that file to `.studio/ai-use-log.jsonl`, per the record template below, using the six-field shape in `docs/formats/ai-use-log.md` (S-08 section 5): `ts`, `agent`, `surface`, `scope`, `targets`, `summary` - with `surface` set honestly to the surface this flow is actually running on. A record already sitting in the log before this flow started, from an earlier session, does not by itself suppress the append; only a count increase observed between this flow's own two reads does. This skill never appends twice for the same write.
+This flow's writes may already be logged automatically by a hook on this surface; this skill never assumes which surfaces do or do not fire that hook, and it never assumes the flow is running on any particular surface. Before this flow's first write, read `<state-dir>/ai-use-log.jsonl` and count how many records currently target each file this flow is about to write (the file's path appearing in that record's `targets` array). Hold that starting count per file. After this flow's writes complete, re-read `<state-dir>/ai-use-log.jsonl` and count the records targeting each of those files again. For each file: if the count increased between the two reads, a hook already appended a record for this write on this surface, and this skill appends nothing further for that file. If the count did not increase, append the flow's record or records for that file to `<state-dir>/ai-use-log.jsonl`, per the record template below, using the six-field shape in `docs/formats/ai-use-log.md` (S-08 section 5): `ts`, `agent`, `surface`, `scope`, `targets`, `summary` - with `surface` set honestly to the surface this flow is actually running on. A record already sitting in the log before this flow started, from an earlier session, does not by itself suppress the append; only a count increase observed between this flow's own two reads does. This skill never appends twice for the same write.
 
 **Record template for this flow.** One record covering the ledger files `research-librarian` touched in this session (per the count-delta check above):
 
@@ -115,7 +128,7 @@ Name the invocation paths:
 - `/nonfiction-studio:nfs-fact-check <chapter>`
 - `/nonfiction-studio:nfs-draft <chapter-slug>`
 
-The skill writes no `.studio/` state.
+The skill writes no `<state-dir>/` state.
 
 ---
 

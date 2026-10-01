@@ -26,7 +26,7 @@ context agents) and honors D-16 (honest, resumable interview).
 > No `context/brief.md` was found, so this is a new intake. First, the book tree
 > needs to exist, so I am running `nfs-new-book` to scaffold it.
 >
-> The `book/` tree and `.studio/` state files are in place.
+> The `book/` tree and `_nonfiction-studio/` state files are in place.
 >
 > Welcome. This interview configures the studio for your specific book. It
 > typically takes 45 to 90 minutes, and you can pause after any section and resume

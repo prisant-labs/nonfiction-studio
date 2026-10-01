@@ -486,12 +486,12 @@ test('(5) end-to-end: a hostile body with a forged closing fence cannot break ou
 });
 
 // ---------------------------------------------------------------------------
-// (6) .studio/logs/fetches.jsonl gains exactly one appended line per fetch,
+// (6) _nonfiction-studio/logs/fetches.jsonl gains exactly one appended line per fetch,
 // parseable as JSON, with the flag state recorded.
 // ---------------------------------------------------------------------------
 test('(6) fetches.jsonl: exactly one line appended per fetch, parseable, flag state recorded', () => {
   const book = cloneSampleBook('case6-log');
-  const logPath = join(book, '.studio', 'logs', 'fetches.jsonl');
+  const logPath = join(book, '_nonfiction-studio', 'logs', 'fetches.jsonl');
   const before = readJsonlLines(logPath).length;
 
   const result1 = runHook(makePostToolUseEvent(book, 'WebFetch',
@@ -526,7 +526,7 @@ test('(6) fetches.jsonl: exactly one line appended per fetch, parseable, flag st
 
 test('(6b) fetches.jsonl: flagged fetch records flagged=true and names the signature(s)', () => {
   const book = cloneSampleBook('case6b-log-flagged');
-  const logPath = join(book, '.studio', 'logs', 'fetches.jsonl');
+  const logPath = join(book, '_nonfiction-studio', 'logs', 'fetches.jsonl');
 
   // Content scanInjection actually catches (same trigger as case (1b) above): the OPP-P04
   // headline text used through round 3 no longer flags anything now that scanPromptInjection
@@ -556,8 +556,8 @@ test('(7a) fail-open: malformed stdin exits 0, empty stdout', () => {
 
 test('(7b) fail-open: a body that makes the scanner throw leaves the original output untouched', () => {
   const book = cloneSampleBook('case7b-throws');
-  const logPath = join(book, '.studio', 'logs', 'fetches.jsonl');
-  const errorsPath = join(book, '.studio', 'logs', 'errors.jsonl');
+  const logPath = join(book, '_nonfiction-studio', 'logs', 'fetches.jsonl');
+  const errorsPath = join(book, '_nonfiction-studio', 'logs', 'errors.jsonl');
   const logsBefore = readJsonlLines(logPath).length;
 
   // tool_response.result is a number, not a string: scanInjection(42) throws
@@ -590,7 +590,7 @@ test('(7b) fail-open: a body that makes the scanner throw leaves the original ou
 // ---------------------------------------------------------------------------
 test('(8) non-matching tool (Read) is untouched: empty stdout, no log line', () => {
   const book = cloneSampleBook('case8-nonmatching');
-  const logPath = join(book, '.studio', 'logs', 'fetches.jsonl');
+  const logPath = join(book, '_nonfiction-studio', 'logs', 'fetches.jsonl');
   const before = readJsonlLines(logPath).length;
 
   const result = runHook(makePostToolUseEvent(book, 'Read',
@@ -621,8 +621,8 @@ test('(9) no book root: wrap and flag still emitted (unconditional); fetches.jso
   assert.equal(out.hookSpecificOutput.hookEventName, 'PostToolUse');
   assert.match(out.hookSpecificOutput.updatedToolOutput.result, /retrieved data/i, 'wrap/flag happens regardless of book-root presence');
 
-  // No .studio directory should have been created under noRootDir.
-  assert.ok(!existsSync(join(noRootDir, '.studio')), 'no .studio/ directory created when there is no book root');
+  // No _nonfiction-studio directory should have been created under noRootDir.
+  assert.ok(!existsSync(join(noRootDir, '_nonfiction-studio')), 'no _nonfiction-studio/ directory created when there is no book root');
 });
 
 // ---------------------------------------------------------------------------

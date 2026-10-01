@@ -4,12 +4,12 @@ Ground-truth fixtures and provenance for `tests/engines/stylometry-calibration.t
 golden drift-detection suite for the calibrated-null verdict statistic (ADR-0012, voice verdict
 scope). `baseline.json` in this directory is a frozen, committed copy of the corpus-calibrated v5
 baseline (`markers`, `marker_set_version`, `calibration`) that `examples/sample-book`'s own
-`.studio/config.json` also carries, measured by `calibrateBaseline`
+`_nonfiction-studio/config.json` also carries, measured by `calibrateBaseline`
 (`hooks/lib/stylometry-calibration.mjs`) from the sample book's independent voice corpus
 (`examples/sample-book/context/samples/voice-corpus-01.md` through `-03.md`). It deliberately
 carries only `{ markers, marker_set_version, calibration }` -- `captured` and `sample_count` are
 omitted on purpose: those two fields are written by the voice-capture agent for a real book config
-(the read-modify-write contract in `examples/sample-book/.studio/config.json`), not by
+(the read-modify-write contract in `examples/sample-book/_nonfiction-studio/config.json`), not by
 `calibrateBaseline` itself, and this directory is a test fixture, not a book config, so it has
 nothing to capture them from.
 
@@ -38,7 +38,7 @@ was originally self-fit from total only 1055 words, so the exact frozen `markers
 this file used to carry CANNOT be reproduced by any v5 `--calibrate` run over that same
 two-chapter source; the minimum-corpus floor did not exist when this file was first frozen.
 Rather than leave this fixture on an unscorable v4 baseline, `markers` and `marker_set_version`
-here were replaced wholesale with `examples/sample-book/.studio/config.json`'s own new v5
+here were replaced wholesale with `examples/sample-book/_nonfiction-studio/config.json`'s own new v5
 baseline (also carrying a `calibration` object, added here for the first time) -- the same
 independent, disjoint voice corpus every other sample-book-derived fixture in this wave shares.
 
@@ -134,7 +134,7 @@ both.
 
 **Determinism**: recalibrating `calibrateBaseline` from the three committed voice-corpus files, in
 the test process itself, reproduces both this directory's `baseline.json` and
-`examples/sample-book/.studio/config.json`'s own baseline (`markers` and `calibration` only --
+`examples/sample-book/_nonfiction-studio/config.json`'s own baseline (`markers` and `calibration` only --
 `captured`/`sample_count`/`method` are agent-written, not measured, and excluded from the
 comparison by construction) byte-for-byte. Measured runtime for the single `calibrateBaseline` call
 this determinism check performs: approx 10-11 seconds.

@@ -98,7 +98,7 @@ listed here.
 - `structure/chapter-list.md` - the slug registry: chapter number, working
   title, slug (matching `^[0-9]{2}-[a-z0-9-]+$`), and one-line promise. No
   word-count column: word counts are single-writer state in
-  `.studio/progress.json` per D-06 (single-writer state discipline).
+  the state folder's `progress.json` per D-06 (single-writer state discipline).
 - `research/open-questions.md` - appends one entry per evidence-needed item
   from the outline in the same invocation that writes the outline; never deferred
   to a follow-up session.
@@ -147,7 +147,7 @@ matching the Promise field in the corresponding outline block.
 ```
 
 Word count and status columns are deliberately absent. Word counts are owned by
-the `PostToolBatch` hook and written atomically to `.studio/progress.json` per
+the `PostToolBatch` hook and written atomically to the state folder's `progress.json` per
 D-06 (single-writer state discipline); duplicating them here produces the drift
 class that D-06 (single-writer state discipline) exists to prevent.
 

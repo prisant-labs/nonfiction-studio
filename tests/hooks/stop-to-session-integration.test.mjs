@@ -16,7 +16,7 @@
 //               test consumes only real producer output, never hand-authored
 //               JSON - that is the point.
 // guard note:   the clone's committed last-gate.json
-//               (examples/sample-book/.studio/gate/last-gate.json) is itself a
+//               (examples/sample-book/_nonfiction-studio/gate/last-gate.json) is itself a
 //               genuine flat-shape report, so its ts could satisfy the
 //               fresh/stale assertions below even if stop-gate.mjs silently
 //               stopped writing the file. The test deletes that file before
@@ -61,7 +61,7 @@ const SAMPLE_BOOK = join(REPO_ROOT, 'examples', 'sample-book');
 // so this file stays self-contained, matching the existing tests/hooks/ convention).
 // ---------------------------------------------------------------------------
 
-// examples/sample-book/.studio/config.json now carries a full marker_set_version 5 stylometry
+// examples/sample-book/_nonfiction-studio/config.json now carries a full marker_set_version 5 stylometry
 // baseline with a calibration ladder (recaptured in Task 5, ADR-0012 implementation wave); when
 // this helper was first written it still carried marker_set_version 4 with no calibration
 // ladder, so scoring against it with the v5 computeDrift threw StaleBaselineError, which --
@@ -83,7 +83,7 @@ function cloneSampleBook(label) {
 
 /** Write the session-write flag atomically, as pre-tool-use.mjs would for a chapter write. */
 function setFlag(bookDir) {
-  const gateDir = join(bookDir, '.studio', 'gate');
+  const gateDir = join(bookDir, '_nonfiction-studio', 'gate');
   mkdirSync(gateDir, { recursive: true });
   const tmp = join(gateDir, '.session-write-flag.tmp');
   writeFileSync(tmp, new Date().toISOString() + '\n', 'utf8');
@@ -156,17 +156,17 @@ test('F-HK-02 real stop-gate output -> session-start gate-debt tracks it: absent
   setFlag(book);
 
   // --- Phase 0: delete the clone's committed last-gate.json before running
-  // the real gate. examples/sample-book/.studio/gate/last-gate.json is itself
+  // the real gate. examples/sample-book/_nonfiction-studio/gate/last-gate.json is itself
   // a genuine flat-shape report (repaired by the F-HK-02 fix) whose ts falls
   // between the pinned 2020/2099 mtimes used below; left in place, the
   // fresh/stale assertions could pass even if Phase 1 never ran stop-gate.mjs
   // at all. Deleting it first means ONLY a genuine write by the real
   // stop-gate.mjs can produce a file for session-start.mjs to read.
-  const lastGatePath = join(book, '.studio', 'gate', 'last-gate.json');
+  const lastGatePath = join(book, '_nonfiction-studio', 'gate', 'last-gate.json');
   if (existsSync(lastGatePath)) unlinkSync(lastGatePath);
 
   // --- Phase 1: run the REAL stop-gate hook; it spawns bin/ns-gate for real
-  // and writes a REAL .studio/gate/last-gate.json (flat shape, verbatim
+  // and writes a REAL _nonfiction-studio/gate/last-gate.json (flat shape, verbatim
   // ns-gate stdout). Nothing here is hand-authored.
   const stopResult = runScript(STOP_GATE_SCRIPT, makeStopEvent(book));
   assert.equal(stopResult.status, 0, 'stop-gate hook exits 0');

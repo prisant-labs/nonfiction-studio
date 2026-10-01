@@ -129,7 +129,7 @@ short of the 0.95 bar, so only a book-scale aggregate verdict is supportable.
 The agent reads `markers`, `marker_set_version`, and `calibration` from stdout
 VERBATIM, keeps the stderr sentence verbatim for its completion report, states
 the current UTC time as `captured` (`2026-07-18T10:00:00Z` in this example), and
-writes `.studio/config.json` at `stylometry.baseline` via read-modify-write (all
+writes `_nonfiction-studio/config.json` at `stylometry.baseline` via read-modify-write (all
 other config fields are preserved untouched):
 
 ```json
@@ -149,7 +149,7 @@ score against, or the doctor flags as incomplete.
 
 **voice-capture:**
 
-> Baseline calibrated and written to `.studio/config.json`. This corpus supports
+> Baseline calibrated and written to `_nonfiction-studio/config.json`. This corpus supports
 > a book-scale verdict only (detectability AUC 0.526 at the 550-word rung falls
 > short of the 0.95 bar for a per-chapter verdict) - drift will be scored on the
 > whole book's prose, not chapter by chapter. Drafting the voice profile now.
@@ -201,7 +201,7 @@ The agent drafts `context/style-profile.md`, copying `captured` and
 - context/samples/voice-sample-04.md
 
 ## Baseline reference
-- vector: .studio/config.json -> stylometry.baseline.markers
+- vector: _nonfiction-studio/config.json -> stylometry.baseline.markers
 - captured: 2026-07-18T10:00:00Z
 - sample_count: 4
 - bootstrapped: false
@@ -253,7 +253,7 @@ The agent writes the confirmed `context/style-profile.md` with `bootstrapped: fa
   `captured` and `sample_count` are copied from what was just written to config,
   not independently restated - the two files cannot silently disagree.
 - **No profile without a full calibrated baseline.** The baseline is written to
-  `.studio/config.json` before the profile draft is presented. A confirmed
+  `_nonfiction-studio/config.json` before the profile draft is presented. A confirmed
   profile always pairs with `markers`, `marker_set_version`, and `calibration`.
 - **Regime disclosure relayed verbatim.** The agent states the assigned regime
   (book, in this run) and its reason exactly as the engine's stderr stated it,

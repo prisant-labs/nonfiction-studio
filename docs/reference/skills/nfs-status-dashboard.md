@@ -14,13 +14,13 @@ The `nfs-status-dashboard` skill renders a read-only per-chapter project overvie
 
 `nfs-status-dashboard` gives the author an at-a-glance view of their book's state: how far each chapter has progressed, how many words have been written, whether drift or coverage issues have been flagged by a gate run, and which chapters still need a gate run. The skill resolves the plugin root, invokes `bin/ns-status --json`, and renders the result: every status value, word count, open-claim count, drift statistic, gate verdict, threshold value, and highlight decision in the rendered table is read directly from a field the CLI has already computed. The skill performs no arithmetic, parses no number out of prose, and compares nothing against a threshold itself.
 
-**Column sourcing.** Every cell comes directly from `bin/ns-status`'s JSON output. The CLI itself reads `.studio/progress.json` for status, word count, and open claims (hook-maintained truth per TSK-050b (progress entry ownership)); and lists `.studio/gate/` for the newest dot-form gate report per chapter slug to supply drift statistic, drift threshold, and gate verdict (filenames `<slug>.<YYYYMMDDTHHMMSSZ>.json`; newest identified by lexicographic sort of the timestamp suffix). Since ADR-0012 (voice verdict scope) retired `thresholds.drift_score_max`, `.studio/config.json` is not read for this at all: each chapter's own threshold comes from that SAME chapter's newest report, not a single board-wide config value. A chapter with no gate report on record shows "-" in the Drift, Threshold, and Gate cells. Whole-book `all.<YYYYMMDDTHHMMSSZ>.json` reports annotate the totals row only, not per-chapter cells. The `progress.last_gate` and `progress.drift_score` per-chapter fields are never treated as authoritative; see the [ns-status CLI reference](../cli/ns-status.md) for the full derivation.
+**Column sourcing.** Every cell comes directly from `bin/ns-status`'s JSON output. The CLI itself reads `_nonfiction-studio/progress.json` for status, word count, and open claims (hook-maintained truth per TSK-050b (progress entry ownership)); and lists `_nonfiction-studio/gate/` for the newest dot-form gate report per chapter slug to supply drift statistic, drift threshold, and gate verdict (filenames `<slug>.<YYYYMMDDTHHMMSSZ>.json`; newest identified by lexicographic sort of the timestamp suffix). Since ADR-0012 (voice verdict scope) retired `thresholds.drift_score_max`, `_nonfiction-studio/config.json` is not read for this at all: each chapter's own threshold comes from that SAME chapter's newest report, not a single board-wide config value. A chapter with no gate report on record shows "-" in the Drift, Threshold, and Gate cells. Whole-book `all.<YYYYMMDDTHHMMSSZ>.json` reports annotate the totals row only, not per-chapter cells. The `progress.last_gate` and `progress.drift_score` per-chapter fields are never treated as authoritative; see the [ns-status CLI reference](../cli/ns-status.md) for the full derivation.
 
 **Status vocabulary.** The Status column displays the committed schema enum values verbatim: `empty`, `outlined`, `drafting`, `drafted`, `revised`, `gated`, `final`. No mapping or renaming is applied. `final` is a real terminal state: reaching it requires a dated human attestation entry in `context/decisions.md`, and editing a chapter's file after it reaches `final` automatically falls it back to `revised`, both enforced by `hooks/post-tool-batch.mjs` rather than by this skill or by `bin/ns-status`. See [ns-status's ceremony section](../cli/ns-status.md#the-promotion-ceremony-and-automatic-demotion) for the full rule; this skill only ever displays whatever `status` value the CLI's JSON output already carries.
 
 **Highlight mechanism.** A row is highlighted when `bin/ns-status`'s JSON marks its `highlighted` field `true` - the CLI's own determination that either the drift statistic exceeds that SAME row's own `threshold` field (both sourced from the chapter's own newest gate report; ADR-0012, voice verdict scope, Decision 2), or the newest gate report carries a `block` verdict. The skill reads that field directly; it never re-derives the comparison.
 
-**The skill writes nothing.** No file writes, no `.studio/` mutations, no agent invocations. Grep-provable against the skill body.
+**The skill writes nothing.** No file writes, no `_nonfiction-studio/` mutations, no agent invocations. Grep-provable against the skill body.
 
 **No agents invoked.** This skill has no chain edges.
 
@@ -42,8 +42,8 @@ Alternate entry points:
 
 | Path | When it is read | Why |
 |---|---|---|
-| `.studio/progress.json` | By `bin/ns-status`, via its Step 2 `--project=.` invocation | Chapter status, word count, open_claim_count, totals block |
-| `.studio/gate/` | By `bin/ns-status`, via its Step 2 `--project=.` invocation | Drift statistic, per-chapter drift threshold, and gate verdict per chapter (each from that SAME chapter's own newest report; ADR-0012, voice verdict scope, Decision 2); newest all-report for the totals annotation |
+| `_nonfiction-studio/progress.json` | By `bin/ns-status`, via its Step 2 `--project=.` invocation | Chapter status, word count, open_claim_count, totals block |
+| `_nonfiction-studio/gate/` | By `bin/ns-status`, via its Step 2 `--project=.` invocation | Drift statistic, per-chapter drift threshold, and gate verdict per chapter (each from that SAME chapter's own newest report; ADR-0012, voice verdict scope, Decision 2); newest all-report for the totals annotation |
 
 The skill itself performs no file reads beyond the plugin-root lookup in Step 1; every project-state read happens inside `bin/ns-status`.
 
@@ -114,7 +114,7 @@ The totals row comes from `bin/ns-status`'s JSON `totals` object, which the CLI 
 - `totals.chaptersFinal` - count of chapters at status `final`
 - `totals.chaptersTotal` and `totals.chaptersRemaining` - total chapter count and the remaining-to-final count (both `null` when `progress.json`'s totals carry no `chapters_total` field)
 
-If a whole-book `all.<ts>.json` gate report is present in `.studio/gate/`, the JSON's top-level `wholeBookGate` carries its verdict, which the skill appends to the totals row as `(whole-book gate: <verdict>)`.
+If a whole-book `all.<ts>.json` gate report is present in `_nonfiction-studio/gate/`, the JSON's top-level `wholeBookGate` carries its verdict, which the skill appends to the totals row as `(whole-book gate: <verdict>)`.
 
 ## Surface Behavior
 
@@ -126,15 +126,15 @@ The dashboard renders identically on all three surfaces per D-14 (three-surface 
 
 **No book root found.** Step 3 halts on the "No book root found" stderr message with the not-initialized message and routes to `/nonfiction-studio:nfs-new-book`. No table is rendered.
 
-**`.studio/progress.json` missing.** Step 3 halts on the ENOENT-shaped `Cannot read progress.json` stderr message and routes to `/nonfiction-studio:nfs-new-book`. No table is rendered.
+**`_nonfiction-studio/progress.json` missing.** Step 3 halts on the ENOENT-shaped `Cannot read progress.json` stderr message and routes to `/nonfiction-studio:nfs-new-book`. No table is rendered.
 
 **Any other `bin/ns-status` error.** A malformed `progress.json`, `config.json`, or `meta.json`, or an internal argument error, all route to `/nonfiction-studio:nfs-doctor` with the stderr content verbatim. Never renders a partial or incorrect dashboard; partial data is more misleading than a clear error.
 
 **Missing or empty gate directory.** Not a halt condition. `bin/ns-status` returns `null` for `drift` and `gate` on every chapter with no matching report; the skill renders "-" for both cells and Next Actions suggests running the quality gate for every such chapter.
 
-**Missing `.studio/config.json`.** Not a halt condition: `hooks/lib/bible.mjs` returns `config: null` when the file does not exist, and since ADR-0012 (voice verdict scope) retired `thresholds.drift_score_max`, `bin/ns-status`'s board computation does not read `config.json` for the threshold in any case.
+**Missing `_nonfiction-studio/config.json`.** Not a halt condition: `hooks/lib/bible.mjs` returns `config: null` when the file does not exist, and since ADR-0012 (voice verdict scope) retired `thresholds.drift_score_max`, `bin/ns-status`'s board computation does not read `config.json` for the threshold in any case.
 
-**Unreadable (malformed) `.studio/config.json`.** This IS a halt condition, unlike the missing case above: `hooks/lib/bible.mjs` throws `BibleError` (`CONFIG_READ_ERROR`) when `config.json` exists but fails to parse, and `bin/ns-status` exits 2 - covered by the "Any other `bin/ns-status` error" case above, which routes to `nfs-doctor`.
+**Unreadable (malformed) `_nonfiction-studio/config.json`.** This IS a halt condition, unlike the missing case above: `hooks/lib/bible.mjs` throws `BibleError` (`CONFIG_READ_ERROR`) when `config.json` exists but fails to parse, and `bin/ns-status` exits 2 - covered by the "Any other `bin/ns-status` error" case above, which routes to `nfs-doctor`.
 
 ## Worked Example
 

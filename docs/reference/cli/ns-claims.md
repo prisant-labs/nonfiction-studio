@@ -55,11 +55,11 @@ or use the same `node` plus full-path form.
 |---|---|---|
 | `--chapter=<slug>` | string | Scan a single chapter file `chapters/<slug>.md`. Mutually exclusive with `--all`. |
 | `--all` | boolean | Scan all `.md` files in `chapters/` (default when no scope flag is given). |
-| `--project=<dir>` | string | Override the book root to `<dir>`. If omitted, the tool walks up from the current directory looking for `.studio/meta.json`. |
+| `--project=<dir>` | string | Override the book root to `<dir>`. If omitted, the tool walks up from the current directory looking for `_nonfiction-studio/meta.json`. |
 | `--json` | boolean | Emit the full gate report as JSON to stdout instead of the human-readable summary. |
 | `--online` | boolean | (Not yet implemented; reserved for a future DOI/URL resolution pass.) |
 | `--quotes` | boolean | Run the quote-fidelity check instead of claim coverage (OPP-D03 (quote fidelity and source packets)). Read-only. |
-| `--packets` | boolean | Generate per-chapter research packets under `research/packets/` instead of claim coverage (OPP-D03 (quote fidelity and source packets)). Writes only under `research/`, never `.studio/`. |
+| `--packets` | boolean | Generate per-chapter research packets under `research/packets/` instead of claim coverage (OPP-D03 (quote fidelity and source packets)). Writes only under `research/`, never `_nonfiction-studio/`. |
 
 `--quotes` and `--packets` are each a distinct mode: exactly one runs per invocation, in place
 of the default claim-coverage report. Neither flag changes `ns-claims`'s behavior when absent;

@@ -15,7 +15,7 @@ This fixture exercises two distinct engine behaviors:
 
 - `bin/ns-claims` (TSK-025 (ns-claims engine)) exits 0. All three marker forms present in the chapter resolve successfully; the unmarked sentence is invisible to marker resolution (the engine scans only for markers, not for semantic factuality).
 
-- `bin/ns-doctor` (TSK-028 (ns-doctor engine)) exits 1. The chapter file word count no longer matches the recorded count in `.studio/progress.json`, naming chapter 2 and the two mismatched counts.
+- `bin/ns-doctor` (TSK-028 (ns-doctor engine)) exits 1. The chapter file word count no longer matches the recorded count in `_nonfiction-studio/progress.json`, naming chapter 2 and the two mismatched counts.
 
 - The semantic catch (an unmarked factual assertion present in the file) is exercised warn-tier by the gate's judgment prompt layer and the fact-checker agent, not by a deterministic engine.
 

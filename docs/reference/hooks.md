@@ -28,7 +28,7 @@ on either side. All four fields below follow this same nested placement.
 | Field | Type | When emitted |
 |---|---|---|
 | `hookEventName` | string | Always: `"SessionStart"` |
-| `additionalContext` | string | Always: the orientation block (a found book project) or a two-sentence empty-state or corrupt-project message |
+| `additionalContext` | string | Always: the orientation block (a found book project), or a two-sentence empty-state, corrupt-project, or unpointed-state-folder message |
 | `sessionTitle` | string | Only when a book project is found and its `book_title` is readable |
 | `initialUserMessage` | string | Only on the empty-state path, and only when the directory is truly empty (see below) |
 | `reloadSkills` | boolean (`true`) | Only when a book project is found and a generated `book-context` skill exists for it (see below) |
@@ -37,10 +37,17 @@ on either side. All four fields below follow this same nested placement.
 
 On a found book project, `additionalContext` carries the five-element orientation block (gate
 debt, thesis, active chapter, top style rules, open-claims count), assembled by
-`hooks/lib/orientation.mjs`, and `sessionTitle` carries the book's title from `.studio/meta.json`.
+`hooks/lib/orientation.mjs`, and `sessionTitle` carries the book's title from `_nonfiction-studio/meta.json`.
 On the empty-state path (no book project found anywhere in the ancestor chain) or the
-corrupt-project path (a book root was found but its bible files could not be read),
-`additionalContext` carries a short plain-text message instead, and `sessionTitle` is omitted.
+corrupt-project path (a book root was found but its bible files could not be read, including a
+bad `nonfiction-studio.json`), `additionalContext` carries a short plain-text message instead,
+and `sessionTitle` is omitted.
+
+A third message path covers an unpointed state folder: the bible folders exist, but the book's
+records sit in a folder the plugin does not expect, such as the legacy `.studio/` (ADR-0015, state
+folder name). `additionalContext` then names that folder and `/nonfiction-studio:nfs-doctor`, and
+the empty-state path never runs. Its new-book pointer would otherwise lead to a second, empty state
+folder beside the real one.
 
 ### `initialUserMessage`: opening the studio dispatcher unprompted
 
@@ -76,7 +83,7 @@ their next session, not the current one.
 ## Fail-open
 
 `hooks/session-start.mjs` exits 0 unconditionally. Any read or parse error after the book root is
-resolved is caught, logged as one JSONL record to `.studio/logs/errors.jsonl`, and the script
+resolved is caught, logged as one JSONL record to `_nonfiction-studio/logs/errors.jsonl`, and the script
 continues with whatever partial orientation block it has already assembled - a single failed
 element (for example, an unreadable style profile) never suppresses the rest of the block. The
 `initialUserMessage` and `reloadSkills` checks added for the zero-friction first session follow

@@ -10,8 +10,8 @@ tags: ["cli", "gate", "orchestrator", "quality", "stop"]
 
 Orchestrates all quality-gate checks (claim coverage, quote fidelity, prompt scrub,
 stylometry drift, state coherence, continuity, overlap, thesis alignment, and session write flag)
-and writes a timestamped gate report under `.studio/gate/`. Exits according to the gate
-mode in `.studio/config.json`: 0 in warn mode; 0 or 1 in block mode depending on which
+and writes a timestamped gate report under `_nonfiction-studio/gate/`. Exits according to the gate
+mode in `_nonfiction-studio/config.json`: 0 in warn mode; 0 or 1 in block mode depending on which
 checks are configured to block; 2 on operational error.
 
 ## Purpose
@@ -58,7 +58,7 @@ or use the same `node` plus full-path form.
 |---|---|---|
 | `--check=<checks>` | string (comma-separated) | Run only the named checks. Valid flag values: `claims`, `quotes`, `stylometry`, `scrub`, `continuity-quick`, `coherence`, `overlap`. See the flag-to-report mapping table below. |
 | `--chapter=<slug>` | string | Limit chapter-scoped checks to `chapters/<slug>.md`. |
-| `--project=<dir>` | string | Override the book root to `<dir>`. If omitted, walks up from the current directory looking for `.studio/meta.json`. |
+| `--project=<dir>` | string | Override the book root to `<dir>`. If omitted, walks up from the current directory looking for `_nonfiction-studio/meta.json`. |
 | `--json` | boolean | Emit the full gate report as JSON to stdout. |
 
 ### --check flag values
@@ -88,8 +88,8 @@ The `--check` flag accepts CLI flag names, not REPORT check names. The seven val
 
 ## Gate checks and default modes (Phase 1)
 
-The table below reflects the `examples/sample-book/.studio/config.json` defaults. Authors
-override modes via their own `.studio/config.json`. Whether a block-mode check's block
+The table below reflects the `examples/sample-book/_nonfiction-studio/config.json` defaults. Authors
+override modes via their own `_nonfiction-studio/config.json`. Whether a block-mode check's block
 verdict actually stops the session depends on top-level `gate.mode`: every verdict is
 capped to `warn` only when top-level `gate.mode` is `warn`, the shipped default; a block
 verdict survives when top-level `gate.mode` is anything else (D-03 (layered Stop gate)
@@ -116,7 +116,7 @@ Real run against the shipped sample book (`node "<plugin-root>/bin/ns-gate"
 aggregate below the 2,200-word floor):
 
 ```
-[ns-gate] verdict: pass (report: .studio/gate/01-listening-before-speaking.20260905T102434Z.json)
+[ns-gate] verdict: pass (report: _nonfiction-studio/gate/01-listening-before-speaking.20260905T102434Z.json)
   [claim_coverage] pass: claim coverage 100%; no open markers
   [quote_fidelity] pass: 0 quote anchor(s) checked; all match verbatim excerpts exactly
   [stylometry] pass: book-scale verdict only: 528 scored word(s) is below the 2200-word floor a supportable book-scale verdict needs; reporting for advice only, never blocking below the floor
@@ -151,12 +151,12 @@ words) are skipped rather than scored, and listed in `skipped` with a reason. Se
 
 Every `ns-gate` run writes one file directly:
 
-- `.studio/gate/<slug>.<YYYYMMDDTHHMMSSZ>.json` - the timestamped full gate report
+- `_nonfiction-studio/gate/<slug>.<YYYYMMDDTHHMMSSZ>.json` - the timestamped full gate report
 
 When `ns-gate` runs under the `Stop` hook (`hooks/stop-gate.mjs`), the hook - not `ns-gate`
 itself - separately writes a second file by copying that same run's stdout verbatim:
 
-- `.studio/gate/last-gate.json` - the most recent gate report for the chapter, exactly as
+- `_nonfiction-studio/gate/last-gate.json` - the most recent gate report for the chapter, exactly as
   `ns-gate` emitted it
 
 A direct `ns-gate` invocation with no Stop hook in the loop (a manual run, or CI) never

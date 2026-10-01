@@ -48,7 +48,7 @@ invocation from a user's own shell can add `bin/` to PATH manually, or use the s
 
 | Flag | Type | Description |
 |---|---|---|
-| `--project=<dir>` | string | Override the book root to `<dir>`. If omitted, the tool walks up from the current directory looking for `.studio/meta.json`. |
+| `--project=<dir>` | string | Override the book root to `<dir>`. If omitted, the tool walks up from the current directory looking for `_nonfiction-studio/meta.json`. |
 | `--json` | boolean | Emit the full gate report as JSON to stdout instead of the human-readable summary. |
 
 There is no `--chapter` or `--all` scope flag. Endnotes are numbered per chapter, but the

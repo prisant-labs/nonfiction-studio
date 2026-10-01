@@ -5,7 +5,7 @@
 //               returns a structured gate report matching S-08 section 11 exactly, plus the
 //               stylometry entry's `drift` sibling per ADR-0012 (PF-14 structured drift field);
 //               handles per-check verdict derivation and the mode-dependent exit taxonomy;
-//               writes and prunes gate reports under .studio/gate/
+//               writes and prunes gate reports under _nonfiction-studio/gate/
 // why:          all engine logic lives in lib modules per S-07 section 4; bin/ns-gate is
 //               a thin shell; hooks/stop-gate.mjs (TSK-034) is the subprocess boundary
 // used-by:      bin/ns-gate, and hooks/stop-gate.mjs, which imports ALL_FLAGS directly
@@ -25,6 +25,7 @@ import {
   readdirSync, unlinkSync
 } from 'node:fs';
 import { join, relative } from 'node:path';
+import { stateDirOf, stateDirNameOf } from './bible.mjs';
 import { computeCoverage, scanChapter, scanQuoteAnchors, computeQuoteFindings } from './claims-engine.mjs';
 import { measureBook, measureChapter, countWords, computeDrift } from './stylometry-engine.mjs';
 import { scrub } from './scrub-engine.mjs';
@@ -104,7 +105,7 @@ const MIN_BOOK_VERDICT_WORDS = 2200;
 // template-parity test can assert both shipped config templates' gate.checks key sets deeply
 // equal Object.keys(DEFAULT_GATE.checks): both shipped config templates must carry the full
 // default check set, and a parity test in the gate suite enforces it, so the list cannot drift
-// out of sync the way templates/config-defaults.json and templates/book-scaffold/.studio/
+// out of sync the way templates/config-defaults.json and templates/book-scaffold/_nonfiction-studio/
 // config.json already had (Wave 1 exit Task 2).
 export const DEFAULT_GATE = {
   mode: 'warn',
@@ -134,10 +135,10 @@ export const DEFAULT_GATE = {
 };
 
 /**
- * Loads the gate config from .studio/config.json, overlays per-project studio settings
+ * Loads the gate config from _nonfiction-studio/config.json, overlays per-project studio settings
  * (Wave 1 exit Task 2), and applies the two D-03 invariants.
  *
- * Layering order (single choke point): DEFAULT_GATE <- .studio/config.json gate/thresholds <-
+ * Layering order (single choke point): DEFAULT_GATE <- _nonfiction-studio/config.json gate/thresholds <-
  * settings mappings (gate_mode -> gate.mode; thresholds -> shallow merge) <- structural
  * coercions (unchanged). Settings can raise gate.mode to "block" but can never promote
  * thesis_alignment or quote_fidelity out of their coerced "warn" mode, because the coercion
@@ -159,7 +160,7 @@ export function loadGateConfig(root, stderrFn) {
   const stderr = stderrFn || (s => process.stderr.write(s));
 
   let rawConfig = null;
-  const configPath = join(root, '.studio', 'config.json');
+  const configPath = join(stateDirOf(root), 'config.json');
   if (existsSync(configPath)) {
     rawConfig = JSON.parse(readFileSync(configPath, 'utf8'));
   }
@@ -361,7 +362,7 @@ export function runGate(root, opts = {}) {
 
   // Read the full config once for stylometry baseline (needed when chapters exist)
   let fullConfig = null;
-  const configPath = join(root, '.studio', 'config.json');
+  const configPath = join(stateDirOf(root), 'config.json');
   if (existsSync(configPath)) {
     try {
       fullConfig = JSON.parse(readFileSync(configPath, 'utf8'));
@@ -775,13 +776,13 @@ export function runGate(root, opts = {}) {
           detail =
             coherenceFindings.length + ' word-count mismatch(es); ' +
             first.type + '; ' + first.message;
-          // evidence: the chapter file paths (from finding.path) plus .studio/progress.json
+          // evidence: the chapter file paths (from finding.path) plus _nonfiction-studio/progress.json
           // (the two sides of the incoherence: chapter file has actual count, progress.json
           // has the recorded count)
           evidence = coherenceFindings
             .filter(f => f.path)
             .map(f => f.path);
-          evidence.push('.studio/progress.json');
+          evidence.push(stateDirNameOf(root) + '/progress.json');
           next = 'Run ns-doctor to diagnose the word-count incoherence and update progress.json.';
         }
 
@@ -862,7 +863,7 @@ export function runGate(root, opts = {}) {
   // ---- SESSION WRITE FLAG (always evaluated; ns-gate never blocks on this check) ----
   {
     const reportName = 'session_write_flag';
-    const flagPath = join(root, '.studio', 'gate', '.session-write-flag');
+    const flagPath = join(stateDirOf(root), 'gate', '.session-write-flag');
 
     if (existsSync(flagPath)) {
       // Present: pass with the flag path as evidence
@@ -870,7 +871,7 @@ export function runGate(root, opts = {}) {
         reportName,
         'pass',
         'session write flag present',
-        ['.studio/gate/.session-write-flag'],
+        [stateDirNameOf(root) + '/gate/.session-write-flag'],
         null
       ));
     } else {
@@ -956,10 +957,10 @@ function toUTCSeconds(d) {
 }
 
 /**
- * Writes the gate report to .studio/gate/<slug>.<YYYYMMDDTHHMMSSZ>.json and prunes
+ * Writes the gate report to _nonfiction-studio/gate/<slug>.<YYYYMMDDTHHMMSSZ>.json and prunes
  * to the last 10 reports per slug (mirror of the snapshot retention policy in S-08 section 10).
  *
- * ns-gate writes ONLY under .studio/gate/ per D-06 (single-writer state discipline);
+ * ns-gate writes ONLY under _nonfiction-studio/gate/ per D-06 (single-writer state discipline);
  * it never touches progress.json or any bible file.
  *
  * @param {string} root   - absolute book root path
@@ -967,7 +968,7 @@ function toUTCSeconds(d) {
  * @returns {{ reportPath: string }} bible-relative path of the written report
  */
 export function writeGateReport(root, report) {
-  const gateDir = join(root, '.studio', 'gate');
+  const gateDir = join(stateDirOf(root), 'gate');
   mkdirSync(gateDir, { recursive: true });
 
   const slug = report.chapter || 'all';
@@ -988,7 +989,7 @@ export function writeGateReport(root, report) {
  * Prunes gate reports for a slug to the last 10, keeping the most recent by filename sort.
  * Lexicographic sort equals chronological sort for the YYYYMMDDTHHMMSSZ timestamp format.
  *
- * @param {string} gateDir - absolute path to .studio/gate/
+ * @param {string} gateDir - absolute path to _nonfiction-studio/gate/
  * @param {string} slug    - chapter slug (e.g., 'all' or '01-intro')
  */
 function pruneGateReports(gateDir, slug) {

@@ -38,7 +38,7 @@ and never writes a sentence that could mislead a reader into attributing a claim
 to a source it did not consult.
 
 The agent does not line-edit its own output, does not run voice scoring, does not
-generate formatted citations from memory, and does not write to `.studio/` machine
+generate formatted citations from memory, and does not write to the state folder's machine
 state. Those roles belong to `line-editor`, `voice-guardian`, `citation-manager`,
 and the PostToolBatch hook respectively, per D-06 (single-writer state discipline).
 
@@ -70,7 +70,7 @@ and the PostToolBatch hook respectively, per D-06 (single-writer state disciplin
   this per D-13 (security posture): it denies any write outside `chapters/` once
   it identifies `drafting-partner` from the `agent_type` slug the platform reports
   in the hook envelope (ADR-0007, agent identity resolution). The agent does not
-  write to `structure/`, `context/`, `research/`, or `.studio/`.
+  write to `structure/`, `context/`, `research/`, or the state folder.
 
 Read and Write are the minimum tool set for the drafting workflow. No web access
 is needed: the agent works exclusively from pre-registered ledger evidence.
@@ -225,9 +225,9 @@ noted in a session observation, not embedded in the chapter file.
 - **No fabricated citations.** Bibliography entries, footnotes, and in-text
   citation strings are not generated from memory. Citation formatting is the
   domain of `citation-manager`.
-- **No `.studio/` writes.** Chapter word counts and session progress are recorded
+- **No state-folder writes.** Chapter word counts and session progress are recorded
   by the PostToolBatch hook per D-06 (single-writer state discipline). The agent
-  does not write to `.studio/` under any circumstance.
+  does not write to the state folder under any circumstance.
 - **No line-editing or voice scoring.** Sentence-level revision belongs to
   `line-editor`; voice-drift scoring belongs to `voice-guardian`. The
   drafting-partner does not perform either role.

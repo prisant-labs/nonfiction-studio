@@ -11,7 +11,7 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
-import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
+import { findBookRoot, BibleError, DEFAULT_STATE_DIR, POINTER_FILE } from '../hooks/lib/bible.mjs';
 import {
   SUPPORTED_MAJOR,
   checkSchemaVersion,
@@ -44,10 +44,50 @@ try {
 
 const startDir = opts.project ? resolve(opts.project) : process.cwd();
 
+/**
+ * Reports a book whose state folder cannot be resolved (ADR-0015, state folder name) in the
+ * normal report shape, so the nfs-doctor skill can read the folder names off the findings
+ * and offer the move. Exit 2: the checks cannot run until the folder is resolved.
+ */
+function emitStateFolderReport(status, findings) {
+  if (opts.json) {
+    process.stdout.write(JSON.stringify({
+      check: 'doctor',
+      status,
+      findings,
+      notices: [],
+      migrationAvailable: false
+    }, null, 2) + '\n');
+  } else {
+    process.stdout.write('[doctor] ' + status + ': ' + findings.length + ' finding(s):\n');
+    for (const f of findings) {
+      process.stdout.write('  ' + f.path + ' [' + f.type + ']: ' + f.message + '\n');
+    }
+  }
+  process.exit(2);
+}
+
 let root, meta, config;
 try {
   ({ root, meta, config } = findBookRoot(startDir));
 } catch (err) {
+  if (err.name === 'BibleError' && err.code === 'NO_BOOK_ROOT' &&
+      Array.isArray(err.candidates) && err.candidates.length > 0) {
+    emitStateFolderReport('state-folder-unpointed', err.candidates.map((name) => ({
+      type: 'state.unpointed-folder',
+      path: name + '/',
+      message: 'folder "' + name + '" holds this book\'s records, but the plugin expects "' +
+        DEFAULT_STATE_DIR + '"; run /nonfiction-studio:nfs-doctor migrate to rename it or to ' +
+        'record its name in ' + POINTER_FILE
+    })));
+  }
+  if (err.name === 'BibleError' && err.code === 'STATE_POINTER_INVALID') {
+    emitStateFolderReport('state-pointer-invalid', [{
+      type: 'state.pointer-invalid',
+      path: POINTER_FILE,
+      message: err.message
+    }]);
+  }
   if (err.name === 'BibleError') {
     process.stderr.write('ns-doctor: ' + err.message + '\n');
     process.exit(2);

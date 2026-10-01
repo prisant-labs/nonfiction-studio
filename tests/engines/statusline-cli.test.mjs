@@ -64,12 +64,12 @@ test('case 1: full render contains active chapter, words vs target, open claims,
     // populated by any shipped writer yet (see ADR-0008 (status HUD and CANON 3.5)), but the
     // engine is forward-compatible with both when present, per additionalProperties:
     // true on both schemas. This proves that path with a real fixture.
-    const configPath = join(tmp, '.studio', 'config.json');
+    const configPath = join(tmp, '_nonfiction-studio', 'config.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
     config.targets = { word_count: 30000 };
     writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
 
-    const progressPath = join(tmp, '.studio', 'progress.json');
+    const progressPath = join(tmp, '_nonfiction-studio', 'progress.json');
     const progress = JSON.parse(readFileSync(progressPath, 'utf8'));
     progress.chapters[0].promise = 'the reader learns to listen before speaking';
     writeFileSync(progressPath, JSON.stringify(progress, null, 2), 'utf8');
@@ -93,7 +93,7 @@ test('case 1: full render contains active chapter, words vs target, open claims,
 test('case 1b: as-shipped golden book (no target, no promise) still renders the required fields gracefully', () => {
   const tmp = makeTempClone(GOLDEN);
   try {
-    const progress = JSON.parse(readFileSync(join(tmp, '.studio', 'progress.json'), 'utf8'));
+    const progress = JSON.parse(readFileSync(join(tmp, '_nonfiction-studio', 'progress.json'), 'utf8'));
     const result = spawnStatusline(os.tmpdir(), { cwd: tmp });
     assert.equal(result.status, 0, 'stderr: ' + result.stderr);
 
@@ -111,7 +111,7 @@ test('case 1b: as-shipped golden book (no target, no promise) still renders the 
 test('case 2: a block verdict in last-gate.json renders the literal token BLOCK', () => {
   const tmp = makeTempClone(GOLDEN);
   try {
-    const lastGatePath = join(tmp, '.studio', 'gate', 'last-gate.json');
+    const lastGatePath = join(tmp, '_nonfiction-studio', 'gate', 'last-gate.json');
     const lastGate = JSON.parse(readFileSync(lastGatePath, 'utf8'));
     lastGate.verdict = 'block';
     writeFileSync(lastGatePath, JSON.stringify(lastGate, null, 2), 'utf8');
@@ -143,7 +143,7 @@ test('case 3: no book root anywhere: exit 0, empty stdout, no error text', () =>
 test('case 4: malformed progress.json degrades gracefully: exit 0, no parse error text, no crash', () => {
   const tmp = makeTempClone(GOLDEN);
   try {
-    writeFileSync(join(tmp, '.studio', 'progress.json'), '{ this is not valid JSON', 'utf8');
+    writeFileSync(join(tmp, '_nonfiction-studio', 'progress.json'), '{ this is not valid JSON', 'utf8');
 
     const result = spawnStatusline(os.tmpdir(), { cwd: tmp });
     assert.equal(result.status, 0, 'stderr: ' + result.stderr);
@@ -194,8 +194,8 @@ test('case 5b: workspace.current_dir is honored the same way as top-level cwd', 
 test('case 6: a project that has never gated (no last-gate.json) renders without a gate token', () => {
   const tmp = makeTempClone(GOLDEN);
   try {
-    unlinkSync(join(tmp, '.studio', 'gate', 'last-gate.json'));
-    assert.ok(!existsSync(join(tmp, '.studio', 'gate', 'last-gate.json')), 'precondition: file removed');
+    unlinkSync(join(tmp, '_nonfiction-studio', 'gate', 'last-gate.json'));
+    assert.ok(!existsSync(join(tmp, '_nonfiction-studio', 'gate', 'last-gate.json')), 'precondition: file removed');
 
     const result = spawnStatusline(os.tmpdir(), { cwd: tmp });
     assert.equal(result.status, 0, 'stderr: ' + result.stderr);

@@ -42,7 +42,7 @@ The ledger at session start:
 - `research/evidence-log.md`: 10 entries, highest is EV-0010 (pacing recommendation)
 - `research/sources.md`: 6 records, highest is SRC-0006 (Lave and Wenger 1991)
 
-Web research is disabled for this project (`research.web_enabled` is absent from `.studio/config.json`).
+Web research is disabled for this project (`research.web_enabled` is absent from `_nonfiction-studio/config.json`).
 
 The author has located a relevant book: Clay Johnson, "The Information Diet: A Case for Conscious Consumption," O'Reilly Media, 2012, ISBN 978-1449304683.
 
@@ -51,6 +51,10 @@ The author has located a relevant book: Clay Johnson, "The Information Diet: A C
 ## Session: chapter-scoped research pass, gate closed, pasted source text
 
 **Author:** `/nonfiction-studio:nfs-research 03-your-curation-practice`
+
+**Studio (Locate the state folder):**
+
+The skill uses the Read tool on `nonfiction-studio.json` at the book root. This is the skill's first tool call. The file does not exist, so the state folder is `_nonfiction-studio/`, and `_nonfiction-studio/meta.json` exists, so no other folder needs checking.
 
 **Studio (Step 1 - Outline probe):**
 
@@ -78,7 +82,7 @@ The skill reads `structure/outline.md` and extracts the evidence-needed items fo
 
 The skill reads `research/evidence-log.md` (highest: EV-0010) and `research/sources.md` (highest: SRC-0006).
 
-The skill reads `.studio/config.json`. The field `research.web_enabled` is absent.
+The skill reads `_nonfiction-studio/config.json`. The field `research.web_enabled` is absent.
 
 **Studio:**
 
@@ -90,9 +94,9 @@ The skill reads `.studio/config.json`. The field `research.web_enabled` is absen
 >
 > Current ledger: 10 EV entries (highest: EV-0010), 6 SRC records (highest: SRC-0006).
 >
-> Web research status: not enabled for this project (`research.web_enabled` is absent from `.studio/config.json`). Source material arrives as pasted text. Paste the text of any sources you want registered; the `research-librarian` agent will analyze pasted content with the same quote-and-attribute discipline it applies to fetched content.
+> Web research status: not enabled for this project (`research.web_enabled` is absent from `_nonfiction-studio/config.json`). Source material arrives as pasted text. Paste the text of any sources you want registered; the `research-librarian` agent will analyze pasted content with the same quote-and-attribute discipline it applies to fetched content.
 >
-> To enable web research, add `"research": { "web_enabled": true }` to `.studio/config.json`.
+> To enable web research, add `"research": { "web_enabled": true }` to `_nonfiction-studio/config.json`.
 >
 > Ready to proceed with this agenda?
 
@@ -245,9 +249,9 @@ The skill reads `research/open-questions.md`. OQ-003 and OQ-004 are now resolved
 
 ## Key assertions from this transcript
 
-- **Outline probe is a tool call.** The Bash call on `structure/outline.md` determines the `HAS_OUTLINE`/`NO_OUTLINE` token before any other work begins. No prose inference substitutes for the tool result.
+- **The state folder is located before Step 1 runs.** The Read on `nonfiction-studio.json` is the skill's first tool call. Step 1's Bash call on `structure/outline.md` is the first tool call after the state folder is located, and it determines the `HAS_OUTLINE`/`NO_OUTLINE` token before any other work begins. No prose inference substitutes for the tool result.
 - **Chapter argument resolved via Read.** The skill reads `structure/chapter-list.md` and matches the supplied slug `03-your-curation-practice` to row 3. An unmatched argument would halt with the registry file name and the list of valid slugs.
-- **Web gate stated honestly in the agenda.** The skill reads `.studio/config.json` before presenting the agenda. The gate is closed; the skill states this explicitly and tells the author how to enable web research. The agent confirms the gate status when it runs and declines any web call accordingly.
+- **Web gate stated honestly in the agenda.** The skill reads `_nonfiction-studio/config.json` before presenting the agenda. The gate is closed; the skill states this explicitly and tells the author how to enable web research. The agent confirms the gate status when it runs and declines any web call accordingly.
 - **Skill writes no ledger files.** SRC-0007, EV-0011, and EV-0012 are written by the `research-librarian` agent, not by the skill. The skill's Step 4 delegates and waits; it calls no Write tool on ledger paths.
 - **Source-first contract.** SRC-0007 is written before EV-0011 and EV-0012. The agent confirms no SRC record for Johnson 2012 exists before allocating SRC-0007.
 - **Author confirmation before write.** The agent presents the two proposed entries and the corrected locator for EV-0012 and waits for explicit author confirmation before writing any file.

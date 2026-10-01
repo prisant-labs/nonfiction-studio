@@ -35,7 +35,7 @@ samples (or, when none exist, a confirmed bootstrap passage plus additional
 generated passages) into two outputs that must agree with each other:
 `context/style-profile.md`, following the seven-section grammar normative in
 `docs/formats/style-profile.md`, and the full calibrated baseline in
-`.studio/config.json` `stylometry.baseline`. It invokes
+`<state-dir>/config.json` `stylometry.baseline`. It invokes
 `bin/ns-stylometry --calibrate` to compute both the eight-marker vector AND the
 five-rung noise-scale and block-threshold ladder (ADR-0012, voice verdict scope,
 Decision 3) that the drift scorer judges a chapter against. The engine computes
@@ -52,6 +52,10 @@ same-voice variation and the regime (chapter vs. book scale) a verdict can
 honestly support. This takes real wall-clock time - seconds to roughly a minute,
 proportional to corpus size - and the agent states that once, before invoking
 it, not merely by silently taking the time.
+
+## State folder
+
+`<state-dir>` stands for the book's state folder. The skill that dispatched you names that folder in your brief, and you never resolve it yourself. If your brief does not name it, read and write nothing under it, and say so in your reply. When you dispatch another agent, pass the same folder name in its brief.
 
 ## When to invoke
 
@@ -78,7 +82,7 @@ it, not merely by silently taking the time.
   (so re-numbering continues past what is already on disk instead of overwriting it).
 - **Write** - persist every sample used for calibration to `context/samples/` (see
   Reads and writes below), write `context/style-profile.md` after the author
-  confirms the draft profile, and write the baseline into `.studio/config.json`
+  confirms the draft profile, and write the baseline into `<state-dir>/config.json`
   using read-modify-write semantics: load the full config file, set
   `stylometry.baseline` to the object described under "Config write contract"
   below, then write the whole file back without stripping any other top-level
@@ -100,7 +104,7 @@ it, not merely by silently taking the time.
   ns-stylometry" --measure=<bucket-file-paths>`, one call per eligible register
   bucket, per "Register capture" below - no other Bash command is permitted. The
   current UTC timestamp for `captured` is stated directly (the same convention
-  `nfs-new-book`'s `{{DATETIME}}` token uses for `.studio/meta.json` `created`,
+  `nfs-new-book`'s `{{DATETIME}}` token uses for `<state-dir>/meta.json` `created`,
   not a shell `date` call), and `sample_count` is simply the number of files this
   agent just persisted, not a counted value from a tool.
 
@@ -127,7 +131,7 @@ These are behavior contracts. The voice-capture agent touches only the paths lis
 - `context/style-profile.md` - the full operational voice profile, in the
   seven-section grammar normative in `docs/formats/style-profile.md`, per the
   field-mapping table below.
-- `.studio/config.json` - the `stylometry.baseline` key, per "Config write
+- `<state-dir>/config.json` - the `stylometry.baseline` key, per "Config write
   contract" below, and, when register bucketing is eligible, the
   `stylometry.registers` key, per "Register capture" below. The engine is the
   single counting and calibrating authority and is read-only; this agent is the
@@ -136,7 +140,7 @@ These are behavior contracts. The voice-capture agent touches only the paths lis
 
 ## Write ordering (single source of truth)
 
-The numeric baseline is written to `.studio/config.json` as soon as calibration
+The numeric baseline is written to `<state-dir>/config.json` as soon as calibration
 completes - the vector and calibration ladder are objective measurements, not
 something the author approves before they exist on disk. `context/style-profile.md`
 is written only after the author confirms the draft profile. Between those two
@@ -202,7 +206,7 @@ by the time Exemplars is drafted.
 
 5. **Write the numeric baseline.** State the current UTC time in RFC 3339 format
    as `captured` (see the Bash entry under Tools for why this is stated directly
-   rather than shelled out to). Write `.studio/config.json` per "Config write
+   rather than shelled out to). Write `<state-dir>/config.json` per "Config write
    contract" below. This is on disk before the profile draft is presented.
 
 6. **Draft the profile.** Draft `context/style-profile.md` using the seven-section
@@ -214,7 +218,7 @@ by the time Exemplars is drafted.
    Incorporate and confirm.
 
 8. **Commit and report.** Write the confirmed `context/style-profile.md` with
-   `bootstrapped: false`. The baseline in `.studio/config.json` was written in
+   `bootstrapped: false`. The baseline in `<state-dir>/config.json` was written in
    step 5 and is already on disk. Report the two verbatim regime-disclosure
    sentences from step 4 to the invoking skill (see "Regime disclosure").
 
@@ -262,7 +266,7 @@ by the time Exemplars is drafted.
 
 9. **Write the numeric baseline.** Exactly as Path A step 5 - the same fields,
    with no `bootstrapped` marker: `bootstrapped` is a profile-only field (see the
-   field-mapping table above) and never touches `.studio/config.json`.
+   field-mapping table above) and never touches `<state-dir>/config.json`.
 
 10. **Draft, review, and commit.** Draft `context/style-profile.md` with the
     seven-section grammar, including the `bootstrapped: true` bullet defined once
@@ -295,7 +299,7 @@ what the agent observes; it changes where each observation is written.
 | `## Do` | (bullet list, 5 to 10 items) | Positive stylistic directives derived from samples and intake |
 | `## Do not` | (bullet list, 5 to 10 items) | Negative constraints derived from samples and intake, including the brief's explicit banned-tics list folded in as named terms to avoid |
 | `## Exemplars` | (bullet list of paths) | Every path under `context/samples/` persisted for this capture (see "Persist before calibrating") - paths, not passages, so `bin/ns-doctor` can resolve each one |
-| `## Baseline reference` | `vector` | Literal string `.studio/config.json -> stylometry.baseline.markers` |
+| `## Baseline reference` | `vector` | Literal string `<state-dir>/config.json -> stylometry.baseline.markers` |
 | | `captured` | Copied from the `captured` value just written to config (Write ordering, above) |
 | | `sample_count` | Copied from the `sample_count` value just written to config |
 | | `bootstrapped` | `false` on Path A, `true` on Path B - a profile-only field, always written, with no config-level counterpart; Path B additionally states the own-prose replacement recommendation |
@@ -305,7 +309,7 @@ It observes and describes. Evaluative judgment belongs to the author.
 
 ## Config write contract
 
-`stylometry.baseline` in `.studio/config.json`, written via read-modify-write
+`stylometry.baseline` in `<state-dir>/config.json`, written via read-modify-write
 (every other top-level config key untouched):
 
 ```json
@@ -384,7 +388,7 @@ touched.
    step 2, read `markers` from stdout VERBATIM - do not recompute, round, or
    reshape it. `sample_count` for that bucket is the number of files in it, the
    same convention the baseline's own `sample_count` uses.
-4. **Write the registers.** Read the full `.studio/config.json` fresh
+4. **Write the registers.** Read the full `<state-dir>/config.json` fresh
    (read-modify-write, the same single-writer discipline as the baseline), set
    `stylometry.registers.<bucket-name>` to `{ "markers": {...from step 3,
    verbatim...}, "sample_count": N }` for each surviving bucket, and write the
@@ -427,7 +431,7 @@ it lives beside a v5 baseline, not inside its version guard.
   `context/samples/voice-sample-NN.md` first, per "Persist before calibrating."
   A sample the doctor cannot resolve as an Exemplars path is not a usable sample.
 - **Single source for agreement fields.** `captured` and `sample_count` are
-  computed once and written to `.studio/config.json`; the profile's `Baseline
+  computed once and written to `<state-dir>/config.json`; the profile's `Baseline
   reference` block copies those same values rather than restating them
   independently. `bin/ns-doctor` checks the two files agree by exact string and
   number equality.

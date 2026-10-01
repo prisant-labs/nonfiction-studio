@@ -35,11 +35,12 @@ Every command below is one line of `.github/workflows/tier-a.yml`, in the order 
 13. `node scripts/checks/check-link-labels.mjs` - once a Markdown link's target resolves to a component's own reference page, `SKILL.md`, agent page, or `bin/` CLI, the link's label has to name that component.
 14. `node scripts/checks/check-component-counts.mjs` - a stated component count (skills, CLIs) has to match the tree's true count. See "Writing prose that survives this checker," below.
 15. `node scripts/checks/check-compliance-stanza.mjs` - every agent-dispatching skill (a skill whose frontmatter `chain:` list is non-empty) carries the byte-identical shared compliance stanza.
-16. `node scripts/test-engines.mjs` - the engine, lib, hook, and schema unit test suites, **and** the checker unit tests under `tests/checks/`, all in one `node --test` invocation.
-17. `node scripts/test-fixtures.mjs` - the bidirectional fixture matrix, run against temp clones so committed fixtures are never touched.
-18. `node scripts/verify-sample-book.mjs` - sample-book integrity: marker-to-ledger-to-source resolution.
+16. `node scripts/checks/check-state-folder-stanza.mjs` - every skill that names `<state-dir>` carries the byte-identical "Locate the state folder" stanza before its first step, and no skill or agent names the state folder literally (ADR-0015, state folder name).
+17. `node scripts/test-engines.mjs` - the engine, lib, hook, and schema unit test suites, **and** the checker unit tests under `tests/checks/`, all in one `node --test` invocation.
+18. `node scripts/test-fixtures.mjs` - the bidirectional fixture matrix, run against temp clones so committed fixtures are never touched.
+19. `node scripts/verify-sample-book.mjs` - sample-book integrity: marker-to-ledger-to-source resolution.
 
-`tier-a.yml` has twenty `run:` lines. Its comments number nineteen of them "Live step 1" through "Live step 19", and Live step 1 is `npm ci` (see Setup). The twentieth, `npm install -g @anthropic-ai/claude-code`, is marked inert scaffolding. Each item above is therefore numbered one lower than its "Live step" label in the workflow; installing the `claude` binary is a prerequisite already covered by "Prerequisites." Open a pull request only once every numbered step above passes locally.
+`tier-a.yml` has twenty-one `run:` lines. Its comments number twenty of them "Live step 1" through "Live step 20", and Live step 1 is `npm ci` (see Setup). The twenty-first, `npm install -g @anthropic-ai/claude-code`, is marked inert scaffolding. Each item above is therefore numbered one lower than its "Live step" label in the workflow; installing the `claude` binary is a prerequisite already covered by "Prerequisites." Open a pull request only once every numbered step above passes locally.
 
 ### The two suites, named directly
 
@@ -86,6 +87,16 @@ The types in active use are `feat`, `fix`, `docs`, `test`, and `chore`; pick the
 ## The `nfs-` skill naming convention
 
 Every skill directory under `skills/` is named `nfs-<name>`, with no exceptions, ever. This is machine-enforced in `scripts/check-frontmatter.mjs`: the directory name must match `^nfs-[a-z0-9]+(-[a-z0-9]+)*$`, the `SKILL.md`'s own `name:` frontmatter field must equal the directory name, and the `library.json` `components.skills[]` entry must match the same pattern. See [ADR-0003 (skill invocation ergonomics)](docs/adr/ADR-0003-skill-invocation-ergonomics.md)'s amendment for why: a short invocation form shares a namespace with every other installed plugin, and the prefix is what keeps this plugin's verbs from colliding with someone else's.
+
+## Naming the state folder in code, skills, and agents
+
+A book's state folder is `_nonfiction-studio/` by default, but a book can give it another name in `nonfiction-studio.json` at the book root, so nothing may assume the name. See [ADR-0015 (state folder name)](docs/adr/ADR-0015-state-folder-name.md).
+
+- **Code** under `hooks/` and `bin/` reaches the folder only through `stateDirOf(root)` or `stateDirNameOf(root)` in `hooks/lib/bible.mjs`, never through a literal.
+- **A skill** that reads or writes the folder itself writes its paths as `<state-dir>/...` and carries the shared "Locate the state folder" section before its first step. Copy that section byte for byte from any skill that already has it. A skill that only describes what a CLI does says "the state folder" instead, and needs no section.
+- **An agent** never resolves the folder. An agent that reads or writes it uses `<state-dir>/...` and carries the shared note that the dispatching skill names the folder in its brief; the checker prints the note's exact text when it is missing.
+
+`scripts/checks/check-state-folder-stanza.mjs` enforces all three rules for skills and agents, and it flags any literal folder name in a skill or an agent file.
 
 ## Hooks fail open; settings can never promote a coerced check
 

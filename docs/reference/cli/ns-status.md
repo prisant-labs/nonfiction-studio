@@ -16,7 +16,7 @@ Running it twice against unchanged state produces byte-identical output.
 ## Purpose
 
 Before this CLI existed, the `nfs-status-dashboard` skill computed the same numbers by asking the
-language model to list the `.studio/gate/` directory, parse filenames, open reports, and read
+language model to list the `_nonfiction-studio/gate/` directory, parse filenames, open reports, and read
 numbers out of prose by eye - with nothing asserting it parsed correctly the same way twice.
 `ns-status` is the deterministic replacement computation: a later task points that skill at this
 CLI's own JSON output instead. This passes [ADR-0009](../../adr/ADR-0009-apparatus-cli.md)
@@ -24,23 +24,23 @@ CLI's own JSON output instead. This passes [ADR-0009](../../adr/ADR-0009-apparat
 property that a failing test can be written against before the feature exists, the same criterion
 `ns-notes` passed.
 
-`ns-status` is read-only by design. It never writes to `.studio/` or anywhere else. State
+`ns-status` is read-only by design. It never writes to `_nonfiction-studio/` or anywhere else. State
 changes (the promotion ceremony onto the existing `final` chapter status, for example - see
 ["The promotion ceremony and automatic demotion"](#the-promotion-ceremony-and-automatic-demotion)
-below) belong to a hook, because D-06 (single-writer state discipline) reserves `.studio/`
+below) belong to a hook, because D-06 (single-writer state discipline) reserves `_nonfiction-studio/`
 machine-state writes for hooks, not for a CLI a narrating skill can invoke mid-conversation.
 
 ## What it reads
 
 | Path | Fields |
 |---|---|
-| `.studio/progress.json` | Per-chapter `slug`, `title`, `status`, `word_count`, `open_claim_count`; whole-book `totals` (`word_count`, `open_claim_count`, `chapters_final`, `chapters_total`) |
-| `.studio/gate/` (directory listing, then the newest report per chapter slug) | Gate verdict, drift statistic, and drift threshold per chapter |
+| `_nonfiction-studio/progress.json` | Per-chapter `slug`, `title`, `status`, `word_count`, `open_claim_count`; whole-book `totals` (`word_count`, `open_claim_count`, `chapters_final`, `chapters_total`) |
+| `_nonfiction-studio/gate/` (directory listing, then the newest report per chapter slug) | Gate verdict, drift statistic, and drift threshold per chapter |
 
 **Gate verdict, drift statistic, and drift threshold come only from the newest report file per
-chapter slug under `.studio/gate/`, never from `progress.json`'s per-chapter `last_gate` field,
+chapter slug under `_nonfiction-studio/gate/`, never from `progress.json`'s per-chapter `last_gate` field,
 never from `progress.json`'s per-chapter `drift_score` field, and (since ADR-0012, voice verdict
-scope) never from `.studio/config.json`'s retired `thresholds.drift_score_max` either.**
+scope) never from `_nonfiction-studio/config.json`'s retired `thresholds.drift_score_max` either.**
 `last_gate` stays null in every shipped writer by design (the field is reserved for a
 later task); a hand-authored fixture may populate it for one chapter as sample content, which
 does not make it a real source. `drift_score` is a separate, hook-maintained convenience field
@@ -73,7 +73,7 @@ where `<plugin-root>` is the resolved plugin installation path.
 
 | Flag | Type | Description |
 |---|---|---|
-| `--project=<dir>` | string | Override the book root to `<dir>`. If omitted, the tool walks up from the current directory looking for `.studio/meta.json`. |
+| `--project=<dir>` | string | Override the book root to `<dir>`. If omitted, the tool walks up from the current directory looking for `_nonfiction-studio/meta.json`. |
 | `--json` | boolean | Emit the board as JSON to stdout instead of the human-readable Markdown board. |
 
 ## Exit taxonomy
@@ -81,7 +81,7 @@ where `<plugin-root>` is the resolved plugin installation path.
 | Exit code | Meaning |
 |---|---|
 | 0 | Success. There is no findings-based exit code: a highlighted row (drift above ITS OWN row's threshold, or a block verdict) is reported in the board, not signaled through the exit code, because `ns-status` reports state - it does not gate anything. |
-| 2 | An argument error (an unknown flag, a flag missing its required value), no book root found walking up from the start directory, or an unreadable/malformed `.studio/progress.json` or `.studio/config.json`. Every exit-2 message is prefixed `ns-status: `. |
+| 2 | An argument error (an unknown flag, a flag missing its required value), no book root found walking up from the start directory, or an unreadable/malformed `_nonfiction-studio/progress.json` or `_nonfiction-studio/config.json`. Every exit-2 message is prefixed `ns-status: `. |
 
 ## Output
 
@@ -127,7 +127,7 @@ legacy prose-detail fallback described under JSON below):
       "drift": 10.86,
       "threshold": null,
       "gate": "pass",
-      "reportPath": ".studio/gate/01-listening-before-speaking.20260810T091000Z.json",
+      "reportPath": "_nonfiction-studio/gate/01-listening-before-speaking.20260810T091000Z.json",
       "highlighted": false
     }
   ],
@@ -142,7 +142,7 @@ legacy prose-detail fallback described under JSON below):
 }
 ```
 
-`reportPath` is always book-root-relative (for example `.studio/gate/<slug>.<timestamp>.json`),
+`reportPath` is always book-root-relative (for example `_nonfiction-studio/gate/<slug>.<timestamp>.json`),
 never an absolute filesystem path, and is `null` when the chapter has no gate report on record.
 `drift` is the row's own chapter's newest report's drift statistic: it prefers the structured
 `drift.statistic` field (PF-14, ADR-0012 voice verdict scope, Decision 2) and falls back to
@@ -175,9 +175,9 @@ for this project calls this same terminal state "locked"; there is no separate `
 the enum - it is `final` under a different name, reused rather than adding an eighth schema value
 for a rename that would force a version bump and a migration.
 
-Promotion is a human editing `.studio/progress.json` directly, in a batch that does not also
+Promotion is a human editing `_nonfiction-studio/progress.json` directly, in a batch that does not also
 write the chapter's own file (see below for why). Demotion is automatic and machine-enforced:
-`hooks/post-tool-batch.mjs`, `.studio/progress.json`'s sole writer per D-06 (single-writer state
+`hooks/post-tool-batch.mjs`, `_nonfiction-studio/progress.json`'s sole writer per D-06 (single-writer state
 discipline), falls a chapter back to `revised` whenever either holds:
 
 - the chapter reads `final` but no valid attestation names its slug - an unattested promotion
@@ -190,7 +190,7 @@ discipline), falls a chapter back to `revised` whenever either holds:
   does not try to guess.
 
 Because the hook demotes on any edit to the chapter's own file, a batch that both edits the
-chapter and sets it `final` in `.studio/progress.json` is demoted by the edit half before the
+chapter and sets it `final` in `_nonfiction-studio/progress.json` is demoted by the edit half before the
 promotion can stand - the attestation must land in its own batch.
 
 The eligibility check - `isEligibleForFinal` in `hooks/lib/status-engine.mjs` - is the one
@@ -211,10 +211,10 @@ own self-sufficiency tier climb): the two are unrelated ideas that happen to bot
 `ns-status` is the eighth CLI shipped under `bin/` (D-05, five shipped CLIs, grown by one per each
 of `ns-statusline`, `ns-notes`, and now `ns-status`; see
 [ADR-0009](../../adr/ADR-0009-apparatus-cli.md) for the growth-policy test). It reads the same
-`.studio/gate/` report shape [`ns-gate`](./ns-gate.md) writes
+`_nonfiction-studio/gate/` report shape [`ns-gate`](./ns-gate.md) writes
 ([gate report format](../../formats/gate-report.md)), but never runs `ns-gate` itself: `ns-status`
 only ever reads reports already on disk, the same performance boundary
-[`ns-statusline`](./ns-statusline.md) draws against `.studio/gate/last-gate.json`. Unlike
+[`ns-statusline`](./ns-statusline.md) draws against `_nonfiction-studio/gate/last-gate.json`. Unlike
 `ns-statusline`, which is a fail-safe status-bar renderer that always exits 0 and never writes to
 stderr, `ns-status` follows this plugin's ordinary CLI exit taxonomy (0 or 2, with the CLI's own
 name in every error message), because it has a real operator - a skill or an author - that can act
@@ -224,6 +224,6 @@ on a non-zero exit.
 
 - [ns-gate CLI reference](./ns-gate.md) - writes the per-chapter and whole-book reports this CLI reads
 - [ns-statusline CLI reference](./ns-statusline.md) - the always-succeeding status-bar sibling this CLI's exit taxonomy deliberately diverges from, and why
-- [gate report format](../../formats/gate-report.md) - the normative shape of the files under `.studio/gate/`
+- [gate report format](../../formats/gate-report.md) - the normative shape of the files under `_nonfiction-studio/gate/`
 - [decision log format](../../formats/decisions.md) - the normative grammar for `context/decisions.md`, including the promotion attestation shape the ceremony above requires
 - [ADR-0009: apparatus CLI](../../adr/ADR-0009-apparatus-cli.md) - the standing growth-policy test this CLI passes

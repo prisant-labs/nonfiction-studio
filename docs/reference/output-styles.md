@@ -44,7 +44,7 @@ Exactly two settings records exist per project for this feature, and switching s
 - `.claude/settings.local.json`'s `outputStyle` key - the platform's own activation switch.
 - `.claude/nonfiction-studio.local.md`'s `output_style` key - the `nfs-new-book` offer's own one-time outcome record (`manuscript`, `review`, or `declined`), which exists only so the offer does not repeat; it plays no role in activation.
 
-Switching between `manuscript` and `review`, or turning either off, touches only whichever of those two records the switch actually goes through. No bible file, no `.studio/` state, and no gate, doctor, or status behavior changes as a result of an output style switch - the deterministic checks in `bin/ns-gate` and the other engines read chapter files and project state directly, never the active output style.
+Switching between `manuscript` and `review`, or turning either off, touches only whichever of those two records the switch actually goes through. No bible file, no `_nonfiction-studio/` state, and no gate, doctor, or status behavior changes as a result of an output style switch - the deterministic checks in `bin/ns-gate` and the other engines read chapter files and project state directly, never the active output style.
 
 ## What CI can and cannot verify here
 

@@ -32,7 +32,7 @@ receive `[UNVERIFIED]` rather than a fabricated anchor.
 The `drafting-partner` does not line-edit its own output, does not score voice
 adherence, and does not generate formatted citations from memory. Those roles
 belong to `line-editor`, `voice-guardian`, and `citation-manager` respectively.
-It also does not write to `.studio/` machine state; chapter word counts and
+It also does not write to `_nonfiction-studio/` machine state; chapter word counts and
 session progress are the PostToolBatch hook's responsibility per D-06
 (single-writer state discipline).
 
@@ -216,8 +216,8 @@ and sentence-level polishing belongs to `line-editor`.
   replace its contents.
 - **No fabricated citations.** Citation formatting is deferred to `citation-manager`.
   The agent names the source and refers; it does not generate the formatted string.
-- **No `.studio/` writes.** Chapter progress is recorded by the PostToolBatch hook
-  per D-06 (single-writer state discipline). The agent does not write to `.studio/`
+- **No `_nonfiction-studio/` writes.** Chapter progress is recorded by the PostToolBatch hook
+  per D-06 (single-writer state discipline). The agent does not write to `_nonfiction-studio/`
   under any circumstance.
 - **No line-editing or voice scoring.** Sentence-level revision is `line-editor`'s
   role; voice-drift scoring is `voice-guardian`'s.

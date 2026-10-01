@@ -52,7 +52,7 @@ or use the same `node` plus full-path form.
 | `--report` | boolean | Synonym for `--check` in v1; both run the same inventory. |
 | `--migrate` | boolean | Check whether a migration is available for the current schema version; exits 0 with a nothing-to-migrate message when the schema is already current, exits 2 when migration is required (an incompatible version). |
 | `--validate-packs` | boolean | Validate craft-model packs in `packs/`; exits 0 cleanly when no packs directory exists (Phase 2 feature). |
-| `--project=<dir>` | string | Override the book root to `<dir>`. If omitted, walks up from the current directory looking for `.studio/meta.json`. |
+| `--project=<dir>` | string | Override the book root to `<dir>`. If omitted, walks up from the current directory looking for a book root: `context/` and `chapters/`, with `meta.json` in the state folder (`_nonfiction-studio/`, or the name recorded in `nonfiction-studio.json`). |
 | `--json` | boolean | Emit the full result as JSON to stdout. |
 
 ## Exit taxonomy
@@ -61,14 +61,25 @@ or use the same `node` plus full-path form.
 |---|---|
 | 0 | Pass - bible is valid, no findings |
 | 1 | One or more findings (structure, schema, grammar, coherence, naming, or malformed ai-use-log line violations) |
-| 2 | Migration required (schema_version mismatch), argument error, or operational failure |
+| 2 | Migration required (schema_version mismatch), an unresolved state folder (see below), argument error, or operational failure |
+
+### Unresolved state folder
+
+When a book root has its bible folders but the engine cannot tell where its records are, `ns-doctor` runs no checks. It exits 2 and reports the problem in the normal report shape, as JSON with `--json` and as text without it. The checks cannot run until the folder is resolved, so this is never a pass. See [ADR-0015 (state folder name)](../../adr/ADR-0015-state-folder-name.md).
+
+| `status` | Cause | Finding |
+|---|---|---|
+| `state-folder-unpointed` | A folder at the book root holds `meta.json` and `progress.json`, but neither the default name nor `nonfiction-studio.json` points to it; for example, the legacy `.studio/` of a book created before ADR-0015 | One `state.unpointed-folder` finding per such folder, with the folder as its `path` |
+| `state-pointer-invalid` | `nonfiction-studio.json` is unreadable or malformed, names an invalid folder, or names a folder without `meta.json` | One `state.pointer-invalid` finding, with `nonfiction-studio.json` as its `path` |
+
+The `nfs-doctor` skill reads these findings to offer its `migrate` fix, or to describe the pointer repair.
 
 ## Check inventory
 
 `ns-doctor` runs twelve checks in order:
 
 1. **Bible structure** - all scaffold-mandated paths are present (progress.json, config.json, evidence-log.md, etc.)
-2. **progress.json schema** - validated against `templates/book-scaffold/.studio/progress.schema.json`; missing or wrong-typed required fields are named findings
+2. **progress.json schema** - validated against `templates/book-scaffold/_nonfiction-studio/progress.schema.json`; missing or wrong-typed required fields are named findings
 3. **meta.json and config.json shape** - required fields and enum values; unknown fields tolerated per S-08 Rule 2
 4. **EV grammar** - every evidence entry has required fields with valid enum values
 5. **SRC grammar** - every source entry has required fields with valid enum values
@@ -76,9 +87,9 @@ or use the same `node` plus full-path form.
 7. **Orphan SRC references** - EV entries referencing SRC IDs not in sources.md, and vice versa
 8. **Word-count coherence** - chapter file word counts vs progress.json recorded values; names the chapter and both counts on mismatch
 9. **Config coercion notice** - informational report when thesis_alignment is set to block (D-03 coerces it to warn at gate time); never affects exit code
-10. **Snapshot naming** - `.studio/snapshots/` files must match `<slug>.<YYYYMMDDTHHMMSSZ>.md`
+10. **Snapshot naming** - `_nonfiction-studio/snapshots/` files must match `<slug>.<YYYYMMDDTHHMMSSZ>.md`
 11. **Style profile structure** - `context/style-profile.md` (F-CI-08, voice quality unchecked, deterministic half): a pre-capture stub (no `# Style profile` heading) is a NOTICE unless `config.json` already carries a stylometry baseline, in which case it is a finding; once populated, the seven required sections (`## Voice`, `## Diction`, `## Rhythm`, `## Do`, `## Do not`, `## Exemplars`, `## Baseline reference`) must be present and in order, the `Baseline reference` block's `vector`, `captured`, and `sample_count` fields must be present, `captured` and `sample_count` must agree with `config.json`'s stylometry baseline when one exists, and every `Exemplars` path must resolve relative to the book root
-12. **ai-use-log coverage** - `.studio/ai-use-log.jsonl` (Task 5, Wave 1 exit: chat compliance parity), parsed tolerantly (blank lines are fine; a non-blank line that fails to parse as JSON is a named finding, naming its line number - the one place this checker does not silently discard a partial line the way other readers do). Per `chapters/*.md` file: a filesystem mtime newer than the newest record whose `targets` array names it, or no covering record at all, is an "uncovered writing window" NOTICE (never a finding). The report always states the coverage fraction: `ai-use-log covers N of M chapters with writes`, where `M` is chapters on disk and `N` is chapters with at least one covering record by presence, independent of mtime. A fresh git checkout stamps every file's mtime to checkout time, which postdates any committed log record, so the uncovered-writing-window notice can legitimately fire even on a fully, currently-covered book.
+12. **ai-use-log coverage** - `_nonfiction-studio/ai-use-log.jsonl` (Task 5, Wave 1 exit: chat compliance parity), parsed tolerantly (blank lines are fine; a non-blank line that fails to parse as JSON is a named finding, naming its line number - the one place this checker does not silently discard a partial line the way other readers do). Per `chapters/*.md` file: a filesystem mtime newer than the newest record whose `targets` array names it, or no covering record at all, is an "uncovered writing window" NOTICE (never a finding). The report always states the coverage fraction: `ai-use-log covers N of M chapters with writes`, where `M` is chapters on disk and `N` is chapters with at least one covering record by presence, independent of mtime. A fresh git checkout stamps every file's mtime to checkout time, which postdates any committed log record, so the uncovered-writing-window notice can legitimately fire even on a fully, currently-covered book.
 
 ## Output
 

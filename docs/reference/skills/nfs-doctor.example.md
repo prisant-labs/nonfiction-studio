@@ -10,7 +10,7 @@ tags: ["skill", "doctor", "integrity", "schema", "orphan", "example"]
 
 This is a condensed transcript of a `nfs-doctor report` session over the committed two-chapter sample book "The Quiet Network" (see `examples/sample-book/`). The example follows the flow specified in S-06 3.11 (skills and invocation surface) and the adjudications recorded in TSK-054 (doctor skill).
 
-**Session provenance note.** This example was re-run 2026-09-05 against the committed `examples/sample-book/` baseline to add the ai-use-log coverage check (Task 5, Wave 1 exit: chat compliance parity). The `findings` array is unchanged (still empty: `.studio/ai-use-log.jsonl` is well-formed); the `notices` array gained three entries this check adds. Those three notices are a property of any real checkout, not a fixture defect: git stamps every file's mtime at checkout time, which postdates every committed `ai-use-log.jsonl` record, so both committed chapters read as "uncovered writing windows" even though both are covered by presence (see the coverage-fraction notice, `2 of 2`). The command, run after resolving the plugin root per Step 2 below, was `node "<plugin-root>/bin/ns-doctor" --project=examples/sample-book --report --json`; it exited 0 with `status: valid` and no findings. The JSON output is quoted verbatim. In a real book project the skill would run as `node "<plugin-root>/bin/ns-doctor" --project=. --report --json` from the book root; this is equivalent. The committed sample-book fixture is never modified by a doctor run; the engine is read-only per its READ-ONLY COVENANT.
+**Session provenance note.** This example was re-run 2026-09-05 against the committed `examples/sample-book/` baseline to add the ai-use-log coverage check (Task 5, Wave 1 exit: chat compliance parity). The `findings` array is unchanged (still empty: `_nonfiction-studio/ai-use-log.jsonl` is well-formed); the `notices` array gained three entries this check adds. Those three notices are a property of any real checkout, not a fixture defect: git stamps every file's mtime at checkout time, which postdates every committed `ai-use-log.jsonl` record, so both committed chapters read as "uncovered writing windows" even though both are covered by presence (see the coverage-fraction notice, `2 of 2`). The command, run after resolving the plugin root per Step 2 below, was `node "<plugin-root>/bin/ns-doctor" --project=examples/sample-book --report --json`; it exited 0 with `status: valid` and no findings. The JSON output is quoted verbatim. In a real book project the skill would run as `node "<plugin-root>/bin/ns-doctor" --project=. --report --json` from the book root; this is equivalent. The committed sample-book fixture is never modified by a doctor run; the engine is read-only per its READ-ONLY COVENANT.
 
 Any scenario showing exit 1 findings is explicitly labeled as a synthetic illustration and does not reflect the committed fixture or the live run output.
 
@@ -18,9 +18,9 @@ Any scenario showing exit 1 findings is explicitly labeled as a synthetic illust
 
 ## Setup: what was already in place
 
-The committed `examples/sample-book/` baseline is a valid two-chapter bible for "The Quiet Network". Its `.studio/meta.json` has `schema_version: "2"` (the supported major). All scaffold-mandated paths are present: `.studio/progress.json`, `.studio/config.json`, `.studio/ai-use-log.jsonl`, `research/evidence-log.md`, `research/sources.md`, `context/style-profile.md`, `context/brief.md`, `structure/thesis.md`, and `structure/outline.md`.
+The committed `examples/sample-book/` baseline is a valid two-chapter bible for "The Quiet Network". Its `_nonfiction-studio/meta.json` has `schema_version: "2"` (the supported major). All scaffold-mandated paths are present: `_nonfiction-studio/progress.json`, `_nonfiction-studio/config.json`, `_nonfiction-studio/ai-use-log.jsonl`, `research/evidence-log.md`, `research/sources.md`, `context/style-profile.md`, `context/brief.md`, `structure/thesis.md`, and `structure/outline.md`.
 
-The EV and SRC entries in the research files are well-formed; all chapter claim markers reference EV IDs present in the ledger; word counts in progress.json match the chapter files on disk; and no snapshot naming violations exist in `.studio/snapshots/`. The `config.json` `gate.checks.thesis_alignment.mode` is `warn`, so no config-coercion notice fires. `context/style-profile.md` carries all seven required sections in order, its `Baseline reference` block's `captured` and `sample_count` values agree with `config.json`'s `stylometry.baseline`, and its one `Exemplars` path resolves to a real file under `context/samples/`, so the style-profile structure check also passes clean.
+The EV and SRC entries in the research files are well-formed; all chapter claim markers reference EV IDs present in the ledger; word counts in progress.json match the chapter files on disk; and no snapshot naming violations exist in `_nonfiction-studio/snapshots/`. The `config.json` `gate.checks.thesis_alignment.mode` is `warn`, so no config-coercion notice fires. `context/style-profile.md` carries all seven required sections in order, its `Baseline reference` block's `captured` and `sample_count` values agree with `config.json`'s `stylometry.baseline`, and its one `Exemplars` path resolves to a real file under `context/samples/`, so the style-profile structure check also passes clean.
 
 ---
 
@@ -56,16 +56,16 @@ node "<plugin-root>/bin/ns-doctor" --project=. --report --json
     {
       "type": "ai-use-log.uncovered-writing-window",
       "path": "chapters/01-listening-before-speaking.md",
-      "message": "uncovered writing window: chapters/01-listening-before-speaking.md was modified after its newest covering record in .studio/ai-use-log.jsonl; the most recent edit may not be reflected in the compliance ledger"
+      "message": "uncovered writing window: chapters/01-listening-before-speaking.md was modified after its newest covering record in _nonfiction-studio/ai-use-log.jsonl; the most recent edit may not be reflected in the compliance ledger"
     },
     {
       "type": "ai-use-log.uncovered-writing-window",
       "path": "chapters/02-finding-your-network.md",
-      "message": "uncovered writing window: chapters/02-finding-your-network.md was modified after its newest covering record in .studio/ai-use-log.jsonl; the most recent edit may not be reflected in the compliance ledger"
+      "message": "uncovered writing window: chapters/02-finding-your-network.md was modified after its newest covering record in _nonfiction-studio/ai-use-log.jsonl; the most recent edit may not be reflected in the compliance ledger"
     },
     {
       "type": "ai-use-log.coverage-fraction",
-      "path": ".studio/ai-use-log.jsonl",
+      "path": "_nonfiction-studio/ai-use-log.jsonl",
       "message": "ai-use-log covers 2 of 2 chapters with writes"
     }
   ],
@@ -81,9 +81,9 @@ Doctor exit code: 0. Parse stdout as JSON report. `status: valid`, zero findings
 >
 > Schema version: 2. Checks run: bible structure, progress.json schema, meta.json and config.json shape, EV grammar, SRC grammar, orphan claim markers, orphan SRC references, word-count coherence, config-coercion notice, snapshot naming, style profile structure, ai-use-log coverage.
 >
-> Notice (informational, does not affect this verdict): uncovered writing window: chapters/01-listening-before-speaking.md was modified after its newest covering record in .studio/ai-use-log.jsonl; the most recent edit may not be reflected in the compliance ledger
+> Notice (informational, does not affect this verdict): uncovered writing window: chapters/01-listening-before-speaking.md was modified after its newest covering record in _nonfiction-studio/ai-use-log.jsonl; the most recent edit may not be reflected in the compliance ledger
 >
-> Notice (informational, does not affect this verdict): uncovered writing window: chapters/02-finding-your-network.md was modified after its newest covering record in .studio/ai-use-log.jsonl; the most recent edit may not be reflected in the compliance ledger
+> Notice (informational, does not affect this verdict): uncovered writing window: chapters/02-finding-your-network.md was modified after its newest covering record in _nonfiction-studio/ai-use-log.jsonl; the most recent edit may not be reflected in the compliance ledger
 >
 > Notice (informational, does not affect this verdict): ai-use-log covers 2 of 2 chapters with writes
 >
@@ -168,7 +168,7 @@ The following is explicitly synthetic. It shows what Step 4 would present for ea
 
 **Migration required (exit 2; stderr content, `schema_version: "1"`):**
 
-> Doctor migrate verdict: Migration required. bible schema version "1" requires migration to supported major "2"; run ns-doctor --migrate to apply the migration. No migration has been applied; migrations from older schema versions are not yet defined in v1. The snapshot-before-migrate and restore-on-failure contract activates when real migrations arrive per Q-04 (release, versioning, and compatibility). No files were written. Verify the `schema_version` field in `.studio/meta.json`; the supported major is `2`.
+> Doctor migrate verdict: Migration required. bible schema version "1" requires migration to supported major "2"; run ns-doctor --migrate to apply the migration. No migration has been applied; migrations from older schema versions are not yet defined in v1. The snapshot-before-migrate and restore-on-failure contract activates when real migrations arrive per Q-04 (release, versioning, and compatibility). No files were written. Verify the `schema_version` field in `_nonfiction-studio/meta.json`; the supported major is `2`.
 
 The `--migrate` flag exits 0 for the current-schema case and 2 for the migration-required case. Neither case writes any file; the migrate mode in v1 is diagnose-only.
 
@@ -180,6 +180,6 @@ The `--migrate` flag exits 0 for the current-schema case and 2 for the migration
 
 **Studio (Step 1 - fix decline):**
 
-> The `fix` mode is Phase 2+ scope and is not available in v1. No changes have been made to any file. When `fix` arrives in Phase 2 its contract will be: dry-run default, explicit `apply` argument required to commit changes, fixable-issue list includes duplicate EV IDs, malformed JSONL log lines, and broken internal cross-references, and each change is logged to `.studio/logs/doctor-<ts>.json`. To diagnose issues without repairing them, run `/nonfiction-studio:nfs-doctor` (no argument) to run the full check inventory in report mode.
+> The `fix` mode is Phase 2+ scope and is not available in v1. No changes have been made to any file. When `fix` arrives in Phase 2 its contract will be: dry-run default, explicit `apply` argument required to commit changes, fixable-issue list includes duplicate EV IDs, malformed JSONL log lines, and broken internal cross-references, and each change is logged to `_nonfiction-studio/logs/doctor-<ts>.json`. To diagnose issues without repairing them, run `/nonfiction-studio:nfs-doctor` (no argument) to run the full check inventory in report mode.
 
 No tool call is made. The skill halts at Step 1 without invoking the engine or reading any file.

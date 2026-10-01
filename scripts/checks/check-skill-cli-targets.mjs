@@ -58,7 +58,7 @@
 //               Binary files are skipped entirely in both scopes: a file is treated as binary,
 //               and never read as text, when a NUL byte (0x00) appears anywhere in its first
 //               8 KB - the same shape of heuristic git itself uses to classify a blob as binary.
-//               Dot-directories (e.g. templates/book-scaffold/.studio/): the degraded (no-git)
+//               Dot-directories (any directory whose name starts with '.'): the degraded (no-git)
 //               fallback walk descends into them for the non-Markdown scope, matching
 //               git-tracked mode, which never skipped them (git ls-files does not care about a
 //               dot-prefixed directory name, only .gitignore). The Markdown scope's fallback
@@ -167,8 +167,7 @@ function inNonMdScope(rel) {
 // Dot-directory handling in the fallback walk deliberately differs between
 // the two scopes, to keep git-tracked mode and degraded mode in agreement
 // for each scope separately:
-//   - non-Markdown: descends into dot-directories (e.g.
-//     templates/book-scaffold/.studio/), skipping only .git and
+//   - non-Markdown: descends into dot-directories, skipping only .git and
 //     node_modules by name - matching git-tracked mode, where
 //     `git ls-files` already includes tracked files under a dot-directory
 //     regardless of the directory name.
@@ -178,14 +177,12 @@ function inNonMdScope(rel) {
 //     byte-identical, and later additions to the Markdown prefix list
 //     (output-styles/, and scripts/, hooks/, bin/, evals/ for their .md
 //     files) kept that same skip behavior rather than changing it. Checked
-//     against the real tree: agents/, docs/, examples/, skills/, and
-//     templates/ collectively carry real .md files under dot-directories
-//     today (five gate-snapshot files under examples/*/.studio/snapshots/),
-//     so descending into dot-directories for the Markdown scope too would
-//     change which files degraded mode counts as Markdown; the newer
-//     Markdown prefixes carry no dot-directory .md files today, so this is
-//     currently a distinction without a difference for them, but the rule
-//     stays the same for all ten prefixes rather than special-casing some.
+//     against the real tree: no scanned prefix carries a tracked .md file
+//     under a dot-directory today. The five gate-snapshot files that once
+//     did moved out of a dot-directory when ADR-0015 (state folder name)
+//     renamed the state folder to _nonfiction-studio/, so the split is
+//     currently a distinction without a difference, but the rule stays the
+//     same for all ten prefixes rather than special-casing some.
 //     Because agents/, bin/, evals/, examples/, hooks/, scripts/, and
 //     templates/ are scanned by BOTH scopes, this requires two separate
 //     walks over those directories in degraded mode (one per scope, each

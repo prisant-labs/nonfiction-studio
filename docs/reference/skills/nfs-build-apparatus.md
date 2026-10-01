@@ -14,7 +14,7 @@ The `nfs-build-apparatus` skill generates publisher-ready back matter from the e
 
 `nfs-build-apparatus` bridges the deterministic apparatus-generation engine and the author conversation. The `bin/ns-notes` engine it invokes reads `research/evidence-log.md`, `research/sources.md`, `chapters/*.md`, and the Chicago style data at `hooks/lib/citation-styles/chicago.json`, then writes four files under `production/`: `endnotes.md`, `bibliography.md`, `index-candidates.md`, and `apparatus-attention.md`. The skill's role is to invoke the engine and present its verdict honestly, including every item that still needs attention.
 
-**`bin/ns-notes` never writes to the ledger.** It reads `research/evidence-log.md`, `research/sources.md`, and `chapters/*.md` and never modifies any of them (OPP-D05: read-then-emit only). Its only writes are the four files under `production/`, which is the author-facing directory that already holds `front-matter.md` and `back-matter.md`, not `.studio/` machine state, so D-06 (single-writer state discipline) is not implicated.
+**`bin/ns-notes` never writes to the ledger.** It reads `research/evidence-log.md`, `research/sources.md`, and `chapters/*.md` and never modifies any of them (OPP-D05: read-then-emit only). Its only writes are the four files under `production/`, which is the author-facing directory that already holds `front-matter.md` and `back-matter.md`, not `_nonfiction-studio/` machine state, so D-06 (single-writer state discipline) is not implicated.
 
 **No agents invoked.** This is a deterministic-CLI-only skill. No chain edges exist.
 
@@ -90,7 +90,7 @@ The Chicago style itself lives in `hooks/lib/citation-styles/chicago.json`, not 
 
 **Exit 2 from `ns-notes`.** Step 3 surfaces the stderr error and halts. Never treated as a pass, and never presented as if any `production/` file changed. Routes to `nfs-doctor` for a broader structural diagnosis.
 
-**Project root not found.** `bin/ns-notes` exits 2 with a `BibleError` message on stderr when `.studio/meta.json` cannot be located walking up from the current directory. The skill surfaces it verbatim.
+**Project root not found.** `bin/ns-notes` exits 2 with a `BibleError` message on stderr when `_nonfiction-studio/meta.json` cannot be located walking up from the current directory. The skill surfaces it verbatim.
 
 **Evidence log, sources registry, or chapters/ missing.** `bin/ns-notes` exits 2 naming the missing path on stderr. The skill surfaces it verbatim rather than guessing at a fix.
 

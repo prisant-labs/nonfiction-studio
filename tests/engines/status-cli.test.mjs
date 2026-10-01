@@ -4,7 +4,7 @@
 //               (never the committed examples/sample-book fixture in place) to prove: byte-identical
 //               output across two runs against unchanged state (both output modes), that the CLI
 //               writes nothing to the project tree, that gate verdict and drift score come from the
-//               newest .studio/gate/ report and never from progress.json's last_gate or per-chapter
+//               newest _nonfiction-studio/gate/ report and never from progress.json's last_gate or per-chapter
 //               drift_score fields, the golden-book numbers, the exit-2 operational-error taxonomy,
 //               and that no shipped output string names the tier-climb word
 //               scripts/tier-report.mjs reserves for a different concept (controller Decision 3).
@@ -131,24 +131,24 @@ test('READ-ONLY: the project tree is byte- and mtime-unchanged after a default-m
 
 // ---------------------------------------------------------------------------
 // HEADLINE 3: gate-source invariant - progress.json's last_gate AND per-chapter
-// drift_score are deliberately set to disagree with the real newest .studio/gate/
+// drift_score are deliberately set to disagree with the real newest _nonfiction-studio/gate/
 // report, on BOTH the verdict and the numeric drift score; the CLI must follow
 // the gate directory report, not progress.json, for either value.
 // ---------------------------------------------------------------------------
 
-test('GATE SOURCE: the CLI follows the newest .studio/gate/ report, never progress.json last_gate or drift_score', () => {
+test('GATE SOURCE: the CLI follows the newest _nonfiction-studio/gate/ report, never progress.json last_gate or drift_score', () => {
   const tmp = makeTempClone(GOLDEN);
   try {
-    const progressPath = join(tmp, '.studio', 'progress.json');
+    const progressPath = join(tmp, '_nonfiction-studio', 'progress.json');
     const progress = JSON.parse(readFileSync(progressPath, 'utf8'));
 
     // The real committed gate report for chapter 1 says verdict "pass" and drift 10.86
-    // (examples/sample-book/.studio/gate/01-listening-before-speaking.20260810T091000Z.json).
+    // (examples/sample-book/_nonfiction-studio/gate/01-listening-before-speaking.20260810T091000Z.json).
     // Plant disagreeing values on BOTH progress.json fields this engine must never read.
     progress.chapters[0].last_gate = {
       ts: '2020-01-01T00:00:00Z',
       verdict: 'block',
-      report: '.studio/gate/does-not-exist.json',
+      report: '_nonfiction-studio/gate/does-not-exist.json',
     };
     progress.chapters[0].drift_score = 99.9;
     writeFileSync(progressPath, JSON.stringify(progress, null, 2), 'utf8');
@@ -193,7 +193,7 @@ test('golden book (--json): chapter and totals figures match the committed fixtu
     assert.equal(ch1.threshold, null,
       'a pre-structured-field report carries no drift.threshold, and there is no prose fallback for it');
     assert.equal(ch1.gate, 'pass');
-    assert.equal(ch1.reportPath, '.studio/gate/01-listening-before-speaking.20260810T091000Z.json');
+    assert.equal(ch1.reportPath, '_nonfiction-studio/gate/01-listening-before-speaking.20260810T091000Z.json');
     assert.equal(ch1.highlighted, false);
 
     const ch2 = json.chapters[1];
@@ -278,7 +278,7 @@ test('a whole-book all.<ts>.json report annotates wholeBookGate in --json output
     const allReport = {
       version: 2, chapter: 'all', ts: '2026-08-11T00:00:00Z', verdict: 'warn', checks: [],
     };
-    writeFileSync(join(tmp, '.studio', 'gate', 'all.20260811T000000Z.json'), JSON.stringify(allReport), 'utf8');
+    writeFileSync(join(tmp, '_nonfiction-studio', 'gate', 'all.20260811T000000Z.json'), JSON.stringify(allReport), 'utf8');
 
     const result = spawnStatus(tmp, ['--json']);
     assert.equal(result.status, 0, 'stderr: ' + result.stderr);
@@ -340,7 +340,7 @@ test('exit 2: an unknown flag; stderr names the CLI', () => {
 test('exit 2: malformed progress.json; stderr names the CLI', () => {
   const tmp = makeTempClone(GOLDEN);
   try {
-    writeFileSync(join(tmp, '.studio', 'progress.json'), '{ this is not valid JSON', 'utf8');
+    writeFileSync(join(tmp, '_nonfiction-studio', 'progress.json'), '{ this is not valid JSON', 'utf8');
     const result = spawnStatus(tmp, []);
     assert.equal(result.status, 2);
     assert.match(result.stderr, /^ns-status:/);

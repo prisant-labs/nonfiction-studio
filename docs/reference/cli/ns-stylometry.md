@@ -20,7 +20,7 @@ operational failure.
 ## Purpose
 
 `ns-stylometry` is the voice-drift engine per D-08 (hybrid voice scoring) and S-07 (hooks and
-scripts). In scoring mode it reads the author's baseline from `.studio/config.json` (or a
+scripts). In scoring mode it reads the author's baseline from `_nonfiction-studio/config.json` (or a
 `--baseline` override) and measures the current chapters against it using eight markers:
 function-word rate, contraction rate, first-person rate, second-person rate, type-token ratio,
 average word length, average sentence length, and punctuation rate (unchanged in meaning since
@@ -261,7 +261,7 @@ verdict at the end. When no registers are configured, `--by-register` prints a p
 explanation instead of a table (still exit 0, never silence):
 
 ```
-no stylometry.registers configured in .studio/config.json; register-aware comparison is unavailable until nfs-capture-voice's optional register bucketing runs
+no stylometry.registers configured in _nonfiction-studio/config.json; register-aware comparison is unavailable until nfs-capture-voice's optional register bucketing runs
 ```
 
 With `--json --by-register`, the JSON gains a top-level `registers` array (one entry per
@@ -318,7 +318,7 @@ ns-stylometry --calibrate=context/samples/voice-corpus-01.md,context/samples/voi
 full baseline material (`markers`, `marker_set_version`, `calibration`) as JSON to stdout,
 plus a plain-language regime disclosure to stderr (see below). It reads no config and writes
 nothing - `nfs-capture-voice` is the only path that persists the result, via a read-modify-write
-into `.studio/config.json` `stylometry.baseline` (see "Relationship to other CLIs", below).
+into `_nonfiction-studio/config.json` `stylometry.baseline` (see "Relationship to other CLIs", below).
 
 **Cost.** Calibration draws 1,000 replicates at each of the five spans (calibration block plus
 disjoint evaluation block, per rung) plus 1,000 ghostwritten replicates at the shortest span for
@@ -449,7 +449,7 @@ ns-stylometry: thresholds.drift_score_max is retired by the calibrated-null verd
 ```
 
 `bin/ns-gate`'s stylometry check appends the same string to its check `detail` once per run. It
-will become an error in a future release; remove the key from `.studio/config.json` at your
+will become an error in a future release; remove the key from `_nonfiction-studio/config.json` at your
 convenience. `MARKER_CONTRIBUTION_DIVISOR` and `DEFAULT_DRIFT_SCORE_MAX`, artifacts of the
 retired capped-sum rule, are gone entirely - no deprecation window for either, since nothing
 outside the engine ever read them directly.
@@ -461,7 +461,7 @@ authority per the 2026-07-18 banked adjudication). `bin/ns-gate` calls the stylo
 (`computeDrift`) as the `stylometry` gate check, applying the two-tier regime policy described
 above on top of the same statistic this CLI reports directly. The `nfs-capture-voice` agent
 calls `ns-stylometry --calibrate` to build the full baseline (markers plus calibration ladder)
-that it then writes to `.studio/config.json`, and calls `ns-stylometry --measure` separately to
+that it then writes to `_nonfiction-studio/config.json`, and calls `ns-stylometry --measure` separately to
 measure each optional register bucket's plain vector (registers carry no calibration - see
 `--by-register`, above). `nfs-quick-scan` calls `ns-stylometry --measure` standalone, with no
 book root and no baseline, for a project-free measurement of pasted prose.

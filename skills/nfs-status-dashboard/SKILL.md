@@ -6,20 +6,20 @@ description: "Fronts the read-only bin/ns-status engine in a single Bash call: r
 when_to_use: "Use when the author asks how their book is going, or wants a project overview before starting a session. Do not invoke to run the quality gate (use nfs-check-chapter), diagnose project structure problems (use nfs-doctor), start a new project (use nfs-new-book), or for unrelated queries."
 ---
 
-This skill is the read-only project status dashboard. It fronts `bin/ns-status` in a single Bash call, parses its JSON output, and renders the per-chapter board and whole-book totals directly from that output. The skill performs no arithmetic and parses no number out of prose: every status value, word count, open-claim count, drift statistic, gate verdict, threshold value, and highlight decision in the rendered table is read directly from a field `bin/ns-status` has already computed. The skill writes nothing to any file or `.studio/` path.
+This skill is the read-only project status dashboard. It fronts `bin/ns-status` in a single Bash call, parses its JSON output, and renders the per-chapter board and whole-book totals directly from that output. The skill performs no arithmetic and parses no number out of prose: every status value, word count, open-claim count, drift statistic, gate verdict, threshold value, and highlight decision in the rendered table is read directly from a field `bin/ns-status` has already computed. The skill writes nothing to any file or state-folder path.
 
-**Status vocabulary.** Chapter status values are the committed schema enum verbatim: `empty`, `outlined`, `drafting`, `drafted`, `revised`, `gated`, `final`. These are the values defined in `templates/book-scaffold/.studio/progress.schema.json` and S-08 (schemas and file formats) section 3. No mapping or display transformation is applied. `final` is a real chapter's terminal state, not merely the highest ordinal: reaching it requires a dated human attestation entry in `context/decisions.md`, and editing a chapter's file after it reaches `final` automatically falls it back to `revised` - both enforced by `hooks/post-tool-batch.mjs`, never by this skill. See the [ns-status CLI reference](../../docs/reference/cli/ns-status.md#the-promotion-ceremony-and-automatic-demotion) for the full ceremony; this skill only ever displays whatever `status` value `bin/ns-status`'s JSON output already carries.
+**Status vocabulary.** Chapter status values are the committed schema enum verbatim: `empty`, `outlined`, `drafting`, `drafted`, `revised`, `gated`, `final`. These are the values defined in `templates/book-scaffold/_nonfiction-studio/progress.schema.json` and S-08 (schemas and file formats) section 3. No mapping or display transformation is applied. `final` is a real chapter's terminal state, not merely the highest ordinal: reaching it requires a dated human attestation entry in `context/decisions.md`, and editing a chapter's file after it reaches `final` automatically falls it back to `revised` - both enforced by `hooks/post-tool-batch.mjs`, never by this skill. See the [ns-status CLI reference](../../docs/reference/cli/ns-status.md#the-promotion-ceremony-and-automatic-demotion) for the full ceremony; this skill only ever displays whatever `status` value `bin/ns-status`'s JSON output already carries.
 
-**Column sourcing.** Every cell in the table, and the totals row, comes directly from `bin/ns-status`'s JSON output. The CLI itself reads `.studio/progress.json` and the newest dot-form gate report per chapter slug under `.studio/gate/`, and has already resolved which row counts as highlighted and what that row's own threshold is; `.studio/config.json` is loaded only as part of book-root discovery (a malformed one still halts the CLI), and its content, including `stylometry.baseline` and its calibration ladder, is never consulted by the board computation - each row's threshold comes entirely from that SAME chapter's own newest gate report. See the [ns-status CLI reference](../../docs/reference/cli/ns-status.md) for exactly how each field is derived, including which report file counts as newest and why `progress.json`'s per-chapter `last_gate` and `drift_score` fields are never treated as authoritative.
+**Column sourcing.** Every cell in the table, and the totals row, comes directly from `bin/ns-status`'s JSON output. The CLI itself reads the state folder's `progress.json` and the newest dot-form gate report per chapter slug under its `gate/` folder, and has already resolved which row counts as highlighted and what that row's own threshold is; the state folder's `config.json` is loaded only as part of book-root discovery (a malformed one still halts the CLI), and its content, including `stylometry.baseline` and its calibration ladder, is never consulted by the board computation - each row's threshold comes entirely from that SAME chapter's own newest gate report. See the [ns-status CLI reference](../../docs/reference/cli/ns-status.md) for exactly how each field is derived, including which report file counts as newest and why `progress.json`'s per-chapter `last_gate` and `drift_score` fields are never treated as authoritative.
 
-**Read-only covenant.** This skill writes nothing. No file writes, no `.studio/` mutations, no agent invocations. Grep-provable against the skill body.
+**Read-only covenant.** This skill writes nothing. No file writes, no state-folder mutations, no agent invocations. Grep-provable against the skill body.
 
 **No agents invoked.** No chain edges exist for this skill.
 
 Skill inputs read (by `bin/ns-status` via `--project=.`):
-- `.studio/progress.json` (chapter status, word count, open_claim_count; totals block; required)
-- `.studio/config.json` is loaded only as part of book-root discovery (a malformed one still halts the CLI with exit 2); its content is never consulted by the board computation - the per-chapter drift threshold is per-report, read from each chapter's own newest gate report, not from config - see the [ns-status CLI reference](../../docs/reference/cli/ns-status.md)
-- `.studio/gate/` directory listing, then the newest report per chapter slug (drift statistic and gate verdict per chapter; newest whole-book report for the totals annotation)
+- the state folder's `progress.json` (chapter status, word count, open_claim_count; totals block; required)
+- the state folder's `config.json` is loaded only as part of book-root discovery (a malformed one still halts the CLI with exit 2); its content is never consulted by the board computation - the per-chapter drift threshold is per-report, read from each chapter's own newest gate report, not from config - see the [ns-status CLI reference](../../docs/reference/cli/ns-status.md)
+- the state folder's `gate/` directory listing, then the newest report per chapter slug (drift statistic and gate verdict per chapter; newest whole-book report for the totals annotation)
 
 No skill chain edges exist for this skill.
 
@@ -109,7 +109,7 @@ If no entry in `chapters` has `highlighted: true`, state "No rows flagged." afte
 
 - Else if stderr contains "Cannot read progress.json" together with either "ENOENT" or "no such file": state the following and halt.
 
-  > `.studio/progress.json` was not found. Run `/nonfiction-studio:nfs-new-book` to scaffold the project and create the progress file.
+  > The state folder's `progress.json` was not found. Run `/nonfiction-studio:nfs-new-book` to scaffold the project and create the progress file.
 
 - Otherwise (any other exit 2 - a malformed `progress.json`, `config.json`, or `meta.json`, or an internal argument error): state the following and halt.
 
@@ -123,12 +123,12 @@ If no entry in `chapters` has `highlighted: true`, state "No rows flagged." afte
 
 **No book root found.** Step 3 halts on the "No book root found" stderr message with the not-initialized message and routes to `nfs-new-book`. No table is rendered.
 
-**`.studio/progress.json` missing.** Step 3 halts on the ENOENT-shaped `Cannot read progress.json` stderr message with the not-initialized message and routes to `nfs-new-book`. No table is rendered.
+**The state folder's `progress.json` missing.** Step 3 halts on the ENOENT-shaped `Cannot read progress.json` stderr message with the not-initialized message and routes to `nfs-new-book`. No table is rendered.
 
 **Any other `bin/ns-status` error (malformed `progress.json`, `config.json`, or `meta.json`; an internal argument error).** Step 3 halts with the stderr content verbatim and routes to `nfs-doctor`. Never renders a partial or incorrect dashboard.
 
 **Missing or empty gate directory.** Not a halt condition: `bin/ns-status` itself returns `null` for `drift` and `gate` on every chapter with no matching report, which Step 3 renders as "-". Next actions suggests running the quality gate for every such chapter.
 
-**Missing `.studio/config.json`.** Not a halt condition: `hooks/lib/bible.mjs` returns `config: null` when the file does not exist, and since ADR-0012 (voice verdict scope) retired `thresholds.drift_score_max`, `bin/ns-status`'s board computation does not read `config.json` for the threshold in any case - each chapter's Threshold cell comes from that SAME chapter's own newest gate report, independent of `config.json`.
+**Missing state-folder `config.json`.** Not a halt condition: `hooks/lib/bible.mjs` returns `config: null` when the file does not exist, and since ADR-0012 (voice verdict scope) retired `thresholds.drift_score_max`, `bin/ns-status`'s board computation does not read `config.json` for the threshold in any case - each chapter's Threshold cell comes from that SAME chapter's own newest gate report, independent of `config.json`.
 
-**Unreadable (malformed) `.studio/config.json`.** This IS a halt condition, unlike the missing case above: `hooks/lib/bible.mjs` throws `BibleError` (`CONFIG_READ_ERROR`) when `config.json` exists but fails to parse, and `bin/ns-status` exits 2 - handled by the "Any other `bin/ns-status` error" case above, which routes to `nfs-doctor`.
+**Unreadable (malformed) state-folder `config.json`.** This IS a halt condition, unlike the missing case above: `hooks/lib/bible.mjs` throws `BibleError` (`CONFIG_READ_ERROR`) when `config.json` exists but fails to parse, and `bin/ns-status` exits 2 - handled by the "Any other `bin/ns-status` error" case above, which routes to `nfs-doctor`.

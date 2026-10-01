@@ -4,7 +4,7 @@
 //               extractGateVerdict, extractDriftScore, deriveDriftThreshold, deriveChapterNumber,
 //               deriveChapterTitle, isHighlighted, renderBoardMarkdown) directly against synthetic
 //               objects, and computeStatusBoard (the one fs-touching function) against small temp
-//               .studio/gate/ directories built per test. No process spawning here; CLI-level,
+//               _nonfiction-studio/gate/ directories built per test. No process spawning here; CLI-level,
 //               end-to-end behavior against the real golden sample book is covered separately in
 //               tests/engines/status-cli.test.mjs.
 // runner:       node --test tests/engines/status.test.mjs
@@ -35,7 +35,7 @@ import {
 } from '../../hooks/lib/status-engine.mjs';
 
 // ---------------------------------------------------------------------------
-// Helper: a temp directory containing only .studio/gate/, populated with the
+// Helper: a temp directory containing only _nonfiction-studio/gate/, populated with the
 // given { filename: reportObject } map. computeStatusBoard's only fs access
 // is listing and reading this one directory.
 // ---------------------------------------------------------------------------
@@ -45,7 +45,7 @@ const cleanupDirs = [];
 function makeGateDir(reports = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'ns-status-engine-'));
   cleanupDirs.push(dir);
-  const gateDir = join(dir, '.studio', 'gate');
+  const gateDir = join(dir, '_nonfiction-studio', 'gate');
   mkdirSync(gateDir, { recursive: true });
   for (const [filename, report] of Object.entries(reports)) {
     writeFileSync(join(gateDir, filename), JSON.stringify(report), 'utf8');
@@ -162,7 +162,7 @@ test('readJsonSafe: returns null (never throws) for malformed JSON', () => {
 
 test('readJsonSafe: returns the parsed object for valid JSON', () => {
   const dir = makeGateDir({ 'r.json': { verdict: 'pass' } });
-  assert.deepEqual(readJsonSafe(join(dir, '.studio', 'gate', 'r.json')), { verdict: 'pass' });
+  assert.deepEqual(readJsonSafe(join(dir, '_nonfiction-studio', 'gate', 'r.json')), { verdict: 'pass' });
 });
 
 // ---- extractGateVerdict ------------------------------------------------------
@@ -374,7 +374,7 @@ test('computeStatusBoard: a chapter with a matching gate report gets drift, thre
   assert.equal(row.drift, 1.42);
   assert.equal(row.threshold, 3.87);
   assert.equal(row.gate, 'pass');
-  assert.equal(row.reportPath, '.studio/gate/01-a.20260810T091000Z.json');
+  assert.equal(row.reportPath, '_nonfiction-studio/gate/01-a.20260810T091000Z.json');
   assert.equal(row.highlighted, false);
 });
 
@@ -429,7 +429,7 @@ test('computeStatusBoard: a chapter whose drift exceeds ITS OWN report\'s thresh
   assert.equal(board.chapters[0].highlighted, true);
 });
 
-test('computeStatusBoard: missing .studio/gate/ directory entirely is not an error (every row degrades, not a throw)', () => {
+test('computeStatusBoard: missing _nonfiction-studio/gate/ directory entirely is not an error (every row degrades, not a throw)', () => {
   const bareDir = mkdtempSync(join(tmpdir(), 'ns-status-engine-bare-'));
   cleanupDirs.push(bareDir);
   const progress = {
@@ -443,14 +443,14 @@ test('computeStatusBoard: missing .studio/gate/ directory entirely is not an err
 });
 
 // ---- GATE-SOURCE INVARIANT: computeStatusBoard never reads chapter.last_gate or ------
-// chapter.drift_score from the progress argument, only the newest report under .studio/gate/.
+// chapter.drift_score from the progress argument, only the newest report under _nonfiction-studio/gate/.
 // This is the same shape of trap as F-HK-05 (last_gate never written): progress.json's
 // last_gate and drift_score are DELIBERATELY set to values that disagree with the real gate
 // report on disk, for BOTH the verdict and the numeric drift score (not verdict alone), so an
 // implementation that reads either progress.json field for either value would pass a naive
 // test but fail this one.
 
-test('GATE SOURCE: computeStatusBoard follows the newest .studio/gate/ report, never progress.json last_gate, drift_score, or config\'s retired drift_score_max', () => {
+test('GATE SOURCE: computeStatusBoard follows the newest _nonfiction-studio/gate/ report, never progress.json last_gate, drift_score, or config\'s retired drift_score_max', () => {
   const root = makeGateDir({
     '01-a.20260810T091000Z.json': {
       version: 2, chapter: '01-a', ts: '2026-08-10T09:10:00Z', verdict: 'pass',
@@ -465,7 +465,7 @@ test('GATE SOURCE: computeStatusBoard follows the newest .studio/gate/ report, n
       slug: '01-a', title: 'Chapter A', status: 'drafted', word_count: 500, open_claim_count: 0,
       // Deliberately disagreeing with the real report above, on BOTH fields:
       drift_score: 99.9,
-      last_gate: { ts: '2026-01-01T00:00:00Z', verdict: 'block', report: '.studio/gate/stale.json' },
+      last_gate: { ts: '2026-01-01T00:00:00Z', verdict: 'block', report: '_nonfiction-studio/gate/stale.json' },
     }],
     totals: { word_count: 500, open_claim_count: 0, chapters_final: 0, chapters_total: 1 },
   };
@@ -563,7 +563,7 @@ function sampleBoard() {
       {
         slug: '01-a', number: '01', title: 'Chapter A', status: 'drafted', wordCount: 528,
         openClaimCount: 0, drift: 1.42, threshold: 3.87, gate: 'pass',
-        reportPath: '.studio/gate/01-a.20260810T091000Z.json', highlighted: false,
+        reportPath: '_nonfiction-studio/gate/01-a.20260810T091000Z.json', highlighted: false,
       },
       {
         slug: '02-b', number: '02', title: 'Chapter B', status: 'drafted', wordCount: 527,
@@ -612,7 +612,7 @@ test('renderBoardMarkdown: appends the whole-book gate annotation to the totals 
 
 test('renderBoardMarkdown: never contains an absolute filesystem path', () => {
   const md = renderBoardMarkdown(sampleBoard());
-  // A book-relative reportPath (".studio/gate/...") is fine; a drive letter or a leading
+  // A book-relative reportPath ("_nonfiction-studio/gate/...") is fine; a drive letter or a leading
   // slash path segment is not, and would break cross-machine string-portable assertions.
   assert.ok(!/[A-Za-z]:[\\/]/.test(md), 'no Windows drive-letter path; got: ' + md);
 });
@@ -641,7 +641,7 @@ const DECISIONS_DOC_HUMAN_ATTESTATION = [
   '- actor: author',
   '- decision: Chapter 03 approved for gate after a full manual read.',
   '- rationale: Stylometry warned on drift but the technical section reads correctly for the audience.',
-  '- links: .studio/gate/03-the-signal.20260717T154022Z.json, EV-0031 (survey figure)',
+  '- links: _nonfiction-studio/gate/03-the-signal.20260717T154022Z.json, EV-0031 (survey figure)',
 ].join('\n');
 
 const DECISIONS_DOC_EDITORIAL_OUTCOME = [
@@ -663,7 +663,7 @@ test('parseDecisionsLog: parses the format doc\'s human-attestation worked examp
     actor: 'author',
     decision: 'Chapter 03 approved for gate after a full manual read.',
     rationale: 'Stylometry warned on drift but the technical section reads correctly for the audience.',
-    links: '.studio/gate/03-the-signal.20260717T154022Z.json, EV-0031 (survey figure)',
+    links: '_nonfiction-studio/gate/03-the-signal.20260717T154022Z.json, EV-0031 (survey figure)',
   });
 });
 
@@ -736,7 +736,7 @@ test('linksNameChapter: matches a slug inside a chapters/ path token', () => {
 
 test('linksNameChapter: matches a slug inside a gate-report-shaped token (the format doc\'s own example)', () => {
   assert.equal(
-    linksNameChapter('.studio/gate/03-the-signal.20260717T154022Z.json, EV-0031 (survey figure)', '03-the-signal'),
+    linksNameChapter('_nonfiction-studio/gate/03-the-signal.20260717T154022Z.json, EV-0031 (survey figure)', '03-the-signal'),
     true
   );
 });

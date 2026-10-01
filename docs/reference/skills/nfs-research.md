@@ -14,9 +14,9 @@ The `nfs-research` skill is the studio's research front door. It confirms the ch
 
 `nfs-research` bridges the structured chapter outline and the evidence ledger. The `research-librarian` agent it invokes is the sole allocator of EV and SRC identifiers: it registers every source the book will cite in `research/sources.md` (assigning a `SRC-NNNN` record) and logs every claim in `research/evidence-log.md` (assigning an `EV-NNNN` entry with `status: pending`). Those identifiers give `fact-checker` traceable references to verify and give `bin/ns-claims` the data it needs to compute claim coverage for the quality gate.
 
-The skill orchestrates, presents, and reports. It writes no ledger files and no `.studio/` state. The `research-librarian` agent is the sole writer of both ledger files.
+The skill orchestrates, presents, and reports. It writes no ledger files and no `_nonfiction-studio/` state. The `research-librarian` agent is the sole writer of both ledger files.
 
-**Web research is config-conditional everywhere.** The agent's hard gate reads `research.web_enabled` in `.studio/config.json`. Until that flag is set to the boolean `true`, no WebSearch or WebFetch call is made regardless of surface. When the gate is closed (the default) or when running on chat, source material arrives as pasted text or author-provided files that the agent analyzes with the same quote-and-attribute discipline per D-13 (security posture).
+**Web research is config-conditional everywhere.** The agent's hard gate reads `research.web_enabled` in `_nonfiction-studio/config.json`. Until that flag is set to the boolean `true`, no WebSearch or WebFetch call is made regardless of surface. When the gate is closed (the default) or when running on chat, source material arrives as pasted text or author-provided files that the agent analyzes with the same quote-and-attribute discipline per D-13 (security posture).
 
 ## Invocation
 
@@ -41,12 +41,12 @@ Alternate entry points:
 | `research/open-questions.md` | Step 3 and Step 5 (Read) | Load the unresolved research agenda for the scope; count remaining open items after the session |
 | `research/evidence-log.md` | Step 3 (Read) | Note the current highest EV ID to pass to the agent as context |
 | `research/sources.md` | Step 3 (Read) | Note the current highest SRC ID to pass to the agent as context |
-| `.studio/config.json` | Step 3 (Read) | Check `research.web_enabled` to state the web gate status honestly in the agenda |
+| `_nonfiction-studio/config.json` | Step 3 (Read) | Check `research.web_enabled` to state the web gate status honestly in the agenda |
 | `context/brief.md` | Step 4 (passed to the agent) | Project context for the `research-librarian` agent's research session |
 
 ### Outputs
 
-All ledger writes are performed by the `research-librarian` agent, not by the skill. The skill writes no file and no `.studio/` state.
+All ledger writes are performed by the `research-librarian` agent, not by the skill. The skill writes no file and no `_nonfiction-studio/` state.
 
 | Path | Written by | Contents |
 |---|---|---|
@@ -60,11 +60,13 @@ Ledger writes are append-only. A partial session is safe: entries written before
 
 The skill runs five steps. Step 2 executes only when a chapter argument is supplied.
 
-1. **Outline probe (mandatory first tool call).** Uses a Bash tool call to test whether `structure/outline.md` is present. The output is a binary token: `NO_OUTLINE` halts chapter-scoped sessions immediately and routes to `nfs-outline`; for un-scoped sessions it warns and permits proceeding on explicit author confirmation; `HAS_OUTLINE` continues. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
+Before its first step, the skill locates the state folder: it reads `nonfiction-studio.json` at the book root, uses `_nonfiction-studio/` when that file does not exist, and stops without writing when the pointer is invalid or an unpointed state folder is found.
+
+1. **Outline probe (first tool call after the state folder is located).** Uses a Bash tool call to test whether `structure/outline.md` is present. The output is a binary token: `NO_OUTLINE` halts chapter-scoped sessions immediately and routes to `nfs-outline`; for un-scoped sessions it warns and permits proceeding on explicit author confirmation; `HAS_OUTLINE` continues. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
 
 2. **Chapter argument resolution (when chapter argument is supplied).** Reads `structure/chapter-list.md` to resolve the supplied slug or number. If no match is found, halts with the supplied value, the registry file name, and the list of valid slugs. Carries the slug, chapter number, and working title forward to Step 3.
 
-3. **Load inputs, check web gate, and present agenda.** Reads `structure/outline.md` for the scoped chapter's evidence-needed items, reads `research/open-questions.md` for the unresolved research queue, reads `research/evidence-log.md` and `research/sources.md` to note the current highest IDs, and reads `.studio/config.json` to check the web gate. States the gate status explicitly: gate open announces web-enabled mode; gate closed (the default) explains that source material arrives as pasted text or author-provided files analyzed with the same quote-and-attribute discipline. Waits for author approval before delegating.
+3. **Load inputs, check web gate, and present agenda.** Reads `structure/outline.md` for the scoped chapter's evidence-needed items, reads `research/open-questions.md` for the unresolved research queue, reads `research/evidence-log.md` and `research/sources.md` to note the current highest IDs, and reads `_nonfiction-studio/config.json` to check the web gate. States the gate status explicitly: gate open announces web-enabled mode; gate closed (the default) explains that source material arrives as pasted text or author-provided files analyzed with the same quote-and-attribute discipline. Waits for author approval before delegating.
 
 4. **Delegate to research-librarian.** Spawns the `research-librarian` agent via the `nfs-research -> research-librarian` chain edge with the chapter scope, evidence-needed items, open-question items, current highest IDs, and web gate status. The agent reads both ledger files to establish the true highest IDs before any allocation, registers SRC records before any EV entries (source-first contract), appends new EV entries with `status: pending`, and marks resolved open-question items. The skill writes no ledger files.
 
@@ -72,11 +74,11 @@ The skill runs five steps. Step 2 executes only when a chapter argument is suppl
 
 ## Web Research Gate
 
-The `research-librarian` agent checks `research.web_enabled` in `.studio/config.json` before every WebSearch or WebFetch call. The gate rule is strict: the value must be exactly the boolean `true`. An absent field, the string `"true"`, `false`, or `null` all leave the gate closed.
+The `research-librarian` agent checks `research.web_enabled` in `_nonfiction-studio/config.json` before every WebSearch or WebFetch call. The gate rule is strict: the value must be exactly the boolean `true`. An absent field, the string `"true"`, `false`, or `null` all leave the gate closed.
 
 This is a project-level setting, not a surface-level one. Authors running on Claude Code CLI with the gate closed receive the same pasted-text workflow as authors on chat.
 
-To enable web research for a project, add the following to `.studio/config.json`:
+To enable web research for a project, add the following to `_nonfiction-studio/config.json`:
 
 ```json
 "research": {

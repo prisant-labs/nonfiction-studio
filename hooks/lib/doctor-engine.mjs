@@ -20,6 +20,7 @@
 
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
+import { DEFAULT_STATE_DIR, stateDirOf, stateDirNameOf } from './bible.mjs';
 import { fileURLToPath } from 'node:url';
 
 import { parseEvidenceLog, parseSources } from './ledger.mjs';
@@ -32,19 +33,22 @@ const __dirnameHere = dirname(__filename);
 // Path to the canonical progress JSON Schema (banked adjudication: validate against
 // THAT file, not a re-declaration; the schema file is the single source of truth).
 const PROGRESS_SCHEMA_PATH = join(
-  __dirnameHere, '..', '..', 'templates', 'book-scaffold', '.studio', 'progress.schema.json'
+  __dirnameHere, '..', '..', 'templates', 'book-scaffold', DEFAULT_STATE_DIR, 'progress.schema.json'
 );
 
 // Supported schema_version major for this plugin version.
 export const SUPPORTED_MAJOR = '2';
 
 // Scaffold-mandated paths every valid bible must contain.
-// (bible.mjs isBookRoot already guarantees .studio/meta.json, context/, and chapters/
-//  exist before the doctor runs; these additional paths are checked here.)
-const REQUIRED_PATHS = [
-  '.studio/progress.json',
-  '.studio/config.json',
-  '.studio/ai-use-log.jsonl',
+// (bible.mjs isBookRoot already guarantees the state folder's meta.json, context/, and
+//  chapters/ exist before the doctor runs; these additional paths are checked here.)
+// State-folder entries are relative to the state folder, whose name is resolved per book.
+const REQUIRED_STATE_FILES = [
+  'progress.json',
+  'config.json',
+  'ai-use-log.jsonl',
+];
+const REQUIRED_BIBLE_PATHS = [
   'research/evidence-log.md',
   'research/sources.md',
   'context/style-profile.md',
@@ -197,7 +201,7 @@ function validateAgainstSchema(schema, value, path) {
  * Returns { ok: true } when supported, { ok: false, current, supported, message }
  * when the version is older (exit-2 class: migration required).
  *
- * @param {object} meta - parsed .studio/meta.json
+ * @param {object} meta - parsed _nonfiction-studio/meta.json
  * @returns {{ ok: boolean, current?: string, supported?: string, message?: string }}
  */
 export function checkSchemaVersion(meta) {
@@ -228,7 +232,7 @@ export function checkSchemaVersion(meta) {
  */
 export function checkWordCountCoherence(root) {
   const findings = [];
-  const progressPath = join(root, '.studio', 'progress.json');
+  const progressPath = join(stateDirOf(root), 'progress.json');
   if (!existsSync(progressPath)) return findings;
 
   let progress;
@@ -359,8 +363,9 @@ function styleProfileParseBulletPaths(bodyLines) {
 }
 
 function checkStyleProfile(root, config, findings, notices) {
+  const SD = stateDirNameOf(root);
   const absPath = join(root, 'context', 'style-profile.md');
-  // Absence is already a structure.missing-path finding (REQUIRED_PATHS); this
+  // Absence is already a structure.missing-path finding (REQUIRED_STATE_FILES); this
   // check only validates CONTENT, so it has nothing to do when the file is gone.
   if (!existsSync(absPath)) return;
 
@@ -397,7 +402,7 @@ function checkStyleProfile(root, config, findings, notices) {
         path: STYLE_PROFILE_REL_PATH,
         message:
           STYLE_PROFILE_REL_PATH + ' has no "# Style profile" heading (an uncaptured stub) but ' +
-          '.studio/config.json already carries a stylometry baseline; nfs-capture-voice writes both ' +
+          SD + '/config.json already carries a stylometry baseline; nfs-capture-voice writes both ' +
           'together, so a baseline with no captured profile is inconsistent state. Run nfs-capture-voice ' +
           'to write the profile, or clear the baseline.'
       });
@@ -481,7 +486,7 @@ function checkStyleProfile(root, config, findings, notices) {
           path: STYLE_PROFILE_REL_PATH,
           message:
             STYLE_PROFILE_REL_PATH + ' Baseline reference captured "' + baselineFields.captured +
-            '" disagrees with .studio/config.json stylometry.baseline.captured "' +
+            '" disagrees with ' + SD + '/config.json stylometry.baseline.captured "' +
             configBaseline.captured + '"'
         });
       }
@@ -493,7 +498,7 @@ function checkStyleProfile(root, config, findings, notices) {
             path: STYLE_PROFILE_REL_PATH,
             message:
               STYLE_PROFILE_REL_PATH + ' Baseline reference sample_count "' +
-              baselineFields.sample_count + '" disagrees with .studio/config.json ' +
+              baselineFields.sample_count + '" disagrees with ' + SD + '/config.json ' +
               'stylometry.baseline.sample_count "' + configBaseline.sample_count + '"'
           });
         }
@@ -526,7 +531,7 @@ function checkStyleProfile(root, config, findings, notices) {
 
 // ---------------------------------------------------------------------------
 // ai-use-log coverage and uncovered-writing-window check (check 12, Task 5 of the
-// Wave 1 exit wave: chat compliance parity). Parses .studio/ai-use-log.jsonl
+// Wave 1 exit wave: chat compliance parity). Parses _nonfiction-studio/ai-use-log.jsonl
 // tolerantly: blank lines are skipped, never a finding; a non-blank line that
 // fails JSON.parse IS a finding naming its 1-based line number. This is
 // deliberately stricter than a runtime reader's "a partial final line from an
@@ -549,9 +554,8 @@ function checkStyleProfile(root, config, findings, notices) {
 // count of those with at least one covering record (by presence, not recency).
 // ---------------------------------------------------------------------------
 
-const AI_USE_LOG_REL_PATH = '.studio/ai-use-log.jsonl';
-
 function checkAiUseLogCoverage(root, findings, notices) {
+  const AI_USE_LOG_REL_PATH = stateDirNameOf(root) + '/ai-use-log.jsonl';
   const chaptersDir = join(root, 'chapters');
   let chapterFiles = [];
   if (existsSync(chaptersDir)) {
@@ -568,7 +572,7 @@ function checkAiUseLogCoverage(root, findings, notices) {
   const newestCoveringTs = new Map();
   for (const f of chapterFiles) newestCoveringTs.set('chapters/' + f, -Infinity);
 
-  const logPath = join(root, '.studio', 'ai-use-log.jsonl');
+  const logPath = join(stateDirOf(root), 'ai-use-log.jsonl');
   if (existsSync(logPath)) {
     let logText = null;
     try {
@@ -672,7 +676,7 @@ function checkAiUseLogCoverage(root, findings, notices) {
  *      Baseline reference block's three required fields; captured/sample_count agreement with
  *      config.json's stylometry baseline when one exists; and Exemplars path resolution.
  *  12. ai-use-log coverage and uncovered writing windows (Task 5, Wave 1 exit: chat compliance
- *      parity): .studio/ai-use-log.jsonl is parsed tolerantly (blank lines ok; a malformed
+ *      parity): _nonfiction-studio/ai-use-log.jsonl is parsed tolerantly (blank lines ok; a malformed
  *      non-blank line is a finding naming its line number); a chapter file whose mtime is newer
  *      than its newest covering record (or that has no covering record at all) is an "uncovered
  *      writing window" NOTICE; the report always prints the coverage-fraction NOTICE "ai-use-log
@@ -683,11 +687,13 @@ function checkAiUseLogCoverage(root, findings, notices) {
  * @returns {{ findings: object[], notices: object[] }}
  */
 export function runChecks(root) {
+  const SD = stateDirNameOf(root);
   const findings = [];
   const notices = [];
 
   // ---- 1. Bible structure ---------------------------------------------------
-  for (const rel of REQUIRED_PATHS) {
+  const requiredPaths = REQUIRED_STATE_FILES.map((f) => SD + '/' + f).concat(REQUIRED_BIBLE_PATHS);
+  for (const rel of requiredPaths) {
     const parts = rel.split('/');
     if (!existsSync(join(root, ...parts))) {
       findings.push({
@@ -699,7 +705,7 @@ export function runChecks(root) {
   }
 
   // ---- 2. progress.json schema validation -----------------------------------
-  const progressPath = join(root, '.studio', 'progress.json');
+  const progressPath = join(stateDirOf(root), 'progress.json');
   let progress = null;
   if (existsSync(progressPath)) {
     let progressRaw;
@@ -708,7 +714,7 @@ export function runChecks(root) {
     } catch (err) {
       findings.push({
         type: 'schema.invalid-json',
-        path: '.studio/progress.json',
+        path: SD + '/progress.json',
         message: 'progress.json is not valid JSON: ' + err.message
       });
     }
@@ -728,7 +734,7 @@ export function runChecks(root) {
         for (const e of schemaErrors) {
           findings.push({
             type: 'schema.progress-violation',
-            path: '.studio/progress.json#' + e.path,
+            path: SD + '/progress.json#' + e.path,
             message: e.message
           });
         }
@@ -738,7 +744,7 @@ export function runChecks(root) {
 
   // ---- 3. meta.json and config.json shape checks ----------------------------
   // meta.json is already confirmed readable (findBookRoot guarantees it); re-read for shape.
-  const metaPath = join(root, '.studio', 'meta.json');
+  const metaPath = join(stateDirOf(root), 'meta.json');
   let meta = null;
   try {
     meta = JSON.parse(readFileSync(metaPath, 'utf8'));
@@ -749,21 +755,21 @@ export function runChecks(root) {
     if (typeof meta.schema_version !== 'string') {
       findings.push({
         type: 'shape.meta-violation',
-        path: '.studio/meta.json#schema_version',
+        path: SD + '/meta.json#schema_version',
         message: 'meta.json: schema_version must be a string; got ' + typeOf(meta.schema_version)
       });
     }
     if (typeof meta.created !== 'string') {
       findings.push({
         type: 'shape.meta-violation',
-        path: '.studio/meta.json#created',
+        path: SD + '/meta.json#created',
         message: 'meta.json: created must be a string (RFC 3339 UTC); got ' + typeOf(meta.created)
       });
     }
     if (typeof meta.plugin_version_at_creation !== 'string') {
       findings.push({
         type: 'shape.meta-violation',
-        path: '.studio/meta.json#plugin_version_at_creation',
+        path: SD + '/meta.json#plugin_version_at_creation',
         message: 'meta.json: plugin_version_at_creation must be a string; got ' +
                  typeOf(meta.plugin_version_at_creation)
       });
@@ -771,7 +777,7 @@ export function runChecks(root) {
     // additionalProperties: unknown fields are tolerated per S-08 Rule 2 and banked adjudication 1.
   }
 
-  const configPath = join(root, '.studio', 'config.json');
+  const configPath = join(stateDirOf(root), 'config.json');
   let config = null;
   if (existsSync(configPath)) {
     try {
@@ -779,7 +785,7 @@ export function runChecks(root) {
     } catch (err) {
       findings.push({
         type: 'shape.config-violation',
-        path: '.studio/config.json',
+        path: SD + '/config.json',
         message: 'config.json is not valid JSON: ' + err.message
       });
     }
@@ -787,14 +793,14 @@ export function runChecks(root) {
       if (!Number.isInteger(config.version)) {
         findings.push({
           type: 'shape.config-violation',
-          path: '.studio/config.json#version',
+          path: SD + '/config.json#version',
           message: 'config.json: version must be an integer; got ' + typeOf(config.version)
         });
       }
       if (typeof config.gate !== 'object' || config.gate === null || Array.isArray(config.gate)) {
         findings.push({
           type: 'shape.config-violation',
-          path: '.studio/config.json#gate',
+          path: SD + '/config.json#gate',
           message: 'config.json: gate must be an object'
         });
       } else {
@@ -802,7 +808,7 @@ export function runChecks(root) {
         if (config.gate.mode !== undefined && !validGateModes.has(config.gate.mode)) {
           findings.push({
             type: 'shape.config-violation',
-            path: '.studio/config.json#gate.mode',
+            path: SD + '/config.json#gate.mode',
             message: 'config.json: gate.mode must be one of off, warn, block; got "' + config.gate.mode + '"'
           });
         }
@@ -822,7 +828,7 @@ export function runChecks(root) {
       ) {
         notices.push({
           type: 'config-coercion.thesis-alignment',
-          path: '.studio/config.json#gate.checks.thesis_alignment.mode',
+          path: SD + '/config.json#gate.checks.thesis_alignment.mode',
           message:
             '[D-03 notice] thesis_alignment mode "block" will be coerced to "warn" at gate time ' +
             'per D-03 (layered Stop gate): judgment checks never block in v1. ' +
@@ -844,7 +850,7 @@ export function runChecks(root) {
       ) {
         notices.push({
           type: 'config-coercion.quote-fidelity',
-          path: '.studio/config.json#gate.checks.quote_fidelity.mode',
+          path: SD + '/config.json#gate.checks.quote_fidelity.mode',
           message:
             '[roadmap row 1.5 notice] quote_fidelity mode "block" will be coerced to "warn" at gate time ' +
             'per roadmap row 1.5 (quote fidelity requires the normalization and adjudication policy, not yet shipped). ' +
@@ -1012,7 +1018,7 @@ export function runChecks(root) {
   }
 
   // ---- 10. Snapshot naming conformance ------------------------------------
-  const snapshotDir = join(root, '.studio', 'snapshots');
+  const snapshotDir = join(stateDirOf(root), 'snapshots');
   if (existsSync(snapshotDir)) {
     let snapshotFiles;
     try {
@@ -1026,7 +1032,7 @@ export function runChecks(root) {
       if (!SNAPSHOT_NAME_RE.test(fname)) {
         findings.push({
           type: 'snapshot.bad-name',
-          path: '.studio/snapshots/' + fname,
+          path: SD + '/snapshots/' + fname,
           message: 'snapshot file "' + fname + '" does not match naming convention ' +
                    '<slug>.<YYYYMMDDTHHMMSSZ>.md'
         });

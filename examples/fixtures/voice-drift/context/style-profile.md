@@ -30,6 +30,6 @@
 - context/samples/voice-corpus-03.md
 
 ## Baseline reference
-- vector: .studio/config.json -> stylometry.baseline.markers
+- vector: _nonfiction-studio/config.json -> stylometry.baseline.markers
 - captured: 2026-09-01T02:03:34Z
 - sample_count: 3

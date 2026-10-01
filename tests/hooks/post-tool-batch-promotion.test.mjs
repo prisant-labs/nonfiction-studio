@@ -4,7 +4,7 @@
 // what-it-does: spawns the REAL hooks/post-tool-batch.mjs script (never a helper
 //               function called directly) with crafted snake_case PostToolBatch
 //               events against temp clones of the sample-book, and asserts on the
-//               resulting .studio/progress.json, .studio/ai-use-log.jsonl, and
+//               resulting _nonfiction-studio/progress.json, _nonfiction-studio/ai-use-log.jsonl, and
 //               stdout content. This file exists specifically to prove the
 //               demotion rule depends on the real producer being wired up: if
 //               hooks.json ever stopped invoking this script, or the script's
@@ -87,11 +87,11 @@ function readJsonlLines(filePath) {
 }
 
 function readProgress(book) {
-  return JSON.parse(readFileSync(join(book, '.studio', 'progress.json'), 'utf8'));
+  return JSON.parse(readFileSync(join(book, '_nonfiction-studio', 'progress.json'), 'utf8'));
 }
 
 function writeProgress(book, progress) {
-  writeFileSync(join(book, '.studio', 'progress.json'), JSON.stringify(progress, null, 2) + '\n', 'utf8');
+  writeFileSync(join(book, '_nonfiction-studio', 'progress.json'), JSON.stringify(progress, null, 2) + '\n', 'utf8');
 }
 
 /** Directly promotes a chapter to 'final' in progress.json (bypassing the hook
@@ -181,7 +181,7 @@ test('demotion: editing a chapter at the terminal status falls back via the real
     'additionalContext names the chapter and states the demotion; got: ' + out.hookSpecificOutput.additionalContext
   );
 
-  const logLines = readJsonlLines(join(book, '.studio', 'ai-use-log.jsonl'));
+  const logLines = readJsonlLines(join(book, '_nonfiction-studio', 'ai-use-log.jsonl'));
   const lastRecord = JSON.parse(logLines[logLines.length - 1]);
   assert.ok(
     /demot/i.test(lastRecord.summary),
@@ -233,7 +233,7 @@ test('demotion: a Write with byte-identical content still demotes a final chapte
 // ---------------------------------------------------------------------------
 test('promotion gating: a chapter set to final directly in progress.json with no matching attestation is reverted by the real hook in the same batch', () => {
   const book = cloneSampleBook('promote-no-attestation');
-  const progressJsonPath = join(book, '.studio', 'progress.json');
+  const progressJsonPath = join(book, '_nonfiction-studio', 'progress.json');
 
   // Simulate "the direct Edit to progress.json already executed" - PostToolBatch
   // fires AFTER tool execution, so by the time the hook runs, this write has
@@ -320,7 +320,7 @@ test('no over-demotion: a final chapter with a valid attestation, untouched this
 // ---------------------------------------------------------------------------
 test('promotion gating: an attestation whose actor is a roster slug (not "author") does not confer eligibility', () => {
   const book = cloneSampleBook('promote-roster-slug-actor');
-  const progressJsonPath = join(book, '.studio', 'progress.json');
+  const progressJsonPath = join(book, '_nonfiction-studio', 'progress.json');
 
   forcePromoteToFinal(book, CH1_SLUG);
   appendDecisionEntry(book, {
@@ -362,7 +362,7 @@ test('promotion gating: an attestation whose actor is a roster slug (not "author
 // ---------------------------------------------------------------------------
 test('a progress.json edit batch with no final chapters at all is a true no-op: no rewrite, empty stdout', () => {
   const book = cloneSampleBook('progress-touch-noop');
-  const progressJsonPath = join(book, '.studio', 'progress.json');
+  const progressJsonPath = join(book, '_nonfiction-studio', 'progress.json');
   const progressBefore = readFileSync(progressJsonPath, 'utf8');
 
   const result = runHook(makeBatchEvent(book, [

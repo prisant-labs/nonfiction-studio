@@ -1,6 +1,6 @@
 // what-it-is:   PreToolUse guard and snapshot hook; replaces the TSK-030 stub per TSK-032 (pre-tool-use hook)
 // what-it-does: (a) denies writes outside the bible root (containment guard, fail-closed per D-13),
-//               (b) exempts .studio/ from snapshot and flag writes,
+//               (b) exempts _nonfiction-studio/ from snapshot and flag writes,
 //               (c) writes the session-write flag and a pre-write snapshot for chapters/ overwrites,
 //               (d) injects an additionalContext caution for destructive Bash/PowerShell patterns,
 //               (e) enforces the per-agent write-scope constraint (F-AG-01) and the web research
@@ -30,7 +30,7 @@
 //
 // Failure modes:
 //   - Path guard and web gate violations: FAIL-CLOSED (emit deny JSON, exit 0) per D-13 (security posture)
-//   - Snapshot and session-write flag errors: FAIL-OPEN (append to .studio/logs/errors.jsonl, allow)
+//   - Snapshot and session-write flag errors: FAIL-OPEN (append to _nonfiction-studio/logs/errors.jsonl, allow)
 //   - Malformed stdin: FAIL-OPEN (exit 0, empty stdout; cannot identify a write)
 //   - Dispatch routing errors (missing agent file, unparseable frontmatter, unreadable
 //     agents/_chain-permitted.yaml, corrupt settings): FAIL-OPEN (silence; never a warn, never a deny)
@@ -48,7 +48,7 @@ import {
 } from 'node:fs';
 import { join, resolve, sep, basename, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findBookRoot } from './lib/bible.mjs';
+import { findBookRoot, stateDirOf, stateDirNameOf } from './lib/bible.mjs';
 import {
   resolveActiveAgent,
   checkAgentWriteConstraint,
@@ -225,12 +225,12 @@ function emitDeny(reason) {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: append one JSONL error record to .studio/logs/errors.jsonl (fail-open;
+// Helper: append one JSONL error record to _nonfiction-studio/logs/errors.jsonl (fail-open;
 // never throws; used for snapshot and flag write failures).
 // ---------------------------------------------------------------------------
 function logError(root, msg, err) {
   try {
-    const logsDir = join(root, '.studio', 'logs');
+    const logsDir = join(stateDirOf(root), 'logs');
     mkdirSync(logsDir, { recursive: true });
     appendFileSync(
       join(logsDir, 'errors.jsonl'),
@@ -259,7 +259,7 @@ function logError(root, msg, err) {
 // boolean true; an absent key, the string "true", false, and null all leave
 // the gate CLOSED.
 // ---------------------------------------------------------------------------
-function checkWebGateConstraint(agentSlug, bookRootError, bookConfig) {
+function checkWebGateConstraint(agentSlug, bookRootError, bookConfig, stateDirName) {
   if (bookRootError) {
     return (
       'Web gate closed for agent ' + agentSlug + ': ' +
@@ -267,8 +267,8 @@ function checkWebGateConstraint(agentSlug, bookRootError, bookConfig) {
         ? 'no book root could be found'
         : 'bible files are corrupt (' + bookRootError.message + ')') +
       ', so research.web_enabled cannot be verified. Set research.web_enabled to the boolean ' +
-      'true in .studio/config.json once the book project is available. Denied per D-13 ' +
-      '(security posture, fail-closed).'
+      "true in the config.json inside the book's state folder once the book project is " +
+      'available. Denied per D-13 (security posture, fail-closed).'
     );
   }
 
@@ -279,8 +279,8 @@ function checkWebGateConstraint(agentSlug, bookRootError, bookConfig) {
 
   return (
     'Web gate closed for agent ' + agentSlug + ': research.web_enabled must be exactly the ' +
-    'boolean true in .studio/config.json (got ' + JSON.stringify(webEnabled) + '). Denied per ' +
-    'D-13 (security posture, fail-closed).'
+    'boolean true in ' + stateDirName + '/config.json (got ' + JSON.stringify(webEnabled) +
+    '). Denied per D-13 (security posture, fail-closed).'
   );
 }
 
@@ -345,7 +345,7 @@ if (isMain) {
   // module location, per the platform's `node ${CLAUDE_PLUGIN_ROOT}/hooks/...`
   // invocation convention) - an entirely different root from the book/bible
   // root findBookRoot resolves below - so it must not depend on a book
-  // project existing or its .studio/config.json being valid.
+  // project existing or its _nonfiction-studio/config.json being valid.
   //
   // tool_name match: the 2026-09-04 platform probe's dispatch findings
   // captured "Agent" live, three times; the installed binary's own
@@ -478,7 +478,7 @@ if (isMain) {
   // -------------------------------------------------------------------------
   // WEB GATE (F-AG-02, web gate unenforced): WebSearch/WebFetch from a
   // web-gated agent (isWebGatedAgent) are denied unless research.web_enabled
-  // is exactly the boolean true in .studio/config.json. Runs before the
+  // is exactly the boolean true in _nonfiction-studio/config.json. Runs before the
   // generic book-root error handling below because "no book root" is itself a
   // fail-closed DENY for a web-gated agent here (unlike the silent no-op
   // every other tool gets for NO_BOOK_ROOT): there is no config to read, so
@@ -489,7 +489,9 @@ if (isMain) {
   if (toolName === 'WebSearch' || toolName === 'WebFetch') {
     const webGateAgent = resolveActiveAgent(event);
     if (isWebGatedAgent(webGateAgent)) {
-      const webGateDenyReason = checkWebGateConstraint(webGateAgent, bookRootError, bookConfig);
+      const webGateDenyReason = checkWebGateConstraint(
+        webGateAgent, bookRootError, bookConfig, bookRoot ? stateDirNameOf(bookRoot) : null
+      );
       if (webGateDenyReason) {
         emitDeny(webGateDenyReason);
       }
@@ -514,9 +516,23 @@ if (isMain) {
   if (bookRootError) {
     if (bookRootError.code && bookRootError.code !== 'NO_BOOK_ROOT') {
       if (WRITE_TOOLS.has(toolName)) {
+        // A bad state-folder pointer (ADR-0015) blocks every write but one: the write that
+        // repairs the pointer itself. Without this exemption the author could not fix the
+        // pointer from inside the session. The comparison is exact (after platform folding),
+        // so no other path rides along.
+        if (bookRootError.code === 'STATE_POINTER_INVALID' && bookRootError.pointerPath) {
+          const repairTarget =
+            toolName === 'NotebookEdit' ? toolInput.notebook_path : toolInput.file_path;
+          if (
+            typeof repairTarget === 'string' &&
+            foldForCompare(resolve(cwd, repairTarget)) === foldForCompare(resolve(bookRootError.pointerPath))
+          ) {
+            process.exit(0);
+          }
+        }
         emitDeny(
           'Cannot verify write safety: bible files are corrupt (' + bookRootError.message + '). ' +
-          'Repair .studio/config.json then retry; bin/ns-doctor reports the parse error. ' +
+          'Repair the file named there, then retry; bin/ns-doctor reports the problem. ' +
           'Denied per D-13 (security posture, fail-closed).'
         );
       }
@@ -604,7 +620,7 @@ if (isMain) {
   // =========================================================================
   // WRITE TOOLS path (Write, Edit, NotebookEdit)
   // Steps follow S-07 PreToolUse internal steps, re-read 2026-07-18 under the
-  // flattened layout where .studio/ and research/ are direct children of the
+  // flattened layout where _nonfiction-studio/ and research/ are direct children of the
   // bible root, so the old explicit allowlist is subsumed by the root check.
   // =========================================================================
 
@@ -629,7 +645,7 @@ if (isMain) {
 
   // Step 3b: CONTAINMENT GUARD.
   // [S-07 step 3, re-read 2026-07-18 under the flattened layout: the old explicit
-  // allowlist (.studio/, research/) is subsumed because both directories live
+  // allowlist (_nonfiction-studio/, research/) is subsumed because both directories live
   // inside the root in the committed layout. The guard now simply checks whether
   // the resolved target falls inside the bible root subtree. FAIL-CLOSED.]
   // F-HK-13: case-fold only on win32 (foldForCompare) - unconditional folding
@@ -698,12 +714,10 @@ if (isMain) {
     emitDeny(agentDenyReason);
   }
 
-  // Step 3c: .studio/ targets are machine state.
+  // Step 3c: state-folder targets are machine state.
   // Allowed with no snapshot and no session-write flag (S-07 no-op row).
-  if (
-    targetNorm === rootNorm + sep + '.studio' ||
-    targetNorm.startsWith(rootNorm + sep + '.studio' + sep)
-  ) {
+  const stateDirNorm = rootNorm + sep + foldForCompare(stateDirNameOf(resolvedRoot));
+  if (targetNorm === stateDirNorm || targetNorm.startsWith(stateDirNorm + sep)) {
     process.exit(0);
   }
 
@@ -712,11 +726,11 @@ if (isMain) {
     targetNorm === rootNorm + sep + 'chapters' ||
     targetNorm.startsWith(rootNorm + sep + 'chapters' + sep)
   ) {
-    // --- Session-write flag (.studio/gate/.session-write-flag) ---
-    // Atomic write-then-rename; creating .studio/gate/ if needed.
+    // --- Session-write flag (_nonfiction-studio/gate/.session-write-flag) ---
+    // Atomic write-then-rename; creating _nonfiction-studio/gate/ if needed.
     // Fail-open: flag write error is logged and the write is still allowed.
     try {
-      const gateDir = join(resolvedRoot, '.studio', 'gate');
+      const gateDir = join(stateDirOf(resolvedRoot), 'gate');
       mkdirSync(gateDir, { recursive: true });
       const tmpFlagPath = join(gateDir, '.session-write-flag.tmp');
       writeFileSync(tmpFlagPath, new Date().toISOString() + '\n', 'utf8');
@@ -730,7 +744,7 @@ if (isMain) {
     // pruned after creation to the newest 10 per slug.
     if (existsSync(resolvedTarget)) {
       try {
-        const snapshotsDir = join(resolvedRoot, '.studio', 'snapshots');
+        const snapshotsDir = join(stateDirOf(resolvedRoot), 'snapshots');
         mkdirSync(snapshotsDir, { recursive: true });
 
         const fileBase = basename(resolvedTarget);

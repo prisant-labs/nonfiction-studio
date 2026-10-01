@@ -1,26 +1,28 @@
 ---
 title: "nfs-doctor skill reference"
-description: "Reference for the nfs-doctor skill - the bible integrity front door that wraps bin/ns-doctor in one Bash call per invocation, maps exit codes to grouped findings with routing hints, and (in its report, migrate, and packs modes) writes nothing; a fourth mode, install-statusline, performs one consented write to the author's own Claude Code settings"
+description: "Reference for the nfs-doctor skill - the bible integrity front door that wraps bin/ns-doctor in one Bash call per invocation, maps exit codes to grouped findings with routing hints, and (in its report and packs modes) writes nothing; three modes write only after an explicit yes - migrate and move-state move or record the book's state folder, and install-statusline writes the author's own Claude Code settings"
 audience: "non-engineer"
 level: "beginner"
-tags: ["skill", "doctor", "integrity", "schema", "validation", "orphan", "migrate"]
+tags: ["skill", "doctor", "integrity", "schema", "validation", "orphan", "migrate", "move-state", "state-folder"]
 ---
 
 # nfs-doctor
 
-The `nfs-doctor` skill is the bible integrity front door per D-12 (versioned bible with a doctor) and S-06 3.11 (skills and invocation surface). It fronts `bin/ns-doctor` with a single Bash call per invocation, maps the exit code to a presented result, and groups findings by check type with routing hints. `bin/ns-doctor` and its engine (`hooks/lib/doctor-engine.mjs`) are read-only without exception, in every mode. The skill's `report`, `migrate`, and `packs` modes write nothing either. A fourth mode, `install-statusline` (OPP-P03, studio HUD; ADR-0008, status HUD and CANON 3.5), writes exactly one file, `~/.claude/settings.json`, and only after the author answers an explicit yes; see "Install-statusline Mode" below. It is governed by D-05 (five shipped CLIs), D-06 (single-writer state discipline), and D-12 (versioned bible with a doctor).
+The `nfs-doctor` skill is the bible integrity front door per D-12 (versioned bible with a doctor) and S-06 3.11 (skills and invocation surface). It fronts `bin/ns-doctor` with a single Bash call per invocation, maps the exit code to a presented result, and groups findings by check type with routing hints. `bin/ns-doctor` and its engine (`hooks/lib/doctor-engine.mjs`) are read-only without exception, in every mode. The skill's `report` and `packs` modes write nothing either. Three modes write, each only after the author answers an explicit yes: `migrate` and `move-state <name>` move or record the book's state folder (ADR-0015, state folder name), and `install-statusline` (OPP-P03, studio HUD; ADR-0008, status HUD and CANON 3.5) writes `~/.claude/settings.json`. See "Move Routine" and "Install-statusline Mode" below. It is governed by D-05 (five shipped CLIs), D-06 (single-writer state discipline), and D-12 (versioned bible with a doctor).
 
 ## Purpose
 
 `nfs-doctor` bridges the deterministic bible integrity engine and the author conversation. The `bin/ns-doctor` engine it invokes runs up to twelve checks (bible structure, progress.json schema, meta.json and config.json shape, EV grammar, SRC grammar, orphan claim markers, orphan SRC references, word-count coherence, config-coercion notice, snapshot naming, style-profile structure and baseline consistency, and ai-use-log coverage) composed into a single pass. The skill's role is to select the right mode flag, invoke the engine, and present the verdict honestly with per-group counts and routing hints.
 
-**`bin/ns-doctor` is read-only without exception.** Proven by the grep in the engine's own header (`hooks/lib/doctor-engine.mjs:13-14`; TSK-028, ns-doctor engine). The skill's `report`, `migrate`, and `packs` modes add no log file and write nothing. The `.studio/logs/doctor-<ts>.json` write and bible mutations that appear in the S-06 3.11 specification predate the built engine and describe the Phase 2 `fix` mode contract, unrelated to `install-statusline`.
+**`bin/ns-doctor` is read-only without exception.** Proven by the grep in the engine's own header (`hooks/lib/doctor-engine.mjs:13-14`; TSK-028, ns-doctor engine). The skill's `report` and `packs` modes add no log file and write nothing, and `migrate` writes nothing unless it finds a state-folder problem and the author consents to the fix. The `_nonfiction-studio/logs/doctor-<ts>.json` write and bible mutations that appear in the S-06 3.11 specification predate the built engine and describe the Phase 2 `fix` mode contract, unrelated to `install-statusline`.
 
-**`install-statusline` is the one exception, narrowly scoped.** It writes `~/.claude/settings.json`'s `statusLine` key, and only that key, and only on an explicit yes to a stated, one-time consent prompt. The write is performed by the skill itself with the Write or Edit tool; `bin/ns-doctor` is not invoked and is not involved in any way. See "Install-statusline Mode" below.
+**`migrate` and `move-state` move the book's state folder.** They write or delete `nonfiction-studio.json` at the book root, rename the state folder, and add the folder's `README.md`, through one move routine and only after an explicit yes; see "Move Routine" below. Before ADR-0015 (state folder name), this page said that `migrate` writes nothing. That claim widens to the consented move, in the same way that ADR-0013 (wave 1 exit surfaces) recorded the output-style offer widening the plugin's settings-write claim.
 
-**The fix mode is not in v1.** The skill responds to a `fix` argument by stating it is Phase 2+ scope. The `fix` contract recorded for Phase 2 is: dry-run default, explicit `apply` argument required, fixable-issue list (duplicate EV IDs, malformed JSONL log lines, broken internal cross-references), and a change log written to `.studio/logs/doctor-<ts>.json`.
+**`install-statusline` writes one key of the author's own settings, narrowly scoped.** It writes `~/.claude/settings.json`'s `statusLine` key, and only that key, and only on an explicit yes to a stated, one-time consent prompt. The write is performed by the skill itself with the Write or Edit tool; `bin/ns-doctor` is not invoked and is not involved in any way. See "Install-statusline Mode" below.
 
-**No agents invoked, in any mode.** This is a deterministic-CLI-only skill for `report`, `migrate`, and `packs`. `install-statusline` uses the Write or Edit tool directly, not an agent. No chain edges exist.
+**The fix mode is not in v1.** The skill responds to a `fix` argument by stating it is Phase 2+ scope. The `fix` contract recorded for Phase 2 is: dry-run default, explicit `apply` argument required, fixable-issue list (duplicate EV IDs, malformed JSONL log lines, broken internal cross-references), and a change log written to `_nonfiction-studio/logs/doctor-<ts>.json`.
+
+**No agents invoked, in any mode.** This is a deterministic-CLI-only skill for `report`, `migrate`, `move-state`, and `packs`. `install-statusline` and the move routine use the Write, Edit, and Bash tools directly, not an agent. No chain edges exist.
 
 ## Invocation
 
@@ -33,7 +35,8 @@ The mode argument is optional; the default is `report`.
 | Mode | Description |
 |---|---|
 | `report` (default) | Full 12-check inventory; exit 0 (clean), exit 1 (findings), exit 2 (error or migration-required prelude) |
-| `migrate` | Schema-version diagnosis only; never writes; exit 0 when already current, exit 2 when migration is required (genuinely incompatible version) |
+| `migrate` | Checks the state folder first: a legacy or unpointed folder is renamed to `_nonfiction-studio/`, or its name is recorded in `nonfiction-studio.json`, after an explicit yes. Otherwise a schema-version diagnosis that writes nothing; exit 0 when already current, exit 2 when migration is required (genuinely incompatible version) |
+| `move-state <name>` | Renames a healthy book's state folder to `<name>` and records the name in `nonfiction-studio.json`, or deletes that file when `<name>` is the default; writes only on an explicit yes |
 | `packs` | Craft-pack validity check; exit 0 in all v1 cases (no packs directory or no validator yet) |
 | `install-statusline` | Offers a one-time consented write of the main Claude Code status line into `~/.claude/settings.json`; does not invoke `bin/ns-doctor`; writes only on an explicit yes |
 | `fix` | Not in v1; the skill declines and states the Phase 2 contract |
@@ -43,6 +46,7 @@ Alternate entry points:
 - Via the `nfs-start` dispatcher: routes here from Path 5 (Troubleshoot or get help) for structural problems
 - Via `nfs-status-dashboard`: routes here when `progress.json` is malformed or unreadable
 - Via `nfs-check-chapter`: routes here when the gate exits 2 with an engine error
+- Via the session start message, any `bin/ns-*` CLI, or any skill: each names this skill when it finds an unpointed state folder or a bad `nonfiction-studio.json`
 
 ## Inputs and Outputs
 
@@ -50,45 +54,53 @@ Alternate entry points:
 
 | Path | When it is read | Why |
 |---|---|---|
-| `.studio/meta.json` | Step 3 (via engine) | Schema-version check; required fields (schema_version, created, plugin_version_at_creation) |
-| `.studio/progress.json` | Step 3 (via engine) | Schema validation against `templates/book-scaffold/.studio/progress.schema.json` |
-| `.studio/config.json` | Step 3 (via engine) | Shape check (version integer, gate object, gate.mode enum); config-coercion notice |
-| `.studio/snapshots/` | Step 3 (via engine) | Filename conformance check against `<slug>.<YYYYMMDDTHHMMSSZ>.md` pattern |
+| `nonfiction-studio.json` | Step 3 (via engine); `move-state` (by the skill) | The state folder's name, when the book uses a non-default one; absent for the default `_nonfiction-studio/` |
+| `_nonfiction-studio/meta.json` | Step 3 (via engine) | Schema-version check; required fields (schema_version, created, plugin_version_at_creation) |
+| `_nonfiction-studio/progress.json` | Step 3 (via engine) | Schema validation against `templates/book-scaffold/_nonfiction-studio/progress.schema.json` |
+| `_nonfiction-studio/config.json` | Step 3 (via engine) | Shape check (version integer, gate object, gate.mode enum); config-coercion notice |
+| `_nonfiction-studio/snapshots/` | Step 3 (via engine) | Filename conformance check against `<slug>.<YYYYMMDDTHHMMSSZ>.md` pattern |
 | `research/evidence-log.md` | Step 3 (via engine) | EV grammar (required fields, enum values, SRC ID format); orphan-marker cross-reference |
 | `research/sources.md` | Step 3 (via engine) | SRC grammar (type enum, retrieval-status enum); SRC cross-reference check |
 | `chapters/*.md` | Step 3 (via engine) | Scanned for `[claim: EV-nnnn]` markers in the orphan-marker check |
 | `context/style-profile.md` | Step 3 (via engine) | Style-profile structure (seven sections, present and in order); Baseline reference field completeness; agreement with `config.json`'s stylometry baseline; Exemplars path resolution; a pre-capture stub is a notice unless `config.json` already carries a baseline |
-| `.studio/ai-use-log.jsonl` | Step 3 (via engine) | ai-use-log coverage: parsed tolerantly (a malformed non-blank line is a finding naming its line number); per chapter, an "uncovered writing window" notice when the file's mtime is newer than its newest covering record, or there is no covering record at all; the coverage fraction is always stated as a notice |
+| `_nonfiction-studio/ai-use-log.jsonl` | Step 3 (via engine) | ai-use-log coverage: parsed tolerantly (a malformed non-blank line is a finding naming its line number); per chapter, an "uncovered writing window" notice when the file's mtime is newer than its newest covering record, or there is no covering record at all; the coverage fraction is always stated as a notice |
 | `~/.claude/settings.json` | `install-statusline` mode only, by the skill itself (not the engine) | Read first to merge into, never to validate against the bible; a user-scope file, outside any book project |
 
 ### Outputs
 
 `bin/ns-doctor` writes no files, in any mode, without exception - the engine performs every read
-in `report`, `migrate`, and `packs`. The skill itself writes exactly one file, in exactly one
-mode: `install-statusline` writes `~/.claude/settings.json`'s `statusLine` key, and only after the
-author answers an explicit yes to a stated consent prompt. See "Install-statusline Mode" below.
+in `report`, `migrate`, `move-state`, and `packs`. The skill itself writes in three modes, each
+only after the author answers an explicit yes to a stated proposal: `migrate` and `move-state`
+through the move routine, and `install-statusline` into `~/.claude/settings.json`. See "Move
+Routine" and "Install-statusline Mode" below.
 
 | Path | Written by | Notes |
 |---|---|---|
 | `~/.claude/settings.json` | the skill, `install-statusline` mode only, on explicit yes | Merges a `statusLine` entry; every other existing top-level key is preserved; a pre-existing `statusLine` requires a separate explicit confirmation before being replaced |
-| (none, all other modes) | - | The `.studio/logs/doctor-<ts>.json` write arrives with `fix` in Phase 2, unrelated to `install-statusline` |
+| `nonfiction-studio.json` | the skill, `migrate` and `move-state` only, on explicit yes | Written as `{"state_dir": "<name>"}` for a non-default name; deleted when the target is the default `_nonfiction-studio` |
+| the state folder itself | the skill, `migrate` and `move-state` only, on explicit yes | Renamed with `git mv` inside a git working tree (every file keeps its history), otherwise with a plain rename; never merged into an existing folder |
+| `<state folder>/README.md` | the skill, `migrate` and `move-state` only, on explicit yes | Copied from the scaffold when the folder has none |
+| (none, `report` and `packs`) | - | The `_nonfiction-studio/logs/doctor-<ts>.json` write arrives with `fix` in Phase 2, unrelated to `install-statusline` |
 
 ## Flow Summary
 
-`report`, `migrate`, and `packs` run four steps each. `install-statusline` is a separate four-step
-flow (Steps A-D) that never invokes `bin/ns-doctor` at all; see "Install-statusline Mode" below.
+`report`, `migrate`, `move-state`, and `packs` run four steps each, and `migrate` and `move-state`
+may continue into the move routine. `install-statusline` is a separate four-step flow (Steps A-D)
+that never invokes `bin/ns-doctor` at all; see "Install-statusline Mode" below.
 
-1. **Argument parsing (no tool call).** Extracts the mode from the supplied argument. Default is `report`. Recognizes `report`, `migrate`, `packs`, `install-statusline`, and `validate` (treated as `report`). Declines `fix` as Phase 2+ scope and halts without any tool calls. Declines unknown tokens and halts. An `install-statusline` mode skips straight to its own flow, below.
+1. **Argument parsing (no tool call).** Extracts the mode from the supplied argument. Default is `report`. Recognizes `report`, `migrate`, `move-state <name>` (halting with a usage line when no name follows), `packs`, `install-statusline`, and `validate` (treated as `report`). Declines `fix` as Phase 2+ scope and halts without any tool calls. Declines unknown tokens and halts. An `install-statusline` mode skips straight to its own flow, below.
 
 2. **Resolve the plugin root.** Before the engine is invoked, the skill resolves the plugin's installed path: reads `installed_plugins.json` in the Claude config directory first (a marketplace install, verified by confirming `bin/ns-stylometry` exists under the candidate path; the newest installed version wins if more than one is present), then a local self-marketplace entry in `settings.json`, then a plugins-cache scan (versioned and legacy layouts), then the current working directory. This is the same resolver `nfs-new-book` uses to locate its scaffold templates; it exists because a literal relative `bin/ns-doctor` path resolves against the invoking shell's working directory, not the installed plugin, and would silently fail for a marketplace-installed author. If nothing resolves, the skill halts and names the config directory and the `installed_plugins.json` path it attempted. (`install-statusline` reuses this same resolution as its own Step A, but for a different purpose: composing the command string it proposes to install, not for locating `bin/ns-doctor`.)
 
-3. **Single Bash invocation (one call per mode).** Runs one Bash call: `node "<plugin-root>/bin/ns-doctor" --project=. [--report|--migrate|--validate-packs] --json`. Captures exit code, stdout (JSON), and stderr. No individual sub-CLI calls are made; the engine composes its checks internally.
+3. **Single Bash invocation (one call per mode).** Runs one Bash call: `node "<plugin-root>/bin/ns-doctor" --project=. [--report|--migrate|--validate-packs] --json`; `move-state` uses `--report` to confirm that the book resolves. Captures exit code, stdout (JSON), and stderr. No individual sub-CLI calls are made; the engine composes its checks internally.
 
 4. **Present the result (exit-code mapping).** Maps exit code to the presented verdict:
    - **Report mode, exit 0:** clean pass; no findings; names the twelve checks run.
    - **Report mode, exit 1:** findings grouped by check-type prefix with per-group counts and routing hints; closes with total count and re-run invitation.
-   - **Report mode, exit 2:** surfaces stderr error; NEVER treated as a pass.
-   - **Migrate mode:** exit 0 when the schema is already current (stdout JSON with status "current"); exit 2 when migration is required (stderr content); presents each clearly.
+   - **Report mode, exit 2 with a state-folder status:** stdout JSON with status `state-folder-unpointed` or `state-pointer-invalid`; presents the findings and routes to `migrate` or to a hand repair of `nonfiction-studio.json`; NEVER treated as a pass.
+   - **Report mode, any other exit 2:** surfaces stderr error; NEVER treated as a pass.
+   - **Migrate mode:** an unpointed state folder leads to the two-choice offer and the move routine; otherwise exit 0 when the schema is already current (stdout JSON with status "current"), and exit 2 when migration is required (stderr content); presents each clearly.
+   - **Move-state mode:** on exit 0 or 1, reads the current folder name and runs the move routine; on exit 2, presents the result and halts.
    - **Packs mode, exit 0:** presents the stdout JSON `message` field.
 
 ## Exit-Code Mapping
@@ -97,9 +109,13 @@ flow (Steps A-D) that never invokes `bin/ns-doctor` at all; see "Install-statusl
 |---|---|---|---|
 | `report` | 0 | All checks passed; no findings | Present clean pass; name the twelve checks; note any notices |
 | `report` | 1 | One or more findings | Present grouped findings with counts and routing hints; invite re-run |
+| `report` | 2 | State folder unresolved: stdout JSON status `state-folder-unpointed` or `state-pointer-invalid` | Present the findings; route to `nfs-doctor migrate`, or to a hand repair of `nonfiction-studio.json`; NEVER treat as a pass |
 | `report` | 2 | Operational error (e.g. BibleError, bad args) or schema-version prelude | Surface stderr; NEVER treat as a pass; route to `nfs-doctor migrate` if version mismatch indicated |
-| `migrate` | 0 | Schema is already current; nothing to migrate | Present the current-schema message; note writes are never performed in v1 |
-| `migrate` | 2 | Migration required (genuinely incompatible version) | Present the migration-required message; note writes are never performed in v1 |
+| `migrate` | 2 | State folder unpointed (stdout JSON status `state-folder-unpointed`) | Offer to rename the folder to the default or record its name, then run the move routine on an explicit yes |
+| `migrate` | 0 | Schema is already current; nothing to migrate | Present the current-schema message; no schema migration is performed in v1 |
+| `migrate` | 2 | Migration required (genuinely incompatible version) | Present the migration-required message; no schema migration is performed in v1 |
+| `move-state` | 0 or 1 | The book resolves (findings, if any, do not block a move) | Run the move routine |
+| `move-state` | 2 | The book does not resolve | Present the result and halt |
 | `packs` | 0 | Always in v1: no packs directory or no validator yet | Present the stdout message field |
 | `install-statusline` | n/a | This mode never invokes `bin/ns-doctor`, so it produces no CLI exit code; its outcome is binary instead (wrote the file on an explicit yes, or wrote nothing) | See "Install-statusline Mode" below |
 
@@ -109,8 +125,8 @@ The engine runs twelve checks in order. The `type` prefix of each finding identi
 
 | Check | Engine section | Finding type prefix | What it checks |
 |---|---|---|---|
-| Bible structure | 1 | `structure` | Scaffold-mandated paths: `.studio/progress.json`, `.studio/config.json`, `.studio/ai-use-log.jsonl`, `research/evidence-log.md`, `research/sources.md`, `context/style-profile.md`, `context/brief.md`, `structure/thesis.md`, `structure/outline.md` |
-| progress.json schema | 2 | `schema` | JSON validity and conformance against `templates/book-scaffold/.studio/progress.schema.json`; additionalProperties-tolerant |
+| Bible structure | 1 | `structure` | Scaffold-mandated paths: `_nonfiction-studio/progress.json`, `_nonfiction-studio/config.json`, `_nonfiction-studio/ai-use-log.jsonl`, `research/evidence-log.md`, `research/sources.md`, `context/style-profile.md`, `context/brief.md`, `structure/thesis.md`, `structure/outline.md` |
+| progress.json schema | 2 | `schema` | JSON validity and conformance against `templates/book-scaffold/_nonfiction-studio/progress.schema.json`; additionalProperties-tolerant |
 | meta.json and config.json shape | 3 | `shape` | Required field presence and types; enum values for `gate.mode`; additionalProperties-tolerant |
 | EV grammar | 4 | `ev-grammar` | Required fields, confidence and status enum values, SRC ID format in `research/evidence-log.md` |
 | SRC grammar | 5 | `src-grammar` | type and retrieval-status enum values in `research/sources.md` |
@@ -118,9 +134,9 @@ The engine runs twelve checks in order. The `type` prefix of each finding identi
 | Orphan SRC references | 7 | `src-ref` | SRC IDs referenced in EV entries but absent from sources.md; SRC IDs defined in sources.md but referenced by no EV entry |
 | Word-count coherence | 8 | `coherence` | Chapter word count in progress.json matches the file on disk (single authority: stylometry tokenizer per TSK-029b (state-coherence gate check)) |
 | Config-coercion notice | 9 | `config-coercion` | Reports `thesis_alignment.mode: block` as a notice (informational; never affects exit code; D-03 (layered Stop gate) coercion happens at gate time, not here) |
-| Snapshot naming | 10 | `snapshot` | Files in `.studio/snapshots/` match the pattern `<slug>.<YYYYMMDDTHHMMSSZ>.md` |
+| Snapshot naming | 10 | `snapshot` | Files in `_nonfiction-studio/snapshots/` match the pattern `<slug>.<YYYYMMDDTHHMMSSZ>.md` |
 | Style profile structure | 11 | `style-profile` | `context/style-profile.md` (F-CI-08, voice quality unchecked, deterministic half): a pre-capture stub is a notice unless `config.json` already carries a stylometry baseline (then a finding); once populated, all seven sections present and in order, the `Baseline reference` block's three required fields, agreement with `config.json`'s stylometry baseline when one exists, and Exemplars path resolution |
-| ai-use-log coverage | 12 | `ai-use-log` | `.studio/ai-use-log.jsonl` (Task 5, Wave 1 exit: chat compliance parity): parsed tolerantly, a non-blank line that fails to parse as JSON is a finding naming its line number; per `chapters/*.md` file, a mtime newer than its newest covering record (or no covering record at all) is an "uncovered writing window" notice; the coverage fraction ("ai-use-log covers N of M chapters with writes") is always stated as a notice |
+| ai-use-log coverage | 12 | `ai-use-log` | `_nonfiction-studio/ai-use-log.jsonl` (Task 5, Wave 1 exit: chat compliance parity): parsed tolerantly, a non-blank line that fails to parse as JSON is a finding naming its line number; per `chapters/*.md` file, a mtime newer than its newest covering record (or no covering record at all) is an "uncovered writing window" notice; the coverage fraction ("ai-use-log covers N of M chapters with writes") is always stated as a notice |
 
 ## Finding Grouping and Routing Hints
 
@@ -135,17 +151,19 @@ When exit 1 is returned, findings are grouped by the prefix of their `type` fiel
 | `claim-marker` | Orphan claim markers | Run `/nonfiction-studio:nfs-fact-check <slug>` to reconcile chapter markers and the evidence ledger. |
 | `src-ref` | Orphan SRC references | Run `/nonfiction-studio:nfs-research` to add the missing SRC entry, or `/nonfiction-studio:nfs-fact-check` to reconcile cross-references. |
 | `coherence` | Word-count coherence | This typically self-resolves when the PostToolBatch hook runs on the next chapter write. If the mismatch persists, check whether a manual edit bypassed the hook. |
-| `snapshot` | Snapshot naming | Rename the file in `.studio/snapshots/` to match the pattern `<slug>.<YYYYMMDDTHHMMSSZ>.md`. |
+| `snapshot` | Snapshot naming | Rename the file in `_nonfiction-studio/snapshots/` to match the pattern `<slug>.<YYYYMMDDTHHMMSSZ>.md`. |
 | `style-profile` | Style profile structure | Edit `context/style-profile.md` to add the named missing section, reorder sections, fill in the named `Baseline reference` field, or fix the named `Exemplars` path. A `captured` or `sample_count` disagreement, or a stub sitting alongside an existing `config.json` baseline, typically means re-running `/nonfiction-studio:nfs-capture-voice` to resynchronize both files. |
-| `ai-use-log` | AI use log | Edit or remove the named line (by line number) in `.studio/ai-use-log.jsonl`; every other line is unaffected, since the file is append-only and each line is an independent record. |
+| `ai-use-log` | AI use log | Edit or remove the named line (by line number) in `_nonfiction-studio/ai-use-log.jsonl`; every other line is unaffected, since the file is append-only and each line is an independent record. |
 
 ## Migrate Mode
 
-`--migrate` exits 0 when the schema is already current and 2 only when migration is genuinely required (an incompatible version). Two cases are possible:
+**State folder first.** When the engine reports `state-folder-unpointed`, the book's records sit in a folder the plugin does not expect, such as the legacy `.studio/` of a book created before ADR-0015 (state folder name). With exactly one such folder, the skill offers two choices: rename it to `_nonfiction-studio/`, or keep its name by recording it in `nonfiction-studio.json`. Either choice runs the move routine below. With more than one such folder, the skill never chooses; it lists them, asks the author to move the extras out by hand, and writes nothing. A bad pointer (`state-pointer-invalid`) is presented with its repair and never edited by the skill, because only the author knows which folder is right.
+
+**Schema version.** Otherwise, `--migrate` exits 0 when the schema is already current and 2 only when migration is genuinely required (an incompatible version). Two cases are possible:
 
 **Current schema, nothing to migrate (exit 0; stdout JSON with `"status": "current"`).** The schema version is current; no migrations are defined for the current-to-current version pair. Migrations arrive with the first schema change per Q-04 (release, versioning, and compatibility). No files are written.
 
-**Migration required (exit 2; stderr content).** The bible's `schema_version` in `.studio/meta.json` is older than the supported major (`2`). The engine names both versions in the stderr message. No migration is applied in v1; the snapshot-before-migrate and restore-on-failure contract activates when real migrations arrive per Q-04 (release, versioning, and compatibility). No files are written.
+**Migration required (exit 2; stderr content).** The bible's `schema_version` in `_nonfiction-studio/meta.json` is older than the supported major (`2`). The engine names both versions in the stderr message. No migration is applied in v1; the snapshot-before-migrate and restore-on-failure contract activates when real migrations arrive per Q-04 (release, versioning, and compatibility). No files are written.
 
 ## Packs Mode
 
@@ -155,6 +173,22 @@ When exit 1 is returned, findings are grouped by the prefix of their `type` fiel
 - **Packs directory exists but no validator:** exits 0 with message "packs directory found but pack schema validation is not yet implemented (Phase 2)".
 
 No files are written.
+
+## Move-state Mode
+
+`/nonfiction-studio:nfs-doctor move-state <name>` renames a healthy book's state folder. The skill first runs `--report` to confirm that the book resolves; findings do not block a move, but a book that does not resolve goes to `migrate` or a pointer repair instead. It then reads the current name from `nonfiction-studio.json` (or uses `_nonfiction-studio` when that file is absent) and runs the move routine. Moving a folder to the name it already has does nothing.
+
+## Move Routine
+
+`migrate` and `move-state` share one routine, ADR-0015's (state folder name), so a move is the same whichever mode starts it. It honors the mid-book update promise in [MIGRATION.md](../../../MIGRATION.md): the author sees every change before it happens, and no book content is destroyed.
+
+0. **Check the preconditions.** The session must start at the book root, the folder that holds `context/` and `chapters/`. The target name must pass the same rule the resolver in `hooks/lib/bible.mjs` applies: one folder name of 1 to 64 letters, digits, `_`, `-` or `.`, not `.` or `..`, and not a bible folder, `.git`, or `.claude`.
+1. **Ask.** The skill states the folder change, the pointer change, and the README it will add, and asks for an explicit yes. Anything else, or a non-interactive session, writes nothing.
+2. **Refuse to merge.** If the target folder already exists, the skill names both folders and stops. Two state folders are never merged.
+3. **Change the pointer.** It writes `nonfiction-studio.json` for a non-default name, or deletes it for the default, noting the old content so the move can be undone.
+4. **Rename the folder.** Inside a git working tree whose index tracks the folder, it uses `git mv`, so every file keeps its history; otherwise a plain rename. If the rename fails, the pointer and the folder disagree: writes in the book stay paused, no record is lost, and the skill explains how to finish or undo the move.
+5. **Add the README.** It copies the scaffold's state-folder `README.md` when the folder has none.
+6. **Confirm.** It re-runs the report, warns when `.gitignore` excludes the pointer or the folder, and reminds the author to commit the change.
 
 ## Install-statusline Mode
 
@@ -199,7 +233,7 @@ whole plugin can ever write the author's settings, and it cannot run without tha
 
 ## Surface Behavior
 
-The doctor skill works identically on all three surfaces per D-14 (three-surface compatibility) for `report`, `migrate`, and `packs`. All reads use the Bash tool and engine internals, which are available on all surfaces. `install-statusline` additionally requires an interactive author able to answer its consent question (see "Install-statusline Mode" above); on a non-interactive surface it states that requirement and writes nothing, rather than guessing at consent.
+The doctor skill works identically on all three surfaces per D-14 (three-surface compatibility) for `report`, `packs`, and the diagnosis half of `migrate`. The move routine behind `migrate` and `move-state` needs an interactive author to answer its question, and it needs file and shell tools at the book root; where either is missing, it writes nothing. All reads use the Bash tool and engine internals, which are available on all surfaces. `install-statusline` additionally requires an interactive author able to answer its consent question (see "Install-statusline Mode" above); on a non-interactive surface it states that requirement and writes nothing, rather than guessing at consent.
 
 ## Failure Behavior
 
@@ -213,7 +247,13 @@ The doctor skill works identically on all three surfaces per D-14 (three-surface
 
 **Exit 2 from `--validate-packs`.** Unexpected in v1. Step 4 surfaces the stderr and halts.
 
-**Project root not found.** `findBookRoot` exits 2 with a `BibleError` on stderr when `.studio/meta.json` is not found at or above the current directory. The skill surfaces the error and notes that `.studio/meta.json` must be present at the project root.
+**Project root not found.** `findBookRoot` exits 2 with a `BibleError` on stderr when `_nonfiction-studio/meta.json` is not found at or above the current directory. The skill surfaces the error and notes that `_nonfiction-studio/meta.json` must be present at the project root.
+
+**Unpointed state folder or bad pointer.** The engine exits 2 with a JSON report on stdout naming the problem. The skill presents it and routes to `migrate`, or to a hand repair of `nonfiction-studio.json`. It is never treated as a pass.
+
+**`migrate` or `move-state`: no explicit yes, an invalid target name, an existing target, or a non-interactive context.** The move routine writes nothing and says why.
+
+**`migrate` or `move-state`: the rename fails after the pointer changed.** The skill reports the mismatch and gives the way to finish the move and the way to undo it. Writes stay paused until the pointer and the folder agree.
 
 **`install-statusline`: plugin root cannot be resolved.** Step A halts before any read or write; the skill names the config directory and the `installed_plugins.json` path it attempted.
 

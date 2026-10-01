@@ -312,7 +312,7 @@ test('config-coercion fixture + quote_fidelity block: runChecks returns a notice
   const tempDir = mkdtempSync(join(tmpdir(), 'ns-doctor-quote-coercion-'));
   try {
     cpSync(join(FIXTURES, 'config-coercion'), tempDir, { recursive: true });
-    const configPath = join(tempDir, '.studio', 'config.json');
+    const configPath = join(tempDir, '_nonfiction-studio', 'config.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
     config.gate.checks.quote_fidelity = { enabled: true, mode: 'block' };
     writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
@@ -339,7 +339,7 @@ test('config-coercion fixture + quote_fidelity block: CLI exits 0 and prints the
   const tempDir = mkdtempSync(join(tmpdir(), 'ns-doctor-quote-coercion-cli-'));
   try {
     cpSync(join(FIXTURES, 'config-coercion'), tempDir, { recursive: true });
-    const configPath = join(tempDir, '.studio', 'config.json');
+    const configPath = join(tempDir, '_nonfiction-studio', 'config.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
     config.gate.checks.quote_fidelity = { enabled: true, mode: 'block' };
     writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
@@ -491,11 +491,11 @@ function makeTempSampleBookClone() {
 }
 
 function readBookConfig(dir) {
-  return JSON.parse(readFileSync(join(dir, '.studio', 'config.json'), 'utf8'));
+  return JSON.parse(readFileSync(join(dir, '_nonfiction-studio', 'config.json'), 'utf8'));
 }
 
 function writeBookConfig(dir, config) {
-  writeFileSync(join(dir, '.studio', 'config.json'), JSON.stringify(config, null, 2), 'utf8');
+  writeFileSync(join(dir, '_nonfiction-studio', 'config.json'), JSON.stringify(config, null, 2), 'utf8');
 }
 
 function writeBookStyleProfile(dir, content) {
@@ -538,7 +538,7 @@ function buildValidStyleProfile(baseline) {
     '- context/samples/voice-sample-01.md',
     '',
     '## Baseline reference',
-    '- vector: .studio/config.json -> stylometry.baseline.markers',
+    '- vector: _nonfiction-studio/config.json -> stylometry.baseline.markers',
     '- captured: ' + baseline.captured,
     '- sample_count: ' + baseline.sample_count,
     ''
@@ -915,7 +915,7 @@ function makeCoverageFixture() {
     }),
     '',
   ];
-  writeFileSync(join(dir, '.studio', 'ai-use-log.jsonl'), logLines.join('\n'), 'utf8');
+  writeFileSync(join(dir, '_nonfiction-studio', 'ai-use-log.jsonl'), logLines.join('\n'), 'utf8');
 
   utimesSync(join(dir, 'chapters', '01-listening-before-speaking.md'), COVERED_MTIME, COVERED_MTIME);
   utimesSync(join(dir, 'chapters', '02-finding-your-network.md'), STALE_MTIME, STALE_MTIME);
@@ -991,12 +991,12 @@ test('check 12: a malformed (non-blank, non-JSON) line is a finding naming its 1
     const { findings } = runChecks(dir);
     const malformed = findings.filter(f => f.type === 'ai-use-log.malformed-line');
     assert.equal(malformed.length, 1, 'expected exactly one malformed-line finding; got: ' + JSON.stringify(findings));
-    assert.equal(malformed[0].path, '.studio/ai-use-log.jsonl:3', 'finding names line 3 (1-based)');
+    assert.equal(malformed[0].path, '_nonfiction-studio/ai-use-log.jsonl:3', 'finding names line 3 (1-based)');
     assert.ok(malformed[0].message.includes('line 3'), 'message also names line 3 in prose: ' + malformed[0].message);
 
     const r = spawnDoctor(['--report', '--project=' + dir]);
     assert.equal(r.status, 1, 'a malformed line is a genuine finding: exit must be 1');
-    assert.ok(r.stdout.includes('.studio/ai-use-log.jsonl:3'), 'CLI output names the malformed line: ' + r.stdout);
+    assert.ok(r.stdout.includes('_nonfiction-studio/ai-use-log.jsonl:3'), 'CLI output names the malformed line: ' + r.stdout);
   } finally {
     removeTempClone(dir);
   }
@@ -1005,7 +1005,7 @@ test('check 12: a malformed (non-blank, non-JSON) line is a finding naming its 1
 test('check 12: an empty (zero-byte) ai-use-log.jsonl produces no malformed-line finding and every chapter reads recordless', () => {
   const dir = makeTempSampleBookClone();
   try {
-    writeFileSync(join(dir, '.studio', 'ai-use-log.jsonl'), '', 'utf8');
+    writeFileSync(join(dir, '_nonfiction-studio', 'ai-use-log.jsonl'), '', 'utf8');
 
     const { findings, notices } = runChecks(dir);
     const malformed = findings.filter(f => f.type === 'ai-use-log.malformed-line');

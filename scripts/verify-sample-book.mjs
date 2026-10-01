@@ -9,6 +9,7 @@
 
 import { readFileSync, existsSync, readdirSync } from "fs";
 import { join } from "path";
+import { DEFAULT_STATE_DIR } from "../hooks/lib/bible.mjs";
 
 const ROOT = new URL("../examples/sample-book/", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1");
 const FAIL = [];
@@ -33,7 +34,7 @@ function warn(label, detail) {
 
 console.log("\n=== CHECK 1: progress.json schema assertions ===");
 
-const progressPath = join(ROOT, ".studio/progress.json");
+const progressPath = join(ROOT, DEFAULT_STATE_DIR, "progress.json");
 let progress;
 try {
   progress = JSON.parse(readFileSync(progressPath, "utf8"));

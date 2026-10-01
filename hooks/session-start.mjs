@@ -8,7 +8,7 @@
 //               root IS found but its bible files are corrupt (META_READ_ERROR, CONFIG_READ_ERROR),
 //               the script emits a truthful one-line message naming the real problem, mirroring the
 //               TSK-034 (stop-gate hook) error-code discrimination pattern. Fail-open: any read or
-//               parse error after root detection appends one JSONL record to .studio/logs/errors.jsonl
+//               parse error after root detection appends one JSONL record to _nonfiction-studio/logs/errors.jsonl
 //               and the script continues with whatever partial block it has assembled. Exits 0
 //               unconditionally.
 //               Wave 1 exit Task 4 (zero-friction first session) adds two fields, both nested
@@ -35,7 +35,7 @@
 import { readFileSync, appendFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findBookRoot } from './lib/bible.mjs';
+import { findBookRoot, stateDirOf } from './lib/bible.mjs';
 import { buildOrientation } from './lib/orientation.mjs';
 import { loadSettings } from './lib/settings.mjs';
 
@@ -128,6 +128,24 @@ if (!bookRoot) {
     process.exit(0);
   }
 
+  // An unpointed state folder (ADR-0015, state folder name): the bible folders exist and a
+  // folder holding this book's records sits under a name the plugin does not expect - a
+  // legacy layout, a clone that lost its pointer, or an interrupted move. findBookRoot's
+  // message names the folder and nfs-doctor. This must run before the empty-state path:
+  // pointing at the new-book flow here would stamp a second, empty state folder beside the
+  // real one and split the AI-use log.
+  if (bibleError && Array.isArray(bibleError.candidates) && bibleError.candidates.length > 0) {
+    process.stdout.write(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: 'SessionStart',
+          additionalContext: bibleError.message
+        }
+      }) + '\n'
+    );
+    process.exit(0);
+  }
+
   // D-17 (guided front door): exactly two sentences.
   // Sentence 1: states no book project exists here.
   // Sentence 2: names the studio front door by invocation form (D-17), which
@@ -183,7 +201,7 @@ try {
   }
 } catch (err) {
   try {
-    const logsDir = join(bookRoot, '.studio', 'logs');
+    const logsDir = join(stateDirOf(bookRoot), 'logs');
     mkdirSync(logsDir, { recursive: true });
     appendFileSync(
       join(logsDir, 'errors.jsonl'),

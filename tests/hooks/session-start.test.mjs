@@ -177,7 +177,7 @@ test('(c) stale last-gate: gate-debt line is present', () => {
   // Flat shape (F-HK-02): {version, chapter, ts, verdict, checks} is the real
   // S-08 section 11 report shape written verbatim by hooks/stop-gate.mjs -
   // NOT a per-chapter map keyed by slug.
-  const gateDir = join(cloneDir, '.studio', 'gate');
+  const gateDir = join(cloneDir, '_nonfiction-studio', 'gate');
   writeFileSync(
     join(gateDir, 'last-gate.json'),
     JSON.stringify({
@@ -214,7 +214,7 @@ test('(d) fresh last-gate: no gate-debt line', () => {
 
   // Overwrite last-gate.json with a ts far in the future.
   // Flat shape (F-HK-02): see the case (c) comment above.
-  const gateDir = join(cloneDir, '.studio', 'gate');
+  const gateDir = join(cloneDir, '_nonfiction-studio', 'gate');
   writeFileSync(
     join(gateDir, 'last-gate.json'),
     JSON.stringify({
@@ -244,7 +244,7 @@ test('(e) malformed progress.json: exit 0, partial block, exactly one error line
   const cloneDir = cloneSampleBook('malformed-progress');
 
   // Corrupt progress.json with non-JSON content.
-  writeFileSync(join(cloneDir, '.studio', 'progress.json'), 'not valid json {{', 'utf8');
+  writeFileSync(join(cloneDir, '_nonfiction-studio', 'progress.json'), 'not valid json {{', 'utf8');
 
   const result = runHook(cloneDir);
   assert.equal(result.status, 0, 'exit code is 0 despite malformed progress.json');
@@ -262,7 +262,7 @@ test('(e) malformed progress.json: exit 0, partial block, exactly one error line
   );
 
   // Errors log must be created with exactly one entry (the progress.json failure).
-  const errorsPath = join(cloneDir, '.studio', 'logs', 'errors.jsonl');
+  const errorsPath = join(cloneDir, '_nonfiction-studio', 'logs', 'errors.jsonl');
   assert.ok(existsSync(errorsPath), 'errors.jsonl was created by the fail-open handler');
 
   const errLines = readFileSync(errorsPath, 'utf8')
@@ -282,7 +282,7 @@ test('(e) malformed progress.json: exit 0, partial block, exactly one error line
 test('(g) corrupt meta.json: exit 0, truthful one-line message, no sessionTitle', () => {
   const cloneDir = cloneSampleBook('corrupt-meta');
 
-  writeFileSync(join(cloneDir, '.studio', 'meta.json'), 'not valid json {{', 'utf8');
+  writeFileSync(join(cloneDir, '_nonfiction-studio', 'meta.json'), 'not valid json {{', 'utf8');
 
   const result = runHook(cloneDir);
   assert.equal(result.status, 0, 'exit code is 0 despite corrupt meta.json');
@@ -310,7 +310,7 @@ test('(g) corrupt meta.json: exit 0, truthful one-line message, no sessionTitle'
 test('(h) corrupt config.json: exit 0, truthful one-line message, no sessionTitle', () => {
   const cloneDir = cloneSampleBook('corrupt-config');
 
-  writeFileSync(join(cloneDir, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  writeFileSync(join(cloneDir, '_nonfiction-studio', 'config.json'), 'not valid json {{', 'utf8');
 
   const result = runHook(cloneDir);
   assert.equal(result.status, 0, 'exit code is 0 despite corrupt config.json');
@@ -507,7 +507,7 @@ test('(o) non-empty non-book dir (unrelated-repo regression guard): no initialUs
 
 test('(p) corrupt meta.json branch: no initialUserMessage, truthful message still present', () => {
   const cloneDir = cloneSampleBook('corrupt-meta-initmsg');
-  writeFileSync(join(cloneDir, '.studio', 'meta.json'), 'not valid json {{', 'utf8');
+  writeFileSync(join(cloneDir, '_nonfiction-studio', 'meta.json'), 'not valid json {{', 'utf8');
 
   const result = runHook(cloneDir);
   assert.equal(result.status, 0, 'exit code is 0');

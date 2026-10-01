@@ -16,6 +16,7 @@
 //               field. See docs/adr/ADR-0007-agent-identity-resolution.md.
 
 import { sep, resolve } from 'node:path';
+import { stateDirNameOf } from './bible.mjs';
 
 // ---------------------------------------------------------------------------
 // foldForCompare: case-fold a path for comparison only on case-insensitive
@@ -105,7 +106,7 @@ export function resolveAgentLabel(event) {
 // for the full verification note.
 //
 //   slug                 allowed prefixes            source of truth
-//   research-librarian   research/, .studio/         agents/research-librarian.md:73-74
+//   research-librarian   research/, <state-dir>/     agents/research-librarian.md:73-74
 //   drafting-partner     chapters/                    agents/drafting-partner.md:69-71
 //   line-editor          chapters/                    agents/line-editor.md:62-64
 //   structure-architect  structure/, research/        agents/structure-architect.md:67-69
@@ -114,16 +115,22 @@ export function resolveAgentLabel(event) {
 // Deliberately ABSENT (absence means UNCONSTRAINED, not denied - roadmap row
 // 1.1, no false denies under ambiguity):
 //   fact-checker       - prose declares writes spanning research/, chapters/,
-//                        .studio/fact-check-reports/, and .claude/agent-memory/
+//                        <state-dir>/fact-check-reports/, and .claude/agent-memory/
 //                        with no path-guard citation; constraining it would be
 //                        a behavior change the prose does not authorize. It IS
 //                        web-gated (see WEB_GATED_AGENTS / isWebGatedAgent below).
 //   interviewer        - claims no path guard.
 //   voice-capture       - claims no path guard.
 //   citation-manager    - a Phase 2 agent that does not exist on disk yet.
+//
+// STATE_DIR_SCOPE stands for the book's state folder, whose name is resolved
+// per book at check time (ADR-0015, state folder name), so no table entry ever
+// names a literal folder that a book might not use.
 // ---------------------------------------------------------------------------
+export const STATE_DIR_SCOPE = '<state-dir>/';
+
 export const AGENT_WRITE_SCOPES = {
-  'research-librarian': ['research/', '.studio/'],
+  'research-librarian': ['research/', STATE_DIR_SCOPE],
   'drafting-partner': ['chapters/'],
   'line-editor': ['chapters/'],
   'structure-architect': ['structure/', 'research/'],
@@ -180,7 +187,9 @@ export function checkAgentWriteConstraint(agentSlug, realTargetAbsPath, bibleRoo
 
   const rootNorm = foldForCompare(resolve(bibleRoot), platformOverride);
   const targetNorm = foldForCompare(resolve(realTargetAbsPath), platformOverride);
-  const prefixes = AGENT_WRITE_SCOPES[agentSlug];
+  const prefixes = AGENT_WRITE_SCOPES[agentSlug].map((prefix) =>
+    prefix === STATE_DIR_SCOPE ? stateDirNameOf(bibleRoot) + '/' : prefix
+  );
 
   const inScope = prefixes.some((prefix) => {
     const bare = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix;

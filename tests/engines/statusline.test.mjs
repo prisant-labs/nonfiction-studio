@@ -31,7 +31,7 @@ import {
 
 // ---------------------------------------------------------------------------
 // Helper: builds a minimal valid book root under a fresh temp directory.
-// Only .studio/meta.json, context/, and chapters/ are required by
+// Only _nonfiction-studio/meta.json, context/, and chapters/ are required by
 // hooks/lib/bible.mjs's isBookRoot; the other files are supplied per test.
 // ---------------------------------------------------------------------------
 
@@ -39,7 +39,7 @@ function makeMinimalBookRoot(overrides = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'ns-statusline-engine-'));
   mkdirSync(join(dir, 'context'), { recursive: true });
   mkdirSync(join(dir, 'chapters'), { recursive: true });
-  mkdirSync(join(dir, '.studio', 'gate'), { recursive: true });
+  mkdirSync(join(dir, '_nonfiction-studio', 'gate'), { recursive: true });
 
   const meta = overrides.meta !== undefined ? overrides.meta : {
     schema_version: '2',
@@ -47,20 +47,20 @@ function makeMinimalBookRoot(overrides = {}) {
     plugin_version_at_creation: '0.1.0',
     book_title: 'Test Book',
   };
-  writeFileSync(join(dir, '.studio', 'meta.json'), JSON.stringify(meta), 'utf8');
+  writeFileSync(join(dir, '_nonfiction-studio', 'meta.json'), JSON.stringify(meta), 'utf8');
 
   if (overrides.progressRaw !== undefined) {
-    writeFileSync(join(dir, '.studio', 'progress.json'), overrides.progressRaw, 'utf8');
+    writeFileSync(join(dir, '_nonfiction-studio', 'progress.json'), overrides.progressRaw, 'utf8');
   } else if (overrides.progress !== undefined && overrides.progress !== null) {
-    writeFileSync(join(dir, '.studio', 'progress.json'), JSON.stringify(overrides.progress), 'utf8');
+    writeFileSync(join(dir, '_nonfiction-studio', 'progress.json'), JSON.stringify(overrides.progress), 'utf8');
   }
 
   if (overrides.config !== undefined && overrides.config !== null) {
-    writeFileSync(join(dir, '.studio', 'config.json'), JSON.stringify(overrides.config), 'utf8');
+    writeFileSync(join(dir, '_nonfiction-studio', 'config.json'), JSON.stringify(overrides.config), 'utf8');
   }
 
   if (overrides.lastGate !== undefined && overrides.lastGate !== null) {
-    writeFileSync(join(dir, '.studio', 'gate', 'last-gate.json'), JSON.stringify(overrides.lastGate), 'utf8');
+    writeFileSync(join(dir, '_nonfiction-studio', 'gate', 'last-gate.json'), JSON.stringify(overrides.lastGate), 'utf8');
   }
 
   return dir;
@@ -275,12 +275,12 @@ test('readJsonSafe: returns null (never throws) for a missing file', () => {
 
 test('readJsonSafe: returns null (never throws) for malformed JSON', () => {
   const dir = trackedBookRoot({ progressRaw: '{ not valid json' });
-  assert.equal(readJsonSafe(join(dir, '.studio', 'progress.json')), null);
+  assert.equal(readJsonSafe(join(dir, '_nonfiction-studio', 'progress.json')), null);
 });
 
 test('readJsonSafe: returns the parsed object for valid JSON', () => {
   const dir = trackedBookRoot({ progress: { chapters: [], totals: { word_count: 0, open_claim_count: 0 } } });
-  const parsed = readJsonSafe(join(dir, '.studio', 'progress.json'));
+  const parsed = readJsonSafe(join(dir, '_nonfiction-studio', 'progress.json'));
   assert.deepEqual(parsed, { chapters: [], totals: { word_count: 0, open_claim_count: 0 } });
 });
 

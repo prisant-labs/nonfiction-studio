@@ -20,6 +20,7 @@ import {
   resolveActiveAgent,
   resolveAgentLabel,
   AGENT_WRITE_SCOPES,
+  STATE_DIR_SCOPE,
   checkAgentWriteConstraint,
   isWebGatedAgent
 } from '../../hooks/lib/agent-identity.mjs';
@@ -133,9 +134,10 @@ test('resolveAgentLabel: field present but not a string returns null', () => {
 // ---------------------------------------------------------------------------
 
 test('AGENT_WRITE_SCOPES: exactly the five table agents with their exact allowed prefixes', () => {
+  assert.equal(STATE_DIR_SCOPE, '<state-dir>/', 'the state-folder token is resolved per book at check time');
   assert.deepEqual(
     AGENT_WRITE_SCOPES['research-librarian'],
-    ['research/', '.studio/'],
+    ['research/', STATE_DIR_SCOPE],
     'research-librarian per agents/research-librarian.md:73-74'
   );
   assert.deepEqual(
@@ -217,13 +219,13 @@ test('checkAgentWriteConstraint: a slug absent from the table always allows (unc
   assert.equal(checkAgentWriteConstraint('interviewer', target, SAMPLE_BOOK), null);
 });
 
-test('checkAgentWriteConstraint: research-librarian allowed under both of its prefixes (research/, .studio/)', () => {
+test('checkAgentWriteConstraint: research-librarian allowed under both of its prefixes (research/, _nonfiction-studio/)', () => {
   assert.equal(
     checkAgentWriteConstraint('research-librarian', join(SAMPLE_BOOK, 'research', 'sources.md'), SAMPLE_BOOK),
     null
   );
   assert.equal(
-    checkAgentWriteConstraint('research-librarian', join(SAMPLE_BOOK, '.studio', 'progress.json'), SAMPLE_BOOK),
+    checkAgentWriteConstraint('research-librarian', join(SAMPLE_BOOK, '_nonfiction-studio', 'progress.json'), SAMPLE_BOOK),
     null
   );
 });
@@ -234,7 +236,7 @@ test('checkAgentWriteConstraint: research-librarian denied outside its prefixes,
   assert.ok(typeof reason === 'string' && reason.length > 0, 'deny reason is a non-empty string');
   assert.ok(reason.includes('research-librarian'), 'names the agent slug');
   assert.ok(reason.includes('research/'), 'names the allowed prefixes');
-  assert.ok(reason.includes('.studio/'), 'names the allowed prefixes');
+  assert.ok(reason.includes('_nonfiction-studio/'), 'names the allowed prefixes');
 });
 
 test('checkAgentWriteConstraint: drafting-partner (single-prefix agent) denied outside chapters/', () => {

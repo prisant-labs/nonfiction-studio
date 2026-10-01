@@ -3,18 +3,18 @@
 //               top three style rules, and open-claims count into a single newline-joined block
 //               string; returns the block and the book title for sessionTitle use; each element
 //               is fail-open (any read or parse error logs one JSONL record to
-//               .studio/logs/errors.jsonl and the element is omitted from the block).
+//               _nonfiction-studio/logs/errors.jsonl and the element is omitted from the block).
 // why:          one implementation, two callers (session-start.mjs and pre-compact.mjs);
 //               the equality of their additionalContext outputs proves shared code.
 // used-by:      hooks/session-start.mjs, hooks/pre-compact.mjs
 
 import { readFileSync, appendFileSync, mkdirSync, statSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { readProgress } from './bible.mjs';
+import { readProgress, stateDirOf } from './bible.mjs';
 import { parseEvidenceLog, resolvedStatuses } from './ledger.mjs';
 
 /**
- * Appends one JSONL error record to .studio/logs/errors.jsonl.
+ * Appends one JSONL error record to _nonfiction-studio/logs/errors.jsonl.
  * Fail-open: never throws. Only callable after a book root is confirmed.
  *
  * @param {string} root     - absolute path to the book root
@@ -24,7 +24,7 @@ import { parseEvidenceLog, resolvedStatuses } from './ledger.mjs';
  */
 function logError(root, hookName, msg, err) {
   try {
-    const logsDir = join(root, '.studio', 'logs');
+    const logsDir = join(stateDirOf(root), 'logs');
     mkdirSync(logsDir, { recursive: true });
     const record = JSON.stringify({
       ts: new Date().toISOString(),
@@ -42,11 +42,11 @@ function logError(root, hookName, msg, err) {
  * Assembles the five-element orientation block.
  *
  * Elements (in specification order):
- *   1. Gate debt: present when .studio/gate/last-gate.json is absent or its newest ts
+ *   1. Gate debt: present when _nonfiction-studio/gate/last-gate.json is absent or its newest ts
  *      predates the most recent chapters/*.md mtime.
  *   2. Thesis one-liner: from context/brief.md, first non-empty non-heading line under
  *      the "## 2. Thesis" heading.
- *   3. Active chapter and title: from .studio/progress.json; last chapter with a working
+ *   3. Active chapter and title: from _nonfiction-studio/progress.json; last chapter with a working
  *      status (outlined, drafting, drafted, revised), falling back to the last chapter.
  *   4. Top three style rules: first three bullet lines from context/style-profile.md
  *      "## Do" and "## Do not" sections, in document order.
@@ -54,7 +54,7 @@ function logError(root, hookName, msg, err) {
  *      not in resolvedStatuses (verified, interpretation).
  *
  * Each element is fail-open: a read or parse error logs one JSONL line to
- * .studio/logs/errors.jsonl and the element is omitted from the returned block.
+ * _nonfiction-studio/logs/errors.jsonl and the element is omitted from the returned block.
  *
  * @param {string}      root     - absolute path to the confirmed book root
  * @param {object|null} meta     - meta object from findBookRoot (provides book_title for callers)
@@ -71,7 +71,7 @@ export function buildOrientation(root, meta, hookName) {
   // Debt is present when last-gate.json is absent (gateTsMs 0) or its newest ts
   // is older than the most recent chapters/*.md mtime.
   try {
-    const lastGatePath = join(root, '.studio', 'gate', 'last-gate.json');
+    const lastGatePath = join(stateDirOf(root), 'gate', 'last-gate.json');
     const chaptersDir = join(root, 'chapters');
 
     let gateTsMs = 0; // 0 means absent, unreadable, or wrong type
@@ -135,7 +135,7 @@ export function buildOrientation(root, meta, hookName) {
     logError(root, hookName, 'thesis read failed', err);
   }
 
-  // --- Element 3: Active chapter and title from .studio/progress.json ---------
+  // --- Element 3: Active chapter and title from _nonfiction-studio/progress.json ---------
   // Active = last chapter with a working status; falls back to last chapter in array.
   try {
     const progress = readProgress(root);

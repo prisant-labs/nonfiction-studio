@@ -1,6 +1,6 @@
 // what-it-is:   the ns-statusline engine (OPP-P03, studio HUD; ADR-0008, status HUD and CANON 3.5)
 // what-it-does: resolves the project directory from a status-line stdin event, locates the book
-//               root, reads three small .studio/ JSON files defensively (never throwing), and
+//               root, reads three small _nonfiction-studio/ JSON files defensively (never throwing), and
 //               renders either a single main-status-line string (active chapter and its promise,
 //               words versus target, open claims, drift band, gate state token) or, in
 //               --subagent mode, one {id, content} JSON row per task this plugin's own agents own.
@@ -12,7 +12,7 @@
 //
 // DESIGN INVARIANT: every exported function here is defensive by construction. A missing file,
 // malformed JSON, an absent book root, or an unexpected shape in any of the three source files
-// (.studio/progress.json, .studio/config.json, .studio/gate/last-gate.json) must never throw past
+// (_nonfiction-studio/progress.json, _nonfiction-studio/config.json, _nonfiction-studio/gate/last-gate.json) must never throw past
 // this module's boundary. Not in a book project is a normal state, not an error; this module has
 // no code path that prints a stack trace or an error string.
 //
@@ -23,7 +23,7 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { findBookRoot } from './bible.mjs';
+import { findBookRoot, stateDirOf } from './bible.mjs';
 
 // Matches .claude-plugin/plugin.json's "name" field and the PLUGIN_NAMESPACE constant in
 // hooks/lib/agent-identity.mjs (ADR-0007, agent identity resolution). Duplicated as a literal
@@ -63,8 +63,8 @@ export function resolveProjectDir(event) {
 /**
  * Reads and JSON-parses a file, returning null on ANY failure (missing file, unreadable,
  * malformed JSON) instead of throwing. This is the core of the "degrade to silence" contract
- * for the two files findBookRoot does not itself read (.studio/progress.json and
- * .studio/gate/last-gate.json).
+ * for the two files findBookRoot does not itself read (_nonfiction-studio/progress.json and
+ * _nonfiction-studio/gate/last-gate.json).
  *
  * @param {string} absPath
  * @returns {object|null}
@@ -99,7 +99,7 @@ export function findRootSafe(startDir) {
 
 /**
  * Picks the "active" chapter from progress.json's chapters array. progress.json carries no
- * explicit active-chapter marker (verified against templates/book-scaffold/.studio/progress.schema.json
+ * explicit active-chapter marker (verified against templates/book-scaffold/_nonfiction-studio/progress.schema.json
  * and the PostToolBatch hook that writes it); this is a deterministic, documented derivation
  * rule instead (recorded in docs/adr/ADR-0008-status-hud.md and docs/reference/cli/ns-statusline.md):
  *
@@ -173,7 +173,7 @@ export function formatWords(wordCount, target) {
 /**
  * Derives the gate state token and the drift band from a parsed last-gate.json.
  *
- * Both come from the SAME file (.studio/gate/last-gate.json) by design: the HUD's job (OPP-P03,
+ * Both come from the SAME file (_nonfiction-studio/gate/last-gate.json) by design: the HUD's job (OPP-P03,
  * studio HUD) is to surface the verdict AS OF THE LAST GATE RUN continuously between runs, not
  * to recompute a live verdict from progress.json's raw drift_score - recomputing live would
  * defeat the whole point of a HUD that makes work the author cannot otherwise see visible, by
@@ -191,7 +191,7 @@ export function formatWords(wordCount, target) {
  * Both are null when lastGate is null, has no string top-level verdict, or (for driftBand only)
  * carries no stylometry entry in checks[].
  *
- * @param {object|null} lastGate - parsed .studio/gate/last-gate.json, or null
+ * @param {object|null} lastGate - parsed _nonfiction-studio/gate/last-gate.json, or null
  * @returns {{gateToken: string|null, driftBand: string|null}}
  */
 export function deriveGateInfo(lastGate) {
@@ -315,8 +315,8 @@ export function buildMainStatusLine(event) {
 
   try {
     const { root, meta, config } = found;
-    const progress = readJsonSafe(join(root, '.studio', 'progress.json'));
-    const lastGate = readJsonSafe(join(root, '.studio', 'gate', 'last-gate.json'));
+    const progress = readJsonSafe(join(stateDirOf(root), 'progress.json'));
+    const lastGate = readJsonSafe(join(stateDirOf(root), 'gate', 'last-gate.json'));
     return renderStatusLine({ meta, progress, config, lastGate });
   } catch {
     return '';
@@ -365,8 +365,8 @@ export function buildSubagentLines(event) {
     if (!found) continue;
 
     try {
-      const progress = readJsonSafe(join(found.root, '.studio', 'progress.json'));
-      const lastGate = readJsonSafe(join(found.root, '.studio', 'gate', 'last-gate.json'));
+      const progress = readJsonSafe(join(stateDirOf(found.root), 'progress.json'));
+      const lastGate = readJsonSafe(join(stateDirOf(found.root), 'gate', 'last-gate.json'));
       const chapter = deriveActiveChapter(progress);
       const { gateToken } = deriveGateInfo(lastGate);
 

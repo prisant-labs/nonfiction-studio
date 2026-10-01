@@ -41,7 +41,7 @@ The ledger at session start:
 - `research/sources.md`: 6 records, highest is SRC-0006 (Lave and Wenger 1991)
 
 Web research is disabled for this project (`research.web_enabled` is absent from
-`.studio/config.json`).
+`_nonfiction-studio/config.json`).
 
 The author has provided a physical book: Etienne Wenger, "Communities of
 Practice: Learning, Meaning, and Identity," Cambridge University Press, 1998,
@@ -210,11 +210,11 @@ communities of practice was available online.
 **research-librarian:**
 
 > Web research is not enabled for this project. The `research.web_enabled` field
-> is absent from `.studio/config.json`, which leaves the gate closed. No
+> is absent from `_nonfiction-studio/config.json`, which leaves the gate closed. No
 > WebSearch or WebFetch call will be made.
 >
 > To enable web research for this project, add the following to
-> `.studio/config.json`:
+> `_nonfiction-studio/config.json`:
 >
 > ```json
 > "research": {

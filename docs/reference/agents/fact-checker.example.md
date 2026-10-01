@@ -45,7 +45,7 @@ Chapter 2 (`chapters/02-finding-your-network.md`) has five claim markers:
 `[claim: EV-0010]`. None of these are in the cache.
 
 Web research is disabled for this project (`research.web_enabled` is absent from
-`.studio/config.json`), so the online pass does not run.
+`_nonfiction-studio/config.json`), so the online pass does not run.
 
 ---
 
@@ -225,7 +225,7 @@ text is unchanged.
 
 ## Per-chapter fact-check report
 
-The agent writes `.studio/fact-check-reports/02-report.md`:
+The agent writes `_nonfiction-studio/fact-check-reports/02-report.md`:
 
 ```markdown
 # Fact-check report: Chapter 2 (Finding Your Network)

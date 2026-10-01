@@ -12,7 +12,7 @@
       "last_gate": {
         "ts": "2026-08-10T09:10:00Z",
         "verdict": "pass",
-        "report": ".studio/gate/01-listening-before-speaking.20260810T091000Z.json"
+        "report": "_nonfiction-studio/gate/01-listening-before-speaking.20260810T091000Z.json"
       }
     },
     {

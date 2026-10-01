@@ -53,6 +53,8 @@ All outputs are written by the `interviewer` agent, not by the skill directly. T
 
 The skill runs six steps in order.
 
+Before its first step, the skill locates the state folder: it reads `nonfiction-studio.json` at the book root, uses `_nonfiction-studio/` when that file does not exist, and stops without writing when the pointer is invalid or an unpointed state folder is found.
+
 1. **Resumption check.** Reads `context/brief.md` for existing DRAFT blocks. If found, announces the resumption point and names the completed sections. If not, starts a new session.
 
 2. **Delegate to the interviewer.** Spawns the `interviewer` agent (the `nfs-interview -> interviewer` chain edge per `agents/_chain-permitted.yaml`) with the current brief state as context. On chat, the brief content is loaded inline before spawning.

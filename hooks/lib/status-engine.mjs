@@ -1,7 +1,7 @@
 // what-it-is:   the ns-status engine (deterministic project chapter board and completion numbers)
 // what-it-does: computes a per-chapter board and whole-book totals from progress.json's chapters
 //               and totals, config.json's drift threshold, and the newest gate report per chapter
-//               slug under .studio/gate/; renders the result as JSON-ready data or a Markdown board
+//               slug under _nonfiction-studio/gate/; renders the result as JSON-ready data or a Markdown board
 // why:          this module is the deterministic computation nfs-status-dashboard's skill body
 //               narrates rather than computes: the skill no longer asks the language model to
 //               list a directory, parse filenames, open reports, and read numbers out of prose
@@ -15,10 +15,10 @@
 //               DEMOTION_FALLBACK_STATUS, parseDecisionsLog, and isEligibleForFinal directly
 //
 // GATE-SOURCE INVARIANT: gate verdict, drift statistic, and drift threshold for a chapter come
-// ONLY from the newest report file per chapter slug under .studio/gate/, never from
+// ONLY from the newest report file per chapter slug under _nonfiction-studio/gate/, never from
 // progress.json's per-chapter `last_gate` field, never from progress.json's per-chapter
 // `drift_score` field, and (since ADR-0012, voice verdict scope, Decision 2) never from
-// .studio/config.json's `thresholds.drift_score_max` either -- that knob is retired and read by
+// _nonfiction-studio/config.json's `thresholds.drift_score_max` either -- that knob is retired and read by
 // nothing in this module. The drift statistic and its threshold are both per-report: each report
 // already carries the calibration ladder's own resolved threshold for whatever scored word count
 // it measured, so there is no longer a single board-wide number to read from config the way
@@ -28,7 +28,7 @@
 // a hand-authored fixture may populate it for one chapter as sample content, which is exactly the
 // trap a naive implementation would pass by accident. `drift_score` is a separate, hook-maintained
 // convenience field that this board never treats as authoritative either, for the same reason.
-// See computeStatusBoard below, whose only per-chapter fs read is a .studio/gate/ report file.
+// See computeStatusBoard below, whose only per-chapter fs read is a _nonfiction-studio/gate/ report file.
 //
 // DETERMINISM INVARIANT: no function in this module stamps a generation timestamp, reads the
 // system clock, or formats a number with a locale-aware method (no toLocaleString, no
@@ -50,9 +50,10 @@
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { stateDirOf } from './bible.mjs';
 
 /**
- * Parses a .studio/gate/ filename against the two significant patterns documented in
+ * Parses a _nonfiction-studio/gate/ filename against the two significant patterns documented in
  * docs/formats/gate-report.md ("Filename pattern"):
  *   per-chapter: <slug>.<YYYYMMDDTHHMMSSZ>.json
  *   whole-book:  all.<YYYYMMDDTHHMMSSZ>.json (slug is the literal string "all")
@@ -63,7 +64,7 @@ import { join, relative } from 'node:path';
  * formatTimestamp produces. This guards against a chapter slug that is a prefix of another
  * slug (for example "01-a" against a file actually named "01-ab.<ts>.json") ever
  * false-matching, since a chapter slug never contains a "." (the schema's own slug pattern,
- * templates/book-scaffold/.studio/progress.schema.json, permits only digits, lowercase
+ * templates/book-scaffold/_nonfiction-studio/progress.schema.json, permits only digits, lowercase
  * letters, and hyphens).
  *
  * @param {string} filename
@@ -81,7 +82,7 @@ export function parseGateFilename(filename) {
 
 /**
  * Selects the newest report filename per chapter slug, plus the newest whole-book
- * (all.<ts>.json) report filename, from a .studio/gate/ directory listing.
+ * (all.<ts>.json) report filename, from a _nonfiction-studio/gate/ directory listing.
  *
  * Sorts the ENTIRE input array lexicographically before grouping, rather than trusting the
  * caller's array order: Node's readdirSync order is filesystem- and platform-dependent, not
@@ -96,7 +97,7 @@ export function parseGateFilename(filename) {
  * SKILL.md no longer restates this rule itself; it narrates whatever this module already
  * selected.
  *
- * @param {string[]} filenames - a .studio/gate/ directory listing, any order
+ * @param {string[]} filenames - a _nonfiction-studio/gate/ directory listing, any order
  * @returns {{perSlug: Map<string,string>, wholeBook: string|null}}
  */
 export function selectNewestGateFilenames(filenames) {
@@ -128,7 +129,7 @@ export function selectNewestGateFilenames(filenames) {
 
 /**
  * Reads and JSON-parses a file, returning null on ANY failure (missing file, unreadable,
- * malformed JSON) instead of throwing. Used for individual .studio/gate/ report files: one
+ * malformed JSON) instead of throwing. Used for individual _nonfiction-studio/gate/ report files: one
  * corrupt or unreadable report degrades that one chapter's drift/gate cells to null, rather
  * than failing the whole board - mirrors hooks/lib/statusline-engine.mjs's readJsonSafe, which
  * exists for the same reason over a different optional file.
@@ -227,7 +228,7 @@ export function extractDriftThreshold(report) {
 /**
  * The two-digit numeric prefix of a chapter slug (for example "01" from
  * "01-listening-before-speaking"), matching the schema's own slug pattern
- * (templates/book-scaffold/.studio/progress.schema.json: ^[0-9]{2}-[a-z0-9-]+$). Returns null
+ * (templates/book-scaffold/_nonfiction-studio/progress.schema.json: ^[0-9]{2}-[a-z0-9-]+$). Returns null
  * for a slug that does not start with that shape, rather than guessing: schema-required is not
  * schema-guaranteed against a hand-edited progress.json (the same defensive posture
  * hooks/lib/statusline-engine.mjs's formatChapterSegment takes against the same file).
@@ -281,7 +282,7 @@ export function isHighlighted(row) {
  * Computes the full chapter board: one row per progress.json chapters[] entry (array order
  * preserved), whole-book totals, and the newest whole-book gate annotation if any
  * all.<ts>.json report exists. The sole fs access here beyond what the caller already performed
- * to obtain `progress` and `config` is listing and reading .studio/gate/; a missing or empty
+ * to obtain `progress` and `config` is listing and reading _nonfiction-studio/gate/; a missing or empty
  * gate directory is not an error (skills/nfs-status-dashboard/SKILL.md: "not a halt condition")
  * - it simply leaves every chapter's drift, threshold, and gate null. `config` is accepted for
  * forward compatibility (a caller may still hand it in) but is not read by this function: since
@@ -289,7 +290,7 @@ export function isHighlighted(row) {
  * longer a config-sourced value this board computes - each row's own threshold comes from that
  * SAME row's newest gate report (see extractDriftThreshold).
  *
- * @param {string} root - absolute book root (used only to locate .studio/gate/)
+ * @param {string} root - absolute book root (used only to locate _nonfiction-studio/gate/)
  * @param {object} progress - already-parsed progress.json (hooks/lib/bible.mjs readProgress)
  * @param {object|null} config - already-parsed config.json, or null (findBookRoot's loadBible);
  *   unused by this function, kept in the signature for caller compatibility
@@ -304,7 +305,7 @@ export function isHighlighted(row) {
  * }}
  */
 export function computeStatusBoard(root, progress, config) {
-  const gateDir = join(root, '.studio', 'gate');
+  const gateDir = join(stateDirOf(root), 'gate');
   let filenames = [];
   if (existsSync(gateDir)) {
     try {
@@ -505,7 +506,7 @@ export function validateDecisionEntry(entry) {
 }
 
 // A chapter slug, matching the schema's own pattern exactly
-// (templates/book-scaffold/.studio/progress.schema.json: ^[0-9]{2}-[a-z0-9-]+$).
+// (templates/book-scaffold/_nonfiction-studio/progress.schema.json: ^[0-9]{2}-[a-z0-9-]+$).
 const CHAPTER_SLUG_RE = /^[0-9]{2}-[a-z0-9-]+$/;
 
 /**
@@ -514,7 +515,7 @@ const CHAPTER_SLUG_RE = /^[0-9]{2}-[a-z0-9-]+$/;
  * string edge or a character outside the slug alphabet (digits, lowercase
  * letters, hyphen) - so "03-the-signal" matches inside
  * "chapters/03-the-signal.md" and
- * ".studio/gate/03-the-signal.20260717T154022Z.json" (both real shapes used
+ * "_nonfiction-studio/gate/03-the-signal.20260717T154022Z.json" (both real shapes used
  * in docs/formats/decisions.md's own worked examples) but never inside the
  * longer, different slug "03-the-signal-appendix". A slug not shaped like the
  * schema pattern never matches anything: this function gates a `final`

@@ -1,16 +1,18 @@
 # Snapshot Format
 
-**Purpose.** This is the normative grammar for chapter snapshot files under `.studio/snapshots/`, defined in S-08 (schemas and file formats) section 10. Snapshots are pre-write full copies of chapter files created by the `PreToolUse` hook before any write to `chapters/`, resolving the audit gap XR-8 (snapshot-retention). The naming rule and retention policy below are authoritative for all writers, readers, and pruning logic. A parser author must be able to implement a conformant reader without consulting any other document.
+**Purpose.** This is the normative grammar for chapter snapshot files under `_nonfiction-studio/snapshots/`, defined in S-08 (schemas and file formats) section 10. Snapshots are pre-write full copies of chapter files created by the `PreToolUse` hook before any write to `chapters/`, resolving the audit gap XR-8 (snapshot-retention). The naming rule and retention policy below are authoritative for all writers, readers, and pruning logic. A parser author must be able to implement a conformant reader without consulting any other document.
+
+Paths on this page use the default state folder, `_nonfiction-studio/`. A book can give that folder another name, recorded in `nonfiction-studio.json` at the book root; see [ADR-0015 (state folder name)](../adr/ADR-0015-state-folder-name.md).
 
 ## Filename pattern
 
 Snapshot files follow this naming rule:
 
 ```
-.studio/snapshots/<chapter-slug>.<YYYYMMDDTHHMMSSZ>.md
+_nonfiction-studio/snapshots/<chapter-slug>.<YYYYMMDDTHHMMSSZ>.md
 ```
 
-For example: `.studio/snapshots/03-the-signal.20260717T154012Z.md`. The two components are:
+For example: `_nonfiction-studio/snapshots/03-the-signal.20260717T154012Z.md`. The two components are:
 
 - `<chapter-slug>`: the two-digit ordinal plus kebab title matching the chapter filename stem (for example, `03-the-signal`), as defined by the `slug` pattern in S-08 section 3.
 - `<YYYYMMDDTHHMMSSZ>`: compact ISO 8601 timestamp in UTC, with no colons or hyphens in the time component (for example, `20260717T154012Z`).
@@ -34,7 +36,7 @@ A snapshot of chapter 03 created before a `drafting-partner` write at 15:40:12 U
 Filename:
 
 ```
-.studio/snapshots/03-the-signal.20260717T154012Z.md
+_nonfiction-studio/snapshots/03-the-signal.20260717T154012Z.md
 ```
 
 Content: the verbatim contents of `chapters/03-the-signal.md` at the moment the hook fires.

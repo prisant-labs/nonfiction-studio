@@ -494,12 +494,12 @@ test('gap closure: a broken bin/ns-<name> reference in a .md file under hooks/ i
 
 test('non-Markdown scope: a broken bin/ns-<name> reference under a dot-directory is caught in the degraded (no-git) fallback', () => {
   const { root, cleanup } = buildSyntheticRoot('nonmd-dotdir', {
-    'templates/book-scaffold/.studio/notes.mjs': '// bin/ns-nonexistent\n',
+    'templates/book-scaffold/.hidden/notes.mjs': '// bin/ns-nonexistent\n',
   });
   try {
     const result = runClonedChecker(root, SCRIPT);
     assert.equal(result.status, 1, 'must exit 1 on a broken routing target under a dot-directory in the degraded fallback; got: ' + result.combined);
-    assert.match(result.combined, /templates\/book-scaffold\/\.studio\/notes\.mjs:1:/, 'message must name the planted file and line');
+    assert.match(result.combined, /templates\/book-scaffold\/\.hidden\/notes\.mjs:1:/, 'message must name the planted file and line');
     assert.match(result.combined, /ns-nonexistent/, 'message must name the bogus CLI name verbatim');
   } finally {
     cleanup();

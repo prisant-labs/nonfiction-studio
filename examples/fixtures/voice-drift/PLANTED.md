@@ -151,16 +151,16 @@ This fixture differs from a hypothetical undrifted version of itself in these lo
    fixture's own).
 4. **`context/style-profile.md`** -- Voice/Diction/Rhythm/Do/Do-not sections rewritten for the
    new author; Exemplars point at the three new corpus files; Baseline reference `captured` and
-   `sample_count` agree with `.studio/config.json`.
+   `sample_count` agree with `_nonfiction-studio/config.json`.
 5. **`context/brief.md`** -- section 6 (Voice) rewritten to match; unrelated sections unchanged.
-6. **`.studio/config.json`** -- `thresholds.drift_score_max` removed (retired by ADR-0012, voice
+6. **`_nonfiction-studio/config.json`** -- `thresholds.drift_score_max` removed (retired by ADR-0012, voice
    verdict scope, retiring in turn the ADR-0011, tranche 2 decisions, drift budget);
    `stylometry.baseline` replaced wholesale with the real, measured v5 baseline (markers +
    `marker_set_version: 5` + a full five-rung `calibration` ladder, `captured`, `sample_count: 3`,
    `method`) from `ns-stylometry --calibrate` over the three corpus files. `gate.checks.stylometry
    .mode` stays `warn` (the fixture's own default); mode toggles have no effect on `ns-stylometry`
    CLI exit codes, only on the gate's pass/fail decision.
-7. **`.studio/progress.json`**, **`structure/chapter-list.md`** -- word counts updated to 685
+7. **`_nonfiction-studio/progress.json`**, **`structure/chapter-list.md`** -- word counts updated to 685
    (chapter 1), 586 (chapter 2), 1271 (total), matching `countWords` (the same authority
    `ns-doctor`'s word-count coherence check uses) on the final committed chapter text.
 

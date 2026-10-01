@@ -38,7 +38,7 @@ import {
 
 // A complete, hand-built v5 calibration object, shaped per this implementation wave's design
 // pin P2, used by every
-// synthetic computeDrift test below so none of them depend on a real .studio/config.json
+// synthetic computeDrift test below so none of them depend on a real _nonfiction-studio/config.json
 // baseline. Two rungs only (550, 2200) -- matching the brief's own worked example -- not the
 // shipped five-rung ladder; computeDrift's contract does not hardcode a rung count.
 function buildCalibration(overrides = {}) {
@@ -664,7 +664,7 @@ for (const bad of [0, -1, -100]) {
 // PASS) and the voice-drift-fixture intent (a real chapter pair scoring as a BLOCK, with
 // first_person_rate the worst marker) both moved to synthetic v5 tests below ("computeDrift
 // v5: a passing case" / "a blocking case"), rather than reading either example's
-// .studio/config.json: both examples still carry v4 baselines with no calibration ladder
+// _nonfiction-studio/config.json: both examples still carry v4 baselines with no calibration ladder
 // (declared red until Tasks 5 and 6 recapture them), and coupling this file's green status to
 // that fixture state would break this file again the moment those baselines are recaptured
 // to different numbers. measureChapter/measureBook themselves are version-independent (they
@@ -746,7 +746,7 @@ test('computeDrift v5: a blocking case -- first_person_rate collapsing to near-z
 // COMMITTED, not a temp clone with a synthetic baseline patched in (unlike tests/engines/
 // gate.test.mjs's or stylometry-explain.test.mjs's approach): their own intent is specifically
 // to prove these two REAL fixtures' documented behavior under the shipped engine. Task 5
-// (ADR-0012 implementation wave) recaptured examples/sample-book/.studio/config.json's baseline
+// (ADR-0012 implementation wave) recaptured examples/sample-book/_nonfiction-studio/config.json's baseline
 // under v5 (an independent, disjoint voice corpus; regime book). A coordinator ruling later in
 // the same task gave examples/fixtures/voice-drift its own independent, first-person-rich,
 // contraction-rich voice corpus, calibrating to regime chapter -- the fixture now demonstrates
@@ -906,7 +906,7 @@ test('CLI: thresholds.drift_score_max present -> the P7 retirement notice is pri
   try {
     cpSync(join(EXAMPLES, 'sample-book'), dir, { recursive: true });
     writeSyntheticV5Baseline(dir);
-    const configPath = join(dir, '.studio', 'config.json');
+    const configPath = join(dir, '_nonfiction-studio', 'config.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
     config.thresholds = config.thresholds || {};
     config.thresholds.drift_score_max = 25;
@@ -1005,7 +1005,7 @@ test('measure mode: markers key set equals golden config baseline.markers key se
   assert.strictEqual(result.status, 0, 'exits 0; stderr: ' + result.stderr);
   const out = JSON.parse(result.stdout);
   const config = JSON.parse(readFileSync(
-    join(EXAMPLES, 'sample-book', '.studio', 'config.json'), 'utf8'
+    join(EXAMPLES, 'sample-book', '_nonfiction-studio', 'config.json'), 'utf8'
   ));
   const goldenKeys = Object.keys(config.stylometry.baseline.markers).sort();
   const measureKeys = Object.keys(out.markers).sort();

@@ -14,22 +14,22 @@ The fact-checker agent remembers which claims it has already verified against wh
 
 **To clear it:** delete the directory. It rebuilds itself as you keep working; nothing else is affected.
 
-### 2. Project state (`.studio/`)
+### 2. Project state (`_nonfiction-studio/`)
 
-**Location:** the `.studio/` folder inside your book project, created when you first set up the project.
+**Location:** the `_nonfiction-studio/` folder inside your book project, created when you first set up the project.
 
 This is the plugin's working memory for your book: progress tracking and configuration, plus two things worth knowing about specifically.
 
-- **`.studio/ai-use-log.jsonl`** is an append-only log of AI involvement in your manuscript. Each entry records which agent acted, when, what kind of assistance it was (fully AI-generated text, AI-assisted editing of your own text, or purely mechanical work such as formatting or snapshotting), which files it touched, and a one-sentence summary. This log exists to support the kind of AI-use disclosure that publishing platforms such as Amazon KDP increasingly ask authors to provide. A skill that turns this log into a finished disclosure report is planned for a later release; the log itself is already being kept so that history is there when that skill arrives.
-- **`.studio/snapshots/`** holds a timestamped copy of a chapter file taken before certain edits, so you can recover a prior version if something goes wrong.
+- **`_nonfiction-studio/ai-use-log.jsonl`** is an append-only log of AI involvement in your manuscript. Each entry records which agent acted, when, what kind of assistance it was (fully AI-generated text, AI-assisted editing of your own text, or purely mechanical work such as formatting or snapshotting), which files it touched, and a one-sentence summary. This log exists to support the kind of AI-use disclosure that publishing platforms such as Amazon KDP increasingly ask authors to provide. A skill that turns this log into a finished disclosure report is planned for a later release; the log itself is already being kept so that history is there when that skill arrives.
+- **`_nonfiction-studio/snapshots/`** holds a timestamped copy of a chapter file taken before certain edits, so you can recover a prior version if something goes wrong.
 
-**To clear it:** delete the whole `.studio/` folder, or just the piece you want gone, for example `.studio/snapshots/` to drop old chapter snapshots, or the contents of `.studio/ai-use-log.jsonl` to reset the disclosure history. Deleting all of `.studio/` also resets your project's progress tracking and configuration; the plugin recreates the basic structure the next time it needs it, but the deleted history itself is not recoverable.
+**To clear it:** delete the whole `_nonfiction-studio/` folder, or just the piece you want gone, for example `_nonfiction-studio/snapshots/` to drop old chapter snapshots, or the contents of `_nonfiction-studio/ai-use-log.jsonl` to reset the disclosure history. Deleting all of `_nonfiction-studio/` also resets your project's progress tracking and configuration; the plugin recreates the basic structure the next time it needs it, but the deleted history itself is not recoverable.
 
 ### 3. Generated book-context skill
 
 **Location:** `.claude/skills/book-context/SKILL.md` inside your book project folder.
 
-The `nfs-new-book` skill can generate this file: a short, project-committed quick-reference assembled from your bible content at the time it was generated - your thesis one-liner, your top three style rules, your chapter map, and your open-claims count - each line naming the exact file (or CLI) it was read from. Unlike the fact-checker cache and `.studio/`, which the plugin maintains on its own, this file is written only after you say yes to an explicit question; a non-interactive session skips the offer and writes nothing, and declining the question writes nothing.
+The `nfs-new-book` skill can generate this file: a short, project-committed quick-reference assembled from your bible content at the time it was generated - your thesis one-liner, your top three style rules, your chapter map, and your open-claims count - each line naming the exact file (or CLI) it was read from. Unlike the fact-checker cache and `_nonfiction-studio/`, which the plugin maintains on its own, this file is written only after you say yes to an explicit question; a non-interactive session skips the offer and writes nothing, and declining the question writes nothing.
 
 It is generated once and does not update itself as your bible changes. Because a skill file written during a running session only becomes usable at the start of your next session (a confirmed Claude Code platform behavior, not a plugin choice), the offer says so plainly before you decide.
 
@@ -37,7 +37,7 @@ It is generated once and does not update itself as your bible changes. Because a
 
 ## Per-project isolation
 
-Every book project keeps its own `.studio/` folder, its own fact-checker memory, and its own generated book-context skill (if any), scoped to that project's folder. One book's state is never read by, or mixed into, another book's. If you write two books with Nonfiction Studio, each keeps a completely separate history.
+Every book project keeps its own `_nonfiction-studio/` folder, its own fact-checker memory, and its own generated book-context skill (if any), scoped to that project's folder. One book's state is never read by, or mixed into, another book's. If you write two books with Nonfiction Studio, each keeps a completely separate history.
 
 ## Further reading
 

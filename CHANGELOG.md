@@ -15,8 +15,39 @@ This file is written from the commit history of the branch it ships from, not fr
   recorded in a committed, visible pointer file, `nonfiction-studio.json`, at the book root. A
   bad pointer never falls back to the default, and no flow creates a second state folder beside
   an existing book.
-  The `nfs-doctor` skill performs every move with the author's consent. No code changes yet;
-  the change lands in its own pull request.
+  The `nfs-doctor` skill performs every move with the author's consent. The implementation is
+  described under Changed below.
+- **`nonfiction-studio.json`, an optional state-folder pointer at the book root** (ADR-0015).
+  It holds `{"state_dir": "<name>"}` and is read only from the book root. The name must be one
+  folder name of 1 to 64 letters, digits, `_`, `-` or `.`, and may not be a bible folder,
+  `.git` or `.claude`; the research-librarian's write scope follows the folder, so these limits
+  are a security control. A missing, malformed or dangling pointer stops every write in the
+  book, except a write that repairs the pointer itself, and never falls back to the default.
+- **`nfs-doctor migrate` moves a legacy or unpointed state folder, and `nfs-doctor move-state
+  <name>` renames a healthy one.** Both run one move routine after an explicit yes: refuse an
+  existing target, change the pointer, rename with `git mv` inside a git working tree, add the
+  folder's README, and re-run the doctor. `bin/ns-doctor` stays read-only and reports an
+  unpointed folder or a bad pointer as a finding (exit 2).
+- **The state folder carries a `README.md`.** It says what the folder holds, that it belongs in
+  version control, that `config.json` is the only hand-edited file, and how to rename it.
+  `nfs-new-book` writes it, and its re-initialize branch re-stamps it when it is missing.
+- **`scripts/checks/check-state-folder-stanza.mjs`, a new Tier A check.** Every skill that reads
+  or writes the state folder carries one byte-identical "Locate the state folder" section, whose
+  name rule is checked against `hooks/lib/bible.mjs`. No skill or agent may name the state
+  folder literally.
+
+### Changed
+
+- **Breaking: the default state folder is `_nonfiction-studio/`, no longer `.studio/`**
+  (ADR-0015). Every hook, CLI, skill and agent finds the folder through one resolver, and the
+  sample book, the fixture books and the book scaffold have moved. A book created by an earlier
+  release keeps working once `/nonfiction-studio:nfs-doctor migrate` renames its folder or
+  records the old name in `nonfiction-studio.json`; until then, every surface names the folder
+  and the doctor rather than treating the book as missing, and `nfs-new-book` refuses to stamp a
+  second state folder. `schema_version` stays "2". See MIGRATION.md, "State-folder note".
+- A `state_dir` key in the personal settings file `.claude/nonfiction-studio.local.md` is
+  dropped with a warning that names `nonfiction-studio.json`, because the folder's name belongs
+  to the book, not to one author's settings.
 
 ### Fixed
 

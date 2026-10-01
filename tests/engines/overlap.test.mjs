@@ -360,10 +360,10 @@ test('CLI: human mode reports the exclusion count as a NOTICE, never silently', 
 test('CLI: exit 0 clean on a project with no overlap findings', () => {
   const base = mkdtempSync(join(os.tmpdir(), 'ns-overlap-clean-'));
   try {
-    mkdirSync(join(base, '.studio'), { recursive: true });
+    mkdirSync(join(base, '_nonfiction-studio'), { recursive: true });
     mkdirSync(join(base, 'context'), { recursive: true });
     mkdirSync(join(base, 'chapters'), { recursive: true });
-    writeFileSync(join(base, '.studio', 'meta.json'), JSON.stringify({
+    writeFileSync(join(base, '_nonfiction-studio', 'meta.json'), JSON.stringify({
       schema_version: '2', created: '2026-09-04T09:00:00Z', plugin_version_at_creation: '0.1.0', book_title: 'Clean',
     }));
     writeFileSync(join(base, 'chapters', '01-x.md'), 'This chapter has nothing in common with any corpus text at all.');

@@ -119,8 +119,8 @@ function flipCase(p) {
 test('(a) one chapter Write: count matches stylometry, no tmp.json, one new generated log line, additionalContext, exit 0', () => {
   const book = cloneSampleBook('a-write');
   const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
-  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
-  const tmpPath = join(book, '.studio', 'progress.tmp.json');
+  const logPath = join(book, '_nonfiction-studio', 'ai-use-log.jsonl');
+  const tmpPath = join(book, '_nonfiction-studio', 'progress.tmp.json');
 
   // Write specific content to the chapter so the count is known.
   const newContent = 'Learning to listen requires patience and daily practice.\n';
@@ -141,7 +141,7 @@ test('(a) one chapter Write: count matches stylometry, no tmp.json, one new gene
   assert.equal(result.status, 0, 'exit code is 0');
 
   // progress.json: ch1 word_count matches the stylometry counter on the on-disk file.
-  const progress = JSON.parse(readFileSync(join(book, '.studio', 'progress.json'), 'utf8'));
+  const progress = JSON.parse(readFileSync(join(book, '_nonfiction-studio', 'progress.json'), 'utf8'));
   const ch1 = progress.chapters.find(ch => ch.slug === '01-listening-before-speaking');
   assert.ok(ch1, 'chapter 01 entry exists in progress.json');
   assert.equal(ch1.word_count, expectedCount, 'word_count equals countWords result for the on-disk file');
@@ -190,7 +190,7 @@ test('(b) two chapter writes: both entries updated in one atomic write, totals c
   const book = cloneSampleBook('b-two');
   const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
   const ch2Path = join(book, 'chapters', '02-finding-your-network.md');
-  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
+  const logPath = join(book, '_nonfiction-studio', 'ai-use-log.jsonl');
 
   const ch1Content = 'Brief chapter one content for testing.\n';
   const ch2Content = 'Chapter two has slightly more content than chapter one here.\n';
@@ -218,7 +218,7 @@ test('(b) two chapter writes: both entries updated in one atomic write, totals c
 
   assert.equal(result.status, 0, 'exit code is 0');
 
-  const progress = JSON.parse(readFileSync(join(book, '.studio', 'progress.json'), 'utf8'));
+  const progress = JSON.parse(readFileSync(join(book, '_nonfiction-studio', 'progress.json'), 'utf8'));
   const ch1 = progress.chapters.find(ch => ch.slug === '01-listening-before-speaking');
   const ch2 = progress.chapters.find(ch => ch.slug === '02-finding-your-network');
 
@@ -247,7 +247,7 @@ test('(b) two chapter writes: both entries updated in one atomic write, totals c
 test('(c) Edit call: scope is "assisted" in ai-use-log', () => {
   const book = cloneSampleBook('c-edit');
   const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
-  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
+  const logPath = join(book, '_nonfiction-studio', 'ai-use-log.jsonl');
   const logLinesBefore = readJsonlLines(logPath).length;
 
   const result = runHook(makeBatchEvent(book, [
@@ -281,7 +281,7 @@ test('(c) Edit call: scope is "assisted" in ai-use-log', () => {
 test('(c2) Write then Edit same chapter: two log records in order, one recount, one progress update', () => {
   const book = cloneSampleBook('c2-same-file');
   const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
-  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
+  const logPath = join(book, '_nonfiction-studio', 'ai-use-log.jsonl');
 
   const ch1Content = 'New content written then edited in same batch.\n';
   writeFileSync(ch1Path, ch1Content, 'utf8');
@@ -335,7 +335,7 @@ test('(c2) Write then Edit same chapter: two log records in order, one recount, 
   }
 
   // One recount: progress.json word_count updated to the expected value exactly once.
-  const progressAfter = JSON.parse(readFileSync(join(book, '.studio', 'progress.json'), 'utf8'));
+  const progressAfter = JSON.parse(readFileSync(join(book, '_nonfiction-studio', 'progress.json'), 'utf8'));
   const ch1After = progressAfter.chapters.find(ch => ch.slug === '01-listening-before-speaking');
   assert.ok(ch1After, 'chapter 01 entry exists in progress.json');
   assert.equal(ch1After.word_count, expectedCount, 'word_count updated once to expected count');
@@ -368,7 +368,7 @@ test('(c2) Write then Edit same chapter: two log records in order, one recount, 
 test('probe residual: PostToolBatch chapter write with agent_type writes that raw label into the ai-use-log record', () => {
   const book = cloneSampleBook('agent-label-with-type');
   const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
-  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
+  const logPath = join(book, '_nonfiction-studio', 'ai-use-log.jsonl');
   const content = 'Agent-attributed chapter content for the probe-residual test.\n';
   writeFileSync(ch1Path, content, 'utf8');
 
@@ -391,7 +391,7 @@ test('probe residual: PostToolBatch chapter write with agent_type writes that ra
 test('probe residual: PostToolBatch chapter write with agent_type "general-purpose" writes that raw label too', () => {
   const book = cloneSampleBook('agent-label-general-purpose');
   const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
-  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
+  const logPath = join(book, '_nonfiction-studio', 'ai-use-log.jsonl');
   const content = 'Generic-subagent chapter content for the probe-residual test.\n';
   writeFileSync(ch1Path, content, 'utf8');
 
@@ -414,7 +414,7 @@ test('probe residual: PostToolBatch chapter write with agent_type "general-purpo
 test('probe residual: PostToolBatch chapter write with NO agent_type still writes hook:PostToolBatch', () => {
   const book = cloneSampleBook('agent-label-without-type');
   const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
-  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
+  const logPath = join(book, '_nonfiction-studio', 'ai-use-log.jsonl');
   const content = 'Main-session chapter content for the probe-residual test.\n';
   writeFileSync(ch1Path, content, 'utf8');
 
@@ -440,7 +440,7 @@ test('probe residual: PostToolBatch chapter write with NO agent_type still write
 // ---------------------------------------------------------------------------
 test('(d) Agent dispatch: one mechanical log line, dispatched slug, empty targets, empty stdout', () => {
   const book = cloneSampleBook('d-dispatch');
-  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
+  const logPath = join(book, '_nonfiction-studio', 'ai-use-log.jsonl');
   const logLinesBefore = readJsonlLines(logPath).length;
 
   const result = runHook(makeBatchEvent(book, [
@@ -478,9 +478,9 @@ test('(d) Agent dispatch: one mechanical log line, dispatched slug, empty target
 test('(e) non-chapter Write (context/): empty stdout, progress unchanged, log unchanged', () => {
   const book = cloneSampleBook('e-non-chapter');
   const outsidePath = join(book, 'context', 'brief.md');
-  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
+  const logPath = join(book, '_nonfiction-studio', 'ai-use-log.jsonl');
 
-  const progressBefore = readFileSync(join(book, '.studio', 'progress.json'), 'utf8');
+  const progressBefore = readFileSync(join(book, '_nonfiction-studio', 'progress.json'), 'utf8');
   const logLinesBefore = readJsonlLines(logPath).length;
 
   const result = runHook(makeBatchEvent(book, [
@@ -495,7 +495,7 @@ test('(e) non-chapter Write (context/): empty stdout, progress unchanged, log un
   assert.equal(result.status, 0, 'exit code is 0');
   assert.equal(result.stdout.trim(), '', 'empty stdout for non-chapter write');
 
-  const progressAfter = readFileSync(join(book, '.studio', 'progress.json'), 'utf8');
+  const progressAfter = readFileSync(join(book, '_nonfiction-studio', 'progress.json'), 'utf8');
   assert.equal(progressBefore, progressAfter, 'progress.json content unchanged');
 
   const logLinesAfter = readJsonlLines(logPath).length;
@@ -507,9 +507,9 @@ test('(e) non-chapter Write (context/): empty stdout, progress unchanged, log un
 // ---------------------------------------------------------------------------
 test('(f) corrupt progress.json: exit 0, one errors.jsonl line, progress byte-identical', () => {
   const book = cloneSampleBook('f-corrupt');
-  const progressPath = join(book, '.studio', 'progress.json');
+  const progressPath = join(book, '_nonfiction-studio', 'progress.json');
   const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
-  const errorsPath = join(book, '.studio', 'logs', 'errors.jsonl');
+  const errorsPath = join(book, '_nonfiction-studio', 'logs', 'errors.jsonl');
 
   // Record how many errors.jsonl lines exist before (may already have some).
   const errLinesBefore = existsSync(errorsPath) ? readJsonlLines(errorsPath).length : 0;
@@ -547,7 +547,7 @@ test('(f) corrupt progress.json: exit 0, one errors.jsonl line, progress byte-id
 // ---------------------------------------------------------------------------
 test('(g) unknown fields at top-level, per-chapter, and per-totals survive round-trip', () => {
   const book = cloneSampleBook('g-unknown-fields');
-  const progressPath = join(book, '.studio', 'progress.json');
+  const progressPath = join(book, '_nonfiction-studio', 'progress.json');
   const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
 
   // Inject unknown fields at every level.
@@ -666,7 +666,7 @@ test('(j) malformed stdin: exit 0, empty stdout', () => {
 // F-HK-01: corrupt-config discrimination.
 //
 // findBookRoot throws a BibleError with code CONFIG_READ_ERROR when a book
-// root is found but .studio/config.json is syntactically invalid JSON. The
+// root is found but _nonfiction-studio/config.json is syntactically invalid JSON. The
 // pre-fix hook caught ANY findBookRoot error identically to NO_BOOK_ROOT and
 // exited 0 with empty stdout, silently skipping progress/log updates with no
 // visible sign anything was wrong. This hook cannot deny post-hoc (the tool
@@ -676,11 +676,11 @@ test('(j) malformed stdin: exit 0, empty stdout', () => {
 // ---------------------------------------------------------------------------
 test('F-HK-01 (k) corrupt config.json: visible additionalContext naming it, exit 0, progress.json untouched', () => {
   const book = cloneSampleBook('fhk01-k-corrupt-config');
-  const progressPath = join(book, '.studio', 'progress.json');
+  const progressPath = join(book, '_nonfiction-studio', 'progress.json');
   const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
-  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
+  const logPath = join(book, '_nonfiction-studio', 'ai-use-log.jsonl');
 
-  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  writeFileSync(join(book, '_nonfiction-studio', 'config.json'), 'not valid json {{', 'utf8');
   const progressBefore = readFileSync(progressPath, 'utf8');
   const logLinesBefore = readJsonlLines(logPath).length;
 
@@ -745,7 +745,7 @@ test('F-HK-01 (l) NO_BOOK_ROOT (no book project at all) stays silent exit 0, unl
 // ---------------------------------------------------------------------------
 test('TSK-050b-(a) create-if-absent: new entry has five fields, title from registry, status drafting, correct count', () => {
   const book = cloneSampleBook('050b-a-create');
-  const progressPath = join(book, '.studio', 'progress.json');
+  const progressPath = join(book, '_nonfiction-studio', 'progress.json');
   const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
 
   // Empty the chapters array to force create-if-absent.
@@ -783,7 +783,7 @@ test('TSK-050b-(a) create-if-absent: new entry has five fields, title from regis
 // ---------------------------------------------------------------------------
 test('TSK-050b-(b) create-if-absent: derived title when registry absent', () => {
   const book = cloneSampleBook('050b-b-no-registry');
-  const progressPath = join(book, '.studio', 'progress.json');
+  const progressPath = join(book, '_nonfiction-studio', 'progress.json');
   const registryPath = join(book, 'structure', 'chapter-list.md');
   const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
 
@@ -822,7 +822,7 @@ test('TSK-050b-(b) create-if-absent: derived title when registry absent', () => 
 // ---------------------------------------------------------------------------
 test('TSK-050b-(c) existing-entry: word_count updated, status NOT changed by hook (regression pin)', () => {
   const book = cloneSampleBook('050b-c-regression');
-  const progressPath = join(book, '.studio', 'progress.json');
+  const progressPath = join(book, '_nonfiction-studio', 'progress.json');
   const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
 
   // Confirm the sample-book entry has 'drafted' status (not 'drafting').
@@ -859,7 +859,7 @@ test('TSK-050b-(c) existing-entry: word_count updated, status NOT changed by hoo
 // ---------------------------------------------------------------------------
 test('TSK-050b-(d) open-marker counting: 2 UNVERIFIED + 1 SOURCE-UNVERIFIABLE = 3 flows to totals', () => {
   const book = cloneSampleBook('050b-d-markers');
-  const progressPath = join(book, '.studio', 'progress.json');
+  const progressPath = join(book, '_nonfiction-studio', 'progress.json');
   const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
 
   // Content with exactly 2 [UNVERIFIED] and 1 [SOURCE-UNVERIFIABLE].
@@ -900,7 +900,7 @@ test('TSK-050b-(d) open-marker counting: 2 UNVERIFIED + 1 SOURCE-UNVERIFIABLE = 
 // ---------------------------------------------------------------------------
 test('TSK-050b-(e) golden clone recount: totals.open_claim_count is 0', () => {
   const book = cloneSampleBook('050b-e-golden');
-  const progressPath = join(book, '.studio', 'progress.json');
+  const progressPath = join(book, '_nonfiction-studio', 'progress.json');
   const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
 
   // Write clean content (no claim markers) to ch1 to trigger a recount.
@@ -949,7 +949,7 @@ test('F-HK-13 (m) isChapterPath on win32: a case-differing chapters/ path is sti
   const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
   const caseFlippedPath = flipCase(ch1Path);
   assert.notEqual(caseFlippedPath, ch1Path, 'precondition: the flipped path is textually different from the original');
-  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
+  const logPath = join(book, '_nonfiction-studio', 'ai-use-log.jsonl');
   const logLinesBefore = readJsonlLines(logPath).length;
 
   const newContent = 'F-HK-13 win32 regression content.\n';
@@ -988,8 +988,8 @@ test('F-HK-13 (n) isChapterPath on a case-sensitive filesystem: a case-differing
   const book = cloneSampleBook('fhk13-n-posix-case');
   const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
   const caseFlippedPath = flipCase(ch1Path);
-  const logPath = join(book, '.studio', 'ai-use-log.jsonl');
-  const progressPath = join(book, '.studio', 'progress.json');
+  const logPath = join(book, '_nonfiction-studio', 'ai-use-log.jsonl');
+  const progressPath = join(book, '_nonfiction-studio', 'progress.json');
   const logLinesBefore = readJsonlLines(logPath).length;
   const progressBefore = readFileSync(progressPath, 'utf8');
 
@@ -1015,7 +1015,7 @@ test('F-HK-13 (n) isChapterPath on a case-sensitive filesystem: a case-differing
 
 test('TSK-050b-(f) unknown fields survive when create-if-absent path runs', () => {
   const book = cloneSampleBook('050b-f-unknown');
-  const progressPath = join(book, '.studio', 'progress.json');
+  const progressPath = join(book, '_nonfiction-studio', 'progress.json');
   const ch1Path = join(book, 'chapters', '01-listening-before-speaking.md');
 
   // Inject unknown fields at every level.

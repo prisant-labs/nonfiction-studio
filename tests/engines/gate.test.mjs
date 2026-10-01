@@ -80,12 +80,12 @@ function makeTempClone(sourceDir, opts = {}) {
 // longer applies -- this fixture demonstrates the OTHER regime.
 
 /**
- * Writes a block-mode gate config to the clone's .studio/config.json.
+ * Writes a block-mode gate config to the clone's _nonfiction-studio/config.json.
  * Sets gate.mode=block and all four deterministic checks to mode=block,
  * preserving the source config's thresholds and baseline per TSK-029 (ns-gate orchestrator).
  */
 function writeBlockConfig(tmpDir) {
-  const configPath = join(tmpDir, '.studio', 'config.json');
+  const configPath = join(tmpDir, '_nonfiction-studio', 'config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.gate = config.gate || {};
   config.gate.mode = 'block';
@@ -108,12 +108,12 @@ function spawnGate(cwd, args) {
 }
 
 /**
- * Reads the most recently written gate report for a slug from .studio/gate/.
+ * Reads the most recently written gate report for a slug from _nonfiction-studio/gate/.
  * Filenames are sorted lexicographically; YYYYMMDDTHHMMSSZ is chronological.
  */
 function readLatestReport(tmpDir, slug) {
   slug = slug || 'all';
-  const gateDir = join(tmpDir, '.studio', 'gate');
+  const gateDir = join(tmpDir, '_nonfiction-studio', 'gate');
   const prefix = slug + '.';
   const files = readdirSync(gateDir)
     .filter(f => f.startsWith(prefix) && f.endsWith('.json') && !f.startsWith('.'))
@@ -457,7 +457,7 @@ test('T08: config-coercion: D-03 coercion notice on stderr; exit 0; thesis_align
     // This proves D-03 Invariant 1 without breaking the stylometry check.
     const coercionConfigPath = join(EXAMPLES, 'fixtures', 'config-coercion', 'config.json');
     const coercionConfig = JSON.parse(readFileSync(coercionConfigPath, 'utf8'));
-    const baseConfigPath = join(tmp, '.studio', 'config.json');
+    const baseConfigPath = join(tmp, '_nonfiction-studio', 'config.json');
     const baseConfig = JSON.parse(readFileSync(baseConfigPath, 'utf8'));
 
     // Overlay only the gate block (preserves sample-book's stylometry baseline)
@@ -512,7 +512,7 @@ test('T10: session-write flag present in temp clone: session_write_flag verdict 
   const tmp = makeTempClone(GOLDEN);
   try {
     // Create the session-write flag that stop-gate.mjs would normally create
-    const gateDir = join(tmp, '.studio', 'gate');
+    const gateDir = join(tmp, '_nonfiction-studio', 'gate');
     mkdirSync(gateDir, { recursive: true });
     writeFileSync(join(gateDir, '.session-write-flag'), '', 'utf8');
 
@@ -543,7 +543,7 @@ test('T12: missing stylometry baseline: exit 2; stylometry check verdict skip wi
   const tmp = makeTempClone(GOLDEN);
   try {
     // Remove the stylometry baseline from config
-    const configPath = join(tmp, '.studio', 'config.json');
+    const configPath = join(tmp, '_nonfiction-studio', 'config.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
     if (config.stylometry) config.stylometry.baseline = null;
     writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
@@ -572,7 +572,7 @@ test('T12: missing stylometry baseline: exit 2; stylometry check verdict skip wi
 test('T13: prune: 11 stale reports + 1 new = 12 total; pruned to 10; newest survives', () => {
   const tmp = makeTempClone(GOLDEN);
   try {
-    const gateDir = join(tmp, '.studio', 'gate');
+    const gateDir = join(tmp, '_nonfiction-studio', 'gate');
     mkdirSync(gateDir, { recursive: true });
 
     // Seed 11 stale report files for slug 'all' with 2025 timestamps
@@ -625,7 +625,7 @@ test('T14: report filename matches <slug>.<YYYYMMDDTHHMMSSZ>.json pattern', () =
     assert.strictEqual(result.status, 0,
       'filename pattern test must exit 0; stderr: ' + result.stderr);
 
-    const gateDir = join(tmp, '.studio', 'gate');
+    const gateDir = join(tmp, '_nonfiction-studio', 'gate');
     // Filter specifically for slug 'all' reports written by this run
     const PATTERN = /^all\.\d{8}T\d{6}Z\.json$/;
     const files = readdirSync(gateDir).filter(f => PATTERN.test(f));
@@ -654,7 +654,7 @@ test('T14: report filename matches <slug>.<YYYYMMDDTHHMMSSZ>.json pattern', () =
  * blocks the gate. Used by T17.
  */
 function writeCoherenceBlockConfig(tmpDir) {
-  const configPath = join(tmpDir, '.studio', 'config.json');
+  const configPath = join(tmpDir, '_nonfiction-studio', 'config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.gate = config.gate || {};
   config.gate.mode = 'block';
@@ -737,8 +737,8 @@ test('T16: unsourced-claim warn mode: exit 0; state_coherence verdict warn; deta
       'evidence must include a pointer to chapter 02; got: ' + JSON.stringify(cohEntry.evidence)
     );
     assert.ok(
-      cohEntry.evidence.includes('.studio/progress.json'),
-      'evidence must include .studio/progress.json; got: ' + JSON.stringify(cohEntry.evidence)
+      cohEntry.evidence.includes('_nonfiction-studio/progress.json'),
+      'evidence must include _nonfiction-studio/progress.json; got: ' + JSON.stringify(cohEntry.evidence)
     );
   } finally {
     rmSync(tmp, { recursive: true, force: true });
@@ -881,7 +881,7 @@ test('T21: planted quote mismatch, quote_fidelity.mode=block coerced to warn (st
   try {
     plantQuoteMismatch(tmp);
 
-    const configPath = join(tmp, '.studio', 'config.json');
+    const configPath = join(tmp, '_nonfiction-studio', 'config.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
     config.gate = config.gate || {};
     config.gate.checks = config.gate.checks || {};
@@ -911,7 +911,7 @@ test('T21: planted quote mismatch, quote_fidelity.mode=block coerced to warn (st
 test('T22: quote_fidelity disabled in config: verdict skip (required case 10)', () => {
   const tmp = makeTempClone(GOLDEN);
   try {
-    const configPath = join(tmp, '.studio', 'config.json');
+    const configPath = join(tmp, '_nonfiction-studio', 'config.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
     config.gate = config.gate || {};
     config.gate.checks = config.gate.checks || {};
@@ -934,7 +934,7 @@ test('T22: quote_fidelity disabled in config: verdict skip (required case 10)', 
 test('T22b: quote_fidelity mode=off in config: verdict skip (required case 10, off variant)', () => {
   const tmp = makeTempClone(GOLDEN);
   try {
-    const configPath = join(tmp, '.studio', 'config.json');
+    const configPath = join(tmp, '_nonfiction-studio', 'config.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
     config.gate = config.gate || {};
     config.gate.checks = config.gate.checks || {};
@@ -989,15 +989,15 @@ test('template parity: templates/config-defaults.json gate.checks key set deeply
   );
 });
 
-test('template parity: templates/book-scaffold/.studio/config.json gate.checks key set deeply equals Object.keys(DEFAULT_GATE.checks)', () => {
+test('template parity: templates/book-scaffold/_nonfiction-studio/config.json gate.checks key set deeply equals Object.keys(DEFAULT_GATE.checks)', () => {
   const scaffoldConfig = JSON.parse(
-    readFileSync(join(TEMPLATES, 'book-scaffold', '.studio', 'config.json'), 'utf8')
+    readFileSync(join(TEMPLATES, 'book-scaffold', '_nonfiction-studio', 'config.json'), 'utf8')
   );
   const actual = Object.keys(scaffoldConfig.gate.checks).sort();
   const expected = Object.keys(DEFAULT_GATE.checks).sort();
   assert.deepStrictEqual(
     actual, expected,
-    'templates/book-scaffold/.studio/config.json gate.checks keys must match DEFAULT_GATE.checks exactly; got: ' +
+    'templates/book-scaffold/_nonfiction-studio/config.json gate.checks keys must match DEFAULT_GATE.checks exactly; got: ' +
     JSON.stringify(actual) + '; expected: ' + JSON.stringify(expected)
   );
 });
@@ -1020,7 +1020,7 @@ test('Wave 1 exit Task 2: settings gate_mode: block flips a real finding from ca
     // the coercion-holds assertion below would prove nothing.
     plantQuoteMismatch(tmp);
 
-    const configPath = join(tmp, '.studio', 'config.json');
+    const configPath = join(tmp, '_nonfiction-studio', 'config.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
     config.gate.checks.quote_fidelity = { enabled: true, mode: 'block' };
     writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
@@ -1075,7 +1075,7 @@ test('Wave 1 exit Task 2: settings gate_mode: block flips a real finding from ca
 test('Wave 1 exit Task 2: settings thresholds shallow-merges over config thresholds -- settings wins on a colliding key, a settings-only key is added, a config-only key survives untouched', () => {
   const tmp = makeTempClone(GOLDEN);
   try {
-    // GOLDEN's own .studio/config.json thresholds: { claim_coverage_min: 1.0, stylometry_marker_tolerance: 2.0 }
+    // GOLDEN's own _nonfiction-studio/config.json thresholds: { claim_coverage_min: 1.0, stylometry_marker_tolerance: 2.0 }
     writeSettingsFile(tmp, [
       '---',
       'thresholds:',
@@ -1227,14 +1227,14 @@ function buildTopologyBaseline(markers, regime) {
 }
 
 /**
- * Builds a temp book root with .studio/config.json (stylometry-only gate, block mode, plus the
+ * Builds a temp book root with _nonfiction-studio/config.json (stylometry-only gate, block mode, plus the
  * given baseline) and chapters/<NN>-chapter.md for each given text, in order. Only the
  * stylometry check is ever requested (via runGate's checkSubset), so no other check's own
  * fixture requirements (evidence-log.md, etc.) apply here.
  */
 function makeTopologyBook(baseline, chapterTexts) {
   const dir = mkdtempSync(join(os.tmpdir(), 'ns-gate-topology-'));
-  mkdirSync(join(dir, '.studio'), { recursive: true });
+  mkdirSync(join(dir, '_nonfiction-studio'), { recursive: true });
   mkdirSync(join(dir, 'chapters'), { recursive: true });
   const config = {
     version: 2,
@@ -1248,7 +1248,7 @@ function makeTopologyBook(baseline, chapterTexts) {
     thresholds: {},
     stylometry: { baseline },
   };
-  writeFileSync(join(dir, '.studio', 'config.json'), JSON.stringify(config, null, 2), 'utf8');
+  writeFileSync(join(dir, '_nonfiction-studio', 'config.json'), JSON.stringify(config, null, 2), 'utf8');
   chapterTexts.forEach((text, i) => {
     const slug = String(i + 1).padStart(2, '0') + '-chapter';
     writeFileSync(join(dir, 'chapters', slug + '.md'), text, 'utf8');
@@ -1537,7 +1537,7 @@ test('P7: thresholds.drift_score_max present -> the retirement notice is appende
   const cleanText = repeatedProse(4);
   const baseline = buildTopologyBaseline(measureChapter(cleanText), 'chapter');
   const dir = makeTopologyBook(baseline, [cleanText]);
-  const configPath = join(dir, '.studio', 'config.json');
+  const configPath = join(dir, '_nonfiction-studio', 'config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.thresholds.drift_score_max = 25;
   writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
@@ -1554,7 +1554,7 @@ test('P7: thresholds.drift_score_max present -> the retirement notice is appende
 // ============================================================================
 // Wave 1 exit Task 7 (overlap gate check): the seventh configurable gate check, warn-mode
 // default. Uses the Task 6 overlap fixture book (tests/engines/fixtures/overlap/), which carries
-// no .studio/config.json of its own, so loadGateConfig falls all the way back to DEFAULT_GATE
+// no _nonfiction-studio/config.json of its own, so loadGateConfig falls all the way back to DEFAULT_GATE
 // (overlap enabled, mode warn) and DEFAULT_MIN_WORDS (15) unless a test plants its own config.
 // makeTempClone's writeSyntheticV5Baseline no-ops silently on a clone with no config.json to
 // patch (tests/lib/synthetic-v5-baseline.mjs's own documented no-chapters/no-config no-op), so
@@ -1656,8 +1656,8 @@ test('Wave 1 exit Task 7: overlap warns when scoped to the unquoted packet-lift 
 test('Wave 1 exit Task 7: thresholds.overlap_min_words raises the floor above a real finding, suppressing it', () => {
   const tmp = makeTempClone(OVERLAP_FIXTURE);
   try {
-    const configPath = join(tmp, '.studio', 'config.json');
-    mkdirSync(join(tmp, '.studio'), { recursive: true });
+    const configPath = join(tmp, '_nonfiction-studio', 'config.json');
+    mkdirSync(join(tmp, '_nonfiction-studio'), { recursive: true });
     // No committed config.json for this fixture -- write a minimal one naming only the
     // threshold override, so DEFAULT_GATE still supplies every check's default mode.
     writeFileSync(configPath, JSON.stringify({ version: 2, thresholds: { overlap_min_words: 31 } }, null, 2), 'utf8');
@@ -1696,8 +1696,8 @@ test('Wave 1 exit Task 7: settings thresholds.overlap_min_words reaches the engi
 test('Wave 1 exit Task 7: double opt-in (settings gate_mode: block AND gate.checks.overlap.mode: block) blocks; overlap is NOT structurally coerced', () => {
   const tmp = makeTempClone(OVERLAP_FIXTURE);
   try {
-    const configPath = join(tmp, '.studio', 'config.json');
-    mkdirSync(join(tmp, '.studio'), { recursive: true });
+    const configPath = join(tmp, '_nonfiction-studio', 'config.json');
+    mkdirSync(join(tmp, '_nonfiction-studio'), { recursive: true });
     writeFileSync(
       configPath,
       JSON.stringify({ version: 2, gate: { checks: { overlap: { enabled: true, mode: 'block' } } } }, null, 2),
@@ -1720,8 +1720,8 @@ test('Wave 1 exit Task 7: double opt-in (settings gate_mode: block AND gate.chec
 test('Wave 1 exit Task 7: gate.checks.overlap.enabled: false skips the check', () => {
   const tmp = makeTempClone(OVERLAP_FIXTURE);
   try {
-    const configPath = join(tmp, '.studio', 'config.json');
-    mkdirSync(join(tmp, '.studio'), { recursive: true });
+    const configPath = join(tmp, '_nonfiction-studio', 'config.json');
+    mkdirSync(join(tmp, '_nonfiction-studio'), { recursive: true });
     writeFileSync(
       configPath,
       JSON.stringify({ version: 2, gate: { checks: { overlap: { enabled: false, mode: 'warn' } } } }, null, 2),
@@ -1742,8 +1742,8 @@ test('Wave 1 exit Task 7: gate.checks.overlap.enabled: false skips the check', (
 test('Wave 1 exit Task 7: gate.checks.overlap.mode: off skips the check even though it is enabled', () => {
   const tmp = makeTempClone(OVERLAP_FIXTURE);
   try {
-    const configPath = join(tmp, '.studio', 'config.json');
-    mkdirSync(join(tmp, '.studio'), { recursive: true });
+    const configPath = join(tmp, '_nonfiction-studio', 'config.json');
+    mkdirSync(join(tmp, '_nonfiction-studio'), { recursive: true });
     writeFileSync(
       configPath,
       JSON.stringify({ version: 2, gate: { checks: { overlap: { enabled: true, mode: 'off' } } } }, null, 2),
