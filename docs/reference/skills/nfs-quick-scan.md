@@ -26,7 +26,7 @@ Before this skill existed, the shortest path to any value in this plugin ran thr
 /nonfiction-studio:nfs-quick-scan
 ```
 
-Paste 500 to 1000 words of prose either in the same message or in reply to the skill's prompt. No book project, `.studio/` directory, or prior setup is required.
+Paste 500 to 1000 words of prose either in the same message or in reply to the skill's prompt. No book project, `_nonfiction-studio/` directory, or prior setup is required.
 
 Alternate entry points:
 - The `nfs-start` dispatcher, Path 6 (Quick preview), including directly from the `NO_PROGRESS` branch before any project exists
@@ -80,7 +80,7 @@ The skill runs seven steps:
 
 ## Relationship to Other Skills
 
-`nfs-quick-scan` shares its underlying engine call with `nfs-capture-voice`, which uses the same `--measure` mode to build a project's permanent voice baseline; `nfs-quick-scan` never writes that baseline and never touches `.studio/config.json`. `nfs-quick-scan` pairs with [`nfs-tour`](./nfs-tour.md): the two together are the try-before-you-commit path per OPP-D17 (five-minute first win), reachable from `nfs-start`'s Path 6 (Quick preview).
+`nfs-quick-scan` shares its underlying engine call with `nfs-capture-voice`, which uses the same `--measure` mode to build a project's permanent voice baseline; `nfs-quick-scan` never writes that baseline and never touches `_nonfiction-studio/config.json`. `nfs-quick-scan` pairs with [`nfs-tour`](./nfs-tour.md): the two together are the try-before-you-commit path per OPP-D17 (five-minute first win), reachable from `nfs-start`'s Path 6 (Quick preview).
 
 ## See also
 

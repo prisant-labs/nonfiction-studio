@@ -21,9 +21,9 @@ OPP-P03). Unlike the other eight CLIs, it never reads its input from `--project`
 directory: the platform's statusLine and subagentStatusLine features pipe a JSON event to stdin on
 every invocation, and this CLI reads the project directory out of that event
 (`workspace.current_dir` or `cwd`), never from `process.cwd()`. It reads at most four small files
-(`.studio/meta.json`, `.studio/config.json`, `.studio/progress.json`,
-`.studio/gate/last-gate.json`) and spawns no subprocess. Not being inside a book project is a
-normal state, not an error: outside a book project, or on any malformed `.studio/` file, the
+(`_nonfiction-studio/meta.json`, `_nonfiction-studio/config.json`, `_nonfiction-studio/progress.json`,
+`_nonfiction-studio/gate/last-gate.json`) and spawns no subprocess. Not being inside a book project is a
+normal state, not an error: outside a book project, or on any malformed `_nonfiction-studio/` file, the
 command prints nothing and exits 0. It never prints a stack trace or an error string.
 
 **This CLI is not, by itself, the HUD the author sees.** A plugin cannot ship a main status line
@@ -72,12 +72,12 @@ Every other field is ignored.
 
 | Segment | Source | Omitted when |
 |---|---|---|
-| Book title | `.studio/meta.json` `book_title` | title absent |
-| Active chapter | `.studio/progress.json` `chapters[]` (first `drafting`, else first non-`final`) | no non-final chapter exists |
-| Words vs. target | `.studio/progress.json` `totals.word_count`; target from `.studio/config.json` `targets.word_count` | word_count unreadable |
-| Open claims | `.studio/progress.json` `totals.open_claim_count` | value unreadable |
-| Drift band | `.studio/gate/last-gate.json` `checks[]` entry where `check` is `stylometry`, its `verdict` | no last-gate.json, or no stylometry entry in it |
-| Gate token | `.studio/gate/last-gate.json` top-level `verdict`, upper-cased | no last-gate.json |
+| Book title | `_nonfiction-studio/meta.json` `book_title` | title absent |
+| Active chapter | `_nonfiction-studio/progress.json` `chapters[]` (first `drafting`, else first non-`final`) | no non-final chapter exists |
+| Words vs. target | `_nonfiction-studio/progress.json` `totals.word_count`; target from `_nonfiction-studio/config.json` `targets.word_count` | word_count unreadable |
+| Open claims | `_nonfiction-studio/progress.json` `totals.open_claim_count` | value unreadable |
+| Drift band | `_nonfiction-studio/gate/last-gate.json` `checks[]` entry where `check` is `stylometry`, its `verdict` | no last-gate.json, or no stylometry entry in it |
+| Gate token | `_nonfiction-studio/gate/last-gate.json` top-level `verdict`, upper-cased | no last-gate.json |
 
 Outside a book project, or when any of these files is missing or fails to parse, the affected
 segment (or, outside a book project, the whole line) is silently omitted. Exit code is always 0.
@@ -137,10 +137,10 @@ measuring both figures.
 
 ## Two fields not yet populated by any shipped writer
 
-`.studio/progress.json` chapter entries may carry an optional `promise` string, and
-`.studio/config.json` may carry an optional `targets.word_count` number; `ns-statusline` renders
+`_nonfiction-studio/progress.json` chapter entries may carry an optional `promise` string, and
+`_nonfiction-studio/config.json` may carry an optional `targets.word_count` number; `ns-statusline` renders
 both when present. As of this CLI's introduction, no shipped writer in this plugin populates
-either field: `progress.json`'s schema (`templates/book-scaffold/.studio/progress.schema.json`)
+either field: `progress.json`'s schema (`templates/book-scaffold/_nonfiction-studio/progress.schema.json`)
 has no `promise` property, and `config.json`'s shape (`templates/config-defaults.json`) has no
 `targets` object. The word-count target an author sets during intake is recorded today as prose
 in `context/brief.md` ("Target word count: NNN words"), not as structured data. Until a future
@@ -153,7 +153,7 @@ fixture, in `tests/engines/statusline-cli.test.mjs`. See ADR-0008 for the full r
 `ns-statusline` is the sixth CLI shipped under `bin/`, alongside `ns-claims`, `ns-doctor`,
 `ns-gate`, `ns-scrub`, and `ns-stylometry` (D-05, five shipped CLIs). It is never invoked by a
 hook or another CLI: `hooks/stop-gate.mjs` writes
-`.studio/gate/last-gate.json`, and `ns-statusline` only ever reads that file, never runs
+`_nonfiction-studio/gate/last-gate.json`, and `ns-statusline` only ever reads that file, never runs
 `ns-gate` itself. This is a deliberate performance boundary: spawning `ns-gate` as a subprocess
 on every assistant message would make the status line as slow as a full gate run, defeating the
 reason it exists.

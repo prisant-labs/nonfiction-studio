@@ -204,7 +204,7 @@ accepts or rejects the PROPOSED ADDITION block and applies it manually or via th
   for SRC-0005 (Dunbar 1992), the agent named the source and referred formatting
   to `citation-manager`. It did not produce a formatted bibliography entry from
   model knowledge.
-- **No `.studio/` writes.** The agent wrote no machine state during this session.
+- **No `_nonfiction-studio/` writes.** The agent wrote no machine state during this session.
   Chapter word-count updates are the PostToolBatch hook's responsibility per
   D-06 (single-writer state discipline).
 - **Existing markers preserved.** The pre-existing claim markers in Chapter 2

@@ -1,16 +1,18 @@
 # Gate Report Format
 
-**Purpose.** This is the normative grammar for gate report files under `.studio/gate/`, one file per gate run, defined in S-08 (schemas and file formats) section 11. `bin/ns-gate` writes a gate report file at the end of every run; `bin/ns-status` (via `hooks/lib/status-engine.mjs`) reads the newest one per chapter slug, and the `nfs-status-dashboard` skill narrates that CLI's JSON output rather than reading a report file itself. The file `.studio/gate/last-gate.json` carries the most recent gate debt for each chapter and is the SessionStart gate-debt input per S-07 (hooks and scripts); it is written by the `Stop` hook, not `bin/ns-gate` itself (see "Consumed by", below). `progress.json`'s `last_gate` per-chapter field is reserved in the schema and unpopulated in v1: no component writes it during a live gate run. Every field name, value constraint, and structural rule below is authoritative. A parser author must be able to implement a conformant reader without consulting any other document.
+**Purpose.** This is the normative grammar for gate report files under `_nonfiction-studio/gate/`, one file per gate run, defined in S-08 (schemas and file formats) section 11. `bin/ns-gate` writes a gate report file at the end of every run; `bin/ns-status` (via `hooks/lib/status-engine.mjs`) reads the newest one per chapter slug, and the `nfs-status-dashboard` skill narrates that CLI's JSON output rather than reading a report file itself. The file `_nonfiction-studio/gate/last-gate.json` carries the most recent gate debt for each chapter and is the SessionStart gate-debt input per S-07 (hooks and scripts); it is written by the `Stop` hook, not `bin/ns-gate` itself (see "Consumed by", below). `progress.json`'s `last_gate` per-chapter field is reserved in the schema and unpopulated in v1: no component writes it during a live gate run. Every field name, value constraint, and structural rule below is authoritative. A parser author must be able to implement a conformant reader without consulting any other document.
+
+Paths on this page use the default state folder, `_nonfiction-studio/`. A book can give that folder another name, recorded in `nonfiction-studio.json` at the book root; see [ADR-0015 (state folder name)](../adr/ADR-0015-state-folder-name.md).
 
 ## Filename pattern
 
 Gate report files follow this naming rule:
 
 ```
-.studio/gate/<chapter-slug>.<YYYYMMDDTHHMMSSZ>.json
+_nonfiction-studio/gate/<chapter-slug>.<YYYYMMDDTHHMMSSZ>.json
 ```
 
-For example: `.studio/gate/03-the-signal.20260717T154022Z.json`. The timestamp is compact ISO 8601 in UTC, with no colons or hyphens in the time component. `<chapter-slug>` is the two-digit ordinal plus kebab title matching the chapter filename stem.
+For example: `_nonfiction-studio/gate/03-the-signal.20260717T154022Z.json`. The timestamp is compact ISO 8601 in UTC, with no colons or hyphens in the time component. `<chapter-slug>` is the two-digit ordinal plus kebab title matching the chapter filename stem.
 
 ## Record structure
 
@@ -33,7 +35,7 @@ Each entry in the `checks` array carries:
 | `check` | string | required | The check name as it appears in `config.json` `gate.checks` |
 | `verdict` | enum | required | One of `pass`, `warn`, `block`, `skip` |
 | `detail` | string | required | A human-readable summary of the check finding |
-| `evidence` | array of strings | required | Bible-relative pointers to the supporting evidence: file paths with optional line anchors (for example, `chapters/03-the-signal.md#L44`) or JSON pointers into `progress.json` (for example, `.studio/progress.json#/chapters/2/drift_score`) |
+| `evidence` | array of strings | required | Bible-relative pointers to the supporting evidence: file paths with optional line anchors (for example, `chapters/03-the-signal.md#L44`) or JSON pointers into `progress.json` (for example, `_nonfiction-studio/progress.json#/chapters/2/drift_score`) |
 | `next` | string or null | required | The recommended author action, or `null` when the verdict is `pass` or `skip` |
 | `drift` | object | only on the `stylometry` entry | The structured drift field (ADR-0012, voice verdict scope, Decision 2; PF-14) - see "The stylometry entry's `drift` field", below. No other check entry carries this field; `version` stays `2` for its addition (additive, and no shipped validator asserts the check-entry key set exhaustively except one test in the implementation wave's own test suite). |
 
@@ -112,11 +114,11 @@ sibling field the way `stylometry` carries `drift`.
 
 ## Placement and retention rules
 
-- Reports are written atomically by `bin/ns-gate` to `.studio/gate/<slug>.<YYYYMMDDTHHMMSSZ>.json` at the end of every gate run.
-- The `Stop` hook (`hooks/stop-gate.mjs`), not `bin/ns-gate` itself, separately writes `.studio/gate/last-gate.json`: it spawns `bin/ns-gate` as a subprocess and copies the subprocess's stdout verbatim into `last-gate.json` via temp-file-plus-rename. This file carries the most recent gate result for the chapter and is the gate-debt input read by the `SessionStart` hook per S-07 (hooks and scripts). `bin/ns-gate`, run directly (for example from CI or a manual invocation with no Stop hook in the loop), never touches `last-gate.json`.
+- Reports are written atomically by `bin/ns-gate` to `_nonfiction-studio/gate/<slug>.<YYYYMMDDTHHMMSSZ>.json` at the end of every gate run.
+- The `Stop` hook (`hooks/stop-gate.mjs`), not `bin/ns-gate` itself, separately writes `_nonfiction-studio/gate/last-gate.json`: it spawns `bin/ns-gate` as a subprocess and copies the subprocess's stdout verbatim into `last-gate.json` via temp-file-plus-rename. This file carries the most recent gate result for the chapter and is the gate-debt input read by the `SessionStart` hook per S-07 (hooks and scripts). `bin/ns-gate`, run directly (for example from CI or a manual invocation with no Stop hook in the loop), never touches `last-gate.json`.
 - The top-level `verdict` is the most severe per-check verdict, subject to the coercions in `config.json` section 4: judgment checks (`thesis_alignment`) are coerced from `block` to `warn`; the top-level `gate.mode` setting governs whether `block` verdicts actually stop the session.
 - Retention mirrors the snapshot policy: the last 10 reports per chapter slug are kept; older reports are pruned by `bin/ns-gate` at creation time.
-- `bin/ns-gate` writes ONLY under `.studio/gate/` per D-06 (single-writer state discipline): it never touches `progress.json` or any bible file. The `progress.json` `last_gate` per-chapter field stays reserved and unpopulated in v1 regardless of how many gate runs have occurred.
+- `bin/ns-gate` writes ONLY under `_nonfiction-studio/gate/` per D-06 (single-writer state discipline): it never touches `progress.json` or any bible file. The `progress.json` `last_gate` per-chapter field stays reserved and unpopulated in v1 regardless of how many gate runs have occurred.
 
 ## Example
 
@@ -165,6 +167,6 @@ sibling field the way `stylometry` carries `drift`.
 
 ## Consumed by
 
-- `bin/ns-gate` (TSK-029 (ns-gate orchestrator)): writes one report per gate run; prunes to the last 10 reports per chapter slug. Writes ONLY under `.studio/gate/` per D-06 (single-writer state discipline): it never updates `progress.json` and does NOT write `.studio/gate/last-gate.json` (see the Stop hook, below).
-- `Stop` gate hook (TSK-034 (stop-gate hook)): invokes `bin/ns-gate` at session end, reads the resulting report to determine whether to block the session, and is the sole writer of `.studio/gate/last-gate.json` (a verbatim copy of that same `bin/ns-gate` run's stdout).
+- `bin/ns-gate` (TSK-029 (ns-gate orchestrator)): writes one report per gate run; prunes to the last 10 reports per chapter slug. Writes ONLY under `_nonfiction-studio/gate/` per D-06 (single-writer state discipline): it never updates `progress.json` and does NOT write `_nonfiction-studio/gate/last-gate.json` (see the Stop hook, below).
+- `Stop` gate hook (TSK-034 (stop-gate hook)): invokes `bin/ns-gate` at session end, reads the resulting report to determine whether to block the session, and is the sole writer of `_nonfiction-studio/gate/last-gate.json` (a verbatim copy of that same `bin/ns-gate` run's stdout).
 - `bin/ns-status` (via `hooks/lib/status-engine.mjs`): reads the newest report per chapter slug to populate the drift statistic and gate verdict fields in its JSON board. The `nfs-status-dashboard` skill never reads a report file itself; it narrates that JSON output directly.

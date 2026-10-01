@@ -8,15 +8,15 @@ tags: ["skill", "fact-check", "verification", "claims", "fact-checker", "evidenc
 
 # nfs-fact-check
 
-The `nfs-fact-check` skill is the studio's verification front door. It resolves the chapter argument, runs a deterministic marker inventory via `bin/ns-claims`, states the web gate status, delegates the authoritative adversarial verification pass to the `fact-checker` agent, confirms agent writes via Read checks, and formats the three counts from the agent's per-chapter report at `.studio/fact-check-reports/<NN>-report.md`. It is a Phase 1 skill specified in S-06 3.7 (skills and invocation surface) and governed by D-05 (five shipped CLIs), D-06 (single-writer state discipline), D-07 (claim ledger), D-09 (learning checker agents), and D-13 (security posture).
+The `nfs-fact-check` skill is the studio's verification front door. It resolves the chapter argument, runs a deterministic marker inventory via `bin/ns-claims`, states the web gate status, delegates the authoritative adversarial verification pass to the `fact-checker` agent, confirms agent writes via Read checks, and formats the three counts from the agent's per-chapter report at `_nonfiction-studio/fact-check-reports/<NN>-report.md`. It is a Phase 1 skill specified in S-06 3.7 (skills and invocation surface) and governed by D-05 (five shipped CLIs), D-06 (single-writer state discipline), D-07 (claim ledger), D-09 (learning checker agents), and D-13 (security posture).
 
 ## Purpose
 
 `nfs-fact-check` bridges a drafted chapter and the verified evidence ledger. The `fact-checker` agent it invokes is the sole component that advances EV entry statuses beyond `pending`: it resolves `verified`, `unverified`, `interpretation`, or `source-unverifiable` for each entry tied to a chapter's claim markers. Chapter markers (`[UNVERIFIED]`, `[SOURCE-UNVERIFIABLE]`) are written and removed exclusively by the agent; the skill never touches marker text directly.
 
-The skill's role is to present an engine-backed pre-count before delegation, confirm agent writes afterward, and format the three counts the agent's report contains. It writes no chapter files, no ledger files, and no `.studio/progress.json`. The PostToolBatch hook maintains the per-chapter `open_claim_count` in `progress.json` when the agent writes chapter files; see [Progress.json and the open-claims total](#progressjson-and-the-open-claims-total) below.
+The skill's role is to present an engine-backed pre-count before delegation, confirm agent writes afterward, and format the three counts the agent's report contains. It writes no chapter files, no ledger files, and no `_nonfiction-studio/progress.json`. The PostToolBatch hook maintains the per-chapter `open_claim_count` in `progress.json` when the agent writes chapter files; see [Progress.json and the open-claims total](#progressjson-and-the-open-claims-total) below.
 
-**Writer alignment.** `fact-checker` writes all claim markers in `chapters/<slug>.md` and all EV status transitions in `research/evidence-log.md`. The skill confirms both files exist after the agent pass via Read checks. The skill's sole read role is: argument resolution (Read on `structure/chapter-list.md`), the ns-claims inventory (Bash), the config read for the web gate (Read on `.studio/config.json`), and the post-pass confirmation reads.
+**Writer alignment.** `fact-checker` writes all claim markers in `chapters/<slug>.md` and all EV status transitions in `research/evidence-log.md`. The skill confirms both files exist after the agent pass via Read checks. The skill's sole read role is: argument resolution (Read on `structure/chapter-list.md`), the ns-claims inventory (Bash), the config read for the web gate (Read on `_nonfiction-studio/config.json`), and the post-pass confirmation reads.
 
 **Re-run idempotency.** Re-runs are safe because the agent's writes are status-field updates and tag insert-or-remove operations against current state, and its cache skips known-good claims per D-09 (learning checker agents). A session interrupted after partial agent writes leaves chapter and ledger files in a consistent intermediate state; re-running picks up from current state without duplicating changes.
 
@@ -43,7 +43,7 @@ Alternate entry points:
 | `chapters/<slug>.md` | Step 1 (Bash probe); Step 5 (Read check) | Confirm the chapter file exists before delegation; confirm it is present and non-empty after the agent pass |
 | `research/evidence-log.md` | Step 5 (Read check); passed to fact-checker | Confirm the ledger is readable after the agent updates status fields |
 | `research/sources.md` | Passed to fact-checker | Source registry the agent reads at session start to scan for `changed: true` flags and to retrieve SRC records during verification |
-| `.studio/config.json` | Step 4 (Read) | Check `research.web_enabled` to state the online pass gate status before delegation |
+| `_nonfiction-studio/config.json` | Step 4 (Read) | Check `research.web_enabled` to state the online pass gate status before delegation |
 | `.claude/agent-memory/nonfiction-studio-fact-checker/` | Read by fact-checker | Verified-claims cache; entries with cache hits are skipped per D-09 (learning checker agents) |
 
 ### Outputs
@@ -54,40 +54,42 @@ All chapter writes and ledger writes are performed by the `fact-checker` agent, 
 |---|---|---|
 | `chapters/<slug>.md` | `fact-checker` (agent) | `[UNVERIFIED]` inserted adjacent to unresolved markers; `[SOURCE-UNVERIFIABLE]` paired with the existing `[claim: EV-nnnn]` for online-pass failures; stale tags removed for entries that advance to `verified` on re-check; `[claim: EV-nnnn]` markers never removed |
 | `research/evidence-log.md` | `fact-checker` (agent) | `status` fields updated to `verified`, `unverified`, `interpretation`, or `source-unverifiable`; status reset to `pending` on cache invalidation; claim text never changed |
-| `.studio/fact-check-reports/<NN>-report.md` | `fact-checker` (agent) | Per-chapter report with total markers, count by status, opinion-presented-as-fact flags, and recommended actions; written at the end of every pass |
+| `_nonfiction-studio/fact-check-reports/<NN>-report.md` | `fact-checker` (agent) | Per-chapter report with total markers, count by status, opinion-presented-as-fact flags, and recommended actions; written at the end of every pass |
 | `.claude/agent-memory/nonfiction-studio-fact-checker/` | `fact-checker` (agent) | Verified-claims cache updated with newly confirmed entries and session timestamps |
 
-The skill writes no `.studio/progress.json` and no other `.studio/` machine state.
+The skill writes no `_nonfiction-studio/progress.json` and no other `_nonfiction-studio/` machine state.
 
 ## Flow Summary
 
 The skill runs six steps.
 
-1. **Chapter argument resolution and file probe (mandatory first tool call).** Uses a Bash tool call to test whether `structure/chapter-list.md` is present (`HAS_REGISTRY`/`NO_REGISTRY`). If the registry is present, reads it and resolves the slug or number argument. Uses a second Bash tool call to test whether `chapters/<slug>.md` exists (`HAS_CHAPTER`/`NO_CHAPTER`). `NO_CHAPTER` halts immediately, routing to `nfs-draft`. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
+Before its first step, the skill locates the state folder: it reads `nonfiction-studio.json` at the book root, uses `_nonfiction-studio/` when that file does not exist, and stops without writing when the pointer is invalid or an unpointed state folder is found.
+
+1. **Chapter argument resolution and file probe (first tool call after the state folder is located).** Uses a Bash tool call to test whether `structure/chapter-list.md` is present (`HAS_REGISTRY`/`NO_REGISTRY`). If the registry is present, reads it and resolves the slug or number argument. Uses a second Bash tool call to test whether `chapters/<slug>.md` exists (`HAS_CHAPTER`/`NO_CHAPTER`). `NO_CHAPTER` halts immediately, routing to `nfs-draft`. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
 
 2. **Resolve the plugin root.** Before ns-claims is invoked, the skill resolves the plugin's installed path: reads `installed_plugins.json` in the Claude config directory first (a marketplace install, verified by confirming `bin/ns-stylometry` exists under the candidate path; the newest installed version wins if more than one is present), then a local self-marketplace entry in `settings.json`, then a plugins-cache scan (versioned and legacy layouts), then the current working directory. This is the same resolver `nfs-new-book` uses to locate its scaffold templates; it exists because a literal relative `bin/ns-claims` path resolves against the invoking shell's working directory, not the installed plugin, and would silently fail for a marketplace-installed author. If nothing resolves, the skill halts and names the config directory and the `installed_plugins.json` path it attempted.
 
 3. **Engine-backed marker inventory.** Uses the Bash tool to run `node "<plugin-root>/bin/ns-claims" --chapter=<slug> --json`. Parses the JSON output for `totalMarkers`, `resolvedCount`, and `coveragePct`, and presents this pre-count to the author before delegation. If ns-claims exits non-zero, reports the exact stderr message and halts. The skill never eyeballs markers itself: ns-claims is the deterministic inventory source.
 
-4. **Web gate check and delegate to fact-checker.** Reads `.studio/config.json` to check `research.web_enabled`. States the gate status explicitly before spawning the agent: gate open announces DOI/URL resolution; gate closed (the default) explains that pasted source content is analyzed with the same quote-and-attribute discipline per D-13 (security posture); on chat notes that WebSearch and WebFetch may not be available. Spawns `fact-checker` via the `nfs-fact-check -> fact-checker` chain edge with the chapter slug, ns-claims pre-count, and web gate status. The agent runs its five-step pass: cache protocol, marker resolution, status updates, marker writes (insert and the re-check removal rule), and the optional online pass.
+4. **Web gate check and delegate to fact-checker.** Reads `_nonfiction-studio/config.json` to check `research.web_enabled`. States the gate status explicitly before spawning the agent: gate open announces DOI/URL resolution; gate closed (the default) explains that pasted source content is analyzed with the same quote-and-attribute discipline per D-13 (security posture); on chat notes that WebSearch and WebFetch may not be available. Spawns `fact-checker` via the `nfs-fact-check -> fact-checker` chain edge with the chapter slug, ns-claims pre-count, and web gate status. The agent runs its five-step pass: cache protocol, marker resolution, status updates, marker writes (insert and the re-check removal rule), and the optional online pass.
 
-5. **Confirm agent writes via Read checks.** Reads `chapters/<slug>.md`, `research/evidence-log.md`, and `.studio/fact-check-reports/<NN>-report.md` to confirm each is present after the agent completes. A missing file surfaces as a gap report with an offer to re-run from Step 4.
+5. **Confirm agent writes via Read checks.** Reads `chapters/<slug>.md`, `research/evidence-log.md`, and `_nonfiction-studio/fact-check-reports/<NN>-report.md` to confirm each is present after the agent completes. A missing file surfaces as a gap report with an offer to re-run from Step 4.
 
-6. **Report three counts from the agent's per-chapter report.** Formats and presents the three counts from `.studio/fact-check-reports/<NN>-report.md`: verified (including cache hits), unresolved (open claims), and source-unverifiable. Names the report path explicitly. Suggests next steps based on the counts. On the chat surface, adds an explicit prompt to run `nfs-check-chapter` because the Stop hook gate does not fire automatically on chat per S-06 1.3 (gate closure compensation).
+6. **Report three counts from the agent's per-chapter report.** Formats and presents the three counts from `_nonfiction-studio/fact-check-reports/<NN>-report.md`: verified (including cache hits), unresolved (open claims), and source-unverifiable. Names the report path explicitly. Suggests next steps based on the counts. On the chat surface, adds an explicit prompt to run `nfs-check-chapter` because the Stop hook gate does not fire automatically on chat per S-06 1.3 (gate closure compensation).
 
 ## Progress.json and the Open-Claims Total
 
-The PostToolBatch hook at `hooks/post-tool-batch.mjs` maintains the per-chapter `open_claim_count` in `.studio/progress.json`. When the `fact-checker` agent writes `chapters/<slug>.md` during the verification pass, the hook recounts claim markers via the claims engine and writes the new total to the matching chapter entry in `progress.json`. The skill performs no `progress.json` write; see D-06 (single-writer state discipline).
+The PostToolBatch hook at `hooks/post-tool-batch.mjs` maintains the per-chapter `open_claim_count` in `_nonfiction-studio/progress.json`. When the `fact-checker` agent writes `chapters/<slug>.md` during the verification pass, the hook recounts claim markers via the claims engine and writes the new total to the matching chapter entry in `progress.json`. The skill performs no `progress.json` write; see D-06 (single-writer state discipline).
 
 The `open_claim_count` in `progress.json` is derived from the marker state on disk after the agent's writes land. The three counts the skill presents (verified, unresolved, source-unverifiable) come from the agent's report and represent the same state; the hook's count reflects the same truth computed independently from the chapter file.
 
 ## Web Research Gate
 
-The `fact-checker` agent checks `research.web_enabled` in `.studio/config.json` before every WebSearch or WebFetch call. The gate rule is strict: the value must be exactly the boolean `true`. An absent field, the string `"true"`, `false`, or `null` all leave the gate closed. The gate is checked at the time of each web-research request, not once at session start.
+The `fact-checker` agent checks `research.web_enabled` in `_nonfiction-studio/config.json` before every WebSearch or WebFetch call. The gate rule is strict: the value must be exactly the boolean `true`. An absent field, the string `"true"`, `false`, or `null` all leave the gate closed. The gate is checked at the time of each web-research request, not once at session start.
 
 This is a project-level setting, not a surface-level one. Authors running on Claude Code CLI with the gate closed receive the same offline-only pass as authors on chat.
 
-To enable the online DOI/URL resolution pass for a project, add the following to `.studio/config.json`:
+To enable the online DOI/URL resolution pass for a project, add the following to `_nonfiction-studio/config.json`:
 
 ```json
 "research": {

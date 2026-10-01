@@ -16,7 +16,7 @@ The `nfs-start` skill is the guided front door and dispatcher for the Nonfiction
 
 **The dispatcher routes to skills only.** Per the TSK-044 (chain contract, Phase 1) reconciliation, `nfs-start` has no chain edges in `agents/_chain-permitted.yaml`. The six paths route to skills; most of those skills invoke agents as their own contracts specify, though Path 6's targets (`nfs-quick-scan` and `nfs-tour`) invoke no agent at all. Path 5's general-questions half answers directly from inline-loaded bible context without invoking any skill.
 
-**The skill writes nothing.** No file writes, no `.studio/` mutations. All output is produced by the target skill.
+**The skill writes nothing.** No file writes, no `_nonfiction-studio/` mutations. All output is produced by the target skill.
 
 **No agents invoked directly.** This skill has no chain edges.
 
@@ -50,8 +50,8 @@ Alternate entry points:
 
 | Path | File read | Why |
 |---|---|---|
-| Step 1 (all paths) | `.studio/progress.json` | Project-exists probe (Bash) and chapter state inspection |
-| Step 2 (all paths) | `.studio/meta.json` | Book title for greeting |
+| Step 1 (all paths) | `_nonfiction-studio/progress.json` | Project-exists probe (Bash) and chapter state inspection |
+| Step 2 (all paths) | `_nonfiction-studio/meta.json` | Book title for greeting |
 | Path 2 | `structure/chapter-list.md` | Chapter registry; read after the registry probe confirms it exists |
 | Path 5 general | `context/brief.md`, `context/style-profile.md`, `structure/thesis.md`, `structure/outline.md` | Inline context for direct answers; loaded as applicable |
 | Path 6 | (none) | `nfs-quick-scan` and `nfs-tour` read no project file; reachable directly from Step 1's `NO_PROGRESS` branch, which skips Step 2's `meta.json` read entirely |
@@ -64,9 +64,11 @@ The skill writes no files and performs no state mutations. All outputs are produ
 
 The skill runs five steps.
 
-1. **Progress file probe (mandatory first tool call).** Uses a Bash probe (`test -f .studio/progress.json`) to detect whether a project exists (`HAS_PROGRESS`/`NO_PROGRESS`). On `NO_PROGRESS`, presents Path 1 and Path 6 (the two paths that need no project) and proceeds to the confirm-before-handoff for whichever the author picks. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
+Before its first step, the skill locates the state folder: it reads `nonfiction-studio.json` at the book root, uses `_nonfiction-studio/` when that file does not exist, and stops without writing when the pointer is invalid or an unpointed state folder is found.
 
-2. **Parse progress.json and read book title.** On `HAS_PROGRESS`, reads `.studio/progress.json`. If the file is present but malformed or unreadable, routes directly to Path 5 naming `nfs-doctor`. On a valid parse, reads `.studio/meta.json` for `book_title`; falls back to "your book" if absent.
+1. **Progress file probe (first tool call after the state folder is located).** Uses a Bash probe (`test -f _nonfiction-studio/progress.json`) to detect whether a project exists (`HAS_PROGRESS`/`NO_PROGRESS`). On `NO_PROGRESS`, presents Path 1 and Path 6 (the two paths that need no project) and proceeds to the confirm-before-handoff for whichever the author picks. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
+
+2. **Parse progress.json and read book title.** On `HAS_PROGRESS`, reads `_nonfiction-studio/progress.json`. If the file is present but malformed or unreadable, routes directly to Path 5 naming `nfs-doctor`. On a valid parse, reads `_nonfiction-studio/meta.json` for `book_title`; falls back to "your book" if absent.
 
 3. **Greet and present six paths.** Greets the author by book title and presents all six paths as numbered choices with one-line descriptions. Waits for the author's choice. Skipped when Step 1 already routed via the `NO_PROGRESS` shortcut (see Path 6 below).
 
@@ -92,7 +94,7 @@ test -f structure/chapter-list.md && echo HAS_REGISTRY || echo NO_REGISTRY
 
 **Chapter state inspection (using the committed status enum):**
 
-The inspection reads `.studio/progress.json` (the alive progress layer) and `structure/chapter-list.md` (the full chapter registry). The committed status enum values are `empty`, `outlined`, `drafting`, `drafted`, `revised`, `gated`, `final` per S-08 section 3.
+The inspection reads `_nonfiction-studio/progress.json` (the alive progress layer) and `structure/chapter-list.md` (the full chapter registry). The committed status enum values are `empty`, `outlined`, `drafting`, `drafted`, `revised`, `gated`, `final` per S-08 section 3.
 
 Priority order:
 1. First chapter in `progress.json` with status `drafting` (in-progress work) - offered with `nfs-draft <slug>`.

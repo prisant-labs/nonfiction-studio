@@ -45,24 +45,25 @@ production/front-matter.md    created
 production/back-matter.md     created
 ```
 
-> Writing .studio/ state files:
+> Writing _nonfiction-studio/ state files:
 
 ```
-.studio/meta.json              created
-.studio/config.json            created
-.studio/progress.json          created
-.studio/progress.schema.json   created
-.studio/ai-use-log.jsonl       created (empty)
-.studio/snapshots/.gitkeep     created
-.studio/gate/.gitkeep          created
-.studio/logs/.gitkeep          created
+_nonfiction-studio/meta.json              created
+_nonfiction-studio/config.json            created
+_nonfiction-studio/progress.json          created
+_nonfiction-studio/progress.schema.json   created
+_nonfiction-studio/ai-use-log.jsonl       created (empty)
+_nonfiction-studio/snapshots/.gitkeep     created
+_nonfiction-studio/gate/.gitkeep          created
+_nonfiction-studio/logs/.gitkeep          created
+_nonfiction-studio/README.md              created
 ```
 
 > Skipping the output style offer in this non-interactive session; no output style was set. Run `/nonfiction-studio:nfs-new-book` again from an interactive session to see the offer, or set a style directly with `/config`.
 >
 > Skipping the book-context skill generation in this non-interactive session; no skill was generated. Run `/nonfiction-studio:nfs-new-book` again from an interactive session to be asked.
 >
-> Book project "The Quiet Ledger" has been initialized. The bible tree and .studio/ state files are ready.
+> Book project "The Quiet Ledger" has been initialized. The bible tree and _nonfiction-studio/ state files are ready.
 >
 > The next step is nfs-interview. Invoke it with `/nonfiction-studio:nfs-interview` to conduct the structured intake interview and build your project brief. The interview typically takes 45-90 minutes and produces a confirmed context/brief.md.
 
@@ -70,7 +71,7 @@ production/back-matter.md     created
 
 ## Resulting state file contents
 
-### .studio/meta.json (all placeholders filled)
+### _nonfiction-studio/meta.json (all placeholders filled)
 
 ```json
 {
@@ -83,7 +84,7 @@ production/back-matter.md     created
 
 Note: `created` is an RFC 3339 UTC timestamp (`{{DATETIME}}`), not a calendar date. No `{{` placeholders remain.
 
-### .studio/progress.json (empty chapter list, zero counters)
+### _nonfiction-studio/progress.json (empty chapter list, zero counters)
 
 ```json
 {
@@ -109,7 +110,7 @@ Note: `created` is an RFC 3339 UTC timestamp (`{{DATETIME}}`), not a calendar da
 
 > Warning: This directory already contains a book project. Scanning for missing scaffold files...
 >
-> All 24 expected scaffold files are present. No files were written.
+> All 25 expected scaffold files are present. No files were written.
 >
 > Run /nonfiction-studio:nfs-interview to continue setting up your project.
 >
@@ -126,5 +127,5 @@ Note: `created` is an RFC 3339 UTC timestamp (`{{DATETIME}}`), not a calendar da
 - All `{{BOOK_TITLE}}`, `{{DATETIME}}`, and `{{PLUGIN_VERSION}}` placeholders are replaced in state files; `{{DATE}}` is replaced with YYYY-MM-DD in prose files. None remain in any written file.
 - `progress.json` has `"version": 2`, `"chapters": []`, and all zero counters.
 - The second invocation runs a Bash scan and reports the result honestly. When all files are present it states so; when files are missing it lists exactly which ones.
-- `.studio/` is at the bible root alongside `context/` and `chapters/`, not in a nested subdirectory.
+- `_nonfiction-studio/` is at the bible root alongside `context/` and `chapters/`, not in a nested subdirectory.
 - Both once-per-project offers (the output style offer and the book-context skill generation step) state plainly that they are skipped in a non-interactive session rather than guessing at consent; neither writes any file in that case, on either the first run or the re-init run.

@@ -12,7 +12,7 @@ The `nfs-capture-voice` skill is the studio's voice-capture front door. It colle
 
 ## Purpose
 
-`nfs-capture-voice` builds and calibrates the author's stylometric voice baseline: the numeric anchor the drift scorer uses to detect when a drafted chapter has moved away from the author's natural style, plus the five-rung noise-scale ladder that gives the verdict a null distribution measured on this author's own voice. The baseline is stored in two places that must agree: `context/style-profile.md` (the seven-section human-readable profile the author can edit directly, per `docs/formats/style-profile.md`) and `.studio/config.json` (`stylometry.baseline`: `markers`, `marker_set_version`, `calibration`, `captured`, and `sample_count`).
+`nfs-capture-voice` builds and calibrates the author's stylometric voice baseline: the numeric anchor the drift scorer uses to detect when a drafted chapter has moved away from the author's natural style, plus the five-rung noise-scale ladder that gives the verdict a null distribution measured on this author's own voice. The baseline is stored in two places that must agree: `context/style-profile.md` (the seven-section human-readable profile the author can edit directly, per `docs/formats/style-profile.md`) and `_nonfiction-studio/config.json` (`stylometry.baseline`: `markers`, `marker_set_version`, `calibration`, `captured`, and `sample_count`).
 
 The skill handles three entry conditions:
 
@@ -50,23 +50,25 @@ All outputs are written by the `voice-capture` agent, not by the skill directly.
 |---|---|---|
 | `context/samples/voice-sample-NN.md` | Before calibration runs | Every sample used to compute the baseline, persisted first so `--calibrate` reads real files |
 | `context/style-profile.md` | After author confirmation in agent session | Seven-section voice profile per `docs/formats/style-profile.md`: Voice, Diction, Rhythm, Do, Do not, Exemplars, Baseline reference |
-| `.studio/config.json` | As soon as calibration completes | `stylometry.baseline`: `markers`, `marker_set_version`, and `calibration` verbatim from `bin/ns-stylometry --calibrate`, plus the agent-supplied `captured` and `sample_count` |
+| `_nonfiction-studio/config.json` | As soon as calibration completes | `stylometry.baseline`: `markers`, `marker_set_version`, and `calibration` verbatim from `bin/ns-stylometry --calibrate`, plus the agent-supplied `captured` and `sample_count` |
 
-The skill writes no `.studio/` state and no `context/samples/` files itself - both are written by the agent. The captured signal is the presence of a non-empty `context/style-profile.md` on disk; no secondary status field is needed per D-06 (single-writer state discipline).
+The skill writes no `_nonfiction-studio/` state and no `context/samples/` files itself - both are written by the agent. The captured signal is the presence of a non-empty `context/style-profile.md` on disk; no secondary status field is needed per D-06 (single-writer state discipline).
 
 ## Flow Summary
 
 The skill runs six steps in order.
 
+Before its first step, the skill locates the state folder: it reads `nonfiction-studio.json` at the book root, uses `_nonfiction-studio/` when that file does not exist, and stops without writing when the pointer is invalid or an unpointed state folder is found.
+
 1. **Existing-profile check.** Uses a Bash tool call to detect whether `context/style-profile.md` exists. If so, offers re-capture or augmentation. States the profile's purpose in plain terms in both branches.
 
 2. **Sample collection and word-count assessment.** Asks the author to paste samples. If no samples are provided, offers the bootstrap path and delegates to the agent with a Path B signal. If samples are submitted, uses a Bash tool call to count the total words and branches: under 2,200 words states the exact count, explains the calibration floor in one sentence, and requests more; 2,200 up to roughly 3,000 words proceeds with a confidence-improves-with-more note; roughly 3,000 words or more proceeds with the count alone.
 
-3. **Delegate to the voice-capture agent.** Reads `context/brief.md`, states the one-sentence calibration cost disclosure, then spawns the `voice-capture` agent (the `nfs-capture-voice -> voice-capture` chain edge) with the samples, the brief content, and the word count. The agent persists the samples under `context/samples/`, runs `bin/ns-stylometry --calibrate`, reads `markers`, `marker_set_version`, and `calibration` from stdout plus the two regime-disclosure sentences from stderr, writes `context/style-profile.md`, and writes the full baseline into `.studio/config.json`.
+3. **Delegate to the voice-capture agent.** Reads `context/brief.md`, states the one-sentence calibration cost disclosure, then spawns the `voice-capture` agent (the `nfs-capture-voice -> voice-capture` chain edge) with the samples, the brief content, and the word count. The agent persists the samples under `context/samples/`, runs `bin/ns-stylometry --calibrate`, reads `markers`, `marker_set_version`, and `calibration` from stdout plus the two regime-disclosure sentences from stderr, writes `context/style-profile.md`, and writes the full baseline into `_nonfiction-studio/config.json`.
 
-4. **Confirm output files and relay the regime disclosure.** Uses the Read tool on `context/style-profile.md` and `.studio/config.json` to confirm both files are present and contain the expected content, including `calibration`, `captured`, and `sample_count`. Halts and reports clearly if any is missing. Once both checks pass, relays the agent's two regime-disclosure sentences to the author verbatim - never re-derived.
+4. **Confirm output files and relay the regime disclosure.** Uses the Read tool on `context/style-profile.md` and `_nonfiction-studio/config.json` to confirm both files are present and contain the expected content, including `calibration`, `captured`, and `sample_count`. Halts and reports clearly if any is missing. Once both checks pass, relays the agent's two regime-disclosure sentences to the author verbatim - never re-derived.
 
-5. **Preview the baseline.** Quotes two or three marker values from the `.studio/config.json` already read in Step 4, in plain language. No additional engine run.
+5. **Preview the baseline.** Quotes two or three marker values from the `_nonfiction-studio/config.json` already read in Step 4, in plain language. No additional engine run.
 
 6. **Close with suggestions.** Offers `nfs-outline` or `nfs-interview` as optional next steps based on project state.
 
@@ -80,4 +82,4 @@ Missing `context/brief.md` is not a blocking error: the skill notes the absence 
 
 ## Worked Example
 
-See [nfs-capture-voice.example.md](./nfs-capture-voice.example.md) for a condensed transcript of a `nfs-capture-voice` run for the sample book "The Quiet Network". The example covers four submitted samples totaling over 3,600 words, the calibration cost disclosure, delegation to the `voice-capture` agent, the two Read-check confirmations, the regime-disclosure relay, and the marker-value preview. The committed `context/style-profile.md` and `.studio/config.json` in `examples/sample-book/` are the live outcome of an equivalent run. For the no-samples bootstrap path, see `agents/voice-capture.md` Path B.
+See [nfs-capture-voice.example.md](./nfs-capture-voice.example.md) for a condensed transcript of a `nfs-capture-voice` run for the sample book "The Quiet Network". The example covers four submitted samples totaling over 3,600 words, the calibration cost disclosure, delegation to the `voice-capture` agent, the two Read-check confirmations, the regime-disclosure relay, and the marker-value preview. The committed `context/style-profile.md` and `_nonfiction-studio/config.json` in `examples/sample-book/` are the live outcome of an equivalent run. For the no-samples bootstrap path, see `agents/voice-capture.md` Path B.

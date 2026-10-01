@@ -180,7 +180,7 @@ The agent writes the updated `chapters/03-your-curation-practice.md` with the ac
 
 The skill uses the Read tool on `chapters/03-your-curation-practice.md`. The file is present with the accepted replacement applied.
 
-**Compliance append.** The skill's count-delta check finds no hook-appended record for `chapters/03-your-curation-practice.md` since the flow started (no hooks fire on chat). It appends two records to `.studio/ai-use-log.jsonl`:
+**Compliance append.** The skill's count-delta check finds no hook-appended record for `chapters/03-your-curation-practice.md` since the flow started (no hooks fire on chat). It appends two records to `_nonfiction-studio/ai-use-log.jsonl`:
 
 ```json
 {"ts":"2026-07-19T15:04:22Z","agent":"drafting-partner","surface":"chat","scope":"generated","targets":["chapters/03-your-curation-practice.md"],"summary":"Drafted 03-your-curation-practice with claim anchors from the evidence ledger."}
@@ -219,7 +219,7 @@ The skill uses the Read tool on `chapters/03-your-curation-practice.md`. The fil
 
 - **Claim markers preserved.** `[claim: EV-0011]` and `[claim: EV-0012]` and the two `[UNVERIFIED]` tags are unchanged by `line-editor`. The rhythm proposal worked around them. The meaning-change flag was presented correctly.
 
-- **No progress.json write.** The skill wrote no `.studio/progress.json`. On CLI or Cowork, the PostToolBatch hook would update the word count for `03-your-curation-practice` in `progress.json` when `drafting-partner` writes the file - but only if a matching slug entry already exists in the `chapters` array. The chapter STATUS lifecycle field is not updated by this flow.
+- **No progress.json write.** The skill wrote no `_nonfiction-studio/progress.json`. On CLI or Cowork, the PostToolBatch hook would update the word count for `03-your-curation-practice` in `progress.json` when `drafting-partner` writes the file - but only if a matching slug entry already exists in the `chapters` array. The chapter STATUS lifecycle field is not updated by this flow.
 
 - **Compliance append via count-delta, not a chat-only special case.** The two ai-use-log records (scope `generated` for `drafting-partner`, scope `assisted` for `line-editor`) are appended by the skill at Step 6 because its count-delta check found no hook-appended record for `chapters/03-your-curation-practice.md` since the flow started - true here because no hooks fire on chat. On CLI or Cowork the PostToolBatch hook normally appends those records first, so the same check normally finds no append needed there; either way it is the identical verify-then-append rule, not two different code paths.
 

@@ -1,6 +1,8 @@
 # Style Profile Format
 
-**Purpose.** This is the normative grammar for `context/style-profile.md`, the human-readable half of the voice system defined in S-08 (schemas and file formats) section 9. The numeric half of the voice system (the baseline vector) lives in `.studio/config.json` under `stylometry.baseline.markers` and is never duplicated in this file; the `Baseline reference` section points to it instead. The file is written by the `voice-capture` skill at intake and edited by the author. A parser author must be able to implement a conformant reader without consulting any other document.
+**Purpose.** This is the normative grammar for `context/style-profile.md`, the human-readable half of the voice system defined in S-08 (schemas and file formats) section 9. The numeric half of the voice system (the baseline vector) lives in `_nonfiction-studio/config.json` under `stylometry.baseline.markers` and is never duplicated in this file; the `Baseline reference` section points to it instead. The file is written by the `voice-capture` skill at intake and edited by the author. A parser author must be able to implement a conformant reader without consulting any other document.
+
+Paths on this page use the default state folder, `_nonfiction-studio/`. A book can give that folder another name, recorded in `nonfiction-studio.json` at the book root; see [ADR-0015 (state folder name)](../adr/ADR-0015-state-folder-name.md).
 
 ## File structure
 
@@ -14,15 +16,15 @@ The style profile is a Markdown document with a top-level `# Style profile` head
 | `## Do` | Positive stylistic directives the agents apply when generating or editing |
 | `## Do not` | Negative constraints; patterns the agents must avoid |
 | `## Exemplars` | Paths to sample files under `context/samples/` that illustrate the voice |
-| `## Baseline reference` | Pointer block linking to the numeric vector in `.studio/config.json` |
+| `## Baseline reference` | Pointer block linking to the numeric vector in `_nonfiction-studio/config.json` |
 
 ## Baseline reference block
 
-The `Baseline reference` section carries three fixed fields and must not duplicate the numeric vector itself. It points to the single stored copy in `.studio/config.json`:
+The `Baseline reference` section carries three fixed fields and must not duplicate the numeric vector itself. It points to the single stored copy in `_nonfiction-studio/config.json`:
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `vector` | string | required | The JSON path into `config.json` where the markers live, expressed as `.studio/config.json -> stylometry.baseline.markers` |
+| `vector` | string | required | The JSON path into `config.json` where the markers live, expressed as `_nonfiction-studio/config.json -> stylometry.baseline.markers` |
 | `captured` | string | required | RFC 3339 UTC timestamp of the voice-capture run; must agree with `config.json` `stylometry.baseline.captured` |
 | `sample_count` | integer | required | Number of voice samples used in the baseline; must agree with `config.json` `stylometry.baseline.sample_count` |
 
@@ -74,7 +76,7 @@ The `Baseline reference` section carries three fixed fields and must not duplica
 - context/samples/voice-sample-02.md
 
 ## Baseline reference
-- vector: .studio/config.json -> stylometry.baseline.markers
+- vector: _nonfiction-studio/config.json -> stylometry.baseline.markers
 - captured: 2026-07-17T09:12:00Z
 - sample_count: 4
 ```
@@ -82,8 +84,8 @@ The `Baseline reference` section carries three fixed fields and must not duplica
 ## Consumed by
 
 - `voice-capture` skill: writes the initial profile at intake, populating all seven sections from the structured author interview.
-- `bin/ns-stylometry` (TSK-026 (ns-stylometry engine)): reads the numeric vector, `marker_set_version`, and calibration ladder directly from `.studio/config.json`'s `stylometry.baseline` object, the location this file's `Baseline reference` block points to, and computes the calibrated-null drift verdict (statistic, threshold, exceeded - ADR-0012, voice verdict scope, Decision 1) via `computeDrift`. It is a read-only CLI: it writes nothing to `progress.json` or anywhere else, does not read this file itself, and does not cross-check the `captured` timestamp; that cross-check is `bin/ns-doctor`'s, described under "Doctor validation" above.
-- `bin/ns-doctor` (the eleventh check in `hooks/lib/doctor-engine.mjs`'s `runChecks`): reads this file's `Baseline reference` block directly and cross-checks its `captured` and `sample_count` fields against `.studio/config.json`'s stylometry baseline, per "Doctor validation" above.
+- `bin/ns-stylometry` (TSK-026 (ns-stylometry engine)): reads the numeric vector, `marker_set_version`, and calibration ladder directly from `_nonfiction-studio/config.json`'s `stylometry.baseline` object, the location this file's `Baseline reference` block points to, and computes the calibrated-null drift verdict (statistic, threshold, exceeded - ADR-0012, voice verdict scope, Decision 1) via `computeDrift`. It is a read-only CLI: it writes nothing to `progress.json` or anywhere else, does not read this file itself, and does not cross-check the `captured` timestamp; that cross-check is `bin/ns-doctor`'s, described under "Doctor validation" above.
+- `bin/ns-doctor` (the eleventh check in `hooks/lib/doctor-engine.mjs`'s `runChecks`): reads this file's `Baseline reference` block directly and cross-checks its `captured` and `sample_count` fields against `_nonfiction-studio/config.json`'s stylometry baseline, per "Doctor validation" above.
 - `drafting-partner`: reads `## Voice`, `## Diction`, `## Rhythm`, `## Do`, and `## Do not` for craft guidance when generating chapter prose.
 - `line-editor`: reads the same craft sections to calibrate line edits against the author's voice.
 - `voice-guardian`: monitors the active writing session against the profile and raises stylometry alerts when drift exceeds the threshold in `config.json`.

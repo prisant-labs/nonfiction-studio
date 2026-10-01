@@ -8,11 +8,11 @@ tags: ["skill", "init", "scaffold", "setup"]
 
 # nfs-new-book
 
-Scaffolds the flat bible tree (context/, structure/, chapters/, research/, production/) and creates `.studio/` state files for a new nonfiction book project. This is the first skill in the studio workflow; every other skill depends on the structure it creates.
+Scaffolds the flat bible tree (context/, structure/, chapters/, research/, production/) and creates `_nonfiction-studio/` state files for a new nonfiction book project. This is the first skill in the studio workflow; every other skill depends on the structure it creates.
 
 ## Purpose
 
-`nfs-new-book` creates a complete project layout from the plugin's scaffold template. After it runs, the directory contains a flat bible tree (context/, structure/, chapters/, research/, production/) and a `.studio/` directory alongside them with the three required state files: `meta.json`, `config.json`, and `progress.json`. It also copies the selected project-init intake template to `context/project-init.md` for the `nfs-interview` skill to consume.
+`nfs-new-book` creates a complete project layout from the plugin's scaffold template. After it runs, the directory contains a flat bible tree (context/, structure/, chapters/, research/, production/) and a `_nonfiction-studio/` directory alongside them with the three required state files: `meta.json`, `config.json`, and `progress.json`. It also copies the selected project-init intake template to `context/project-init.md` for the `nfs-interview` skill to consume.
 
 ## Invocation
 
@@ -50,7 +50,7 @@ Alternate entry points:
 
 ### Bible tree (flat layout)
 
-The flat bible tree is at the project root. The plugin's scaffold and all engines use this layout. (Note: `bible.mjs` also detects a nested `book/` subdirectory that itself contains `.studio/`, `context/`, and `chapters/` as a compatibility path for authors who nest; the plugin's own scaffold is always flat.)
+The flat bible tree is at the project root. The plugin's scaffold and all engines use this layout. (Note: `bible.mjs` also detects a nested `book/` subdirectory that itself contains `_nonfiction-studio/`, `context/`, and `chapters/` as a compatibility path for authors who nest; the plugin's own scaffold is always flat.)
 
 | Path | Contents |
 |---|---|
@@ -71,18 +71,19 @@ The flat bible tree is at the project root. The plugin's scaffold and all engine
 | `production/back-matter.md` | Back matter template |
 | `production/exports/` | Export output directory (`.gitkeep` at init) |
 
-### .studio/ state files (machine state, alongside the bible tree)
+### _nonfiction-studio/ state files (machine state, alongside the bible tree)
 
 | File | Contents |
 |---|---|
-| `.studio/meta.json` | Schema version, creation timestamp, book title |
-| `.studio/config.json` | Gate thresholds and model routing defaults |
-| `.studio/progress.json` | Chapter list (empty) and zero counters |
-| `.studio/progress.schema.json` | JSON Schema for progress.json validation |
-| `.studio/ai-use-log.jsonl` | AI-use log (empty at init; appended during drafting) |
-| `.studio/snapshots/` | Snapshot directory (empty at init) |
-| `.studio/gate/` | Gate reports directory (empty at init) |
-| `.studio/logs/` | Diagnostic logs directory (empty at init) |
+| `_nonfiction-studio/meta.json` | Schema version, creation timestamp, book title |
+| `_nonfiction-studio/config.json` | Gate thresholds and model routing defaults |
+| `_nonfiction-studio/progress.json` | Chapter list (empty) and zero counters |
+| `_nonfiction-studio/progress.schema.json` | JSON Schema for progress.json validation |
+| `_nonfiction-studio/ai-use-log.jsonl` | AI-use log (empty at init; appended during drafting) |
+| `_nonfiction-studio/snapshots/` | Snapshot directory (empty at init) |
+| `_nonfiction-studio/gate/` | Gate reports directory (empty at init) |
+| `_nonfiction-studio/logs/` | Diagnostic logs directory (empty at init) |
+| `_nonfiction-studio/README.md` | Short explanation of the folder: what it holds, that it belongs in version control, and how to rename it with `nfs-doctor move-state` |
 
 ### Output style records (offer outcome only, not always written)
 
@@ -114,7 +115,7 @@ No `{{` placeholder tokens remain in any written file after init completes.
 
 ## Output style offer
 
-After the bible tree and `.studio/` state files are stamped, `nfs-new-book` offers the two output styles Nonfiction Studio ships - `manuscript` and `review` - once per project. This runs on every invocation shape: a fresh NEWINIT, a REINIT that re-stamps missing scaffold files, and even a REINIT against a project that is already fully scaffolded - the last of these is the reachable path for a legitimate re-offer on a project whose earlier offer outcome was never actually recorded. See [Output styles](../output-styles.md) for what each style changes.
+After the bible tree and `_nonfiction-studio/` state files are stamped, `nfs-new-book` offers the two output styles Nonfiction Studio ships - `manuscript` and `review` - once per project. This runs on every invocation shape: a fresh NEWINIT, a REINIT that re-stamps missing scaffold files, and even a REINIT against a project that is already fully scaffolded - the last of these is the reachable path for a legitimate re-offer on a project whose earlier offer outcome was never actually recorded. See [Output styles](../output-styles.md) for what each style changes.
 
 **Fires once.** Before offering, the skill checks the project's studio settings file, `.claude/nonfiction-studio.local.md`, for an existing `output_style` value (`manuscript`, `review`, or `declined`). If one is already recorded, the offer is skipped silently for that project - it does not re-ask on a later run.
 
@@ -144,7 +145,9 @@ Immediately after the output style offer, `nfs-new-book` offers to generate a pr
 
 ## Guardrails
 
-**Never overwrites.** If a book project layout already exists (.studio/ or context/brief.md found), the skill runs a Bash scan of all 24 expected scaffold paths and reports the exact set of missing files. It then offers (or in headless mode, automatically proceeds) to re-stamp only those missing files. No existing file is ever read or replaced in a re-init run.
+Before its first step, the skill locates the state folder: it reads `nonfiction-studio.json` at the book root, uses `_nonfiction-studio/` when that file does not exist, and stops without writing when the pointer is invalid or an unpointed state folder is found.
+
+**Never overwrites.** The same Bash scan that runs the existence check also looks for an unpointed second state folder: any other folder at the book root, hidden folders included, holding both `meta.json` and `progress.json`. If one is found, the skill stops, writes nothing, and names `/nonfiction-studio:nfs-doctor` as the fix, rather than starting a new book that would split the records across two folders. Otherwise, if a book project layout already exists (`_nonfiction-studio/` or `context/brief.md` found), the skill scans all 25 expected scaffold paths and reports the exact set of missing files. It then offers (or in headless mode, automatically proceeds) to re-stamp only those missing files. No existing file is ever read or replaced in a re-init run.
 
 **Surface-independent.** The skill reads template files and writes to the working directory using standard file tools. No hooks or subagents are needed; it works identically on CLI, Cowork, and Chat.
 

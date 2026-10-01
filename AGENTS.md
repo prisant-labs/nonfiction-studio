@@ -32,7 +32,7 @@ for the full documentation index.
 - `docs/` - reference material: `adr/` (decision records), `formats/` (file-format
   contracts), `gates/` (internal build-phase records), `reference/` (per-component pages).
 - `examples/` - `sample-book/` (the committed integration fixture), `fixtures/`, `spikes/`.
-- `templates/` - the two shipped `.studio/config.json` starting points plus scaffold and
+- `templates/` - the two shipped `_nonfiction-studio/config.json` starting points plus scaffold and
   starter templates.
 - `tests/` - unit and fixture suites: `checks/` (CI checkers and Tier B scripts), `engines/`
   (engine modules and their CLIs), `hooks/`, `lib/` (shared helpers from `hooks/lib/`),
@@ -84,7 +84,7 @@ for a keyless run that spends nothing.
   script continues with whatever partial output it already has. A hook must never be the
   reason a session breaks.
 - **Guards and settings precedence follow ADR-0013 (wave 1 exit surfaces).** The precedence
-  chain (defaults, then `.studio/config.json`, then the per-project settings file, then
+  chain (defaults, then `_nonfiction-studio/config.json`, then the per-project settings file, then
   structural coercions) can raise `gate.mode` toward `block`, but settings can never un-coerce
   a structurally-coerced check back out of `warn`. A settings-file warning on one key must
   never silence an unrelated, validly-configured control. Read
@@ -93,7 +93,7 @@ for a keyless run that spends nothing.
 - **Determinism.** Where a CLI's reference page promises byte-identical output (ns-status,
   ns-overlap `--json`, and the ns-claims / ns-notes regenerations), keep that promise: no
   wall-clock value or other run-to-run variance in that output. The gate report's `ts` field
-  and its timestamped file under `.studio/gate/` are the deliberate exception. Sort with plain
+  and its timestamped file under `_nonfiction-studio/gate/` are the deliberate exception. Sort with plain
   code-unit (codepoint) comparison, never
   `localeCompare`: `localeCompare`'s ordering depends on the ICU data bundled with a given Node
   build, which is exactly the kind of platform difference the Windows CI leg exists to catch.

@@ -23,7 +23,7 @@ that must agree with each other: `context/style-profile.md` (the human-readable
 voice contract every other agent reads for craft guidance, in the seven-section
 grammar normative in `docs/formats/style-profile.md`) and the full calibrated
 baseline - `stylometry.baseline.markers`, `marker_set_version`, `calibration`,
-`captured`, and `sample_count` - in `.studio/config.json` (the numeric anchor the
+`captured`, and `sample_count` - in `_nonfiction-studio/config.json` (the numeric anchor the
 gate uses to score drift, the calibration ladder that gives the verdict a null
 distribution measured on this author's own voice, and the version stamp that lets
 the drift scorer refuse a baseline captured under a different marker computation).
@@ -95,10 +95,10 @@ author confirms the draft.
 |---|---|---|
 | `context/samples/voice-sample-NN.md` | Before calibration runs | Every sample used to compute the baseline, persisted so `--calibrate` reads real files and the profile's `Exemplars` paths resolve |
 | `context/style-profile.md` | After author confirmation | Full operational voice profile in the seven-section grammar (`docs/formats/style-profile.md`): Voice, Diction, Rhythm, Do, Do not, Exemplars, Baseline reference |
-| `.studio/config.json` | As soon as calibration completes (before profile confirmation) | `stylometry.baseline`: `markers`, `marker_set_version`, and `calibration` verbatim from `bin/ns-stylometry --calibrate` stdout, plus the agent-supplied `captured` (RFC 3339 UTC) and `sample_count`, written via read-modify-write; no other config fields are touched |
+| `_nonfiction-studio/config.json` | As soon as calibration completes (before profile confirmation) | `stylometry.baseline`: `markers`, `marker_set_version`, and `calibration` verbatim from `bin/ns-stylometry --calibrate` stdout, plus the agent-supplied `captured` (RFC 3339 UTC) and `sample_count`, written via read-modify-write; no other config fields are touched |
 
 The `Baseline reference` section of the profile points at
-`.studio/config.json -> stylometry.baseline.markers` rather than duplicating the
+`_nonfiction-studio/config.json -> stylometry.baseline.markers` rather than duplicating the
 vector values, and copies its `captured`/`sample_count` values from what was just
 written to config - a single source of truth for both fields, since `bin/ns-doctor`
 compares them by exact equality.

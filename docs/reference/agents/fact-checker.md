@@ -89,7 +89,7 @@ at least one claim is being reviewed.
 |---|---|---|
 | `research/evidence-log.md` | After each EV entry is resolved | `status` field updated to `verified`, `unverified`, `interpretation`, or `source-unverifiable`; reset to `pending` on cache invalidation. Claim text is never changed. |
 | `chapters/NN-*.md` | When an entry is unverified or source-unverifiable; when a previously failed entry advances to `verified` on re-check | `[UNVERIFIED]` or `[SOURCE-UNVERIFIABLE]` inserted adjacent to the claim marker when the entry fails; the stale tag is removed when the entry advances to `verified` on re-check. The original `[claim: EV-NNNN]` marker is never removed. |
-| `.studio/fact-check-reports/NN-report.md` | End of every pass | Per-chapter summary of findings and recommended actions |
+| `_nonfiction-studio/fact-check-reports/NN-report.md` | End of every pass | Per-chapter summary of findings and recommended actions |
 | `.claude/agent-memory/nonfiction-studio-fact-checker/` | End of every pass | Cache updated with newly confirmed entries and session timestamps |
 
 ## The adversarial posture
@@ -185,7 +185,7 @@ whether re-checking is needed.
 ## The web research gate and online pass
 
 Web research is an optional capability for the `fact-checker`. The author enables it
-per-project by adding the following to `.studio/config.json`:
+per-project by adding the following to `_nonfiction-studio/config.json`:
 
 ```json
 "research": {
@@ -212,7 +212,7 @@ robot-generated summary as source confirmation.
 ## Per-chapter fact-check report
 
 After completing every pass - offline or online - the `fact-checker` writes
-`.studio/fact-check-reports/NN-report.md`. The report always contains:
+`_nonfiction-studio/fact-check-reports/NN-report.md`. The report always contains:
 
 - Total claim markers found in the chapter.
 - Count and list of `verified`, `unverified`, `interpretation`, and
@@ -234,7 +234,7 @@ such embedded instructions; it does not separately instruct the agent to flag or
 anomaly in its own session output, so whether one appears there is a matter of model
 judgment, not a documented contract. Any WebFetch or WebSearch call this agent makes
 additionally passes through the mechanical `PostToolUse` hook (`hooks/post-tool-use.mjs`),
-which wraps and fences the payload and appends a record to `.studio/logs/fetches.jsonl`
+which wraps and fences the payload and appends a record to `_nonfiction-studio/logs/fetches.jsonl`
 regardless of what the agent itself does. This posture is not waivable; it applies to
 every WebFetch call regardless of the apparent credibility of the source. The agent never reports a robot-generated summary as source
 confirmation and never follows a redirect to a paywall or login screen to retrieve
@@ -255,7 +255,7 @@ gated content.
 - **Original marker preserved.** The `[claim: EV-NNNN]` marker in a chapter is never
   removed. Tags are added adjacent to it; they do not replace it.
 - **Web gate is hard.** WebSearch and WebFetch are not called unless `research.web_enabled`
-  is exactly the boolean `true` in `.studio/config.json`. When the gate is closed the
+  is exactly the boolean `true` in `_nonfiction-studio/config.json`. When the gate is closed the
   agent reports that the online pass is disabled and states the config change needed.
 - **Fetched content is data.** The D-13 (security posture) untrusted-data rule applies
   to all fetched content without exception.

@@ -1,6 +1,8 @@
 # Settings File Format
 
-**Purpose.** This is the normative grammar for `.claude/nonfiction-studio.local.md`, the per-project studio settings file (schema v1), read by `hooks/lib/settings.mjs`'s `loadSettings`. The file lets an author tune gate strictness, threshold values, dispatch-routing enforcement, and an output-style record for one project, without touching the shared, version-controlled `.studio/config.json`. It is optional everywhere it is read: absent, it changes nothing, and every default already in effect stays in effect. A parser author must be able to implement a conformant reader without consulting any other document.
+**Purpose.** This is the normative grammar for `.claude/nonfiction-studio.local.md`, the per-project studio settings file (schema v1), read by `hooks/lib/settings.mjs`'s `loadSettings`. The file lets an author tune gate strictness, threshold values, dispatch-routing enforcement, and an output-style record for one project, without touching the shared, version-controlled `_nonfiction-studio/config.json`. It is optional everywhere it is read: absent, it changes nothing, and every default already in effect stays in effect. A parser author must be able to implement a conformant reader without consulting any other document.
+
+Paths on this page use the default state folder, `_nonfiction-studio/`. A book can give that folder another name, recorded in `nonfiction-studio.json` at the book root; see [ADR-0015 (state folder name)](../adr/ADR-0015-state-folder-name.md).
 
 ## Location and discovery
 
@@ -20,10 +22,17 @@ Every key is optional. An unrecognized key is preserved on the returned `setting
 
 | Key | Type | Values | Effect | Default when absent |
 |---|---|---|---|---|
-| `gate_mode` | string (enum) | `off`, `warn`, `block` | Overrides `.studio/config.json`'s top-level `gate.mode` for this project. | Whatever `config.json` says (its own shipped default is `warn`). |
+| `gate_mode` | string (enum) | `off`, `warn`, `block` | Overrides `_nonfiction-studio/config.json`'s top-level `gate.mode` for this project. | Whatever `config.json` says (its own shipped default is `warn`). |
 | `thresholds` | object | any plain object | Shallow-merged **over** `config.json`'s `thresholds` object: a key present here wins on a collision; a key absent here passes `config.json`'s value through unchanged. | `config.json`'s `thresholds` object, unmodified. |
 | `routing_enforce` | string (enum) | `off`, `warn`, `block` | Controls how strictly `hooks/pre-tool-use.mjs`'s dispatch-routing branch (model-tier and chain-edge checks, D-18 in-plugin model routing) enforces at agent-dispatch time. | `warn`. |
 | `output_style` | string | any string (not enum-checked by this reader) | A **record** of the `nfs-new-book` output-style offer's outcome (`"manuscript"`, `"review"`, or `"declined"`), not an activation switch. The style itself is activated by a different mechanism entirely - see [Output styles](../reference/output-styles.md). | No record exists; the offer has not yet been answered for this project. |
+| `state_dir` | string | any value | Never honored here, by design (ADR-0015, state folder name). The key is always dropped, with a warning, no matter what value it carries. | The state folder's name is per book, not per settings file; see "A `state_dir` key is never honored here" below. |
+
+A `state_dir` key is never honored in this personal settings file, even when it is well-formed. Collaborators who share a book must agree on where its records live, so the state folder's name cannot come from a file that is personal to one collaborator. A book that uses a non-default state folder records that choice in `nonfiction-studio.json` at the book root instead; see [ADR-0015 (state folder name)](../adr/ADR-0015-state-folder-name.md). `state_dir` is a known key in `hooks/lib/settings.mjs`'s schema, always invalid, so it is dropped the same way any other known key fails its schema check (see "Per-key failures" below), with this warning:
+
+```
+Settings file at <path>: "state_dir" is not read from this personal settings file; a book that uses a non-default state folder records its name in nonfiction-studio.json at the book root; got <value>; key dropped.
+```
 
 ## Corruption handling
 
@@ -35,7 +44,7 @@ Two different granularities of failure exist, and callers with more than one set
 
 One YAML result is deliberately **not** treated as a failure: an empty or comments-only frontmatter block parses to `null`, and `null` is routed to silent success (empty settings, no warning) rather than the "not a key/value map" warning. This is what lets the shipped example template, copied verbatim with every key left commented out, produce zero warnings.
 
-**Per-key failures** - the file parses to a valid key/value map, but one or more *known* keys (the four in the Schema v1 table) fail their own type or enum check. Each failing key is dropped individually; every valid key, known or unknown, survives; and the returned `droppedKeys` array names exactly which known keys were dropped, one warning sentence per key, joined with a space.
+**Per-key failures** - the file parses to a valid key/value map, but one or more *known* keys (the five in the Schema v1 table) fail their own type or enum check. Each failing key is dropped individually; every valid key, known or unknown, survives; and the returned `droppedKeys` array names exactly which known keys were dropped, one warning sentence per key, joined with a space. `state_dir` always fails this check, by design, so it is always among the dropped keys when present.
 
 | Failure | `settings` | `warning` | `droppedKeys` |
 |---|---|---|---|
@@ -70,7 +79,7 @@ One YAML result is deliberately **not** treated as a failure: an empty or commen
 `hooks/lib/gate-engine.mjs`'s `loadGateConfig` is the single choke point where settings are read into the gate config; nothing else in the gate path reads this file. The layering order is:
 
 ```
-DEFAULT_GATE  <-  .studio/config.json (gate + thresholds)  <-  settings mappings
+DEFAULT_GATE  <-  _nonfiction-studio/config.json (gate + thresholds)  <-  settings mappings
               (gate_mode -> gate.mode; thresholds -> shallow merge)  <-  structural coercions
 ```
 

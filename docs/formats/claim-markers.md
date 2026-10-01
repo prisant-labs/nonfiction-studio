@@ -2,6 +2,8 @@
 
 **Purpose.** This is the normative grammar for the four machine-read markers embedded inline within chapter files under `chapters/`, as defined in S-08 (schemas and file formats) section 8. `bin/ns-claims` scans chapter files for these markers to compute claim coverage and quote fidelity. Every syntax rule and placement constraint below is authoritative. A parser author must be able to implement a conformant scanner without consulting any other document.
 
+Paths on this page use the default state folder, `_nonfiction-studio/`. A book can give that folder another name, recorded in `nonfiction-studio.json` at the book root; see [ADR-0015 (state folder name)](../adr/ADR-0015-state-folder-name.md).
+
 ## Marker forms
 
 There are exactly four marker forms. All appear inline within chapter prose, written by `drafting-partner` and maintained by `fact-checker`.
@@ -100,13 +102,13 @@ Entries with status `verified` or `interpretation` are resolved (open_claim_coun
 
 Every `[UNVERIFIED]` tag is also counted as one open claim. A `[SOURCE-UNVERIFIABLE]` tag with no paired `[claim: EV-NNNN]` marker on the same sentence is also counted as one open claim (fail-safe; see Placement Rule 5).
 
-The per-chapter `open_claim_count` in `.studio/progress.json` is this total. Coverage is `1.0` (satisfying the `claim_coverage_min` threshold in `config.json`) only when `open_claim_count` is zero.
+The per-chapter `open_claim_count` in `_nonfiction-studio/progress.json` is this total. Coverage is `1.0` (satisfying the `claim_coverage_min` threshold in `config.json`) only when `open_claim_count` is zero.
 
 `[quote: EV-nnnn]` anchors (form 4) are NOT part of `open_claim_count` or claim coverage. They feed an entirely separate check, quote fidelity, which has its own report (`quote_fidelity`) and its own gate check; see the Form 4 section above.
 
 ## Consumed by
 
-- `bin/ns-claims` (TSK-025 (ns-claims engine)): scans chapter files for the three claim-coverage marker forms and resolves them against `research/evidence-log.md`. Does not detect unmarked sentences; that judgment belongs to the fact-checker agent and the gate's judgment layer. State-coherence drift is caught by bin/ns-doctor per `docs/formats/gate-report.md`. Computes the per-chapter `open_claim_count`; the PostToolBatch hook persists it to `.studio/progress.json` per D-06 (single-writer state discipline). With `--quotes` (OPP-D03 (quote fidelity and source packets)), scans for form 4 instead and resolves each against the referenced entry's `verbatim` field.
+- `bin/ns-claims` (TSK-025 (ns-claims engine)): scans chapter files for the three claim-coverage marker forms and resolves them against `research/evidence-log.md`. Does not detect unmarked sentences; that judgment belongs to the fact-checker agent and the gate's judgment layer. State-coherence drift is caught by bin/ns-doctor per `docs/formats/gate-report.md`. Computes the per-chapter `open_claim_count`; the PostToolBatch hook persists it to `_nonfiction-studio/progress.json` per D-06 (single-writer state discipline). With `--quotes` (OPP-D03 (quote fidelity and source packets)), scans for form 4 instead and resolves each against the referenced entry's `verbatim` field.
 - `bin/ns-doctor` (TSK-028 (ns-doctor engine)): validates that every `[claim: EV-NNNN]` references an existing EV entry; reports broken markers and orphan `[SOURCE-UNVERIFIABLE]` tags (tags with no paired `[claim: EV-NNNN]` on the same sentence).
 - `fact-checker`: writes `[UNVERIFIED]` and `[SOURCE-UNVERIFIABLE]` tags, and replaces `[UNVERIFIED]` with `[claim: EV-NNNN]` once a claim is sourced and verified; never removes `[claim: EV-NNNN]` markers.
 - `Stop` gate: reads the `open_claim_count` derived from marker resolution to compute the `claim_coverage` gate verdict. Its `quote_fidelity` check separately resolves every `[quote: EV-nnnn]` anchor and warns on a mismatch; block mode is structurally unreachable until the quote normalization and adjudication policy ships (roadmap row 1.5).

@@ -10,7 +10,7 @@ tags: ["skill", "status", "dashboard", "progress", "overview", "gate", "example"
 
 This is a condensed transcript of a `nfs-status-dashboard` run over the committed two-chapter sample book "The Quiet Network" (see `examples/sample-book/`). The example follows the flow specified in S-06 3.9 (skills and invocation surface) and the adjudications recorded in TSK-052 (status-dashboard skill).
 
-**Session provenance note.** This example is grounded in a live `--json` run executed 2026-08-31 (re-run against the shipped engine after ADR-0012, voice verdict scope, Decision 2) against a scratch copy of the committed `examples/sample-book/` baseline, made outside the repository (this wave's discipline never runs a CLI against `examples/` in place, since the fixture suite asserts that tree stays byte-clean). The command, run after resolving the plugin root per Step 1 below, was `node "<plugin-root>/bin/ns-status" --project=. --json` from the book root; the scratch invocation used to produce the output below is equivalent. The JSON output is quoted verbatim, byte for byte, from that run. `bin/ns-status` is read-only; nothing under `.studio/` was written by generating this example, and the committed `examples/sample-book/` fixture itself was never touched.
+**Session provenance note.** This example is grounded in a live `--json` run executed 2026-08-31 (re-run against the shipped engine after ADR-0012, voice verdict scope, Decision 2) against a scratch copy of the committed `examples/sample-book/` baseline, made outside the repository (this wave's discipline never runs a CLI against `examples/` in place, since the fixture suite asserts that tree stays byte-clean). The command, run after resolving the plugin root per Step 1 below, was `node "<plugin-root>/bin/ns-status" --project=. --json` from the book root; the scratch invocation used to produce the output below is equivalent. The JSON output is quoted verbatim, byte for byte, from that run. `bin/ns-status` is read-only; nothing under `_nonfiction-studio/` was written by generating this example, and the committed `examples/sample-book/` fixture itself was never touched.
 
 **Note on `threshold: null` below.** The committed `01-listening-before-speaking.20260810T091000Z.json` gate report predates the structured `drift` field (PF-14, ADR-0012 voice verdict scope, Decision 2): `drift` still recovers `10.86` from the report's legacy prose detail ("drift score 10.86 within threshold 25"), but `threshold` has no prose fallback by design, so it reads `null` even though the number 25 is right there in the same prose. This report is deliberately kept pre-structured-field rather than regenerated: it is the fixture proving the legacy prose-detail fallback still works, and it is asserted against directly (via a temp clone of `examples/sample-book`) by `tests/engines/status-cli.test.mjs` and `tests/schemas/schemas.test.mjs`; `tests/engines/status.test.mjs` covers the same fallback path against its own synthetic fixture, which only reuses this report's timestamp string as a naming convention.
 
@@ -22,8 +22,8 @@ Any scenario showing a highlighted row or a non-zero exit code is explicitly lab
 
 The committed `examples/sample-book/` baseline is a two-chapter bible for "The Quiet Network":
 
-- `.studio/progress.json` - two chapters, both `status: drafted`; chapter 01 (`01-listening-before-speaking`) has `word_count: 528`, chapter 02 (`02-finding-your-network`) has `word_count: 527`; `totals.chapters_total: 6`.
-- `.studio/gate/` - one dot-form report, `01-listening-before-speaking.20260810T091000Z.json` (top-level `verdict: "pass"`), plus `last-gate.json`, which does not match either gate-report filename pattern and is not read by `bin/ns-status`. No `all.<timestamp>.json` whole-book report is present. Chapter 02 has no gate report on record.
+- `_nonfiction-studio/progress.json` - two chapters, both `status: drafted`; chapter 01 (`01-listening-before-speaking`) has `word_count: 528`, chapter 02 (`02-finding-your-network`) has `word_count: 527`; `totals.chapters_total: 6`.
+- `_nonfiction-studio/gate/` - one dot-form report, `01-listening-before-speaking.20260810T091000Z.json` (top-level `verdict: "pass"`), plus `last-gate.json`, which does not match either gate-report filename pattern and is not read by `bin/ns-status`. No `all.<timestamp>.json` whole-book report is present. Chapter 02 has no gate report on record.
 
 Note: `progress.json`'s per-chapter `drift_score` field (`10.86` for chapter 01, `10.75` for chapter 02) is a hook-maintained convenience field, not the authoritative source for the Drift column - see "Key assertions" below for what the live run actually returned for chapter 02.
 
@@ -60,7 +60,7 @@ node "<plugin-root>/bin/ns-status" --project=. --json
       "drift": 10.86,
       "threshold": null,
       "gate": "pass",
-      "reportPath": ".studio/gate/01-listening-before-speaking.20260810T091000Z.json",
+      "reportPath": "_nonfiction-studio/gate/01-listening-before-speaking.20260810T091000Z.json",
       "highlighted": false
     },
     {
@@ -123,15 +123,15 @@ Totals row from the JSON's `totals` object: Words = `1055`, Open Claims = `0`, C
 
 - **One Bash call, one parse, one render.** After resolving the plugin root in Step 1, the skill issued exactly one Bash call (`node "<plugin-root>/bin/ns-status" --project=. --json`), parsed its stdout as JSON, and read every table cell, the totals row, the footer, and the highlight decision directly from that JSON's fields. No directory listing, no separate file reads, no prose parsing, and no threshold comparison happen anywhere in this transcript.
 
-- **`progress.json`'s per-chapter `drift_score` is not the Drift column's source, proven by real data in this run.** `progress.json` carries `drift_score: 10.75` for chapter 02, but the live run's JSON output returns `"drift": null` for that same chapter, because no gate report exists for it under `.studio/gate/`. `bin/ns-status` never treats `progress.json`'s `drift_score` field as authoritative; this transcript shows that rule holding against real, live output, not merely asserted in prose.
+- **`progress.json`'s per-chapter `drift_score` is not the Drift column's source, proven by real data in this run.** `progress.json` carries `drift_score: 10.75` for chapter 02, but the live run's JSON output returns `"drift": null` for that same chapter, because no gate report exists for it under `_nonfiction-studio/gate/`. `bin/ns-status` never treats `progress.json`'s `drift_score` field as authoritative; this transcript shows that rule holding against real, live output, not merely asserted in prose.
 
 - **The highlight decision is read, not computed.** Both chapters carry `"highlighted": false` in the JSON. The skill applies the `!` prefix by reading that field directly; it never compares a chapter's drift statistic against its own threshold itself. See the synthetic illustration below for what a `highlighted: true` entry looks like and how the skill presents it.
 
 - **The effective threshold is per-row and read, not assumed.** Since ADR-0012 (voice verdict scope) retired `thresholds.drift_score_max`, there is no single board-wide threshold: each chapter's Threshold cell comes from that SAME chapter's own newest gate report. Chapter 01's report here predates the structured `drift` field, so its `threshold` reads `null` (see "Note on `threshold: null`" above); the skill body reads whatever value or `null` the JSON already carries and never computes one.
 
-- **`last-gate.json` is never read by the CLI or the skill.** It is present in `.studio/gate/` (see Setup above) but matches neither the per-chapter dot-form pattern nor the whole-book pattern `bin/ns-status` recognizes, so it plays no part in this output.
+- **`last-gate.json` is never read by the CLI or the skill.** It is present in `_nonfiction-studio/gate/` (see Setup above) but matches neither the per-chapter dot-form pattern nor the whole-book pattern `bin/ns-status` recognizes, so it plays no part in this output.
 
-- **The skill writes nothing.** No file was created, modified, or appended at any step. `bin/ns-status` is read-only by design; `.studio/gate/01-listening-before-speaking.20260810T091000Z.json` and `progress.json` were read by the CLI but not written.
+- **The skill writes nothing.** No file was created, modified, or appended at any step. `bin/ns-status` is read-only by design; `_nonfiction-studio/gate/01-listening-before-speaking.20260810T091000Z.json` and `progress.json` were read by the CLI but not written.
 
 ---
 
@@ -152,7 +152,7 @@ The following is explicitly synthetic. It shows what the JSON and the rendered t
   "drift": 4.10,
   "threshold": 3.87,
   "gate": "warn",
-  "reportPath": ".studio/gate/02-finding-your-network.20260815T090000Z.json",
+  "reportPath": "_nonfiction-studio/gate/02-finding-your-network.20260815T090000Z.json",
   "highlighted": true
 }
 ```
@@ -180,16 +180,16 @@ The `!` prefix comes directly from the synthetic entry's `"highlighted": true`; 
 
 ## Synthetic illustration: an engine error
 
-The following is explicitly synthetic. It shows what Step 3 would present if `.studio/progress.json` were absent from an otherwise-initialized project.
+The following is explicitly synthetic. It shows what Step 3 would present if `_nonfiction-studio/progress.json` were absent from an otherwise-initialized project.
 
 **ns-status stderr (synthetic, exit code 2):**
 
 ```
-ns-status: Cannot read progress.json at /path/to/project/.studio/progress.json: ENOENT: no such file or directory, open '/path/to/project/.studio/progress.json'
+ns-status: Cannot read progress.json at /path/to/project/_nonfiction-studio/progress.json: ENOENT: no such file or directory, open '/path/to/project/_nonfiction-studio/progress.json'
 ```
 
 **Studio:**
 
-> `.studio/progress.json` was not found. Run `/nonfiction-studio:nfs-new-book` to scaffold the project and create the progress file.
+> `_nonfiction-studio/progress.json` was not found. Run `/nonfiction-studio:nfs-new-book` to scaffold the project and create the progress file.
 
 No table is rendered; the exit-2 case is never treated as a pass.

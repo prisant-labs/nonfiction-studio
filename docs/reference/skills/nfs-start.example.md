@@ -12,8 +12,8 @@ This is a condensed transcript of a `nfs-start` session over the committed two-c
 
 **Session provenance note.** All values are read directly from the committed fixtures:
 
-- `examples/sample-book/.studio/progress.json` - two drafted chapters, totals showing 6 chapters total
-- `examples/sample-book/.studio/meta.json` - `book_title: "The Quiet Network"`
+- `examples/sample-book/_nonfiction-studio/progress.json` - two drafted chapters, totals showing 6 chapters total
+- `examples/sample-book/_nonfiction-studio/meta.json` - `book_title: "The Quiet Network"`
 - `examples/sample-book/structure/chapter-list.md` - six-chapter registry; chapters 01-02 drafted, 03-06 outlined
 
 No files are written during this session. Any scenario leaving the committed state (starting a new book, running a gate) is explicitly synthetic.
@@ -22,7 +22,7 @@ No files are written during this session. Any scenario leaving the committed sta
 
 ## Setup: what was already in place
 
-**`.studio/meta.json`** (committed):
+**`_nonfiction-studio/meta.json`** (committed):
 ```json
 {
   "schema_version": "2",
@@ -32,7 +32,7 @@ No files are written during this session. Any scenario leaving the committed sta
 }
 ```
 
-**`.studio/progress.json`** (committed, relevant sections):
+**`_nonfiction-studio/progress.json`** (committed, relevant sections):
 ```json
 {
   "version": 2,
@@ -45,7 +45,7 @@ No files are written during this session. Any scenario leaving the committed sta
       "word_count": 528,
       "drift_score": 10.86,
       "open_claim_count": 0,
-      "last_gate": { "ts": "2026-08-10T09:10:00Z", "verdict": "pass", "report": ".studio/gate/01-listening-before-speaking.20260810T091000Z.json" }
+      "last_gate": { "ts": "2026-08-10T09:10:00Z", "verdict": "pass", "report": "_nonfiction-studio/gate/01-listening-before-speaking.20260810T091000Z.json" }
     },
     {
       "slug": "02-finding-your-network",
@@ -94,7 +94,7 @@ No files are written during this session. Any scenario leaving the committed sta
 The skill uses the Bash tool:
 
 ```
-test -f .studio/progress.json && echo HAS_PROGRESS || echo NO_PROGRESS
+test -f _nonfiction-studio/progress.json && echo HAS_PROGRESS || echo NO_PROGRESS
 ```
 
 Output: `HAS_PROGRESS`
@@ -103,9 +103,9 @@ A project exists in this directory. Continue to Step 2.
 
 **Studio (Step 2 - Parse progress.json and read book title):**
 
-The skill uses the Read tool on `.studio/progress.json`. Parse confirms: `version: 2`, `chapters` array with 2 entries, `totals` object present. No parse error.
+The skill uses the Read tool on `_nonfiction-studio/progress.json`. Parse confirms: `version: 2`, `chapters` array with 2 entries, `totals` object present. No parse error.
 
-The skill uses the Read tool on `.studio/meta.json`. `book_title`: `"The Quiet Network"`.
+The skill uses the Read tool on `_nonfiction-studio/meta.json`. `book_title`: `"The Quiet Network"`.
 
 Continue to Step 3.
 
@@ -224,7 +224,7 @@ After `nfs-status-dashboard` renders the table, the skill inspects for chapters 
 
 If `progress.json` were malformed, Step 2 would route to Path 5 before presenting the five-path menu:
 
-> The project state file (`.studio/progress.json`) could not be read or parsed. This is a structural problem. The `nfs-doctor` skill can diagnose and repair it (Path 5).
+> The project state file (`_nonfiction-studio/progress.json`) could not be read or parsed. This is a structural problem. The `nfs-doctor` skill can diagnose and repair it (Path 5).
 
 The author confirms, and the skill proceeds with `nfs-doctor`.
 

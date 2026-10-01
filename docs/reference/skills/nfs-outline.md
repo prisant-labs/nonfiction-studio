@@ -18,7 +18,7 @@ The `nfs-outline` skill is the studio's outline front door. It confirms the proj
 - `structure/outline.md` - the chapter-by-chapter architecture: promise, payoff, thesis link, key beats, evidence needs, and dependencies per chapter (written by `structure-architect`)
 - `structure/chapter-list.md` - the slug registry: the authoritative identifier list for drafting, fact-checking, and the quality gate (written by `structure-architect`)
 
-The skill writes no `.studio/` state. Chapter progress entries come into existence when the PostToolBatch hook observes the first write of each chapter file per D-06 (single-writer state discipline). The slug registry in `structure/chapter-list.md` is the locked chapter list on author acceptance; no secondary state entry is needed.
+The skill writes no `_nonfiction-studio/` state. Chapter progress entries come into existence when the PostToolBatch hook observes the first write of each chapter file per D-06 (single-writer state discipline). The slug registry in `structure/chapter-list.md` is the locked chapter list on author acceptance; no secondary state entry is needed.
 
 ## Invocation
 
@@ -60,11 +60,13 @@ All structure files are written by the agents, not by the skill directly. No fil
 | `structure/chapter-list.md` | `structure-architect` | Slug registry: chapter number, working title, slug, one-line promise |
 | `research/open-questions.md` | `structure-architect` (appends) | Evidence-needed items, one entry per outline evidence gap |
 
-The skill writes no `.studio/` state. Craft-model selection belongs to `structure-architect`; the skill does not present model options.
+The skill writes no `_nonfiction-studio/` state. Craft-model selection belongs to `structure-architect`; the skill does not present model options.
 
 ## Flow Summary
 
 The skill runs five steps. The scope argument determines which steps execute.
+
+Before its first step, the skill locates the state folder: it reads `nonfiction-studio.json` at the book root, uses `_nonfiction-studio/` when that file does not exist, and stops without writing when the pointer is invalid or an unpointed state folder is found.
 
 1. **Confirmed-brief probe.** Uses a Bash tool call to test whether `context/brief.md` exists and contains no DRAFT-block markers. The output is a binary token: `UNCONFIRMED` halts immediately and routes to `nfs-interview`; `CONFIRMED` continues. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
 

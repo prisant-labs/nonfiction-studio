@@ -1,6 +1,8 @@
 # Fetch Log Format
 
-**Purpose.** This is the normative grammar for `.studio/logs/fetches.jsonl`, the append-only record of every WebFetch and WebSearch call the `PostToolUse` hook wraps. It exists per OPP-P04 (untrusted-source envelope): AR-07 (security, privacy and safety) and D-13 (security posture) treat fetched web content as untrusted data, and this log is the audit trail proving every fetch was scanned and wrapped before Claude saw it. D-06 (single-writer state discipline) is satisfied by construction: the hook only ever appends one JSON line per fetch with a single `appendFileSync` call, never a read-modify-write.
+**Purpose.** This is the normative grammar for `_nonfiction-studio/logs/fetches.jsonl`, the append-only record of every WebFetch and WebSearch call the `PostToolUse` hook wraps. It exists per OPP-P04 (untrusted-source envelope): AR-07 (security, privacy and safety) and D-13 (security posture) treat fetched web content as untrusted data, and this log is the audit trail proving every fetch was scanned and wrapped before Claude saw it. D-06 (single-writer state discipline) is satisfied by construction: the hook only ever appends one JSON line per fetch with a single `appendFileSync` call, never a read-modify-write.
+
+Paths on this page use the default state folder, `_nonfiction-studio/`. A book can give that folder another name, recorded in `nonfiction-studio.json` at the book root; see [ADR-0015 (state folder name)](../adr/ADR-0015-state-folder-name.md).
 
 **The `flagged`/`signatures` fields are advisory defense in depth, not a security boundary.** They record the output of a pattern-matching scanner (below); pattern matching cannot enumerate every phrasing an injection attempt could take, so a `flagged: false` record is not a guarantee the fetched body was safe, only that the scanner recognized nothing. The actual defense against a hostile fetched page is the wrapping and fencing the `PostToolUse` hook applies to the payload itself (a preamble stating the content is data, not instructions, and a per-fetch random-nonce boundary a hostile body cannot forge), applied unconditionally to every fetch regardless of what the scanner finds. This log is a signal for a human auditing fetch history, never a gate; the hook never blocks a fetch on the scanner's result.
 
@@ -29,11 +31,11 @@ A second scanner, `scanPromptInjection(text)`, targeting instruction-override ph
 
 ## Placement and append rules
 
-- The directory `.studio/logs/` is created on demand (`mkdirSync` with `recursive: true`) on the first fetch; it is not pre-seeded at scaffold time.
+- The directory `_nonfiction-studio/logs/` is created on demand (`mkdirSync` with `recursive: true`) on the first fetch; it is not pre-seeded at scaffold time.
 - The writer is the `PostToolUse` hook only. No agent writes to this file directly.
 - Each hook invocation appends at most one record, followed by a newline character. Writers never overwrite or rewrite existing content.
 - Logging is best-effort and book-root-dependent: when no book root can be found, or the book root's bible files are corrupt, the append is skipped silently. This does not affect the wrap-and-flag behavior the hook applies to the fetch itself, which is unconditional and does not depend on a book project being scaffolded.
-- A `fetches.jsonl` append failure after a successful wrap is recorded in `.studio/logs/errors.jsonl`; it never un-does the already-emitted wrapped output.
+- A `fetches.jsonl` append failure after a successful wrap is recorded in `_nonfiction-studio/logs/errors.jsonl`; it never un-does the already-emitted wrapped output.
 
 ## Example
 

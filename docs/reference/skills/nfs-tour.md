@@ -42,9 +42,9 @@ Alternate entry points:
 
 | Path | Written by | Notes |
 |---|---|---|
-| `<tour-dir>/.studio/config.json` | The skill (Edit tool) | Flips the top-level `gate.mode` from `warn` to `block` inside the copy only, so the planted defect produces a real block rather than a warning |
+| `<tour-dir>/_nonfiction-studio/config.json` | The skill (Edit tool) | Flips the top-level `gate.mode` from `warn` to `block` inside the copy only, so the planted defect produces a real block rather than a warning |
 | `<tour-dir>/chapters/02-finding-your-network.md` | The skill (Edit tool) | The planted defect (an AI self-reference line) is appended, then removed, inside the copy only |
-| `<tour-dir>/.studio/gate/*.json` | `bin/ns-gate` itself | Timestamped gate reports, written by the gate exactly as it would in any project |
+| `<tour-dir>/_nonfiction-studio/gate/*.json` | `bin/ns-gate` itself | Timestamped gate reports, written by the gate exactly as it would in any project |
 | `<plugin-root>/examples/sample-book` | Never | Read-only for the entire skill; the hard constraint this skill exists to prove |
 
 ## Flow Summary
@@ -53,7 +53,7 @@ The skill runs nine steps:
 
 1. **Resolve the plugin root.** The same resolver every skill in this plugin uses (`installed_plugins.json`, then `settings.json`, then a plugins-cache scan, then the working directory, each candidate verified against `bin/ns-stylometry`), needed here to locate both `examples/sample-book` and `bin/ns-gate`.
 2. **Copy the sample book to a disposable location.** Chooses a destination (temp directory by default, or the author's supplied folder), appends a timestamp for a fresh collision-free name, and copies with `fs.cpSync`, mirroring the temp-clone pattern in `scripts/test-fixtures.mjs`. States plainly where the copy is and that the shipped example is untouched.
-3. **Opt the copy into block mode.** Edits the copy's `.studio/config.json` top-level `gate.mode` from `warn` to `block`, explaining why: the shipped default only warns, and this is the same setting any author can choose for their own project.
+3. **Opt the copy into block mode.** Edits the copy's `_nonfiction-studio/config.json` top-level `gate.mode` from `warn` to `block`, explaining why: the shipped default only warns, and this is the same setting any author can choose for their own project.
 4. **Run the gate and watch it pass.** A full, unscoped `ns-gate` run against the copy, in block mode, with nothing planted yet; presents a genuine pass, including the stylometry check's honest advice-only reporting at the sample book's word count.
 5. **Plant a realistic defect.** Appends a line drawn from the prompt-scrub check's own fixed phrase lexicon to a chapter in the copy, representing a plausible leftover from an AI-assisted drafting pass.
 6. **Run the gate again and watch it block.** A `ns-gate` run scoped to the chapter and check just planted (`--check=scrub`), keeping the demonstration focused on the one problem introduced; presents the block verdict, exit code 1, and the named reason.
@@ -63,7 +63,7 @@ The skill runs nine steps:
 
 ## Why Block Mode
 
-The shipped `examples/sample-book/.studio/config.json` sets the top-level `gate.mode` to `warn`. Under that setting, `ns-gate`'s own D-03 (layered Stop gate) Invariant 2 caps every check's verdict at `warn`, even a check individually configured to `mode: "block"`, so the CLI always exits 0. This is intentional default behavior, not a defect: it means the gate never silently stops an author who has not opted in. To make Step 6's block genuine rather than a capped warning, `nfs-tour` opts the disposable copy into `gate.mode: "block"` in Step 3, exactly the setting an author can choose for their own project's `.studio/config.json` at any time. See the [ns-gate CLI reference](../cli/ns-gate.md) for the full mode-capping contract.
+The shipped `examples/sample-book/_nonfiction-studio/config.json` sets the top-level `gate.mode` to `warn`. Under that setting, `ns-gate`'s own D-03 (layered Stop gate) Invariant 2 caps every check's verdict at `warn`, even a check individually configured to `mode: "block"`, so the CLI always exits 0. This is intentional default behavior, not a defect: it means the gate never silently stops an author who has not opted in. To make Step 6's block genuine rather than a capped warning, `nfs-tour` opts the disposable copy into `gate.mode: "block"` in Step 3, exactly the setting an author can choose for their own project's `_nonfiction-studio/config.json` at any time. See the [ns-gate CLI reference](../cli/ns-gate.md) for the full mode-capping contract.
 
 ## The Planted Defect
 

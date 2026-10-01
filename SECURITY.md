@@ -107,10 +107,10 @@ a decision for the wrong agent because identity was resolved incorrectly.
   their own session or their own files. Concretely: malformed hook input and
   a missing or unparseable `agents/_chain-permitted.yaml` resolve to silence
   (no warning, no deny, and the action proceeds); snapshot and session-flag
-  write errors are logged to `.studio/logs/errors.jsonl` and the write still
+  write errors are logged to `_nonfiction-studio/logs/errors.jsonl` and the write still
   proceeds; an unreadable or unparseable settings file produces a one-line
   warning and falls back to defaults. (The one internal read failure that
-  does not fail open: a book project whose `.studio/config.json` is corrupt
+  does not fail open: a book project whose `_nonfiction-studio/config.json` is corrupt
   denies write tools, because containment cannot be verified.) This is
   intentional and is not itself a vulnerability. What *is* in scope is the
   guard's own core decision going the wrong way: for example, the web gate

@@ -18,7 +18,7 @@ The `nfs-check-chapter` skill is the surface-independent Definition-of-Done gate
 
 **No agents invoked.** This is a deterministic-CLI-only skill in Phase 1. No chain edges exist. The Phase 2 deep mode, which would add `fact-checker`, `voice-guardian`, and `continuity-checker` as background subagents, is not implemented in v1; the `deep` argument is politely declined.
 
-**The skill writes no `.studio/` state.** `bin/ns-gate` writes `.studio/gate/<slug>.<ts>.json` and prunes to the last 10 per slug per D-06 (single-writer state discipline) and S-08 section 11. The `progress.json` `last_gate` per-chapter field is reserved and unpopulated in v1; no component writes it during a live gate run.
+**The skill writes no `_nonfiction-studio/` state.** `bin/ns-gate` writes `_nonfiction-studio/gate/<slug>.<ts>.json` and prunes to the last 10 per slug per D-06 (single-writer state discipline) and S-08 section 11. The `progress.json` `last_gate` per-chapter field is reserved and unpopulated in v1; no component writes it during a live gate run.
 
 ## Invocation
 
@@ -39,11 +39,11 @@ Alternate entry points:
 
 | Path | When it is read | Why |
 |---|---|---|
-| `.studio/progress.json` | Step 2 (Bash probe + Read) when no chapter argument is supplied | Identify the most-recently-modified chapter for gating |
+| `_nonfiction-studio/progress.json` | Step 2 (Bash probe + Read) when no chapter argument is supplied | Identify the most-recently-modified chapter for gating |
 | `structure/chapter-list.md` | Step 2 (Bash probe + Read) when a chapter argument is supplied | Resolve the chapter slug or number to the canonical slug |
 | `chapters/<slug>.md` | Step 2 (Bash probe) | Confirm the chapter file exists before invoking the gate |
 | `context/style-profile.md` | Step 3 (Bash probe) | Presence check for the baseline pre-check; absence triggers the degraded check subset |
-| `.studio/config.json` | Step 3 (Read) when style-profile.md is present | Check `stylometry.baseline.markers` and `stylometry.baseline.marker_set_version`; either field's absence, a null `markers`, or a `marker_set_version` that does not match the engine's current version triggers the degraded check subset |
+| `_nonfiction-studio/config.json` | Step 3 (Read) when style-profile.md is present | Check `stylometry.baseline.markers` and `stylometry.baseline.marker_set_version`; either field's absence, a null `markers`, or a `marker_set_version` that does not match the engine's current version triggers the degraded check subset |
 
 ### Outputs
 
@@ -51,19 +51,21 @@ The skill writes no files. All state writes are performed by `bin/ns-gate`, not 
 
 | Path | Written by | Contents |
 |---|---|---|
-| `.studio/gate/<slug>.<ts>.json` | `bin/ns-gate` (via Step 5 Bash call) | S-08 section 11 gate report: version, chapter, ts, verdict, per-check entries with detail, evidence, and next action |
+| `_nonfiction-studio/gate/<slug>.<ts>.json` | `bin/ns-gate` (via Step 5 Bash call) | S-08 section 11 gate report: version, chapter, ts, verdict, per-check entries with detail, evidence, and next action |
 
-The `.studio/progress.json` `last_gate` per-chapter field is reserved in the schema (S-08 section 3) and unpopulated in v1; no component writes it during a live gate run.
+The `_nonfiction-studio/progress.json` `last_gate` per-chapter field is reserved in the schema (S-08 section 3) and unpopulated in v1; no component writes it during a live gate run.
 
 ## Flow Summary
 
 The skill runs five steps.
 
+Before its first step, the skill locates the state folder: it reads `nonfiction-studio.json` at the book root, uses `_nonfiction-studio/` when that file does not exist, and stops without writing when the pointer is invalid or an unpointed state folder is found.
+
 1. **Argument parsing and deep argument check.** Parses the supplied argument. If the literal token `deep` appears, declines as Phase 2 and halts without any tool calls. Carries the chapter token (if any) forward to Step 2.
 
-2. **Chapter resolution (mandatory first tool call).** When a chapter argument was supplied: probes `structure/chapter-list.md` for the registry (Bash) and resolves the slug or number (Read); probes `chapters/<slug>.md` (Bash). When no chapter argument was supplied: probes `.studio/progress.json` (Bash), reads it, and selects the most-recently-modified chapter by these criteria in order: (a) the chapter with the most recent `last_gate.ts`; (b) the last chapter in the array with `status: drafted` or `status: drafting`; (c) asks the author when no clear candidate emerges. Halts on any missing file that prevents resolution. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
+2. **Chapter resolution (first tool call after the state folder is located).** When a chapter argument was supplied: probes `structure/chapter-list.md` for the registry (Bash) and resolves the slug or number (Read); probes `chapters/<slug>.md` (Bash). When no chapter argument was supplied: probes `_nonfiction-studio/progress.json` (Bash), reads it, and selects the most-recently-modified chapter by these criteria in order: (a) the chapter with the most recent `last_gate.ts`; (b) the last chapter in the array with `status: drafted` or `status: drafting`; (c) asks the author when no clear candidate emerges. Halts on any missing file that prevents resolution. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
 
-3. **Voice baseline pre-check.** Probes `context/style-profile.md` (Bash). If absent, or if present but `.studio/config.json` lacks `stylometry.baseline.markers`, or `stylometry.baseline.marker_set_version` is absent or does not match the engine's current version, the skill sets the check subset to `claims,scrub,continuity-quick,coherence`, warns that voice drift was skipped, and continues. Only when the profile, the markers, and a matching `marker_set_version` are all present does the skill run the full gate (all seven checks). This is the degradation mechanism the brief describes: the gate engine exits 2 on a missing or stale baseline, so the skill pre-checks and routes around the error with a clear warning rather than a halt.
+3. **Voice baseline pre-check.** Probes `context/style-profile.md` (Bash). If absent, or if present but `_nonfiction-studio/config.json` lacks `stylometry.baseline.markers`, or `stylometry.baseline.marker_set_version` is absent or does not match the engine's current version, the skill sets the check subset to `claims,scrub,continuity-quick,coherence`, warns that voice drift was skipped, and continues. Only when the profile, the markers, and a matching `marker_set_version` are all present does the skill run the full gate (all seven checks). This is the degradation mechanism the brief describes: the gate engine exits 2 on a missing or stale baseline, so the skill pre-checks and routes around the error with a clear warning rather than a halt.
 
 4. **Resolve the plugin root.** Before ns-gate is invoked, the skill resolves the plugin's installed path: reads `installed_plugins.json` in the Claude config directory first (a marketplace install, verified by confirming `bin/ns-stylometry` exists under the candidate path; the newest installed version wins if more than one is present), then a local self-marketplace entry in `settings.json`, then a plugins-cache scan (versioned and legacy layouts), then the current working directory. This is the same resolver `nfs-new-book` uses to locate its scaffold templates; it exists because a literal relative `bin/ns-gate` path resolves against the invoking shell's working directory, not the installed plugin, and would silently fail for a marketplace-installed author. If nothing resolves, the skill halts and names the config directory and the `installed_plugins.json` path it attempted.
 
@@ -80,13 +82,13 @@ The mapping mirrors the Stop hook's exit-code semantics (hooks/stop-gate.mjs) bu
 |---|---|---|
 | 0, verdict `pass` | All checks passed or were skipped; no blocking condition | Present pass summary; note deterministic-only scope; suggest next chapter or next step |
 | 0, verdict `warn` | Checks ran; highest severity was warn (gate top-level mode capped block to warn) | Present warn summary per non-passing check with detail and next action; note deterministic-only scope |
-| 0, verdict `skip` | No checks ran (extremely rare; means all checks were disabled) | Present skip summary and recommend checking `.studio/config.json` |
+| 0, verdict `skip` | No checks ran (extremely rare; means all checks were disabled) | Present skip summary and recommend checking `_nonfiction-studio/config.json` |
 | 1 | Final verdict is block; at least one check is in block mode and fired | Present block verdict; list each blocking check with detail, evidence, and next action; route to remediation |
 | 2 | Gate error: config parse error, engine throw, or spawn failure | Surface error from stderr; NEVER treat as a pass; route to `nfs-doctor` for diagnosis |
 
 ## Baseline Pre-Check and Degradation
 
-The `bin/ns-gate` engine exits 2 when `stylometry.baseline.markers` is absent from `.studio/config.json`, when `stylometry.baseline.marker_set_version` does not match the engine's current marker set version (a `StaleBaselineError`, the state of every baseline captured before that field existed), or when `stylometry.baseline.calibration` is absent or incomplete - missing `spans`, `noise_scales`, `block_thresholds`, or `regime` - while the stylometry check is enabled. Rather than surfacing an exit 2 error, the skill pre-checks the style profile and all three parts of the config baseline before invoking the gate.
+The `bin/ns-gate` engine exits 2 when `stylometry.baseline.markers` is absent from `_nonfiction-studio/config.json`, when `stylometry.baseline.marker_set_version` does not match the engine's current marker set version (a `StaleBaselineError`, the state of every baseline captured before that field existed), or when `stylometry.baseline.calibration` is absent or incomplete - missing `spans`, `noise_scales`, `block_thresholds`, or `regime` - while the stylometry check is enabled. Rather than surfacing an exit 2 error, the skill pre-checks the style profile and all three parts of the config baseline before invoking the gate.
 
 When any of these is missing, stale, or incomplete:
 - The skill sets `--check=claims,scrub,continuity-quick,coherence` on the gate invocation
@@ -94,11 +96,11 @@ When any of these is missing, stale, or incomplete:
 - The skill warns the author explicitly: "Voice drift check skipped: [reason]. Run `/nonfiction-studio:nfs-capture-voice` to enable voice drift detection."
 - The gate still runs the four remaining checks and produces a valid report
 
-The baseline must be established via `/nonfiction-studio:nfs-capture-voice`, which runs `bin/ns-stylometry --calibrate` and writes the full v5 baseline (`markers`, `marker_set_version`, `calibration`, `captured`, `sample_count`, and `method`) to `.studio/config.json`.
+The baseline must be established via `/nonfiction-studio:nfs-capture-voice`, which runs `bin/ns-stylometry --calibrate` and writes the full v5 baseline (`markers`, `marker_set_version`, `calibration`, `captured`, `sample_count`, and `method`) to `_nonfiction-studio/config.json`.
 
 ## Chapter Resolution from Progress.json
 
-When no chapter argument is supplied, the skill reads `.studio/progress.json` (the progress layer is alive per TSK-050b (progress entry ownership)) and selects the target chapter in this order:
+When no chapter argument is supplied, the skill reads `_nonfiction-studio/progress.json` (the progress layer is alive per TSK-050b (progress entry ownership)) and selects the target chapter in this order:
 
 1. The chapter with the most recent `last_gate.ts` among all chapters that have been gated. This is typically the chapter most recently worked on, whether or not the gate passed.
 2. If no chapters have been gated, the last chapter in the `chapters` array with `status: drafted` or `status: drafting` (currently being worked on or ready for gating).
@@ -116,7 +118,7 @@ This skill works identically across all three surfaces per D-14 (three-surface c
 
 ## Gate Report
 
-`bin/ns-gate` writes the gate report to `.studio/gate/<slug>.<YYYYMMDDTHHMMSSZ>.json` per S-08 section 11. The report has the following shape:
+`bin/ns-gate` writes the gate report to `_nonfiction-studio/gate/<slug>.<YYYYMMDDTHHMMSSZ>.json` per S-08 section 11. The report has the following shape:
 
 ```json
 {

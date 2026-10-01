@@ -37,7 +37,7 @@ on either side. All four fields below follow this same nested placement.
 
 On a found book project, `additionalContext` carries the five-element orientation block (gate
 debt, thesis, active chapter, top style rules, open-claims count), assembled by
-`hooks/lib/orientation.mjs`, and `sessionTitle` carries the book's title from `.studio/meta.json`.
+`hooks/lib/orientation.mjs`, and `sessionTitle` carries the book's title from `_nonfiction-studio/meta.json`.
 On the empty-state path (no book project found anywhere in the ancestor chain) or the
 corrupt-project path (a book root was found but its bible files could not be read),
 `additionalContext` carries a short plain-text message instead, and `sessionTitle` is omitted.
@@ -76,7 +76,7 @@ their next session, not the current one.
 ## Fail-open
 
 `hooks/session-start.mjs` exits 0 unconditionally. Any read or parse error after the book root is
-resolved is caught, logged as one JSONL record to `.studio/logs/errors.jsonl`, and the script
+resolved is caught, logged as one JSONL record to `_nonfiction-studio/logs/errors.jsonl`, and the script
 continues with whatever partial orientation block it has already assembled - a single failed
 element (for example, an unreadable style profile) never suppresses the rest of the block. The
 `initialUserMessage` and `reloadSkills` checks added for the zero-friction first session follow

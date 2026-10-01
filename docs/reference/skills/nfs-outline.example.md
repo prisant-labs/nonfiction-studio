@@ -101,7 +101,7 @@ Both checks pass.
 
 **Studio:**
 
-> The chapter list in `structure/chapter-list.md` is the locked chapter registry. The six slug rows are the authoritative identifiers for all downstream work: drafting, fact-checking, and the quality gate all resolve chapters by slug. The skill writes no `.studio/` state; the PostToolBatch hook creates progress entries the first time each chapter file is written.
+> The chapter list in `structure/chapter-list.md` is the locked chapter registry. The six slug rows are the authoritative identifiers for all downstream work: drafting, fact-checking, and the quality gate all resolve chapters by slug. The skill writes no `_nonfiction-studio/` state; the PostToolBatch hook creates progress entries the first time each chapter file is written.
 >
 > `context/style-profile.md` is not yet present. Optional next steps:
 >
@@ -120,6 +120,6 @@ Both checks pass.
 - **Two-revision-pass cap is not triggered.** The author accepts the existing thesis immediately. The cap applies only when the author rejects a thesis produced or revised by `thesis-architect`.
 - **Craft-model selection belongs to the agent.** The skill does not ask the author to choose a craft model; `structure-architect` reads the model from the config and selects `how-to.yaml`. Absent or misconfigured craft model YAML would halt the agent with a clear error, not the skill.
 - **All three structure writes are the agent's.** `structure/outline.md`, `structure/chapter-list.md`, and the `research/open-questions.md` appends are written by `structure-architect` in the same invocation after author confirmation. The skill writes none of them.
-- **No `.studio/progress.json` write.** The locked chapter registry is `structure/chapter-list.md`. The PostToolBatch hook creates progress entries when chapter files are first written; the skill does not initialize slots in `.studio/progress.json`.
+- **No `_nonfiction-studio/progress.json` write.** The locked chapter registry is `structure/chapter-list.md`. The PostToolBatch hook creates progress entries when chapter files are first written; the skill does not initialize slots in `_nonfiction-studio/progress.json`.
 - **Read checks are mandatory.** The skill reads both output files after the agent completes. Only when both checks pass does the skill close with suggestions.
 - **Amendments route to the agent.** If the author had requested changes in Step 4, the skill would re-invoke `structure-architect` with the change notes, not edit the files directly.

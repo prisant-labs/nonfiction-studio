@@ -2,7 +2,7 @@
 
 This page is a contributor-facing map of how Nonfiction Studio is built, grounded in the shipped code and the ADRs that decided it. It does not repeat the user-facing pitch in `README.md`; it explains the mechanism underneath.
 
-The shape in one sentence: skills narrate and orchestrate, agents do scoped writing work, deterministic engines under `hooks/lib/` do the actual computation, `bin/ns-*` CLIs and Claude Code hooks are two different thin callers of those same engines, and the author's plain-Markdown project bible, plus a small amount of machine state under `.studio/`, is where project truth lives.
+The shape in one sentence: skills narrate and orchestrate, agents do scoped writing work, deterministic engines under `hooks/lib/` do the actual computation, `bin/ns-*` CLIs and Claude Code hooks are two different thin callers of those same engines, and the author's plain-Markdown project bible, plus a small amount of machine state under `_nonfiction-studio/`, is where project truth lives.
 
 ## The component model
 
@@ -27,7 +27,7 @@ The CLIs under `bin/` (`ns-claims`, `ns-doctor`, `ns-gate`, `ns-notes`, `ns-over
 
 - **SessionStart** (`hooks/session-start.mjs`) - locates the book root and emits an orientation block; on an empty directory it opens the guided front door unprompted.
 - **PreToolUse** (`hooks/pre-tool-use.mjs`) - the write-containment guard, the per-agent write-scope and web-research gates, and dispatch-routing enforcement (see "The enforcement layer" below).
-- **PostToolBatch** (`hooks/post-tool-batch.mjs`) - refreshes `.studio/progress.json` and writes AI-disclosure records to `.studio/ai-use-log.jsonl`.
+- **PostToolBatch** (`hooks/post-tool-batch.mjs`) - refreshes `_nonfiction-studio/progress.json` and writes AI-disclosure records to `_nonfiction-studio/ai-use-log.jsonl`.
 - **PostToolUse**, matched only on `WebFetch|WebSearch` (`hooks/post-tool-use.mjs`) - the untrusted-fetch envelope.
 - **Stop** (`hooks/stop-gate.mjs` plus a prompt-based thesis-alignment check) - the deterministic quality gate, run at the end of a turn.
 - **PreCompact** (`hooks/pre-compact.mjs`).
@@ -44,7 +44,7 @@ The project bible is the author's own plain-Markdown files - never a database, n
 
 `hooks/lib/gate-engine.mjs` is the policy layer. It composes seven checks - claim coverage, quote fidelity, stylometry (voice drift), prompt-injection scrub, continuity, state coherence, and research-corpus overlap - plus a session-write flag check, into one structured verdict. Two design points carry the whole system:
 
-**Config merge order.** `loadGateConfig` is the single choke point (its own doc comment states this): `DEFAULT_GATE` (the shipped defaults, exported from `gate-engine.mjs` itself) is overlaid by `.studio/config.json`'s `gate` and `thresholds` blocks, which is overlaid by the per-project settings file's `gate_mode` and `thresholds` keys, and only after all of that are two structural coercions applied. The coercions force `thesis_alignment.mode` and `quote_fidelity.mode` from `block` back to `warn` no matter what any config layer requested. `thesis_alignment` is a judgment check that must never block, which is D-03 (layered Stop gate) Invariant 1. `quote_fidelity` is held at warn until a quote normalization and adjudication policy ships. Because the settings overlay runs before the coercions and never writes to `gate.checks`, a settings file can raise the top-level `gate.mode` but can never promote either check out of warn. This is expressed as code, not convention.
+**Config merge order.** `loadGateConfig` is the single choke point (its own doc comment states this): `DEFAULT_GATE` (the shipped defaults, exported from `gate-engine.mjs` itself) is overlaid by `_nonfiction-studio/config.json`'s `gate` and `thresholds` blocks, which is overlaid by the per-project settings file's `gate_mode` and `thresholds` keys, and only after all of that are two structural coercions applied. The coercions force `thesis_alignment.mode` and `quote_fidelity.mode` from `block` back to `warn` no matter what any config layer requested. `thesis_alignment` is a judgment check that must never block, which is D-03 (layered Stop gate) Invariant 1. `quote_fidelity` is held at warn until a quote normalization and adjudication policy ships. Because the settings overlay runs before the coercions and never writes to `gate.checks`, a settings file can raise the top-level `gate.mode` but can never promote either check out of warn. This is expressed as code, not convention.
 
 **Warn versus block.** Every individual engine (`ns-claims`, `ns-stylometry`, `ns-scrub`, `ns-doctor`) is mode-independent - it exits nonzero on any finding regardless of gate config. The gate itself is the one mode-dependent layer: it exits 1 (block) only when the top-level `gate.mode` is not `warn` AND at least one check configured to `block` actually fails; it exits 2 on any operational error (which always beats a block verdict, which always beats a pass or warn verdict); otherwise it exits 0. `hooks/stop-gate.mjs` runs `bin/ns-gate` as a subprocess at the end of a turn and maps that exit code to a block decision, a warn `additionalContext`, or silence.
 
@@ -61,7 +61,7 @@ The stylometry check does not sum per-marker deviations against a fixed budget; 
 Three independent mechanisms, each with its own failure posture:
 
 - **Write-scope guard**, per [ADR-0007 (agent identity resolution)](adr/ADR-0007-agent-identity-resolution.md). `hooks/lib/agent-identity.mjs` exports `AGENT_WRITE_SCOPES`, a table of book-root-relative prefixes each of five agents (`research-librarian`, `drafting-partner`, `line-editor`, `structure-architect`, `thesis-architect`) is allowed to write under, verified against that agent's own shipped prose. `hooks/pre-tool-use.mjs` enforces it fail-closed: a write outside the allowed prefix is denied. An agent deliberately absent from the table (`fact-checker`, `interviewer`, `voice-capture`) is unconstrained by design, not by oversight - constraining a claim the agent's own prose never made would be a behavior change, and the ADR records that reasoning by name. Agent identity itself comes from the hook envelope's `agent_type` field, namespace-matched against `nonfiction-studio:` so a same-named agent from an unrelated plugin is never accidentally bound by this guard.
-- **Untrusted-fetch envelope**, wired to `PostToolUse` matched on `WebFetch|WebSearch` (`hooks/post-tool-use.mjs`). Each fetch result is wrapped before Claude sees it: a preamble stating the content is retrieved data and not instructions, the source, a retrieval timestamp, a content-scan flag line, and the original body inside a nonce-fenced boundary. Inside a book project, one append-only JSONL record per fetch is logged to `.studio/logs/fetches.jsonl`. The hook is fail-open: if wrapping itself throws, it emits nothing and the platform passes the original output through unwrapped. The hook's own header is explicit about a design choice worth citing here: a dedicated "ignore your instructions"-style injection detector was built, adversarially tested across four rounds, and removed rather than shipped, because every narrowing still false-positived on ordinary prose (a "your prompt" reference to a shell prompt, in developer documentation, was the case that closed the question). The wrap-and-fence mechanism is unconditional and unaffected by that removal; it is the mitigation the hook actually relies on.
+- **Untrusted-fetch envelope**, wired to `PostToolUse` matched on `WebFetch|WebSearch` (`hooks/post-tool-use.mjs`). Each fetch result is wrapped before Claude sees it: a preamble stating the content is retrieved data and not instructions, the source, a retrieval timestamp, a content-scan flag line, and the original body inside a nonce-fenced boundary. Inside a book project, one append-only JSONL record per fetch is logged to `_nonfiction-studio/logs/fetches.jsonl`. The hook is fail-open: if wrapping itself throws, it emits nothing and the platform passes the original output through unwrapped. The hook's own header is explicit about a design choice worth citing here: a dedicated "ignore your instructions"-style injection detector was built, adversarially tested across four rounds, and removed rather than shipped, because every narrowing still false-positived on ordinary prose (a "your prompt" reference to a shell prompt, in developer documentation, was the case that closed the question). The wrap-and-fence mechanism is unconditional and unaffected by that removal; it is the mitigation the hook actually relies on.
 - **Routing and chain enforcement**, per [ADR-0013 (wave 1 exit surfaces)](adr/ADR-0013-wave-1-exit-surfaces.md) and D-18 (in-plugin model routing). Covered above under "Agents do scoped work" - the same `hooks/pre-tool-use.mjs` guard, reading `hooks/lib/routing.mjs`, warns or (opted in) blocks a dispatch that violates a declared model tier or an undeclared chain edge.
 
 All enforcement in `hooks/pre-tool-use.mjs` and its collaborators shares one posture split: guard violations (containment, write-scope, web gate) are fail-closed by design (D-13, security posture); operational failures reading a settings file, an agent's frontmatter, or the chain-permitted table are fail-open (silence, never a false deny) - a corrupt or missing config file must never crash a hook or force an incorrect verdict.
@@ -95,22 +95,22 @@ author invokes /nonfiction-studio:nfs-draft <chapter>
         |
         v
   hooks/pre-tool-use.mjs     (fires before each agent write above: containment
-        |                     and write-scope guards; snapshot to .studio/snapshots/
+        |                     and write-scope guards; snapshot to _nonfiction-studio/snapshots/
         |                     on an existing-chapter overwrite; session-write flag set)
         v
-  hooks/post-tool-batch.mjs  (.studio/progress.json refreshed;
-        |                     .studio/ai-use-log.jsonl compliance record appended)
+  hooks/post-tool-batch.mjs  (_nonfiction-studio/progress.json refreshed;
+        |                     _nonfiction-studio/ai-use-log.jsonl compliance record appended)
         v
   [end of turn] hooks/stop-gate.mjs
         |
         v
   bin/ns-gate  -> hooks/lib/gate-engine.mjs
-        |             DEFAULT_GATE <- .studio/config.json <- settings file
+        |             DEFAULT_GATE <- _nonfiction-studio/config.json <- settings file
         |             <- structural coercions (thesis_alignment, quote_fidelity -> warn)
         |             runs: claim_coverage, quote_fidelity, stylometry, prompt_scrub,
         |             continuity, state_coherence, overlap, session_write_flag
         v
-  .studio/gate/<slug>.<ts>.json  (report written by ns-gate; stop-gate copies its stdout to last-gate.json)
+  _nonfiction-studio/gate/<slug>.<ts>.json  (report written by ns-gate; stop-gate copies its stdout to last-gate.json)
         |
         v
   verdict surfaced: pass (silent) | warn (additionalContext) | block (Stop decision)
