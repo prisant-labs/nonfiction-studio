@@ -64,6 +64,15 @@ const KEY_SCHEMA = {
     valid: v => typeof v === 'string',
     describe: 'must be a string',
   },
+  // Never valid here (ADR-0015, state folder name). Collaborators who share a book must agree
+  // on where its records live, so the state folder's name cannot come from this personal file;
+  // a book that uses a non-default name records it in nonfiction-studio.json at its root.
+  state_dir: {
+    valid: () => false,
+    describe:
+      'is not read from this personal settings file; a book that uses a non-default state ' +
+      'folder records its name in nonfiction-studio.json at the book root',
+  },
 };
 
 /**

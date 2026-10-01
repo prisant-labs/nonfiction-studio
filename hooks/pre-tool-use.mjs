@@ -516,6 +516,20 @@ if (isMain) {
   if (bookRootError) {
     if (bookRootError.code && bookRootError.code !== 'NO_BOOK_ROOT') {
       if (WRITE_TOOLS.has(toolName)) {
+        // A bad state-folder pointer (ADR-0015) blocks every write but one: the write that
+        // repairs the pointer itself. Without this exemption the author could not fix the
+        // pointer from inside the session. The comparison is exact (after platform folding),
+        // so no other path rides along.
+        if (bookRootError.code === 'STATE_POINTER_INVALID' && bookRootError.pointerPath) {
+          const repairTarget =
+            toolName === 'NotebookEdit' ? toolInput.notebook_path : toolInput.file_path;
+          if (
+            typeof repairTarget === 'string' &&
+            foldForCompare(resolve(cwd, repairTarget)) === foldForCompare(resolve(bookRootError.pointerPath))
+          ) {
+            process.exit(0);
+          }
+        }
         emitDeny(
           'Cannot verify write safety: bible files are corrupt (' + bookRootError.message + '). ' +
           'Repair the file named there, then retry; bin/ns-doctor reports the problem. ' +
