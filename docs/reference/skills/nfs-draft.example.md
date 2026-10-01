@@ -33,6 +33,10 @@ The session runs on the chat surface. No hooks fire on chat; the skill appends t
 
 **Author:** `/nonfiction-studio:nfs-draft 03-your-curation-practice`
 
+**Studio (Locate the state folder):**
+
+The skill uses the Read tool on `nonfiction-studio.json` at the book root. This is the skill's first tool call. The file does not exist, so the state folder is `_nonfiction-studio/`, and `_nonfiction-studio/meta.json` exists, so no other folder needs checking.
+
 **Studio (Step 1 - Registry probe and chapter argument resolution):**
 
 The skill uses the Bash tool:
@@ -207,7 +211,7 @@ The skill uses the Read tool on `chapters/03-your-curation-practice.md`. The fil
 
 ## Key assertions from this transcript
 
-- **Registry probe is a tool call.** The Bash call on `structure/chapter-list.md` determines the `HAS_REGISTRY`/`NO_REGISTRY` token before any other work begins. No prose inference substitutes for the tool result.
+- **The state folder is located before Step 1 runs.** The Read on `nonfiction-studio.json` is the skill's first tool call. Step 1's Bash call on `structure/chapter-list.md` is the first tool call after the state folder is located, and it determines the `HAS_REGISTRY`/`NO_REGISTRY` token before any other work begins. No prose inference substitutes for the tool result.
 
 - **Chapter argument resolved via Read.** The skill reads `structure/chapter-list.md` and matches the supplied slug `03-your-curation-practice` to row 3. An unmatched argument would halt with the registry file name and the list of valid slugs.
 

@@ -16,6 +16,10 @@ This is a condensed transcript of an `nfs-outline` run for the sample book "The 
 
 **Author:** `/nonfiction-studio:nfs-outline`
 
+**Studio (Locate the state folder):**
+
+The skill uses the Read tool on `nonfiction-studio.json` at the book root. This is the skill's first tool call. The file does not exist, so the state folder is `_nonfiction-studio/`, and `_nonfiction-studio/meta.json` exists, so no other folder needs checking.
+
 **Studio (Step 1 - Confirmed-brief probe):**
 
 The skill uses the Bash tool:
@@ -115,7 +119,7 @@ Both checks pass.
 
 ## Key assertions from this transcript
 
-- **Confirmed-brief probe is a tool call.** The Bash call on `context/brief.md` determines the `CONFIRMED`/`UNCONFIRMED` token before any other work begins. No prose inference substitutes for the tool result.
+- **The state folder is located before Step 1 runs.** The Read on `nonfiction-studio.json` is the skill's first tool call. Step 1's Bash call on `context/brief.md` is the first tool call after the state folder is located, and it determines the `CONFIRMED`/`UNCONFIRMED` token before any other work begins. No prose inference substitutes for the tool result.
 - **Thesis check is a Read call.** The skill reads `structure/thesis.md` before deciding whether to invoke `thesis-architect`. In this run the file exists; `thesis-architect` is not invoked.
 - **Two-revision-pass cap is not triggered.** The author accepts the existing thesis immediately. The cap applies only when the author rejects a thesis produced or revised by `thesis-architect`.
 - **Craft-model selection belongs to the agent.** The skill does not ask the author to choose a craft model; `structure-architect` reads the model from the config and selects `how-to.yaml`. Absent or misconfigured craft model YAML would halt the agent with a clear error, not the skill.

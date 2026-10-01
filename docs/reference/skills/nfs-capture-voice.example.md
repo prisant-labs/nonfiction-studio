@@ -18,6 +18,10 @@ For the no-samples bootstrap path (when an author has no writing samples of thei
 
 **Author:** `/nonfiction-studio:nfs-capture-voice`
 
+**Studio (Locate the state folder):**
+
+The skill uses the Read tool on `nonfiction-studio.json` at the book root. This is the skill's first tool call. The file does not exist, so the state folder is `_nonfiction-studio/`, and `_nonfiction-studio/meta.json` exists, so no other folder needs checking.
+
 **Studio (Step 1 - Existing-profile check):**
 
 The skill uses the Bash tool:
@@ -239,7 +243,7 @@ Using the marker values already in the `_nonfiction-studio/config.json` read in 
 
 ## Key assertions from this transcript
 
-- **Existing-profile check is a tool call.** The Bash call on `context/style-profile.md` determines whether an existing profile is present before any other work begins.
+- **The state folder is located before Step 1 runs.** The Read on `nonfiction-studio.json` is the skill's first tool call. Step 1's Bash call on `context/style-profile.md` is the first tool call after the state folder is located, and it determines whether an existing profile is present before any other work begins.
 - **Word-count check is a tool call.** The Bash count of submitted words (2,221 in this run) determines whether calibration can proceed; no prose estimate is made.
 - **Cost disclosed before delegating.** The skill states, in one sentence, that calibration resamples the corpus and takes real time - before spawning the agent, not after.
 - **The agent writes all three outputs; the skill writes none.** `context/samples/voice-sample-NN.md`, `context/style-profile.md`, and the full `stylometry.baseline` object in `config.json` are written by the `voice-capture` agent only.

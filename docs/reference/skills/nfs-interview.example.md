@@ -16,6 +16,10 @@ This is a condensed two-session transcript of an `nfs-interview` run for the sam
 
 **Author:** `/nonfiction-studio:nfs-interview`
 
+**Studio (Locate the state folder):**
+
+The skill uses the Read tool on `nonfiction-studio.json` at the book root. This is the skill's first tool call. The file does not exist, so the state folder is `_nonfiction-studio/`, and `_nonfiction-studio/meta.json` exists, so no other folder needs checking.
+
 **Studio (Step 1 - Resumption check):**
 
 The skill uses the Read tool on `context/brief.md`. No DRAFT blocks are found. This is a new session with no prior state to skip.
@@ -73,6 +77,10 @@ The session ends here. Sections 1 and 2 are flushed to `context/brief.md` on dis
 ## Session 2: resumed intake, remaining sections, confirmed brief, conditional close
 
 **Author:** `/nonfiction-studio:nfs-interview`
+
+**Studio (Locate the state folder):**
+
+The skill uses the Read tool on `nonfiction-studio.json` at the book root. This is the skill's first tool call. The file does not exist, so the state folder is `_nonfiction-studio/`, and `_nonfiction-studio/meta.json` exists, so no other folder needs checking.
 
 **Studio (Step 1 - Resumption check):**
 

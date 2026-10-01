@@ -18,6 +18,8 @@ This is a condensed transcript of a complete `nfs-new-book` run. It shows the bl
 
 **Studio:**
 
+> No `nonfiction-studio.json` was found at the book root, so the state folder is `_nonfiction-studio/`. `_nonfiction-studio/meta.json` does not exist either, so the skill lists the book root's folders; none holds both `meta.json` and `progress.json`. Continuing.
+>
 > No mode argument supplied; defaulting to blank mode in non-interactive context.
 >
 > No existing book project found. Proceeding.
@@ -108,6 +110,8 @@ Note: `created` is an RFC 3339 UTC timestamp (`{{DATETIME}}`), not a calendar da
 
 **Studio:**
 
+> `nonfiction-studio.json` is still absent, so the state folder is `_nonfiction-studio/`. `_nonfiction-studio/meta.json` now exists from the first run, so no other folder needs checking.
+>
 > Warning: This directory already contains a book project. Scanning for missing scaffold files...
 >
 > All 25 expected scaffold files are present. No files were written.

@@ -28,6 +28,10 @@ Any scenario showing a `block` verdict or exit 1 is explicitly synthetic and doe
 
 **Author:** `/nonfiction-studio:nfs-check-chapter 02-finding-your-network`
 
+**Studio (Locate the state folder):**
+
+The skill uses the Read tool on `nonfiction-studio.json` at the book root. This is the skill's first tool call. The file does not exist, so the state folder is `_nonfiction-studio/`, and `_nonfiction-studio/meta.json` exists, so no other folder needs checking.
+
 **Studio (Step 1 - Argument parsing and deep argument check):**
 
 Argument tokens: `["02-finding-your-network"]`. No `deep` token is present. Chapter token: `02-finding-your-network`. Continue to Step 2.

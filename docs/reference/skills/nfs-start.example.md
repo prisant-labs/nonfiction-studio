@@ -89,6 +89,10 @@ No files are written during this session. Any scenario leaving the committed sta
 
 **Author:** `/nonfiction-studio:nfs-start`
 
+**Studio (Locate the state folder):**
+
+The skill uses the Read tool on `nonfiction-studio.json` at the book root. This is the skill's first tool call. The file does not exist, so the state folder is `_nonfiction-studio/`, and `_nonfiction-studio/meta.json` exists, so no other folder needs checking.
+
 **Studio (Step 1 - Progress file probe):**
 
 The skill uses the Bash tool:
@@ -170,7 +174,7 @@ At this point the `nfs-draft` skill takes over. The `nfs-start` dispatcher has c
 
 ## Key assertions from this transcript
 
-- **Step 1 is always the first tool call.** The Bash probe runs before any Read call. The `HAS_PROGRESS`/`NO_PROGRESS` token drives all subsequent routing.
+- **The state folder is located before Step 1 runs.** The Read on `nonfiction-studio.json` is the skill's first tool call. Step 1's Bash probe is the first tool call after the state folder is located, and the `HAS_PROGRESS`/`NO_PROGRESS` token it produces drives all subsequent routing.
 
 - **Both the progress layer and the chapter registry are read in Path 2.** The progress.json chapters array is the alive layer (hook-maintained truth for `drafted` and in-progress chapters). The chapter-list.md is the full registry including outlined chapters not yet in progress. Both are needed: progress.json to find any `drafting` chapter; chapter-list.md to find the next `outlined` or `empty` chapter when none is in progress.
 

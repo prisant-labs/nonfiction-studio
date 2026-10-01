@@ -32,6 +32,10 @@ All 5 EV entries in `research/evidence-log.md` are at `status: verified`. A prio
 
 **Author:** `/nonfiction-studio:nfs-fact-check 02-finding-your-network`
 
+**Studio (Locate the state folder):**
+
+The skill uses the Read tool on `nonfiction-studio.json` at the book root. This is the skill's first tool call. The file does not exist, so the state folder is `_nonfiction-studio/`, and `_nonfiction-studio/meta.json` exists, so no other folder needs checking.
+
 **Studio (Step 1 - Chapter argument resolution and file probe):**
 
 The skill uses the Bash tool:
