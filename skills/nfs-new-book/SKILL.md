@@ -3,7 +3,7 @@ name: nfs-new-book
 user-invocable: true
 argument-hint: "[book title] [guided|blank]"
 description: "Scaffolds the flat bible tree (context/, structure/, chapters/, research/, production/) and creates the state folder's files for a new nonfiction book project. Use when an author starts a new book or follows the studio Path 1 prompt."
-when_to_use: "Use when the author explicitly wants to initialize, start, or set up a new book project, says 'create a new book', or is routed here from the studio dispatcher Path 1 prompt. Do not invoke for authors with an existing book project layout (<state-dir>/ or context/brief.md) unless they explicitly ask to re-initialize only the missing pieces."
+when_to_use: "Use when the author explicitly wants to initialize, start, or set up a new book project, says 'create a new book', or is routed here from the studio dispatcher Path 1 prompt. Do not invoke for authors with an existing book project layout (a state folder or context/brief.md) unless they explicitly ask to re-initialize only the missing pieces."
 ---
 
 This skill scaffolds a new nonfiction book project. It is surface-independent: no hooks or subagents are needed.
@@ -65,7 +65,8 @@ for f in \
   production/front-matter.md production/back-matter.md \
   <state-dir>/meta.json <state-dir>/config.json <state-dir>/progress.json \
   <state-dir>/progress.schema.json <state-dir>/ai-use-log.jsonl \
-  <state-dir>/snapshots/.gitkeep <state-dir>/gate/.gitkeep <state-dir>/logs/.gitkeep; do
+  <state-dir>/snapshots/.gitkeep <state-dir>/gate/.gitkeep <state-dir>/logs/.gitkeep \
+  <state-dir>/README.md; do
   [ -e "$f" ] || printf "MISSING: %s\n" "$f"
 done
 printf "SCAN_DONE\n"
@@ -73,7 +74,7 @@ printf "SCAN_DONE\n"
 
 **If the output is only `SCAN_DONE` (no MISSING lines):** Output this verbatim. Do not stamp, read, or write any bible or `<state-dir>/` file in this branch:
 
-> Warning: This directory already contains a book project. All 24 expected scaffold files are present. No bible or `<state-dir>/` files were written. Run /nonfiction-studio:nfs-interview to continue setting up your project.
+> Warning: This directory already contains a book project. All 25 expected scaffold files are present. No bible or `<state-dir>/` files were written. Run /nonfiction-studio:nfs-interview to continue setting up your project.
 
 Then run the output style offer (Step 7) followed by the book-context skill generation step (Step 7a); this REINIT run stops after Step 7a. This is the one reachable path for a legitimate re-offer against a fully-scaffolded existing project: Step 7 self-gates on an already-recorded `output_style` value and on non-interactive context, and Step 7a self-gates on the generated skill file's existence, so either adds a write here only when its own outcome has never been recorded for this project and the author actually consents or declines in this interaction.
 
@@ -239,6 +240,8 @@ Note: `updated` uses `{{DATETIME}}` (RFC 3339 UTC), not `{{DATE}}` (YYYY-MM-DD).
 
 **`<state-dir>/ai-use-log.jsonl`**: write as an empty file.
 
+**`<state-dir>/README.md`**: read `PLUGIN_ROOT/templates/book-scaffold/_nonfiction-studio/README.md`, write verbatim. It tells anyone who opens the folder what it holds, that it belongs in version control, and how to rename it.
+
 **Empty directory sentinels** (write empty files):
 - `<state-dir>/snapshots/.gitkeep`
 - `<state-dir>/gate/.gitkeep`
@@ -368,6 +371,10 @@ After writing, report: "`.claude/skills/book-context/SKILL.md` has been generate
 List all files created. Output:
 
 > Book project '{title}' has been initialized. The bible tree and <state-dir>/ state files are ready.
+
+Then name the state folder and how to rename it, substituting the resolved name:
+
+> Nonfiction Studio keeps this book's records in `<state-dir>/`. Commit that folder with the book. To give it a different name, run `/nonfiction-studio:nfs-doctor move-state <name>`.
 
 Then: "The next step is nfs-interview. Invoke it with `/nonfiction-studio:nfs-interview` to conduct the structured intake interview and build your project brief. The interview typically takes 45-90 minutes and produces a confirmed context/brief.md."
 

@@ -1,0 +1,3 @@
+# Nonfiction Studio records
+
+This folder holds Nonfiction Studio's records for this book: settings, progress, quality-gate reports, chapter snapshots, and the AI-use log. Commit it with the rest of the book, because the AI-use log is the book's record of how AI was used. `config.json` is the only file here meant for hand editing; the plugin maintains every other file. To rename this folder, run `/nonfiction-studio:nfs-doctor move-state <name>`. A book that uses a name other than `_nonfiction-studio` records that name in `nonfiction-studio.json` at the book root. The plugin's documentation explains each file: https://github.com/prisant-labs/nonfiction-studio/blob/main/docs/README.md

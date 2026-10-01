@@ -88,6 +88,16 @@ The types in active use are `feat`, `fix`, `docs`, `test`, and `chore`; pick the
 
 Every skill directory under `skills/` is named `nfs-<name>`, with no exceptions, ever. This is machine-enforced in `scripts/check-frontmatter.mjs`: the directory name must match `^nfs-[a-z0-9]+(-[a-z0-9]+)*$`, the `SKILL.md`'s own `name:` frontmatter field must equal the directory name, and the `library.json` `components.skills[]` entry must match the same pattern. See [ADR-0003 (skill invocation ergonomics)](docs/adr/ADR-0003-skill-invocation-ergonomics.md)'s amendment for why: a short invocation form shares a namespace with every other installed plugin, and the prefix is what keeps this plugin's verbs from colliding with someone else's.
 
+## Naming the state folder in code, skills, and agents
+
+A book's state folder is `_nonfiction-studio/` by default, but a book can give it another name in `nonfiction-studio.json` at the book root, so nothing may assume the name. See [ADR-0015 (state folder name)](docs/adr/ADR-0015-state-folder-name.md).
+
+- **Code** under `hooks/` and `bin/` reaches the folder only through `stateDirOf(root)` or `stateDirNameOf(root)` in `hooks/lib/bible.mjs`, never through a literal.
+- **A skill** that reads or writes the folder itself writes its paths as `<state-dir>/...` and carries the shared "Locate the state folder" section before its first step. Copy that section byte for byte from any skill that already has it. A skill that only describes what a CLI does says "the state folder" instead, and needs no section.
+- **An agent** never resolves the folder. An agent that reads or writes it uses `<state-dir>/...` and carries the shared note that the dispatching skill names the folder in its brief; the checker prints the note's exact text when it is missing.
+
+`scripts/checks/check-state-folder-stanza.mjs` enforces all three rules for skills and agents, and it flags any literal folder name in a skill or an agent file.
+
 ## Hooks fail open; settings can never promote a coerced check
 
 Every hook script in `hooks/` is written to fail open: a malformed stdin event, a corrupt config file, or an unreadable settings file never breaks a session and never silently escalates a check's severity. The failure path always substitutes a safe default (empty settings, a skipped check, an unattributed write) and, where a human would otherwise be misled, emits exactly one warning sentence naming what went wrong. See `docs/formats/settings.md`'s "Corruption handling" section for the exact per-key and whole-file failure taxonomy this posture follows.

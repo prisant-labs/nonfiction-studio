@@ -6,13 +6,13 @@ For the mechanical sequence of steps a maintainer follows to cut a plugin releas
 
 ## Where the schema version lives
 
-Every book project carries a `.studio/meta.json` file with a `schema_version` field (currently `"2"` for every book scaffolded by this plugin version). `hooks/lib/doctor-engine.mjs` pins the version this installed plugin supports as `SUPPORTED_MAJOR = '2'`. `bin/ns-doctor` reads both and compares them on every `--check`, `--report`, and `--migrate` invocation.
+Every book project carries a `meta.json` file in its state folder (`_nonfiction-studio/` by default) with a `schema_version` field (currently `"2"` for every book scaffolded by this plugin version). `hooks/lib/doctor-engine.mjs` pins the version this installed plugin supports as `SUPPORTED_MAJOR = '2'`. `bin/ns-doctor` reads both and compares them on every `--check`, `--report`, and `--migrate` invocation.
 
 ## What `ns-doctor --migrate` does today
 
 **Diagnosis only.** If a book's `schema_version` equals the installed plugin's `SUPPORTED_MAJOR`, `--migrate` reports "nothing to migrate" and exits 0: a current schema is a success state, not an error indistinguishable from a broken bible. If a book's `schema_version` is anything else, `--migrate` refuses and exits 2, naming both the book's version and the version the plugin supports.
 
-**No automated transformation exists yet.** `--migrate` does not currently rewrite `.studio/meta.json`, does not touch chapter content, evidence-ledger entries, or voice-profile data, and does not write a migration-event log. There is nothing to transform yet, because the plugin has shipped exactly one schema major (`2`) since its first release, so this path has never had a real old-format bible to run against. The command exists today as a readiness check: it tells an author clearly whether their book needs attention, without silently doing (or silently failing to do) anything to their files.
+**No automated transformation exists yet.** `--migrate` does not currently rewrite `meta.json`, does not touch chapter content, evidence-ledger entries, or voice-profile data, and does not write a migration-event log. There is nothing to transform yet, because the plugin has shipped exactly one schema major (`2`) since its first release, so this path has never had a real old-format bible to run against. The command exists today as a readiness check: it tells an author clearly whether their book needs attention, without silently doing (or silently failing to do) anything to their files.
 
 Practically, this means: if you are reading this because `ns-doctor` told you a migration is required, the automated migration you might expect from the message does not exist yet for your specific version jump. Treat that outcome as a signal to check this file's migration log below and, if your target version genuinely lacks an entry, to treat the mismatch as a real blocker worth reporting rather than something to force past.
 
@@ -44,11 +44,12 @@ No migrations have shipped yet. When `schema_version` first changes, this sectio
 
 For a prompt-and-Markdown plugin like this one, there is no REST endpoint to version: the compatibility surface is the bible schema, the component slugs, and the quality-gate semantics. A change needs a MAJOR version bump if it does any of the following:
 
-- Renames, retypes, or removes a field in `.studio/meta.json`, `.studio/config.json`, `progress.json`, or the evidence-ledger format.
+- Renames, retypes, or removes a field in the state folder's `meta.json`, `config.json`, or `progress.json`, or in the evidence-ledger format.
+- Moves or renames the state folder's default location, or any path under it.
 - Renames or removes any shipped agent, skill, or hook slug.
 - Moves a deterministic quality-gate check from warn to block, or changes a block check's exit condition so that previously valid output starts failing.
 - Changes a `bin/` CLI's exit code, removes a flag, or changes what an existing flag means.
-- Removes or renames a previously documented `.studio/config.json` key.
+- Removes or renames a previously documented `config.json` key.
 
 A new skill, agent, hook, or template, a new optional config key, a new warn-only gate check, or a new `bin/` flag that does not remove an existing one, is feature-additive (MINOR). A correctness fix that does not change a contract (a check that was wrongly accepting bad output starting to reject it correctly, a prose update with no slug or schema affected) is a PATCH.
 
@@ -64,7 +65,7 @@ an umlaut, counted those as two tokens each. The tokenizer now matches any Unico
 they count as one word, which is what they always should have been.
 
 That tokenizer is also `countWords`, the single word-counting authority for the whole plugin.
-`hooks/post-tool-batch.mjs` uses it to write chapter word counts into `.studio/progress.json`,
+`hooks/post-tool-batch.mjs` uses it to write chapter word counts into the state folder's `progress.json`,
 and the doctor's coherence check reads those counts back and compares them against a fresh
 recount.
 
@@ -85,7 +86,7 @@ at all.
 
 ## Voice-baseline note: marker_set_version (not a schema_version change)
 
-Independent of `.studio/meta.json`'s `schema_version` (unchanged by this release), the stylometry engine now requires `stylometry.baseline.marker_set_version` on every voice baseline. Every book's baseline captured before this release lacks the field entirely, and the drift scorer treats an absent field as version 1, which no longer matches the engine's current marker set version.
+Independent of `meta.json`'s `schema_version` (unchanged by this release), the stylometry engine now requires `stylometry.baseline.marker_set_version` on every voice baseline. Every book's baseline captured before this release lacks the field entirely, and the drift scorer treats an absent field as version 1, which no longer matches the engine's current marker set version.
 
 What happens if you take this update without re-running `nfs-capture-voice`: the stylometry check inside `ns-gate` throws a stale-baseline error on every gate run. The gate turns that into a `skip` verdict for the stylometry check alone, with exit code 2 for that run; the top-level gate verdict is unaffected by the skip and can still read `pass`, so voice drift checking goes quiet without the run looking like a failure.
 
@@ -101,13 +102,13 @@ Version 4 to 5 replaced the single stored drift threshold with a calibrated base
 
 Recapturing under this release also changes what `/nonfiction-studio:nfs-capture-voice` does, not just what it produces: it now persists every writing sample under `context/samples/` before calibrating (an earlier build could read a sample from wherever the author pointed it without saving a copy into the book), and the baseline it writes carries three fields no earlier capture wrote at all - `captured`, `sample_count`, and a one-sentence `method` field naming how the baseline was produced. None of this requires a separate action: the same one command, `/nonfiction-studio:nfs-capture-voice`, produces the fuller baseline automatically.
 
-Separately, and not book-affecting the same way: this release also retires `thresholds.drift_score_max` outright. The calibrated-null verdict reads its threshold from the baseline's own `calibration` ladder, not from a single fixed number in config, so this key is no longer read for scoring by anything. A book whose `.studio/config.json` still carries the key is unaffected functionally, but `ns-stylometry` and the gate's stylometry check both print a one-time deprecation notice naming the key when they see it; remove it from `.studio/config.json` at your convenience.
+Separately, and not book-affecting the same way: this release also retires `thresholds.drift_score_max` outright. The calibrated-null verdict reads its threshold from the baseline's own `calibration` ladder, not from a single fixed number in config, so this key is no longer read for scoring by anything. A book whose `config.json` still carries the key is unaffected functionally, but `ns-stylometry` and the gate's stylometry check both print a one-time deprecation notice naming the key when they see it; remove it from `config.json` at your convenience.
 
 Neither change is a MAJOR version bump under "What counts as a breaking change" above (no field was renamed, retyped, or removed; `marker_set_version` and `calibration` are additive, and a config key that is merely ignored rather than rejected is not a removal), so `ns-doctor --migrate`'s `schema_version` check does not see either one, and the migration log format above does not apply. Both are called out here, outside that format, because the mid-book update promise above is the one place an author would think to look.
 
 ## Skill-invocation note: the `nfs-` rename (not a schema_version change)
 
-Independent of `.studio/meta.json`'s `schema_version` (unchanged by this release), every skill this plugin ships has been renamed to carry the `nfs-` prefix, and `studio` is renamed outright to `nfs-start` rather than prefixed. This is a breaking change under "What counts as a breaking change" above: it renames every shipped skill slug. It is being made deliberately, before this plugin's first tagged release, precisely so it never has to be made after one. Renaming a skill after an author has learned its invocation form, written it into their own notes, or scripted around it costs a deprecation cycle and a MAJOR version bump; renaming it now, while the install count is zero, costs nothing but this note.
+Independent of `meta.json`'s `schema_version` (unchanged by this release), every skill this plugin ships has been renamed to carry the `nfs-` prefix, and `studio` is renamed outright to `nfs-start` rather than prefixed. This is a breaking change under "What counts as a breaking change" above: it renames every shipped skill slug. It is being made deliberately, before this plugin's first tagged release, precisely so it never has to be made after one. Renaming a skill after an author has learned its invocation form, written it into their own notes, or scripted around it costs a deprecation cycle and a MAJOR version bump; renaming it now, while the install count is zero, costs nothing but this note.
 
 Every skill in this plugin is invoked as `/nonfiction-studio:<name>`; the table below lists the `<name>` portion only, old to new.
 
@@ -130,7 +131,7 @@ Every skill in this plugin is invoked as `/nonfiction-studio:<name>`; the table 
 
 The eight verb-alias shortcuts (`/draft`, `/factcheck`, `/book-init`, `/interview`, `/outline`, `/research`, `/gate`, `/status`) are also gone, with no replacement alias. They were never registered commands, since this plugin ships no `commands/` directory at all, only documentation shorthand for the same underlying invocation; the new short skill name in the table above is now the shortcut.
 
-No book content, bible schema, or `.studio/` state is affected by this rename: it changes the invocation surface only. If you have notes, scripts, or saved prompts that name a skill by its old invocation form, update them to the new form above; the old form no longer resolves to anything this plugin ships.
+No book content, bible schema, or state-folder file is affected by this rename: it changes the invocation surface only. If you have notes, scripts, or saved prompts that name a skill by its old invocation form, update them to the new form above; the old form no longer resolves to anything this plugin ships.
 
 ## Wave 1 exit surfaces: new capabilities, nothing breaks
 
@@ -138,7 +139,7 @@ This release (ADR-0013, wave 1 exit surfaces) adds seven author-visible surfaces
 
 **A per-project settings file is entirely optional.** `.claude/nonfiction-studio.local.md` does not exist in any book scaffolded before this release, and its absence is silent success: every default already in effect stays in effect. See [docs/formats/settings.md](docs/formats/settings.md) for the schema; the shipped, fully-commented starting point is `templates/nonfiction-studio.local.example.md`. A corrupt settings file never breaks a session or changes gate behavior beyond falling back to the no-settings-file case, with one warning sentence to stderr naming the file.
 
-**A new gate check, `overlap`, ships warn-mode by default, and an existing book gets it automatically.** `hooks/lib/gate-engine.mjs`'s `loadGateConfig` merges every book's `.studio/config.json` against the full default check set (`DEFAULT_GATE.checks`) on every read, taking the shipped default for any check name a book's own config does not name. A book scaffolded before this release, whose `.studio/config.json` has never heard of `overlap`, therefore gates with `overlap: { enabled: true, mode: "warn" }` automatically, with no edit required. To adjust its threshold (the default is a 15-word overlapping span) or raise it to `block`, add an `overlap` entry to the book's own `.studio/config.json` `gate.checks`, or set `thresholds.overlap_min_words` in `.studio/config.json` or the new per-project settings file above - either merges over the default the same way every other threshold already does. The same detection also runs standalone as `ns-overlap`, the ninth shipped CLI, for a check outside of a gate run.
+**A new gate check, `overlap`, ships warn-mode by default, and an existing book gets it automatically.** `hooks/lib/gate-engine.mjs`'s `loadGateConfig` merges every book's `config.json` against the full default check set (`DEFAULT_GATE.checks`) on every read, taking the shipped default for any check name a book's own config does not name. A book scaffolded before this release, whose `config.json` has never heard of `overlap`, therefore gates with `overlap: { enabled: true, mode: "warn" }` automatically, with no edit required. To adjust its threshold (the default is a 15-word overlapping span) or raise it to `block`, add an `overlap` entry to the book's own `config.json` `gate.checks`, or set `thresholds.overlap_min_words` in `config.json` or the new per-project settings file above - either merges over the default the same way every other threshold already does. The same detection also runs standalone as `ns-overlap`, the ninth shipped CLI, for a check outside of a gate run.
 
 **Two output styles, `manuscript` and `review`, are optional and never imposed.** Neither activates itself; `nfs-new-book` offers a consented choice once per project (declining, or running in a non-interactive session, writes nothing), and the built-in `/config` command can activate or change either one at any time. A book that never runs the offer, or declines it, sees no behavior change at all - the two styles change only how Claude's replies are shaped, never anything on disk.
 
@@ -149,3 +150,27 @@ This release (ADR-0013, wave 1 exit surfaces) adds seven author-visible surfaces
 **Routing enforcement at agent dispatch defaults to warn, not block.** `hooks/pre-tool-use.mjs`'s new dispatch-routing branch (model-tier and chain-edge checks) reports a caution via `additionalContext` by default; it never denies a dispatch unless a project's settings file explicitly sets `routing_enforce: block`. No book sees a dispatch newly refused by taking this update; at most, a warning appears where none did before.
 
 **Chat-surface compliance logging is additive, not a behavior change to any hook.** The six agent-dispatching skills append their own `ai-use-log.jsonl` records only when a hook has not already logged the same write on the current surface (verified by a before/after count check around each flow's writes), so a Claude Code session with hooks already firing sees no duplicate records. `ns-doctor`'s twelfth check (AI-use-log coverage) is read-only and adds findings and notices to the report; it writes nothing and blocks nothing on its own.
+
+## State-folder note (2026-10-01): `.studio/` becomes `_nonfiction-studio/` (not a schema_version change)
+
+Independent of `meta.json`'s `schema_version` (unchanged by this release), the folder that holds each book's machine-managed records has moved. Books created by earlier releases keep those records in the hidden `.studio/` folder. Books created by this release keep them in the visible `_nonfiction-studio/` folder, which also carries a short `README.md` explaining itself. [ADR-0015 (state folder name)](docs/adr/ADR-0015-state-folder-name.md) records why. This is a breaking change under "What counts as a breaking change" above: it moves the state folder's default location.
+
+**What happens if you take this update without doing anything.** Your book's records stay exactly where they are, and nothing is deleted or rewritten. The plugin no longer finds them by itself, though, and every surface says so instead of guessing:
+
+- the session start message names the `.studio/` folder and `/nonfiction-studio:nfs-doctor`;
+- every `bin/ns-*` CLI exits 2 with the same message;
+- every skill stops before its first write and routes you to `nfs-doctor`;
+- `nfs-new-book` refuses to start a second book beside the first, so the AI-use log is never split across two folders.
+
+**The remedy is one command: `/nonfiction-studio:nfs-doctor migrate`.** It offers two choices and asks before writing anything:
+
+1. Rename `.studio/` to `_nonfiction-studio/`. Inside a git working tree, the rename uses `git mv`, so every file keeps its history.
+2. Keep `.studio/`, and record that name in a new file, `nonfiction-studio.json`, at the book root.
+
+Either choice also adds the folder's `README.md` and re-runs the doctor to confirm the book resolves. Commit the result, including `nonfiction-studio.json` if you chose to keep the old name: a clone without that file cannot find the records.
+
+**You can also choose any other name.** `/nonfiction-studio:nfs-doctor move-state <name>` renames a healthy book's state folder and records the name in `nonfiction-studio.json`. A name must be a single folder name of 1 to 64 letters, digits, `_`, `-` or `.`, and it may not be one of the bible folders, `.git`, or `.claude`. A personal settings file cannot set the name: a `state_dir` key there is dropped with a warning.
+
+**Things outside the plugin that may name the old folder.** A `.gitignore` rule, an editor setting, a backup script, or your own notes may name `.studio/`. Update them after the move. A Markdown-aware app such as Obsidian will now also index the chapter snapshots under `_nonfiction-studio/snapshots/`, because the folder is no longer hidden; exclude that folder in the app if the extra copies get in your way.
+
+**Why `schema_version` stays "2".** The files themselves did not change, only where they live, so the doctor's schema-version check has nothing to migrate. A version bump would make that check demand a field migration that does not exist.
