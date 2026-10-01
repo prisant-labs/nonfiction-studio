@@ -78,7 +78,7 @@ const MATRIX = [
       // ns-status is read-only and has no findings-based exit code (only 0 on success or 2 on
       // an operational error); the golden book is a well-formed project, so it always exits 0.
       // This proves the CLI runs end to end against the real committed progress.json,
-      // config.json, and .studio/gate/ report via the shared temp-clone harness; the dedicated,
+      // config.json, and _nonfiction-studio/gate/ report via the shared temp-clone harness; the dedicated,
       // more detailed proof of the read-only and determinism guarantees is
       // tests/engines/status-cli.test.mjs.
       { engine: NS_STATUS, args: [], expected: 0 },

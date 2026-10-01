@@ -2,7 +2,7 @@
 # nonfiction-studio.local.md -- per-project studio settings (schema v1)
 #
 # Copy this file to .claude/nonfiction-studio.local.md in your book project (the directory
-# containing .studio/, or any of its ancestors -- the studio walks UP from wherever a session
+# containing _nonfiction-studio/, or any of its ancestors -- the studio walks UP from wherever a session
 # starts, the same way it locates the book root itself, and uses the first one it finds).
 # Everything under the "---" fences below is YAML; everything after the closing "---" is your
 # own Markdown -- the studio never reads or interprets it beyond surfacing a one-line pointer at
@@ -15,14 +15,14 @@
 # file stays forward-compatible with schema additions in a later release.
 
 # gate_mode: off | warn | block
-# Overrides .studio/config.json's top-level gate.mode for THIS project only. Use "block" to make
+# Overrides _nonfiction-studio/config.json's top-level gate.mode for THIS project only. Use "block" to make
 # the Stop gate actually fail a session on a check that is already configured to block (rather
 # than being capped to a warning), "warn" to report everything without ever blocking, or "off" to
 # silence the gate's own summary entirely. Leave commented out to use whatever config.json says
 # (its own default is "warn").
 # gate_mode: warn
 
-# thresholds: an object, shallow-merged OVER .studio/config.json's own "thresholds" object.
+# thresholds: an object, shallow-merged OVER _nonfiction-studio/config.json's own "thresholds" object.
 # Each key you set here overrides the same key in config.json; every key you do NOT set here
 # passes through from config.json unchanged. Use this for a per-project tuning that should live
 # with you locally rather than in the shared, version-controlled config.json.

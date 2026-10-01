@@ -211,7 +211,7 @@ if (opts.baseline) {
   }
   thresholds = (bData && bData.thresholds) ? bData.thresholds : null;
 } else {
-  // Default: read from .studio/config.json
+  // Default: read from _nonfiction-studio/config.json
   const configPath = join(stateDirOf(root), 'config.json');
   if (!existsSync(configPath)) {
     process.stderr.write(
@@ -242,7 +242,7 @@ if (opts.baseline) {
 // ---- registers discovery (P8, ADR-0012 voice verdict scope, Decision 4 -- advisory only) -------
 // Read independently of which baseline branch above ran (an explicit --baseline override reads a
 // baseline from elsewhere, but stylometry.registers, when it exists, still lives in this project's
-// own .studio/config.json). Any read or parse failure here is treated the same as "no registers
+// own _nonfiction-studio/config.json). Any read or parse failure here is treated the same as "no registers
 // configured" -- advisory output degrading quietly is the correct failure mode for a feature that
 // carries no blocking verdict, never a reason to fail the whole scoring run.
 let registers = null;

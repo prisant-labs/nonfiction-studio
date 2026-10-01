@@ -163,7 +163,7 @@ test('nfs-tour procedure: cloning + editing the clone leaves examples/sample-boo
 
     // Step 2: flip the CLONE's gate mode from warn to block (an edit
     // nfs-tour performs only inside the clone).
-    const configPath = join(tourDir, '.studio', 'config.json');
+    const configPath = join(tourDir, '_nonfiction-studio', 'config.json');
     const configText = readFileSync(configPath, 'utf8');
     const blockedConfig = configText.replace('"mode": "warn",', '"mode": "block",');
     assert.notStrictEqual(blockedConfig, configText, 'the gate-mode replacement must actually match something');
@@ -181,7 +181,7 @@ test('nfs-tour procedure: cloning + editing the clone leaves examples/sample-boo
     // Sanity check: the clone really was touched (this is not a vacuous test).
     const cloneAfterRevert = snapshotDir(tourDir);
     const cloneResidue = diffSnapshots(cloneRightAfterCopy, cloneAfterRevert);
-    assert.deepStrictEqual(cloneResidue, ['modified: .studio/config.json'],
+    assert.deepStrictEqual(cloneResidue, ['modified: _nonfiction-studio/config.json'],
       'inside the clone, only the gate-mode edit should remain after the plant-then-revert cycle; got: ' +
       JSON.stringify(cloneResidue));
 

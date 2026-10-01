@@ -202,7 +202,7 @@ test('(c) active chapter removed: exit 0, empty stdout (stricter no-op)', () => 
 
   // Remove the chapters array so there is no resolvable active chapter.
   writeFileSync(
-    join(cloneDir, '.studio', 'progress.json'),
+    join(cloneDir, '_nonfiction-studio', 'progress.json'),
     JSON.stringify({ version: 2, updated: '2026-07-18T00:00:00Z', chapters: [], totals: {} }),
     'utf8'
   );

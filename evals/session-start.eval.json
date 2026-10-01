@@ -3,7 +3,7 @@
   "description": "The SessionStart hook injects the book project orientation block into the session context when a book directory is present.",
   "cases": [
     {
-      "given": "SessionStart fires in a directory containing context/brief.md and .studio/",
+      "given": "SessionStart fires in a directory containing context/brief.md and _nonfiction-studio/",
       "expect": "session-start.mjs injects the orientation block and sets sessionTitle; exits 0"
     },
     {

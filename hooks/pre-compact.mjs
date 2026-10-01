@@ -14,7 +14,7 @@
 //
 // No-op conditions (stricter than SessionStart; asymmetry noted):
 //   - No book root found: empty stdout, exit 0.
-//   - No active chapter resolvable from .studio/progress.json: empty stdout, exit 0.
+//   - No active chapter resolvable from _nonfiction-studio/progress.json: empty stdout, exit 0.
 //     Rationale: a compaction with no active chapter has no studio state worth re-injecting;
 //     SessionStart emits a guided message instead of going silent in the no-root case.
 //   - Malformed stdin: empty stdout, exit 0 (unlike SessionStart which continues with fallbacks).

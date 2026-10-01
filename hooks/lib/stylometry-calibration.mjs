@@ -26,7 +26,7 @@
 //               with a sparse first-person voice as not (AUC 0.707); the 0.95 bar separates the two
 //               groups cleanly, so it is what REGIME_AUC_THRESHOLD ships as.
 // used-by:      bin/ns-stylometry (--calibrate mode); the voice-capture path writes calibrateBaseline's
-//               output into stylometry.baseline.calibration in .studio/config.json
+//               output into stylometry.baseline.calibration in _nonfiction-studio/config.json
 //
 // Methodology note: mulberry32 (seeded RNG), the markdown-to-sentence pipeline, the weighted
 // same-voice resampling draw, and the signed-relative-deviation and Mann-Whitney AUC statistics

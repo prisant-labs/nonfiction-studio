@@ -11,7 +11,7 @@
 //               dir (exit 0, zero findings, the Task 5 style-profile.not-captured NOTICE
 //               present) and cross-checks the same result via a direct hooks/lib/doctor-engine.mjs
 //               runChecks call. Two deliberately corrupted clones are the negative controls: one
-//               with .studio/progress.json replaced with invalid JSON (schema.invalid-json), one
+//               with _nonfiction-studio/progress.json replaced with invalid JSON (schema.invalid-json), one
 //               with structure/outline.md deleted (structure.missing-path), so load-bearing
 //               coverage spans more than the JSON-parse layer. The raw un-substituted scaffold
 //               was checked by hand and already doctors clean (none of the four templated fields
@@ -56,16 +56,16 @@ const PLUGIN_VERSION = JSON.parse(readFileSync(PLUGIN_MANIFEST_PATH, 'utf8')).ve
 //                                                in Step 5's text, but the substitution
 //                                                is not file-specific)
 //   research/evidence-log.md    {{DATE}}
-//   .studio/meta.json           {{DATETIME}}, {{PLUGIN_VERSION}}, {{BOOK_TITLE}}
-//   .studio/progress.json       {{DATETIME}}
+//   _nonfiction-studio/meta.json           {{DATETIME}}, {{PLUGIN_VERSION}}, {{BOOK_TITLE}}
+//   _nonfiction-studio/progress.json       {{DATETIME}}
 // No other token, and no other file, appears anywhere under templates/book-scaffold/.
 // ---------------------------------------------------------------------------
 
 const SUBSTITUTION_FILES = [
   'context/decisions.md',
   'research/evidence-log.md',
-  '.studio/meta.json',
-  '.studio/progress.json',
+  '_nonfiction-studio/meta.json',
+  '_nonfiction-studio/progress.json',
 ];
 
 function substituteTokens(text) {
@@ -228,17 +228,17 @@ test('instantiated scaffold: hooks/lib/doctor-engine.mjs runChecks agrees with t
 // not enforced by the hand-rolled validator, which checks type, const, enum,
 // minimum/maximum, pattern, required, and properties, but never format). An
 // un-substituted clone therefore cannot serve as a load-bearing negative
-// control, so this test corrupts .studio/progress.json into invalid JSON
+// control, so this test corrupts _nonfiction-studio/progress.json into invalid JSON
 // instead, per the brief's own fallback.
 // ---------------------------------------------------------------------------
 
-test('negative control: a clone with invalid .studio/progress.json fails doctor', () => {
+test('negative control: a clone with invalid _nonfiction-studio/progress.json fails doctor', () => {
   const tempDir = makeTempClone('negative-corrupt');
   tempDirsToClean.push(tempDir);
 
   applyInitProjectSubstitutions(tempDir);
 
-  const progressPath = join(tempDir, '.studio', 'progress.json');
+  const progressPath = join(tempDir, '_nonfiction-studio', 'progress.json');
   writeFileSync(progressPath, '{ this is not valid JSON');
 
   const result = spawnDoctorJson(tempDir);

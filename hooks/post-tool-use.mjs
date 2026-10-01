@@ -9,7 +9,7 @@
 //               payload cannot forge. Scans the body with the shared
 //               hooks/lib/scrub-engine.mjs scanInjection(text) (AI-editorial-residue
 //               phrasing), rather than writing a new scanner of its own. Appends one
-//               append-only JSONL record per fetch to .studio/logs/fetches.jsonl. This
+//               append-only JSONL record per fetch to _nonfiction-studio/logs/fetches.jsonl. This
 //               makes mechanical the promise AR-07 (security, privacy and safety) and
 //               D-13 (security posture) already make in prose: fetched content is
 //               untrusted data, never instruction.
@@ -67,11 +67,11 @@
 //   - Anything in the wrap/scan/build pipeline throws (for example a malformed tool_response
 //     whose body is not a string, or either scanner throwing): FAIL-OPEN. Nothing is emitted,
 //     so the platform leaves the tool's original output unmodified; a best-effort record is
-//     appended to .studio/logs/errors.jsonl when a book root is resolvable.
+//     appended to _nonfiction-studio/logs/errors.jsonl when a book root is resolvable.
 //   - No book root, or a book root whose bible files are corrupt: the wrap/flag output above
 //     is emitted regardless (the untrusted-content threat model applies to every fetch, not
-//     only fetches made inside a scaffolded book project); only the .studio/logs/fetches.jsonl
-//     append is skipped, silently, since there is no root to anchor .studio/ under.
+//     only fetches made inside a scaffolded book project); only the _nonfiction-studio/logs/fetches.jsonl
+//     append is skipped, silently, since there is no root to anchor _nonfiction-studio/ under.
 //   - fetches.jsonl append failure after a successful wrap: logged to errors.jsonl; never
 //     affects the already-emitted stdout.
 //
@@ -385,7 +385,7 @@ if (isMain) {
   // Resolve the book root once, independent of whether wrapping succeeds. NO_BOOK_ROOT
   // and a corrupt-bible error both collapse to "logging unavailable" (bookRoot stays
   // null): bible.mjs's findBookRoot throws before returning anything on either error, so
-  // there is no root path to anchor .studio/logs/ under in either case; both are also the
+  // there is no root path to anchor _nonfiction-studio/logs/ under in either case; both are also the
   // established silent-no-op convention every other hook in this repo uses for
   // NO_BOOK_ROOT specifically. The wrap/flag output below does NOT depend on this and is
   // emitted regardless: the untrusted-content threat model applies to every fetch, not

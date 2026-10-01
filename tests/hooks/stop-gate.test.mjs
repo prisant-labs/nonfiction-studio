@@ -23,7 +23,7 @@
 //   (i) malformed stdin: exit 0, empty stdout
 //   (j) NS_HOOK_TRACE inert when unset; one line appended when set
 //   (k) syntactically invalid config.json + flag: exit 0, additionalContext starts with
-//       "Gate skipped:", no new report file in .studio/gate/, flag NOT consumed
+//       "Gate skipped:", no new report file in _nonfiction-studio/gate/, flag NOT consumed
 //
 // Synthetic events copy the snake_case shape captured live in the TSK-030 report.
 
@@ -84,9 +84,9 @@ function cloneFixture(fixturePath, label) {
   return dir;
 }
 
-/** Write the session-write flag atomically to <bookDir>/.studio/gate/.session-write-flag */
+/** Write the session-write flag atomically to <bookDir>/_nonfiction-studio/gate/.session-write-flag */
 function setFlag(bookDir) {
-  const gateDir = join(bookDir, '.studio', 'gate');
+  const gateDir = join(bookDir, '_nonfiction-studio', 'gate');
   mkdirSync(gateDir, { recursive: true });
   const tmp = join(gateDir, '.session-write-flag.tmp');
   writeFileSync(tmp, new Date().toISOString() + '\n', 'utf8');
@@ -125,21 +125,21 @@ function runHook(input, extraEnv = {}) {
   return spawnSync('node', [SCRIPT], { input, encoding: 'utf8', env });
 }
 
-/** Returns all non-hidden .json files in .studio/gate/ excluding last-gate.json */
+/** Returns all non-hidden .json files in _nonfiction-studio/gate/ excluding last-gate.json */
 function listGateReports(bookDir) {
-  const gateDir = join(bookDir, '.studio', 'gate');
+  const gateDir = join(bookDir, '_nonfiction-studio', 'gate');
   if (!existsSync(gateDir)) return [];
   return readdirSync(gateDir).filter(
     f => f.endsWith('.json') && !f.startsWith('.') && f !== 'last-gate.json'
   );
 }
 
-/** Returns the content of the newest timestamped gate report in .studio/gate/, or null. */
+/** Returns the content of the newest timestamped gate report in _nonfiction-studio/gate/, or null. */
 function readNewestGateReport(bookDir) {
   const files = listGateReports(bookDir).sort();
   if (files.length === 0) return null;
   const newest = files[files.length - 1];
-  return readFileSync(join(bookDir, '.studio', 'gate', newest), 'utf8');
+  return readFileSync(join(bookDir, '_nonfiction-studio', 'gate', newest), 'utf8');
 }
 
 /** Read JSONL lines from a file, filtering blank lines. Returns empty array if file absent. */
@@ -162,7 +162,7 @@ function writeSettingsFile(bookDir, text) {
  * preserving the source config's thresholds and baseline (mirrors the gate.test.mjs pattern).
  */
 function writeBlockConfig(dir) {
-  const configPath = join(dir, '.studio', 'config.json');
+  const configPath = join(dir, '_nonfiction-studio', 'config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.gate = config.gate || {};
   config.gate.mode = 'block';
@@ -182,7 +182,7 @@ test('(a) stop_hook_active true: exit 0, empty stdout, gate not run, flag not co
   const book = cloneSampleBook('a');
   setFlag(book);
 
-  const gateDir = join(book, '.studio', 'gate');
+  const gateDir = join(book, '_nonfiction-studio', 'gate');
   const flagPath = join(gateDir, '.session-write-flag');
   const reportsBefore = listGateReports(book).length;
 
@@ -206,11 +206,11 @@ test('(b) flag absent: exit 0, empty stdout, last-gate.json unchanged', () => {
   const book = cloneSampleBook('b');
 
   // Ensure the flag is absent
-  const flagPath = join(book, '.studio', 'gate', '.session-write-flag');
+  const flagPath = join(book, '_nonfiction-studio', 'gate', '.session-write-flag');
   if (existsSync(flagPath)) unlinkSync(flagPath);
 
   // Snapshot last-gate.json content before the run
-  const lastGatePath = join(book, '.studio', 'gate', 'last-gate.json');
+  const lastGatePath = join(book, '_nonfiction-studio', 'gate', 'last-gate.json');
   const lastGateBefore = existsSync(lastGatePath) ? readFileSync(lastGatePath, 'utf8') : null;
   const reportsBefore = listGateReports(book).length;
 
@@ -234,7 +234,7 @@ test('(c) golden clone + flag: gate runs, empty stdout (pass), last-gate byte-id
   const book = cloneSampleBook('c');
   setFlag(book);
 
-  const flagPath = join(book, '.studio', 'gate', '.session-write-flag');
+  const flagPath = join(book, '_nonfiction-studio', 'gate', '.session-write-flag');
 
   const result = runHook(makeStopEvent(book));
 
@@ -243,7 +243,7 @@ test('(c) golden clone + flag: gate runs, empty stdout (pass), last-gate byte-id
   // The key invariant is last-gate.json being byte-identical to the newest timestamped report.
 
   // last-gate.json must have been written
-  const lastGatePath = join(book, '.studio', 'gate', 'last-gate.json');
+  const lastGatePath = join(book, '_nonfiction-studio', 'gate', 'last-gate.json');
   assert.ok(existsSync(lastGatePath), 'last-gate.json written after gate run');
 
   // The newest timestamped gate report must exist and be byte-identical to last-gate.json
@@ -290,7 +290,7 @@ test('(c2) Stop-hook-driven gate report includes quote_fidelity and overlap (the
   const result = runHook(makeStopEvent(book));
   assert.strictEqual(result.status, 0, 'hook exit 0');
 
-  const lastGatePath = join(book, '.studio', 'gate', 'last-gate.json');
+  const lastGatePath = join(book, '_nonfiction-studio', 'gate', 'last-gate.json');
   assert.ok(existsSync(lastGatePath), 'last-gate.json written after gate run');
   const report = JSON.parse(readFileSync(lastGatePath, 'utf8'));
 
@@ -325,7 +325,7 @@ test('(d) block-mode ai-injection + flag: block decision JSON, exit 0, last-gate
   writeBlockConfig(book);
   setFlag(book);
 
-  const flagPath = join(book, '.studio', 'gate', '.session-write-flag');
+  const flagPath = join(book, '_nonfiction-studio', 'gate', '.session-write-flag');
 
   const result = runHook(makeStopEvent(book));
 
@@ -352,7 +352,7 @@ test('(d) block-mode ai-injection + flag: block decision JSON, exit 0, last-gate
   );
 
   // last-gate.json written on block path
-  const lastGatePath = join(book, '.studio', 'gate', 'last-gate.json');
+  const lastGatePath = join(book, '_nonfiction-studio', 'gate', 'last-gate.json');
   assert.ok(existsSync(lastGatePath), 'last-gate.json written on block path');
 
   // last-gate.json is byte-identical to the newest timestamped report
@@ -417,14 +417,14 @@ test('(f) missing-baseline config + flag: one errors.jsonl line, one-line additi
 
   // Remove the stylometry baseline markers to trigger an engine error in ns-gate (exit 2).
   // config.json remains valid JSON so findBookRoot succeeds, but the stylometry check throws.
-  const configPath = join(book, '.studio', 'config.json');
+  const configPath = join(book, '_nonfiction-studio', 'config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   if (config.stylometry && config.stylometry.baseline) {
     delete config.stylometry.baseline.markers;
   }
   writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
 
-  const errorsPath = join(book, '.studio', 'logs', 'errors.jsonl');
+  const errorsPath = join(book, '_nonfiction-studio', 'logs', 'errors.jsonl');
   const linesBefore = readJsonlLines(errorsPath).length;
 
   const result = runHook(makeStopEvent(book));
@@ -550,7 +550,7 @@ test('(g) re-fire after gate run: last-gate.json unchanged on second stop_hook_a
   const book = cloneSampleBook('g');
   setFlag(book);
 
-  const lastGatePath = join(book, '.studio', 'gate', 'last-gate.json');
+  const lastGatePath = join(book, '_nonfiction-studio', 'gate', 'last-gate.json');
 
   // First run: stop_hook_active: false -> gate runs, last-gate.json written
   const firstResult = runHook(makeStopEvent(book, { stop_hook_active: false }));
@@ -576,7 +576,7 @@ test('(g) re-fire after gate run: last-gate.json unchanged on second stop_hook_a
 // (h) no book root: exit 0, empty stdout
 // ---------------------------------------------------------------------------
 test('(h) no book root: exit 0, empty stdout', () => {
-  // Use a temp directory that is NOT a book root (no .studio/meta.json)
+  // Use a temp directory that is NOT a book root (no _nonfiction-studio/meta.json)
   const emptyDir = join(tmpdir(), 'ns-tsk034-h-' + Date.now());
   mkdirSync(emptyDir, { recursive: true });
 
@@ -646,10 +646,10 @@ test('(k) invalid config.json + flag: exit 0, Gate-skipped additionalContext, no
   setFlag(book);
 
   // Corrupt config.json with syntactically invalid JSON so findBookRoot throws CONFIG_READ_ERROR.
-  const configPath = join(book, '.studio', 'config.json');
+  const configPath = join(book, '_nonfiction-studio', 'config.json');
   writeFileSync(configPath, '{ this is not valid JSON }', 'utf8');
 
-  const flagPath = join(book, '.studio', 'gate', '.session-write-flag');
+  const flagPath = join(book, '_nonfiction-studio', 'gate', '.session-write-flag');
   const reportsBefore = listGateReports(book).length;
 
   const result = runHook(makeStopEvent(book));
@@ -674,7 +674,7 @@ test('(k) invalid config.json + flag: exit 0, Gate-skipped additionalContext, no
   );
   assert.ok(hookOut.decision === undefined, 'no block decision on corrupt-config path');
 
-  // No new report file in .studio/gate/ (gate never ran)
+  // No new report file in _nonfiction-studio/gate/ (gate never ran)
   const reportsAfter = listGateReports(book).length;
   assert.strictEqual(reportsAfter, reportsBefore, 'no new report file: gate never ran');
 

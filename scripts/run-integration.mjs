@@ -48,7 +48,7 @@
 // Flat-layout note (Q-02 section 2.1, 2026-07-19):
 //   The Q-02 sketch references a "book/" scaffold. The built flat reality has no
 //   book/ subdirectory: all project directories (context/, structure/, chapters/,
-//   research/, production/, .studio/) live at the project root. Assertions in
+//   research/, production/, _nonfiction-studio/) live at the project root. Assertions in
 //   this runner use the flat paths, not a nested book/ prefix.
 
 import { spawnSync } from 'node:child_process';

@@ -68,7 +68,7 @@ test('progress.json: missing required "version" field produces a named finding',
     chapters: [],
     totals: { word_count: 0, open_claim_count: 0, chapters_final: 0, chapters_total: 0 }
   };
-  const tempDir = makeTempBible('.studio/progress.json', JSON.stringify(invalid));
+  const tempDir = makeTempBible('_nonfiction-studio/progress.json', JSON.stringify(invalid));
   try {
     const { findings } = runChecks(tempDir);
     const vf = findings.filter(f => f.type === 'schema.progress-violation' && f.message.includes('version'));
@@ -80,9 +80,9 @@ test('progress.json: missing required "version" field produces a named finding',
 });
 
 test('progress.json: unknown-field preservation (S-08 Rule 2) -- extra field does not fail doctor', () => {
-  const withExtra = JSON.parse(readFileSync(join(GOLDEN, '.studio', 'progress.json'), 'utf8'));
+  const withExtra = JSON.parse(readFileSync(join(GOLDEN, '_nonfiction-studio', 'progress.json'), 'utf8'));
   withExtra._extra_unknown_field = 'round-trip-sentinel';
-  const tempDir = makeTempBible('.studio/progress.json', JSON.stringify(withExtra));
+  const tempDir = makeTempBible('_nonfiction-studio/progress.json', JSON.stringify(withExtra));
   try {
     const { findings } = runChecks(tempDir);
     const progressFindings = findings.filter(f => f.type === 'schema.progress-violation');
@@ -93,7 +93,7 @@ test('progress.json: unknown-field preservation (S-08 Rule 2) -- extra field doe
 });
 
 // ---------------------------------------------------------------------------
-// 2. .studio/meta.json - valid instance and schema_version type check
+// 2. _nonfiction-studio/meta.json - valid instance and schema_version type check
 // ---------------------------------------------------------------------------
 
 test('meta.json: valid instance from golden fixture produces no shape-meta violations', () => {
@@ -103,9 +103,9 @@ test('meta.json: valid instance from golden fixture produces no shape-meta viola
 });
 
 test('meta.json: schema_version as a number (not string) produces a named finding', () => {
-  const meta = JSON.parse(readFileSync(join(GOLDEN, '.studio', 'meta.json'), 'utf8'));
+  const meta = JSON.parse(readFileSync(join(GOLDEN, '_nonfiction-studio', 'meta.json'), 'utf8'));
   meta.schema_version = 2; // number instead of string
-  const tempDir = makeTempBible('.studio/meta.json', JSON.stringify(meta));
+  const tempDir = makeTempBible('_nonfiction-studio/meta.json', JSON.stringify(meta));
   try {
     const { findings } = runChecks(tempDir);
     const mf = findings.filter(f =>
@@ -124,7 +124,7 @@ test('checkSchemaVersion: supported major "2" returns ok=true', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. .studio/config.json - valid instance and gate.mode validation
+// 3. _nonfiction-studio/config.json - valid instance and gate.mode validation
 // ---------------------------------------------------------------------------
 
 test('config.json: valid instance from golden fixture produces no config violations', () => {
@@ -134,9 +134,9 @@ test('config.json: valid instance from golden fixture produces no config violati
 });
 
 test('config.json: unknown gate.mode value produces a named finding', () => {
-  const config = JSON.parse(readFileSync(join(GOLDEN, '.studio', 'config.json'), 'utf8'));
+  const config = JSON.parse(readFileSync(join(GOLDEN, '_nonfiction-studio', 'config.json'), 'utf8'));
   config.gate.mode = 'invalid-blocking-level'; // unknown value
-  const tempDir = makeTempBible('.studio/config.json', JSON.stringify(config));
+  const tempDir = makeTempBible('_nonfiction-studio/config.json', JSON.stringify(config));
   try {
     const { findings } = runChecks(tempDir);
     const cf = findings.filter(f =>
@@ -223,11 +223,11 @@ test('evidence-log.md: unknown fields round-trip via ledger lib (S-08 Rule 2)', 
 });
 
 // ---------------------------------------------------------------------------
-// 5. .studio/ai-use-log.jsonl - valid instance and missing agent key
+// 5. _nonfiction-studio/ai-use-log.jsonl - valid instance and missing agent key
 // ---------------------------------------------------------------------------
 
 test('ai-use-log.jsonl: every line in the golden fixture is valid JSON with required "agent" field', () => {
-  const jsonlText = readFileSync(join(GOLDEN, '.studio', 'ai-use-log.jsonl'), 'utf8');
+  const jsonlText = readFileSync(join(GOLDEN, '_nonfiction-studio', 'ai-use-log.jsonl'), 'utf8');
   const lines = jsonlText.split('\n').filter(l => l.trim() !== '');
   assert.ok(lines.length > 0, 'golden fixture ai-use-log must have at least one entry');
   for (let i = 0; i < lines.length; i++) {
@@ -242,7 +242,7 @@ test('ai-use-log.jsonl: every line in the golden fixture is valid JSON with requ
 // tautological -- it built a JS object literal in the test body, then asserted a
 // property of that same literal (hasOwnProperty('agent') === false). No repo code
 // was invoked. Verified there is no owning validator to redirect it to: doctor-engine.mjs
-// REQUIRED_PATHS only checks that .studio/ai-use-log.jsonl exists (structure.missing-path);
+// REQUIRED_PATHS only checks that _nonfiction-studio/ai-use-log.jsonl exists (structure.missing-path);
 // it never inspects line content or emits a finding about a missing "agent" field.
 // hooks/post-tool-batch.mjs WRITES the agent field but never reads/validates it back.
 // docs/formats/ai-use-log.md confirms the only readers are the disclosure-report and
@@ -276,11 +276,11 @@ test('ai-use-log.jsonl: every line in the golden fixture is valid JSON with requ
 // to; that gap is what the doctor-engine check named above closes.
 
 // ---------------------------------------------------------------------------
-// 7. Gate report (.studio/gate/*.json) - valid instance shape
+// 7. Gate report (_nonfiction-studio/gate/*.json) - valid instance shape
 // ---------------------------------------------------------------------------
 
 test('gate report: golden fixture last-gate.json parses as valid JSON with expected shape', () => {
-  const gateReportPath = join(GOLDEN, '.studio', 'gate', 'last-gate.json');
+  const gateReportPath = join(GOLDEN, '_nonfiction-studio', 'gate', 'last-gate.json');
   assert.ok(existsSync(gateReportPath), 'golden fixture must have a last-gate.json');
   const text = readFileSync(gateReportPath, 'utf8');
   let parsed;
@@ -289,7 +289,7 @@ test('gate report: golden fixture last-gate.json parses as valid JSON with expec
 });
 
 test('gate report: full gate report JSON has verdict, checks, and ts fields', () => {
-  const fullReportDir = join(GOLDEN, '.studio', 'gate');
+  const fullReportDir = join(GOLDEN, '_nonfiction-studio', 'gate');
   // Find a full gate report (not last-gate.json, which is a summary)
   const fullReport = join(fullReportDir, '01-listening-before-speaking.20260810T091000Z.json');
   assert.ok(existsSync(fullReport), 'golden fixture must have a full gate report');

@@ -201,7 +201,7 @@ function validateAgainstSchema(schema, value, path) {
  * Returns { ok: true } when supported, { ok: false, current, supported, message }
  * when the version is older (exit-2 class: migration required).
  *
- * @param {object} meta - parsed .studio/meta.json
+ * @param {object} meta - parsed _nonfiction-studio/meta.json
  * @returns {{ ok: boolean, current?: string, supported?: string, message?: string }}
  */
 export function checkSchemaVersion(meta) {
@@ -531,7 +531,7 @@ function checkStyleProfile(root, config, findings, notices) {
 
 // ---------------------------------------------------------------------------
 // ai-use-log coverage and uncovered-writing-window check (check 12, Task 5 of the
-// Wave 1 exit wave: chat compliance parity). Parses .studio/ai-use-log.jsonl
+// Wave 1 exit wave: chat compliance parity). Parses _nonfiction-studio/ai-use-log.jsonl
 // tolerantly: blank lines are skipped, never a finding; a non-blank line that
 // fails JSON.parse IS a finding naming its 1-based line number. This is
 // deliberately stricter than a runtime reader's "a partial final line from an
@@ -676,7 +676,7 @@ function checkAiUseLogCoverage(root, findings, notices) {
  *      Baseline reference block's three required fields; captured/sample_count agreement with
  *      config.json's stylometry baseline when one exists; and Exemplars path resolution.
  *  12. ai-use-log coverage and uncovered writing windows (Task 5, Wave 1 exit: chat compliance
- *      parity): .studio/ai-use-log.jsonl is parsed tolerantly (blank lines ok; a malformed
+ *      parity): _nonfiction-studio/ai-use-log.jsonl is parsed tolerantly (blank lines ok; a malformed
  *      non-blank line is a finding naming its line number); a chapter file whose mtime is newer
  *      than its newest covering record (or that has no covering record at all) is an "uncovered
  *      writing window" NOTICE; the report always prints the coverage-fraction NOTICE "ai-use-log

@@ -104,7 +104,7 @@ if (opts.chapter) {
 
 // ---- --packets: generate per-chapter research packets (OPP-D03: quote fidelity and
 // source packets) -----------------------------------------------------------------
-// Read-only over the ledger; writes only under research/packets/, never .studio/
+// Read-only over the ledger; writes only under research/packets/, never _nonfiction-studio/
 // (D-06 (single-writer state discipline) is not implicated: these are author-facing
 // derived artifacts, not machine state). Deterministic: unchanged inputs regenerate
 // byte-identical files (no generation timestamp is stamped).

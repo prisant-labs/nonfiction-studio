@@ -195,14 +195,14 @@ test('--packets: writes one packet per chapter under research/packets/, byte-ide
   }
 });
 
-test('--packets: does not write anything under .studio/ (D-06 single-writer state discipline)', () => {
+test('--packets: does not write anything under _nonfiction-studio/ (D-06 single-writer state discipline)', () => {
   const tmp = makeTempClone(GOLDEN);
   try {
-    const before = readFileSync(join(tmp, '.studio', 'config.json'), 'utf8');
+    const before = readFileSync(join(tmp, '_nonfiction-studio', 'config.json'), 'utf8');
     const result = spawnClaims(tmp, ['--packets']);
     assert.strictEqual(result.status, 0, 'stderr: ' + result.stderr);
-    const after = readFileSync(join(tmp, '.studio', 'config.json'), 'utf8');
-    assert.strictEqual(before, after, '.studio/config.json is untouched by --packets');
+    const after = readFileSync(join(tmp, '_nonfiction-studio', 'config.json'), 'utf8');
+    assert.strictEqual(before, after, '_nonfiction-studio/config.json is untouched by --packets');
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

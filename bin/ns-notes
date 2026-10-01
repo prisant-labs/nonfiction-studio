@@ -116,7 +116,7 @@ const result = computeApparatus(chapters, ledgerEntries, sourceEntries, style);
 
 // ---- write outputs -----------------------------------------------------------------
 // production/ only, per OPP-D05: this is the author-facing directory that already holds
-// front-matter.md and back-matter.md, not .studio/ machine state, so D-06 (single-writer state
+// front-matter.md and back-matter.md, not _nonfiction-studio/ machine state, so D-06 (single-writer state
 // discipline) is not implicated. Deterministic: an unchanged ledger regenerates byte-identical
 // files (no generation timestamp is stamped into any of the four).
 

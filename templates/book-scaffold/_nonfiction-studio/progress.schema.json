@@ -57,7 +57,7 @@
               },
               "report": {
                 "type": "string",
-                "description": "Relative path of the gate report under .studio/gate/."
+                "description": "Relative path of the gate report under _nonfiction-studio/gate/."
               }
             }
           }

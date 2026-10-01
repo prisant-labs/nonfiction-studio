@@ -10,9 +10,9 @@
 //               (ADR-0009 (apparatus CLI), growth-policy criterion 1)
 // usage:        ns-status [--project=<dir>] [--json]
 //
-// READ-ONLY BY DESIGN: this CLI never writes to .studio/ or anywhere else. State changes (a
+// READ-ONLY BY DESIGN: this CLI never writes to _nonfiction-studio/ or anywhere else. State changes (a
 // future promotion ceremony onto the existing `final` chapter status, for example) belong to a
-// hook: D-06 (single-writer state discipline) reserves .studio/ machine-state writes for hooks,
+// hook: D-06 (single-writer state discipline) reserves _nonfiction-studio/ machine-state writes for hooks,
 // not for a CLI a narrating skill can invoke mid-conversation.
 
 import { resolve } from 'node:path';

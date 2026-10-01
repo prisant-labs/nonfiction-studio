@@ -89,12 +89,12 @@ test('findBookRoot throws BibleError with exitCode 2 on a temp directory with no
 test('findBookRoot detects the book/ subdirectory layout', () => {
   const workspace = join(tmpdir(), 'nonfiction-test-book-sub-' + Date.now());
   const bookRoot = join(workspace, 'book');
-  mkdirSync(join(bookRoot, '.studio'), { recursive: true });
+  mkdirSync(join(bookRoot, '_nonfiction-studio'), { recursive: true });
   mkdirSync(join(bookRoot, 'context'), { recursive: true });
   mkdirSync(join(bookRoot, 'chapters'), { recursive: true });
 
   const meta = { schema_version: '2', book_title: 'Test Book' };
-  writeFileSync(join(bookRoot, '.studio', 'meta.json'), JSON.stringify(meta), 'utf8');
+  writeFileSync(join(bookRoot, '_nonfiction-studio', 'meta.json'), JSON.stringify(meta), 'utf8');
 
   try {
     const result = findBookRoot(workspace);
@@ -117,7 +117,7 @@ test('readProgress returns the parsed progress object from the sample book', () 
 
 test('readProgress throws BibleError with exitCode 2 when progress.json is missing', () => {
   const workspace = join(tmpdir(), 'nonfiction-test-progress-' + Date.now());
-  mkdirSync(join(workspace, '.studio'), { recursive: true });
+  mkdirSync(join(workspace, '_nonfiction-studio'), { recursive: true });
   try {
     assert.throws(
       () => readProgress(workspace),
@@ -137,9 +137,9 @@ test('readProgress throws BibleError with exitCode 2 when progress.json is missi
 
 test('writeProgressAtomic writes the file and leaves no .tmp file on success', () => {
   const workspace = join(tmpdir(), 'nonfiction-test-write-' + Date.now());
-  mkdirSync(join(workspace, '.studio'), { recursive: true });
-  const tmpPath = join(workspace, '.studio', 'progress.tmp.json');
-  const progressPath = join(workspace, '.studio', 'progress.json');
+  mkdirSync(join(workspace, '_nonfiction-studio'), { recursive: true });
+  const tmpPath = join(workspace, '_nonfiction-studio', 'progress.tmp.json');
+  const progressPath = join(workspace, '_nonfiction-studio', 'progress.json');
 
   const data = { version: 2, updated: '2026-07-18T00:00:00Z', chapters: [], totals: {} };
   writeProgressAtomic(workspace, data);
@@ -156,12 +156,12 @@ test('writeProgressAtomic writes the file and leaves no .tmp file on success', (
 
 test('writeProgressAtomic preserves unknown fields via read-modify-write', () => {
   const workspace = join(tmpdir(), 'nonfiction-test-rmw-' + Date.now());
-  mkdirSync(join(workspace, '.studio'), { recursive: true });
+  mkdirSync(join(workspace, '_nonfiction-studio'), { recursive: true });
 
   // Write an initial object with an unknown field.
   const initial = { version: 2, unknown_extra: 'preserved', chapters: [] };
   writeFileSync(
-    join(workspace, '.studio', 'progress.json'),
+    join(workspace, '_nonfiction-studio', 'progress.json'),
     JSON.stringify(initial) + '\n',
     'utf8'
   );

@@ -269,7 +269,7 @@ SECTION 10 - SUCCESS CRITERIA & DEFINITION OF DONE
       before you move on.
     How to fill in: check the items you want the studio to enforce. Fill in the
       enforcement mode or threshold value, or leave blank to accept the default shown.
-    Full config schema: .studio/config.json
+    Full config schema: _nonfiction-studio/config.json
 
     [ ] Claim coverage - every factual sentence has an EV anchor or [UNVERIFIED] tag
         Enforcement mode (warn / block, default warn): ___

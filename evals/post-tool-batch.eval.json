@@ -1,6 +1,6 @@
 {
   "covers": { "hook": "PostToolBatch" },
-  "description": "The PostToolBatch hook updates progress.json atomically and appends an entry to .studio/ai-use-log.jsonl after each tool batch completes.",
+  "description": "The PostToolBatch hook updates progress.json atomically and appends an entry to _nonfiction-studio/ai-use-log.jsonl after each tool batch completes.",
   "cases": [
     {
       "given": "PostToolBatch fires after a Write tool call to chapters/01-listening-before-speaking.md",

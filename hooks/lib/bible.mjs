@@ -36,7 +36,14 @@ export class BibleError extends Error {
  * below, never through a literal, so its name is decided in exactly one place
  * (ADR-0015, state folder name).
  */
-export const DEFAULT_STATE_DIR = '.studio';
+export const DEFAULT_STATE_DIR = '_nonfiction-studio';
+
+/**
+ * The state folder's name before ADR-0015. A book still on this layout has no pointer and
+ * nothing at DEFAULT_STATE_DIR, so findBookRoot reports it as an unpointed state folder;
+ * the nfs-doctor skill's migrate mode renames it or records this name in a pointer.
+ */
+export const LEGACY_STATE_DIR = '.studio';
 
 /**
  * The committed pointer file at a book root. Present only in a book whose state folder has

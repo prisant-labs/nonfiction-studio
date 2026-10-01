@@ -192,9 +192,9 @@ function makeReadEvent(cwd) {
   });
 }
 
-/** Count snapshot files in .studio/snapshots/ that belong to the given slug. */
+/** Count snapshot files in _nonfiction-studio/snapshots/ that belong to the given slug. */
 function countSnapshots(bookRoot, slug) {
-  const dir = join(bookRoot, '.studio', 'snapshots');
+  const dir = join(bookRoot, '_nonfiction-studio', 'snapshots');
   if (!existsSync(dir)) return 0;
   return readdirSync(dir).filter(f => f.startsWith(slug + '.') && f.endsWith('.md')).length;
 }
@@ -235,7 +235,7 @@ test('(a) chapter Write existing file: flag + snapshot written, empty stdout, ex
   assert.equal(result.stderr, '', 'no stderr');
 
   // Session-write flag must exist and contain an ISO timestamp
-  const flagPath = join(book, '.studio', 'gate', '.session-write-flag');
+  const flagPath = join(book, '_nonfiction-studio', 'gate', '.session-write-flag');
   assert.ok(existsSync(flagPath), 'session-write flag was written');
   const flagContent = readFileSync(flagPath, 'utf8').trim();
   assert.ok(
@@ -248,7 +248,7 @@ test('(a) chapter Write existing file: flag + snapshot written, empty stdout, ex
   assert.equal(snapshotsAfter, snapshotsBefore + 1, 'exactly one new snapshot was added');
 
   // Snapshot name must match <slug>.<YYYYMMDDTHHMMSSZ>.md
-  const allSnapshots = readdirSync(join(book, '.studio', 'snapshots'))
+  const allSnapshots = readdirSync(join(book, '_nonfiction-studio', 'snapshots'))
     .filter(f => f.startsWith(slug + '.') && f.endsWith('.md'));
   allSnapshots.sort();
   const newestSnapshot = allSnapshots[allSnapshots.length - 1];
@@ -274,7 +274,7 @@ test('(b) chapter Write new file: flag written, no snapshot created', () => {
   assert.equal(result.stdout.trim(), '', 'stdout is empty (allow path)');
 
   // Flag must be written even for a new file
-  const flagPath = join(book, '.studio', 'gate', '.session-write-flag');
+  const flagPath = join(book, '_nonfiction-studio', 'gate', '.session-write-flag');
   assert.ok(existsSync(flagPath), 'session-write flag written for new chapter file');
 
   // No snapshot should exist for the new (never-before-written) file
@@ -291,7 +291,7 @@ test('(b) chapter Write new file: flag written, no snapshot created', () => {
 test('(c) snapshot prune: 10 seeded + 1 new = 11, prune to newest 10', () => {
   const book = cloneSampleBook('c-prune');
   const slug = '01-listening-before-speaking';
-  const snapshotsDir = join(book, '.studio', 'snapshots');
+  const snapshotsDir = join(book, '_nonfiction-studio', 'snapshots');
   const target = join(book, 'chapters', slug + '.md');
 
   // Remove any existing snapshots for this slug from the clone so we start clean
@@ -353,12 +353,12 @@ test('(d) write outside root: deny JSON with path-guard reason, exit 0', () => {
 });
 
 // ---------------------------------------------------------------------------
-// (e) .studio/ write: allowed (empty stdout), no snapshot, no session-write flag
+// (e) _nonfiction-studio/ write: allowed (empty stdout), no snapshot, no session-write flag
 // ---------------------------------------------------------------------------
-test('(e) .studio/ write: empty stdout, no snapshot, no session-write flag', () => {
+test('(e) _nonfiction-studio/ write: empty stdout, no snapshot, no session-write flag', () => {
   const book = cloneSampleBook('e-studio');
-  const studioTarget = join(book, '.studio', 'progress.json');
-  const flagPath = join(book, '.studio', 'gate', '.session-write-flag');
+  const studioTarget = join(book, '_nonfiction-studio', 'progress.json');
+  const flagPath = join(book, '_nonfiction-studio', 'gate', '.session-write-flag');
 
   // Confirm no flag pre-exists in the fresh clone
   const flagBefore = existsSync(flagPath);
@@ -366,17 +366,17 @@ test('(e) .studio/ write: empty stdout, no snapshot, no session-write flag', () 
   const result = runHook(makeWriteEvent(book, studioTarget));
 
   assert.equal(result.status, 0, 'exit code is 0');
-  assert.equal(result.stdout.trim(), '', 'stdout is empty (allow) for .studio/ write');
+  assert.equal(result.stdout.trim(), '', 'stdout is empty (allow) for _nonfiction-studio/ write');
 
   // Flag must not have been written by this hook run
   if (!flagBefore) {
-    assert.ok(!existsSync(flagPath), 'session-write flag NOT written for .studio/ target');
+    assert.ok(!existsSync(flagPath), 'session-write flag NOT written for _nonfiction-studio/ target');
   }
 
-  // No snapshot for .studio/ target (progress.json snapshot would be named progress.*.md)
-  const studioSnapshots = readdirSync(join(book, '.studio', 'snapshots'))
+  // No snapshot for _nonfiction-studio/ target (progress.json snapshot would be named progress.*.md)
+  const studioSnapshots = readdirSync(join(book, '_nonfiction-studio', 'snapshots'))
     .filter(f => f.startsWith('progress.') && f.endsWith('.md'));
-  assert.equal(studioSnapshots.length, 0, 'no snapshot created for .studio/ write');
+  assert.equal(studioSnapshots.length, 0, 'no snapshot created for _nonfiction-studio/ write');
 });
 
 // ---------------------------------------------------------------------------
@@ -384,7 +384,7 @@ test('(e) .studio/ write: empty stdout, no snapshot, no session-write flag', () 
 // ---------------------------------------------------------------------------
 test('(f) Read tool: empty stdout, exit 0, no flag written', () => {
   const book = cloneSampleBook('f-read');
-  const flagPath = join(book, '.studio', 'gate', '.session-write-flag');
+  const flagPath = join(book, '_nonfiction-studio', 'gate', '.session-write-flag');
   const result = runHook(makeReadEvent(book));
 
   assert.equal(result.status, 0, 'exit code is 0 for Read tool');
@@ -479,10 +479,10 @@ test('(i) no book root: empty stdout, exit 0', () => {
 // pinning that this file's fixtures exercise the same function the shipped
 // hook now calls at its Step 5 call site.
 // ---------------------------------------------------------------------------
-test('(j) agent write-scope guard: research-librarian denied chapters/, allowed research/ and .studio/', () => {
+test('(j) agent write-scope guard: research-librarian denied chapters/, allowed research/ and _nonfiction-studio/', () => {
   const chaptersTarget = join(SAMPLE_BOOK, 'chapters', '01-listening-before-speaking.md');
   const researchTarget = join(SAMPLE_BOOK, 'research', 'evidence-log.md');
-  const studioTarget = join(SAMPLE_BOOK, '.studio', 'progress.json');
+  const studioTarget = join(SAMPLE_BOOK, '_nonfiction-studio', 'progress.json');
 
   // research-librarian trying to write to chapters/ must be denied
   const denyReason = checkAgentWriteConstraint('research-librarian', chaptersTarget, SAMPLE_BOOK);
@@ -496,9 +496,9 @@ test('(j) agent write-scope guard: research-librarian denied chapters/, allowed 
   const researchAllow = checkAgentWriteConstraint('research-librarian', researchTarget, SAMPLE_BOOK);
   assert.equal(researchAllow, null, 'research-librarian allowed (null) for research/ write');
 
-  // research-librarian writing to .studio/ must also be allowed (null)
+  // research-librarian writing to _nonfiction-studio/ must also be allowed (null)
   const studioAllow = checkAgentWriteConstraint('research-librarian', studioTarget, SAMPLE_BOOK);
-  assert.equal(studioAllow, null, 'research-librarian allowed (null) for .studio/ write');
+  assert.equal(studioAllow, null, 'research-librarian allowed (null) for _nonfiction-studio/ write');
 
   // An untabled agent (fact-checker, deliberately absent from AGENT_WRITE_SCOPES)
   // always returns null regardless of target: unconstrained, not denied.
@@ -538,12 +538,12 @@ test('agent write-scope containment: a sibling whose name merely prefixes an all
     'research-notes/ must be denied; it is a sibling of research/, not inside it'
   );
 
-  // Same boundary on the .studio side.
-  const studioCollision = join(SAMPLE_BOOK, '.studio-backup', 'progress.json');
+  // Same boundary on the _nonfiction-studio side.
+  const studioCollision = join(SAMPLE_BOOK, '_nonfiction-studio-backup', 'progress.json');
   const studioDenied = checkAgentWriteConstraint('research-librarian', studioCollision, SAMPLE_BOOK);
   assert.ok(
     typeof studioDenied === 'string' && studioDenied.length > 0,
-    '.studio-backup/ must be denied; it is a sibling of .studio/, not inside it'
+    '_nonfiction-studio-backup/ must be denied; it is a sibling of _nonfiction-studio/, not inside it'
   );
 
   // The genuine directories still pass, so the boundary is not simply rejecting
@@ -555,9 +555,9 @@ test('agent write-scope containment: a sibling whose name merely prefixes an all
     'research/ itself is still allowed'
   );
   assert.equal(
-    checkAgentWriteConstraint('research-librarian', join(SAMPLE_BOOK, '.studio', 'progress.json'), SAMPLE_BOOK),
+    checkAgentWriteConstraint('research-librarian', join(SAMPLE_BOOK, '_nonfiction-studio', 'progress.json'), SAMPLE_BOOK),
     null,
-    '.studio/ itself is still allowed'
+    '_nonfiction-studio/ itself is still allowed'
   );
 });
 
@@ -604,7 +604,7 @@ test('case 1: research-librarian write to chapters/ DENIES, reason names the slu
   assert.ok(hso.permissionDecisionReason.includes('research-librarian'), 'deny reason names the agent slug');
 });
 
-test('case 2: research-librarian write under research/ ALLOWS, and under .studio/ ALLOWS', () => {
+test('case 2: research-librarian write under research/ ALLOWS, and under _nonfiction-studio/ ALLOWS', () => {
   const bookA = cloneSampleBook('scope-rl-allow-research');
   const targetA = join(bookA, 'research', 'sources.md');
   const resultA = runHook(makeWriteEvent(bookA, targetA, 'Write', 'nonfiction-studio:research-librarian'));
@@ -612,10 +612,10 @@ test('case 2: research-librarian write under research/ ALLOWS, and under .studio
   assert.equal(resultA.stdout.trim(), '', 'empty stdout: research-librarian allowed under research/');
 
   const bookB = cloneSampleBook('scope-rl-allow-studio');
-  const targetB = join(bookB, '.studio', 'progress.json');
+  const targetB = join(bookB, '_nonfiction-studio', 'progress.json');
   const resultB = runHook(makeWriteEvent(bookB, targetB, 'Write', 'nonfiction-studio:research-librarian'));
   assert.equal(resultB.status, 0, 'exit code is 0');
-  assert.equal(resultB.stdout.trim(), '', 'empty stdout: research-librarian allowed under .studio/');
+  assert.equal(resultB.stdout.trim(), '', 'empty stdout: research-librarian allowed under _nonfiction-studio/');
 });
 
 test('case 3: drafting-partner write to structure/ DENIES (proves the generalization beyond research paths)', () => {
@@ -712,7 +712,7 @@ test('(l) malformed stdin: exit 0, empty stdout', () => {
 // F-HK-01: corrupt-config discrimination.
 //
 // findBookRoot throws a BibleError with code CONFIG_READ_ERROR when a book
-// root is found but .studio/config.json is syntactically invalid JSON. The
+// root is found but _nonfiction-studio/config.json is syntactically invalid JSON. The
 // pre-fix hook caught ANY findBookRoot error identically to NO_BOOK_ROOT and
 // exited 0 with empty stdout, silently disabling the containment guard for
 // every write while the config is broken. The fix discriminates the error
@@ -722,7 +722,7 @@ test('(l) malformed stdin: exit 0, empty stdout', () => {
 
 test('F-HK-01 (a) corrupt config.json + Write outside the book root: deny naming the corrupt config, not silent exit 0', () => {
   const book = cloneSampleBook('fhk01-a-outside');
-  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  writeFileSync(join(book, '_nonfiction-studio', 'config.json'), 'not valid json {{', 'utf8');
   const outsidePath = join(tmpdir(), 'ns-tsk032-fhk01-outside-' + Date.now() + '.md');
 
   const result = runHook(makeWriteEvent(book, outsidePath));
@@ -746,7 +746,7 @@ test('F-HK-01 (a) corrupt config.json + Write outside the book root: deny naming
 
 test('F-HK-01 (b) corrupt config.json + Write inside the book tree: still deny (fail closed)', () => {
   const book = cloneSampleBook('fhk01-b-inside');
-  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  writeFileSync(join(book, '_nonfiction-studio', 'config.json'), 'not valid json {{', 'utf8');
   const insideTarget = join(book, 'chapters', '01-listening-before-speaking.md');
 
   const result = runHook(makeWriteEvent(book, insideTarget));
@@ -772,7 +772,7 @@ test('F-HK-01 (b) corrupt config.json + Write inside the book tree: still deny (
 
 test('F-HK-01 (c) corrupt config.json + Edit and NotebookEdit also deny (all three WRITE_TOOLS)', () => {
   const bookEdit = cloneSampleBook('fhk01-c-edit');
-  writeFileSync(join(bookEdit, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  writeFileSync(join(bookEdit, '_nonfiction-studio', 'config.json'), 'not valid json {{', 'utf8');
   const editTarget = join(bookEdit, 'chapters', '01-listening-before-speaking.md');
   const editResult = runHook(makeWriteEvent(bookEdit, editTarget, 'Edit'));
   assert.equal(editResult.status, 0, 'exit code is 0 for Edit');
@@ -781,7 +781,7 @@ test('F-HK-01 (c) corrupt config.json + Edit and NotebookEdit also deny (all thr
   assert.equal(editOut.hookSpecificOutput.permissionDecision, 'deny', 'Edit denied on corrupt config');
 
   const bookNb = cloneSampleBook('fhk01-c-notebook');
-  writeFileSync(join(bookNb, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  writeFileSync(join(bookNb, '_nonfiction-studio', 'config.json'), 'not valid json {{', 'utf8');
   const nbEvent = JSON.stringify({
     session_id: 'test-session-032',
     cwd: bookNb,
@@ -799,7 +799,7 @@ test('F-HK-01 (c) corrupt config.json + Edit and NotebookEdit also deny (all thr
 
 test('F-HK-01 (d) corrupt config.json + Read: exit 0, empty stdout (non-write tools unaffected)', () => {
   const book = cloneSampleBook('fhk01-d-read');
-  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  writeFileSync(join(book, '_nonfiction-studio', 'config.json'), 'not valid json {{', 'utf8');
 
   const result = runHook(makeReadEvent(book));
 
@@ -824,7 +824,7 @@ test('F-HK-01 (f) NO_BOOK_ROOT (no book project at all) stays silent exit 0 for 
 // F8 (corrupt config suppresses the shell caution): carried from Wave 0's
 // final review into this task (brief section 1f). findBookRoot's catch block
 // used to call process.exit(0) unconditionally right after the write-tool
-// deny check, so when .studio/config.json was corrupt, Bash and PowerShell
+// deny check, so when _nonfiction-studio/config.json was corrupt, Bash and PowerShell
 // never reached the destructive-command caution logic below - the safety
 // message vanished exactly when the project was already in a bad state. The
 // fix lets non-write tools fall through to the caution logic instead of
@@ -841,7 +841,7 @@ test('F-HK-01 (f) NO_BOOK_ROOT (no book project at all) stays silent exit 0 for 
 
 test('F8 (a) corrupt config.json + Bash rm -rf: caution still fires (corrupt config must not suppress the shell caution)', () => {
   const book = cloneSampleBook('f8-a-bash-rmrf');
-  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  writeFileSync(join(book, '_nonfiction-studio', 'config.json'), 'not valid json {{', 'utf8');
 
   const result = runHook(makeBashEvent(book, 'rm -rf /tmp/foo'));
 
@@ -862,7 +862,7 @@ test('F8 (a) corrupt config.json + Bash rm -rf: caution still fires (corrupt con
 
 test('F8 (b) corrupt config.json + genuinely benign Bash: exit 0, empty stdout (coverage added; the old test at this name was not actually benign)', () => {
   const book = cloneSampleBook('f8-b-bash-benign');
-  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  writeFileSync(join(book, '_nonfiction-studio', 'config.json'), 'not valid json {{', 'utf8');
 
   const result = runHook(makeBashEvent(book, 'ls -la'));
 
@@ -875,7 +875,7 @@ test('F8 (b) corrupt config.json + genuinely benign Bash: exit 0, empty stdout (
 
 test('F8 (c) corrupt config.json + PowerShell destructive command: caution still fires (PowerShell is a first-class peer of Bash per F-HK-07)', () => {
   const book = cloneSampleBook('f8-c-powershell');
-  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  writeFileSync(join(book, '_nonfiction-studio', 'config.json'), 'not valid json {{', 'utf8');
 
   const result = runHook(makePowerShellEvent(book, 'Remove-Item -Recurse -Force C:\\Temp\\scratch'));
 
@@ -890,7 +890,7 @@ test('F8 (c) corrupt config.json + PowerShell destructive command: caution still
 
 test('F8 (d) regression: corrupt config.json + Write still DENIES exactly as before (write-tool behavior untouched)', () => {
   const book = cloneSampleBook('f8-d-write-regression');
-  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  writeFileSync(join(book, '_nonfiction-studio', 'config.json'), 'not valid json {{', 'utf8');
   const target = join(book, 'chapters', '01-listening-before-speaking.md');
 
   const result = runHook(makeWriteEvent(book, target));
@@ -961,7 +961,7 @@ test('F-HK-03 (b) two rapid writes to the same chapter in the same second: two d
     'both writes produced a surviving snapshot (no silent same-second overwrite)'
   );
 
-  const allNames = readdirSync(join(book, '.studio', 'snapshots'))
+  const allNames = readdirSync(join(book, '_nonfiction-studio', 'snapshots'))
     .filter(f => f.startsWith(slug + '.') && f.endsWith('.md'));
   const newest = allNames.slice(-2);
   assert.notEqual(
@@ -973,7 +973,7 @@ test('F-HK-03 (b) two rapid writes to the same chapter in the same second: two d
 test('F-HK-03 (c) prune ordering with a same-timestamp collision pair: base is older, -2 is newer, deterministic', () => {
   const book = cloneSampleBook('fhk03-c-prune-collision');
   const slug = '01-listening-before-speaking';
-  const snapshotsDir = join(book, '.studio', 'snapshots');
+  const snapshotsDir = join(book, '_nonfiction-studio', 'snapshots');
   const target = join(book, 'chapters', slug + '.md');
 
   // Clean slate for this slug.
@@ -1390,7 +1390,7 @@ test('F-HK-13 (c) containment guard on a case-sensitive filesystem: a case-diffe
 // identity resolution). WebSearch and WebFetch from a web-gated agent
 // (isWebGatedAgent: research-librarian, fact-checker, citation-manager) are
 // denied unless research.web_enabled is exactly the boolean true in
-// .studio/config.json. The rule for what counts as open is binding at
+// _nonfiction-studio/config.json. The rule for what counts as open is binding at
 // docs/reference/agents/research-librarian.md:135-149: an absent key, the
 // string "true", false, and null all leave the gate CLOSED. Main-session
 // calls and non-gated agents are entirely unaffected regardless of config.
@@ -1421,12 +1421,12 @@ function makeWebEvent(cwd, toolName, agentType = null) {
   return JSON.stringify(event);
 }
 
-/** Overwrite .studio/config.json in a cloned book, adding a "research" block
+/** Overwrite _nonfiction-studio/config.json in a cloned book, adding a "research" block
  *  whose web_enabled value is exactly the given rawValue (JSON-serialized
  *  as-is, so passing the JS string "true" produces the JSON STRING "true",
  *  deliberately exercising the wrong-type case from the brief). */
 function setWebEnabled(book, rawValue) {
-  const configPath = join(book, '.studio', 'config.json');
+  const configPath = join(book, '_nonfiction-studio', 'config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.research = { web_enabled: rawValue };
   writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n', 'utf8');
@@ -1435,7 +1435,7 @@ function setWebEnabled(book, rawValue) {
 test('case 9 (a): WebFetch from research-librarian with no research key DENIES', () => {
   const book = cloneSampleBook('webgate-rl-no-key');
   // Sample-book config.json has no "research" key at all (precondition; matches
-  // templates/book-scaffold/.studio/config.json's own default, which also carries no
+  // templates/book-scaffold/_nonfiction-studio/config.json's own default, which also carries no
   // research key).
   const result = runHook(makeWebEvent(book, 'WebFetch', 'nonfiction-studio:research-librarian'));
   assert.equal(result.status, 0, 'exit code is 0');
@@ -1538,7 +1538,7 @@ test('web gate: no book root found ALLOWS a non-gated call (main session) unaffe
 
 test('web gate: corrupt config.json DENIES a web-gated agent (fail-closed, same posture as F-HK-01)', () => {
   const book = cloneSampleBook('webgate-corrupt-config');
-  writeFileSync(join(book, '.studio', 'config.json'), 'not valid json {{', 'utf8');
+  writeFileSync(join(book, '_nonfiction-studio', 'config.json'), 'not valid json {{', 'utf8');
   const result = runHook(makeWebEvent(book, 'WebFetch', 'nonfiction-studio:fact-checker'));
   assert.equal(result.status, 0, 'exit code is 0');
   let out;
@@ -1991,7 +1991,7 @@ test('Task 8 (r) regression: a Write following a dispatch in the same book behav
 
   assert.equal(writeResult.status, 0, 'write exit code is 0');
   assert.equal(writeResult.stdout.trim(), '', 'Write after a prior dispatch still allows with empty stdout');
-  const flagPath = join(book, '.studio', 'gate', '.session-write-flag');
+  const flagPath = join(book, '_nonfiction-studio', 'gate', '.session-write-flag');
   assert.ok(existsSync(flagPath), 'session-write flag still written after a prior dispatch call');
   assert.equal(
     countSnapshots(book, slug), snapshotsBefore + 1,

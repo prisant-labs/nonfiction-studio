@@ -224,7 +224,7 @@ test('determinism: recalibrating from the committed voice corpus reproduces the 
   const recalibrated = calibrateBaseline(corpusTexts);
 
   const sampleBookConfig = JSON.parse(
-    readFileSync(join(SAMPLE_BOOK, '.studio', 'config.json'), 'utf8')
+    readFileSync(join(SAMPLE_BOOK, '_nonfiction-studio', 'config.json'), 'utf8')
   );
   const sampleBookBaseline = sampleBookConfig.stylometry.baseline;
 
@@ -233,7 +233,7 @@ test('determinism: recalibrating from the committed voice corpus reproduces the 
   assert.strictEqual(JSON.stringify(recalibrated.calibration), JSON.stringify(baseline.calibration),
     'recalibrated calibration ladder must reproduce fixtures/drift-scenarios/baseline.json exactly');
   assert.strictEqual(JSON.stringify(recalibrated.markers), JSON.stringify(sampleBookBaseline.markers),
-    'recalibrated markers must reproduce examples/sample-book/.studio/config.json exactly');
+    'recalibrated markers must reproduce examples/sample-book/_nonfiction-studio/config.json exactly');
   assert.strictEqual(JSON.stringify(recalibrated.calibration), JSON.stringify(sampleBookBaseline.calibration),
-    'recalibrated calibration ladder must reproduce examples/sample-book/.studio/config.json exactly');
+    'recalibrated calibration ladder must reproduce examples/sample-book/_nonfiction-studio/config.json exactly');
 });

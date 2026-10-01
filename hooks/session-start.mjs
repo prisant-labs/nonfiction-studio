@@ -8,7 +8,7 @@
 //               root IS found but its bible files are corrupt (META_READ_ERROR, CONFIG_READ_ERROR),
 //               the script emits a truthful one-line message naming the real problem, mirroring the
 //               TSK-034 (stop-gate hook) error-code discrimination pattern. Fail-open: any read or
-//               parse error after root detection appends one JSONL record to .studio/logs/errors.jsonl
+//               parse error after root detection appends one JSONL record to _nonfiction-studio/logs/errors.jsonl
 //               and the script continues with whatever partial block it has assembled. Exits 0
 //               unconditionally.
 //               Wave 1 exit Task 4 (zero-friction first session) adds two fields, both nested

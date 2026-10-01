@@ -85,9 +85,9 @@ confirmed brief, not a drafted chapter.
 
 10.2 A chapter is "done" when... (Definition-of-Done checklist)
 
-    Each item maps to a gate setting in .studio/config.json. The studio
+    Each item maps to a gate setting in _nonfiction-studio/config.json. The studio
     enforces checked items at session end. Leave unchecked to skip that check.
-    Full config schema: .studio/config.json
+    Full config schema: _nonfiction-studio/config.json
 
     [ ] Claim coverage - every factual sentence has an EV anchor or [UNVERIFIED] tag
         Enforcement mode (warn / block, default warn): ___

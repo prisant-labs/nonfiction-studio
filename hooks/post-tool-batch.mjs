@@ -1,9 +1,9 @@
 // what-it-is:   PostToolBatch progress writer; replaces the TSK-030 stub per TSK-033
 // what-it-does: detects chapter writes and agent dispatches in the tool_calls batch,
 //               recounts each affected chapter file with the stylometry word counter
-//               (the single counting authority per TSK-028), updates .studio/progress.json
+//               (the single counting authority per TSK-028), updates _nonfiction-studio/progress.json
 //               atomically via writeProgressAtomic, and appends compliance records to
-//               .studio/ai-use-log.jsonl per D-10 (compliance layer is a feature) and
+//               _nonfiction-studio/ai-use-log.jsonl per D-10 (compliance layer is a feature) and
 //               S-08 section 5. Chapter-write records now carry the real acting agent's
 //               label (resolveAgentLabel, ADR-0007) instead of a fixed placeholder.
 //
@@ -55,7 +55,7 @@
 //       (actor: author, all required fields present) attestation names its slug in
 //       context/decisions.md. This is what makes an unattested promotion attempt not
 //       take effect even when nothing in chapters/ was touched this batch - a direct
-//       Edit to .studio/progress.json already lands on disk before this hook fires, so
+//       Edit to _nonfiction-studio/progress.json already lands on disk before this hook fires, so
 //       this sweep is what reverts it, in the same batch (see progressTouched below).
 // A batch that both writes a chapter's file AND sets it final in the same batch is
 // still caught by (a): promotion must land in a batch with no write to that chapter's
@@ -141,7 +141,7 @@ try {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: append one JSONL error record to .studio/logs/errors.jsonl (fail-open;
+// Helper: append one JSONL error record to _nonfiction-studio/logs/errors.jsonl (fail-open;
 // never throws; used for recount, progress-write, and log-append failures).
 // ---------------------------------------------------------------------------
 function logError(msg, err) {
@@ -164,7 +164,7 @@ function logError(msg, err) {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: append one JSONL compliance record to .studio/ai-use-log.jsonl.
+// Helper: append one JSONL compliance record to _nonfiction-studio/ai-use-log.jsonl.
 // Fail-open: a write failure is logged to errors.jsonl.
 // ---------------------------------------------------------------------------
 function appendAiUseLog(record) {
@@ -207,7 +207,7 @@ function isChapterPath(absPath) {
 }
 
 // Promotion ceremony and automatic demotion: a direct Write/Edit to
-// .studio/progress.json itself (for example a human hand-setting a chapter's
+// _nonfiction-studio/progress.json itself (for example a human hand-setting a chapter's
 // status to `final`) must also be recognized, even though it carries no
 // chapters/ path, so the eligibility sweep below runs for a batch that
 // contains ONLY a progress.json edit and no chapter file write at all.
@@ -317,7 +317,7 @@ const chapterCallLog = [];
 // Array of dispatch descriptors
 const dispatches = [];
 // Promotion ceremony and automatic demotion: true when this batch contains a
-// recognized Write/Edit targeting .studio/progress.json itself.
+// recognized Write/Edit targeting _nonfiction-studio/progress.json itself.
 let progressTouched = false;
 
 for (const call of toolCalls) {
@@ -482,7 +482,7 @@ if (chapterWrites.size > 0 || progressTouched) {
     // file's header comment for the two rules in full). Runs over EVERY
     // chapter currently `final` in the just-read progress, not only the ones
     // this batch wrote to chapters/ - a stray direct edit to
-    // .studio/progress.json (progressTouched, chapterWrites possibly empty)
+    // _nonfiction-studio/progress.json (progressTouched, chapterWrites possibly empty)
     // must be caught in this same pass too.
     // -----------------------------------------------------------------------
     let decisionsEntries = [];
@@ -543,7 +543,7 @@ if (chapterWrites.size > 0 || progressTouched) {
     // a progress.json-only batch (chapterWrites.size === 0) has nothing worth
     // persisting UNLESS the sweep found and reverted an ineligible `final` -
     // otherwise this would rewrite progress.json (bumping `updated`) on every
-    // incidental .studio/progress.json touch, which is not this hook's job.
+    // incidental _nonfiction-studio/progress.json touch, which is not this hook's job.
     const shouldWrite = chapterWrites.size > 0 || demotions.length > 0;
     if (shouldWrite) {
       progress.updated = ts;

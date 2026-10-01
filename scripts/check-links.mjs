@@ -130,7 +130,7 @@ function collectMdFiles(dir, out = []) {
     return out;
   }
   for (const e of entries) {
-    if (e.name.startsWith('.')) continue; // skip hidden dirs like .studio
+    if (e.name.startsWith('.')) continue; // skip hidden dirs like .git
     const full = join(dir, e.name);
     if (e.isDirectory()) {
       collectMdFiles(full, out);

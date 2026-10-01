@@ -154,14 +154,14 @@ const VALID_CORE = [
   "This flow's writes may already be logged automatically by a hook on this surface; " +
     'this skill never assumes which surfaces do or do not fire that hook, and it never ' +
     'assumes the flow is running on any particular surface. Before this flow\'s first write, ' +
-    'read `.studio/ai-use-log.jsonl` and count how many records currently target each file ' +
+    'read `_nonfiction-studio/ai-use-log.jsonl` and count how many records currently target each file ' +
     "this flow is about to write (the file's path appearing in that record's `targets` array). " +
     'Hold that starting count per file. After this flow\'s writes complete, re-read ' +
-    '`.studio/ai-use-log.jsonl` and count the records targeting each of those files again. ' +
+    '`_nonfiction-studio/ai-use-log.jsonl` and count the records targeting each of those files again. ' +
     'For each file: if the count increased between the two reads, a hook already appended a ' +
     'record for this write on this surface, and this skill appends nothing further for that ' +
     'file. If the count did not increase, append the flow\'s record or records for that file to ' +
-    '`.studio/ai-use-log.jsonl`, per the record template below, using the six-field shape in ' +
+    '`_nonfiction-studio/ai-use-log.jsonl`, per the record template below, using the six-field shape in ' +
     '`docs/formats/ai-use-log.md` (S-08 section 5): `ts`, `agent`, `surface`, `scope`, `targets`, ' +
     '`summary` - with `surface` set honestly to the surface this flow is actually running on. ' +
     'A record already sitting in the log before this flow started, from an earlier session, ' +

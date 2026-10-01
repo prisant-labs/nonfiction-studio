@@ -1,10 +1,10 @@
 {
   "covers": { "hook": "PreToolUse" },
-  "description": "The PreToolUse hook writes a pre-write snapshot to .studio/snapshots/ before any Write tool call targeting a chapter file.",
+  "description": "The PreToolUse hook writes a pre-write snapshot to _nonfiction-studio/snapshots/ before any Write tool call targeting a chapter file.",
   "cases": [
     {
       "given": "PreToolUse fires with tool_name Write targeting chapters/01-listening-before-speaking.md",
-      "expect": "pre-tool-use.mjs writes a snapshot under .studio/snapshots/ and exits 0"
+      "expect": "pre-tool-use.mjs writes a snapshot under _nonfiction-studio/snapshots/ and exits 0"
     },
     {
       "given": "PreToolUse fires with a Read tool call",

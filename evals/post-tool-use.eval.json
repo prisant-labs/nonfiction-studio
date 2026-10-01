@@ -1,6 +1,6 @@
 {
   "covers": { "hook": "PostToolUse" },
-  "description": "The PostToolUse hook wraps every WebFetch and WebSearch result in an untrusted-content envelope (preamble, source, retrieval timestamp, a content-scan flag line, nonce-fenced body) before Claude sees it, scans the body with the shared scanInjection engine (AI-editorial-residue patterns; it does not attempt instruction-override injection detection, see docs/formats/fetch-log.md), and appends one record per fetch to .studio/logs/fetches.jsonl. It never blocks a fetch. The flag line never claims an injection check occurred, positive or negative: it names its real, narrower subject and states a negative result as nothing recognized, not as a clean bill of health.",
+  "description": "The PostToolUse hook wraps every WebFetch and WebSearch result in an untrusted-content envelope (preamble, source, retrieval timestamp, a content-scan flag line, nonce-fenced body) before Claude sees it, scans the body with the shared scanInjection engine (AI-editorial-residue patterns; it does not attempt instruction-override injection detection, see docs/formats/fetch-log.md), and appends one record per fetch to _nonfiction-studio/logs/fetches.jsonl. It never blocks a fetch. The flag line never claims an injection check occurred, positive or negative: it names its real, narrower subject and states a negative result as nothing recognized, not as a clean bill of health.",
   "cases": [
     {
       "given": "PostToolUse fires for a WebFetch result whose body contains AI-editorial-residue phrasing the shared scanner recognizes (for example, an embedded editing instruction like \"Expand this section with new claims...\")",
@@ -20,11 +20,11 @@
     },
     {
       "given": "PostToolUse fires for a Read tool call (a tool the WebFetch|WebSearch matcher does not select)",
-      "expect": "post-tool-use.mjs is a no-op; empty stdout; no line appended to .studio/logs/fetches.jsonl"
+      "expect": "post-tool-use.mjs is a no-op; empty stdout; no line appended to _nonfiction-studio/logs/fetches.jsonl"
     },
     {
       "given": "PostToolUse fires with a malformed tool_response that makes the shared scanner throw",
-      "expect": "post-tool-use.mjs fails open: exits 0 with empty stdout, so the platform leaves the tool's original output unmodified; a best-effort record is appended to .studio/logs/errors.jsonl"
+      "expect": "post-tool-use.mjs fails open: exits 0 with empty stdout, so the platform leaves the tool's original output unmodified; a best-effort record is appended to _nonfiction-studio/logs/errors.jsonl"
     }
   ]
 }

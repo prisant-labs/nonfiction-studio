@@ -17,7 +17,7 @@
 // fixtures:     GOLDEN-book-shaped tests clone examples/sample-book and patch the clone with a
 //               synthetic, self-consistent v5 baseline (writeSyntheticV5Baseline: measured from
 //               the clone's own chapters, so every marker's z is 0 on unchanged content) --
-//               examples/sample-book/.studio/config.json still carries a marker_set_version 4
+//               examples/sample-book/_nonfiction-studio/config.json still carries a marker_set_version 4
 //               baseline with no calibration ladder (Task 5, ADR-0012 implementation wave,
 //               recaptures it), and none of these tests' own intent depends on the golden book's
 //               REAL voice. The marker-breakdown tests (capped/ordering/flagged-signal/tolerance)
@@ -154,10 +154,10 @@ function explainScales(firstPersonScale) {
 
 function buildSyntheticExplainBook() {
   const dir = mkdtempSync(join(tmpdir(), 'ns-stylometry-explain-synth-'));
-  mkdirSync(join(dir, '.studio'), { recursive: true });
+  mkdirSync(join(dir, '_nonfiction-studio'), { recursive: true });
   mkdirSync(join(dir, 'context'), { recursive: true });
   mkdirSync(join(dir, 'chapters'), { recursive: true });
-  writeFileSync(join(dir, '.studio', 'meta.json'), JSON.stringify({ schema_version: 2 }, null, 2), 'utf8');
+  writeFileSync(join(dir, '_nonfiction-studio', 'meta.json'), JSON.stringify({ schema_version: 2 }, null, 2), 'utf8');
   writeFileSync(join(dir, 'chapters', '01-drifted.md'), DRIFTED_TEXT, 'utf8');
 
   const baseline = {
@@ -180,7 +180,7 @@ function buildSyntheticExplainBook() {
     thresholds: { stylometry_marker_tolerance: 2.0 },
     stylometry: { baseline },
   };
-  writeFileSync(join(dir, '.studio', 'config.json'), JSON.stringify(config, null, 2), 'utf8');
+  writeFileSync(join(dir, '_nonfiction-studio', 'config.json'), JSON.stringify(config, null, 2), 'utf8');
   return dir;
 }
 
@@ -191,10 +191,10 @@ function buildSyntheticExplainBook() {
 // cannot silently ripple into the other's already-passing test group.
 function buildSyntheticRegisterBook() {
   const dir = mkdtempSync(join(tmpdir(), 'ns-stylometry-registers-synth-'));
-  mkdirSync(join(dir, '.studio'), { recursive: true });
+  mkdirSync(join(dir, '_nonfiction-studio'), { recursive: true });
   mkdirSync(join(dir, 'context'), { recursive: true });
   mkdirSync(join(dir, 'chapters'), { recursive: true });
-  writeFileSync(join(dir, '.studio', 'meta.json'), JSON.stringify({ schema_version: 2 }, null, 2), 'utf8');
+  writeFileSync(join(dir, '_nonfiction-studio', 'meta.json'), JSON.stringify({ schema_version: 2 }, null, 2), 'utf8');
   writeFileSync(join(dir, 'chapters', '01-drifted.md'), DRIFTED_TEXT, 'utf8');
 
   const baseline = {
@@ -223,7 +223,7 @@ function buildSyntheticRegisterBook() {
       },
     },
   };
-  writeFileSync(join(dir, '.studio', 'config.json'), JSON.stringify(config, null, 2), 'utf8');
+  writeFileSync(join(dir, '_nonfiction-studio', 'config.json'), JSON.stringify(config, null, 2), 'utf8');
   return dir;
 }
 
@@ -235,10 +235,10 @@ function buildSyntheticRegisterBook() {
 // of this task), so neither existing fixture can exercise "no registers, exit 0" literally.
 function buildSyntheticPassingBookNoRegisters() {
   const dir = mkdtempSync(join(tmpdir(), 'ns-stylometry-passing-noregisters-synth-'));
-  mkdirSync(join(dir, '.studio'), { recursive: true });
+  mkdirSync(join(dir, '_nonfiction-studio'), { recursive: true });
   mkdirSync(join(dir, 'context'), { recursive: true });
   mkdirSync(join(dir, 'chapters'), { recursive: true });
-  writeFileSync(join(dir, '.studio', 'meta.json'), JSON.stringify({ schema_version: 2 }, null, 2), 'utf8');
+  writeFileSync(join(dir, '_nonfiction-studio', 'meta.json'), JSON.stringify({ schema_version: 2 }, null, 2), 'utf8');
   writeFileSync(join(dir, 'chapters', '01-base.md'), BASE_TEXT, 'utf8');
 
   const baseline = {
@@ -261,7 +261,7 @@ function buildSyntheticPassingBookNoRegisters() {
     thresholds: { stylometry_marker_tolerance: 2.0 },
     stylometry: { baseline }, // no registers key
   };
-  writeFileSync(join(dir, '.studio', 'config.json'), JSON.stringify(config, null, 2), 'utf8');
+  writeFileSync(join(dir, '_nonfiction-studio', 'config.json'), JSON.stringify(config, null, 2), 'utf8');
   return dir;
 }
 

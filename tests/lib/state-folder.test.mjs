@@ -166,6 +166,20 @@ test('unpointed candidates are sorted by code point, not by locale', () => {
   assert.deepEqual(err.candidates, ['B-state', 'a-state']);
 });
 
+test('a legacy .studio/ book is detected as an unpointed state folder, never treated as empty', () => {
+  assert.equal(bible.LEGACY_STATE_DIR, '.studio', 'the legacy name is exported for the doctor and the skills');
+  assert.notEqual(bible.DEFAULT_STATE_DIR, bible.LEGACY_STATE_DIR, 'the default has moved off the legacy name');
+  const root = makeBook({ label: 'legacy', stateDir: '.studio' });
+  const err = assertBibleError(() => bible.findBookRoot(root), 'NO_BOOK_ROOT', 'findBookRoot');
+  assert.deepEqual(err.candidates, ['.studio'], 'the legacy folder is named');
+  assert.equal(err.root, root);
+});
+
+test('a legacy .studio/ book keeps working once a pointer records its name', () => {
+  const root = makeBook({ label: 'legacy-kept', stateDir: '.studio', pointer: { state_dir: '.studio' } });
+  assert.equal(bible.findBookRoot(root).stateDirName, '.studio');
+});
+
 test('a folder holding meta.json but no progress.json is not a candidate', () => {
   const root = makeBook({ label: 'meta-only', stateDir: 'notes', withProgress: false });
   const err = assertBibleError(() => bible.findBookRoot(root), 'NO_BOOK_ROOT', 'findBookRoot');

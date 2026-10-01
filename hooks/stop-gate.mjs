@@ -26,9 +26,9 @@
 //   exit 2 or error -> errors.jsonl + one-line additionalContext (fall-through visible)
 //
 // Writes:
-//   .studio/gate/last-gate.json  - verbatim gate stdout via temp+rename (step 4)
-//   .studio/gate/.session-write-flag (deleted, step 5)
-//   .studio/logs/errors.jsonl    - appended on error path only
+//   _nonfiction-studio/gate/last-gate.json  - verbatim gate stdout via temp+rename (step 4)
+//   _nonfiction-studio/gate/.session-write-flag (deleted, step 5)
+//   _nonfiction-studio/logs/errors.jsonl    - appended on error path only
 //   NS_HOOK_TRACE path           - opt-in only
 //
 // NS_HOOK_TRACE: when set, appends one trace line (event, own path, raw stdin) to the named file
@@ -131,7 +131,7 @@ if (!existsSync(flagPath)) {
 // All three short-circuit conditions passed. The gate runs from here on.
 // ---------------------------------------------------------------------------
 
-// Helper: append one JSONL error record to .studio/logs/errors.jsonl.
+// Helper: append one JSONL error record to _nonfiction-studio/logs/errors.jsonl.
 // Fail-open; never throws. The error log is the ONLY side channel for
 // operational failures; it must never suppress the primary output.
 function logError(msg, err) {
@@ -212,7 +212,7 @@ if (!gateResult.error) {
   }
 }
 
-// S-07 step 4: Write the gate report VERBATIM to .studio/gate/last-gate.json via temp+rename.
+// S-07 step 4: Write the gate report VERBATIM to _nonfiction-studio/gate/last-gate.json via temp+rename.
 // Done on every gate run when a parseable report was produced (exits 0, 1, and 2 alike).
 // Skipped when report is null (exit 2 with no parseable output).
 // The verbatim copy preserves the ts field session-start's gate-debt check reads.

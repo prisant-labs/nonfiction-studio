@@ -59,7 +59,7 @@ of truth for hook wiring.
 D-06 (single-writer state discipline) requires exactly one orchestrating script per hook event.
 When an event needs multiple behaviors, the single script coordinates them internally. Wiring
 multiple command handlers to the same event (which the platform would run in parallel) violates
-single-writer discipline and risks corrupting shared state files such as `.studio/progress.json`.
+single-writer discipline and risks corrupting shared state files such as `_nonfiction-studio/progress.json`.
 
 The prompt handler in the `Stop` entry of this template is a known exception: it does not write
 state. D-06 permits the combination of one command handler plus one stateless prompt handler on

@@ -1,6 +1,6 @@
 // tests/lib/synthetic-v5-baseline.mjs
 // what-it-is:   shared test helper (not a *.test.mjs suite; never picked up by node --test) that
-//               patches a temp-clone book's .studio/config.json with a synthetic v5 stylometry
+//               patches a temp-clone book's _nonfiction-studio/config.json with a synthetic v5 stylometry
 //               baseline
 // what-it-does: overwrites stylometry.baseline with markers measured directly from the clone's
 //               OWN chapters/*.md (measured === baseline, so every marker's z is 0 on unchanged
@@ -52,7 +52,7 @@ const NOISE_SCALE = 50.0;
 const BLOCK_THRESHOLD = 3.0;
 
 /**
- * Overwrites <cloneDir>/.studio/config.json's stylometry.baseline with a synthetic, self-
+ * Overwrites <cloneDir>/_nonfiction-studio/config.json's stylometry.baseline with a synthetic, self-
  * consistent v5 baseline (measured from the clone's own current chapters/*.md) and removes
  * thresholds.drift_score_max (P7's retired knob) so its deprecation notice does not appear
  * inside tests that are not specifically exercising it. No-ops silently when the clone has no
@@ -63,7 +63,7 @@ const BLOCK_THRESHOLD = 3.0;
  */
 export function writeSyntheticV5Baseline(cloneDir, opts = {}) {
   const regime = opts.regime || 'book';
-  const configPath = join(cloneDir, '.studio', 'config.json');
+  const configPath = join(cloneDir, '_nonfiction-studio', 'config.json');
 
   let config;
   try {
