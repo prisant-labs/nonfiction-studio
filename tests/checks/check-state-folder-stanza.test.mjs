@@ -61,7 +61,7 @@ function withClone(label, body) {
   }
 }
 
-test('real repo: exits 0 and names the nine skills that carry the stanza', () => {
+test('real repo: exits 0 and names every skill that carries the stanza', () => {
   withClone('stanza-clean', (root) => {
     const result = runClonedChecker(root, SCRIPT);
     assert.equal(result.status, 0, 'must exit 0 on the real tree; got: ' + result.combined);
