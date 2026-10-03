@@ -4,7 +4,10 @@
 //               assembly to hooks/lib/orientation.mjs (TSK-035 extraction), and emits
 //               hookSpecificOutput.additionalContext with sessionTitle.
 //               When no book root is found (BibleError code NO_BOOK_ROOT) the script emits a
-//               two-sentence D-17 (guided front door) empty-state message instead. When a book
+//               two-sentence D-17 (guided front door) empty-state message instead, unless the
+//               directory already holds writing (ADR-0016, adopting an existing book): then it
+//               emits an existing-writing message that never points at the new-book flow, which
+//               would stamp an empty project beside the author's manuscript. When a book
 //               root IS found but its bible files are corrupt (META_READ_ERROR, CONFIG_READ_ERROR),
 //               the script emits a truthful one-line message naming the real problem, mirroring the
 //               TSK-034 (stop-gate hook) error-code discrimination pattern. Fail-open: any read or
@@ -28,6 +31,8 @@
 //         empty-state path: {"hookSpecificOutput":{"hookEventName":"SessionStart",
 //          "additionalContext":"<two sentences>","initialUserMessage":"/nonfiction-studio:nfs-start"}}
 //          (initialUserMessage only when the directory is truly empty)
+//         existing-writing path: {"hookSpecificOutput":{"hookEventName":"SessionStart",
+//          "additionalContext":"<existing-writing message>"}}  (never initialUserMessage)
 //
 // NS_HOOK_TRACE: when set, appends one trace line (event, own path, raw stdin) to the named file
 //                before any other logic; inert when unset (preserved from TSK-030 stub convention)
@@ -37,6 +42,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findBookRoot, stateDirOf } from './lib/bible.mjs';
 import { buildOrientation } from './lib/orientation.mjs';
+import { findExistingWriting } from './lib/existing-writing.mjs';
 import { loadSettings } from './lib/settings.mjs';
 
 // Wave 1 exit Task 4 (zero-friction first session): entries tolerated in an otherwise-empty
@@ -56,6 +62,16 @@ const EMPTY_DIR_ALLOWLIST = new Set(['.claude', '.git', '.gitignore', '.DS_Store
 function isTrulyEmptyDir(dir) {
   return readdirSync(dir).every((entry) => EMPTY_DIR_ALLOWLIST.has(entry));
 }
+
+// The empty-state message for a directory that already holds writing (ADR-0016, adopting an
+// existing book). It names what works without a project and never names the new-book flow or
+// the front door, which offers that flow.
+const EXISTING_WRITING_MSG =
+  'No book project was found in this directory, but it already holds writing. ' +
+  'Nonfiction Studio cannot adopt an existing book yet. ' +
+  'Do not start a new book here, because that would set up an empty project beside this writing. ' +
+  'To try the studio on this writing now, paste a passage into /nonfiction-studio:nfs-quick-scan. ' +
+  'To start a new book, open an empty folder.';
 
 // House-notes pointer line (Wave 1 exit Task 2): emitted after the five-element orientation
 // block, exactly once, only when the resolved settings file carries a non-empty Markdown body.
@@ -140,6 +156,30 @@ if (!bookRoot) {
         hookSpecificOutput: {
           hookEventName: 'SessionStart',
           additionalContext: bibleError.message
+        }
+      }) + '\n'
+    );
+    process.exit(0);
+  }
+
+  // Existing writing (ADR-0016, adopting an existing book): Markdown outside hidden folders and
+  // files, other than a top-level README.md, means this directory is somebody's manuscript. The D-17
+  // message below would point at the new-book flow, which would stamp an empty project beside
+  // it, so this path names only what works without a project and never sets
+  // initialUserMessage. Fail-open: an unreadable cwd or an exhausted walk budget falls through
+  // to the D-17 message. The hook is advisory; nfs-new-book's own Step 1 check is the guard.
+  let writing = { found: null };
+  try {
+    writing = findExistingWriting(cwd);
+  } catch {
+    // Unreadable cwd: fall through to the D-17 message.
+  }
+  if (writing.found) {
+    process.stdout.write(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: 'SessionStart',
+          additionalContext: EXISTING_WRITING_MSG
         }
       }) + '\n'
     );

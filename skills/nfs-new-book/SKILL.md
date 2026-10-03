@@ -3,7 +3,7 @@ name: nfs-new-book
 user-invocable: true
 argument-hint: "[book title] [guided|blank]"
 description: "Scaffolds the flat bible tree (context/, structure/, chapters/, research/, production/) and creates the state folder's files for a new nonfiction book project. Use when an author starts a new book or follows the studio Path 1 prompt."
-when_to_use: "Use when the author explicitly wants to initialize, start, or set up a new book project, says 'create a new book', or is routed here from the studio dispatcher Path 1 prompt. Do not invoke for authors with an existing book project layout (a state folder or context/brief.md) unless they explicitly ask to re-initialize only the missing pieces."
+when_to_use: "Use when the author explicitly wants to initialize, start, or set up a new book project, says 'create a new book', or is routed here from the studio dispatcher Path 1 prompt. Do not invoke for authors with an existing book project layout (a state folder or context/brief.md) unless they explicitly ask to re-initialize only the missing pieces. Do not invoke in a folder that already holds the author's own writing; Step 1 stops there, because adopting an existing book is not available yet."
 ---
 
 This skill scaffolds a new nonfiction book project. It is surface-independent: no hooks or subagents are needed.
@@ -39,12 +39,16 @@ Before you run a command or open a path below, replace `<state-dir>` with the re
 Use the Bash tool to run:
 ```
 for d in */ .*/; do d="${d%/}"; case "$d" in .|..|'*'|'.*'|<state-dir>) continue;; esac; [ -f "$d/meta.json" ] && [ -f "$d/progress.json" ] && echo "UNPOINTED: $d"; done
-if [ -d <state-dir> ] || [ -f context/brief.md ]; then echo REINIT; else echo NEWINIT; fi
+if [ -d <state-dir> ] || [ -f context/brief.md ]; then echo REINIT; else find . -mindepth 1 -name '.*' -prune -o -type f \( -iname '*.md' -o -iname '*.markdown' \) ! -path ./README.md -print | head -n 3 | sed 's/^/WRITING: /'; echo NEWINIT; fi
 ```
 
 The first line checks for a second state folder: any other folder at the book root, hidden folders included, that holds both `meta.json` and `progress.json`. **If any line starts with `UNPOINTED:`, stop.** Write nothing, and output:
 
 > This book already keeps its records in [each folder named on an `UNPOINTED:` line], not in `<state-dir>/`. Starting a new book here would split those records across two folders, so nothing was written. Run /nonfiction-studio:nfs-doctor to rename the folder or to record its name in `nonfiction-studio.json`.
+
+When no book project is found, the second line also looks for existing writing, per ADR-0016 (adopting an existing book). A `WRITING:` line names a Markdown file outside hidden folders and files (names beginning with a dot, such as `.git/`, `.claude/` or `.github/`), other than a top-level `README.md`; the search prints at most three. It never runs for a book project, so a book's own chapters never trigger it. **If any line starts with `WRITING:`, stop.** Write nothing, and output:
+
+> This folder already holds writing, for example [each path named on a `WRITING:` line], and it has no Nonfiction Studio project. Nonfiction Studio cannot adopt an existing book yet. Starting a new book here would set up an empty project beside that writing, so nothing was written. To start a new book, run this skill again in an empty folder. To try the studio on this writing now, paste a passage into /nonfiction-studio:nfs-quick-scan.
 
 Otherwise the last line of the output is exactly one of two values:
 - `REINIT` - this directory already contains a book project

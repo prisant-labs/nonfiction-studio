@@ -74,6 +74,15 @@ This file is written from the commit history of the branch it ships from, not fr
   A Claude Code CLI run showed the original probe missing its context marker and the corrected
   probe passing all three observations. ADR-0002 records the corrections in a dated section;
   its decision rule is unchanged.
+- **`nfs-new-book` no longer stamps an empty project beside an existing manuscript.** A folder
+  with no book project holds existing writing when it contains Markdown files outside hidden
+  folders and files (names beginning with a dot), other than a top-level `README.md`; ADR-0016 (adopting an existing book)
+  records this definition. In such a folder, the skill's first check now stops and writes
+  nothing. It explains that adopting an existing book is not available yet, suggests an empty
+  folder for a new book, and names `nfs-quick-scan` for a first look at the writing. The
+  SessionStart hook recognizes the same folders through the new `hooks/lib/existing-writing.mjs`.
+  It sends a message there that names neither the new-book flow nor `nfs-start`, in place of
+  the two-sentence D-17 (guided front door) message. Adoption itself lands in a later release.
 
 ## [0.1.1] - 2026-09-24
 

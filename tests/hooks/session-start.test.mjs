@@ -595,3 +595,72 @@ test('(t) unreadable .claude/skills (a file in place of the directory): fail-ope
     'reloadSkills is absent when the existence check could not complete'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Existing writing (ADR-0016, adopting an existing book): a directory with no book root that
+// already holds Markdown beyond a top-level README.md is somebody's manuscript. Pointing it at
+// the new-book flow would stamp an empty project beside that manuscript, so this path names
+// only what works without a project and never opens the front door unprompted.
+// ---------------------------------------------------------------------------
+
+/** Writes each relative path in `files` under `root` with placeholder Markdown. */
+function writeFilesUnder(root, files) {
+  for (const rel of files) {
+    const path = join(root, ...rel.split('/'));
+    mkdirSync(join(path, '..'), { recursive: true });
+    writeFileSync(path, '# x\n', 'utf8');
+  }
+}
+
+test('(u) existing writing: never names the new-book flow or the front door, names quick-scan, no initialUserMessage', () => {
+  const tmpDir = makeTmpDir('existing-writing');
+  writeFilesUnder(tmpDir, ['README.md', 'manuscript/ch01.md']);
+
+  const result = runHook(tmpDir);
+  assert.equal(result.status, 0, 'exit code is 0');
+
+  let out;
+  assert.doesNotThrow(() => { out = JSON.parse(result.stdout.trim()); }, 'stdout parses as JSON');
+  const hso = out.hookSpecificOutput;
+
+  assert.ok(hso.additionalContext.includes('No book project was found'), 'states that no book project exists');
+  assert.ok(hso.additionalContext.includes('already holds writing'), 'names the existing writing');
+  assert.ok(!hso.additionalContext.includes('nfs-new-book'), 'never points at the new-book flow');
+  assert.ok(!hso.additionalContext.includes('nfs-start'), 'never points at the front door, which offers the new-book flow');
+  assert.ok(hso.additionalContext.includes('/nonfiction-studio:nfs-quick-scan'), 'names what works without a project');
+  assert.equal(hso.initialUserMessage, undefined, 'never opens the front door unprompted');
+  assert.equal(hso.sessionTitle, undefined, 'no sessionTitle without a book');
+});
+
+test('(x) Markdown only in hidden tool folders such as .github/ and .cursor/: still the two-sentence D-17 message [mutation-proof: walking hidden folders turns this red]', () => {
+  const tmpDir = makeTmpDir('hidden-tool-markdown');
+  writeFilesUnder(tmpDir, ['.github/PULL_REQUEST_TEMPLATE.md', '.cursor/rules/style.md']);
+
+  const ctx = JSON.parse(runHook(tmpDir).stdout.trim()).hookSpecificOutput.additionalContext;
+  assert.equal(ctx.split('. ').length, 2, 'the D-17 message keeps exactly two sentences');
+  assert.ok(ctx.includes('nfs-new-book'), 'a folder whose only Markdown is tool state still points at the new-book flow');
+});
+
+test('(v) Markdown only under .git/ and .claude/: still the two-sentence D-17 message [mutation-proof: counting either folder turns this red]', () => {
+  const tmpDir = makeTmpDir('tooling-markdown');
+  writeFilesUnder(tmpDir, ['.git/description.md', '.claude/skills/x/SKILL.md']);
+
+  const out = JSON.parse(runHook(tmpDir).stdout.trim());
+  const ctx = out.hookSpecificOutput.additionalContext;
+  assert.equal(ctx.split('. ').length, 2, 'the D-17 message keeps exactly two sentences');
+  assert.ok(ctx.includes('nfs-new-book'), 'a folder with no writing still points at the new-book flow');
+  assert.equal(
+    out.hookSpecificOutput.initialUserMessage,
+    '/nonfiction-studio:nfs-start',
+    'allowlisted entries alone still count as truly empty'
+  );
+});
+
+test('(w) a README.md below the top level counts as existing writing', () => {
+  const tmpDir = makeTmpDir('nested-readme');
+  writeFilesUnder(tmpDir, ['README.md', 'notes/README.md']);
+
+  const ctx = JSON.parse(runHook(tmpDir).stdout.trim()).hookSpecificOutput.additionalContext;
+  assert.ok(ctx.includes('already holds writing'), 'only the top-level README.md is exempt');
+  assert.ok(!ctx.includes('nfs-new-book'), 'never points at the new-book flow');
+});
