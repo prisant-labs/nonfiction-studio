@@ -28,7 +28,7 @@ on either side. All four fields below follow this same nested placement.
 | Field | Type | When emitted |
 |---|---|---|
 | `hookEventName` | string | Always: `"SessionStart"` |
-| `additionalContext` | string | Always: the orientation block (a found book project), or a two-sentence empty-state, corrupt-project, or unpointed-state-folder message |
+| `additionalContext` | string | Always: the orientation block (a found book project), or a two-sentence empty-state message, an existing-writing message, a corrupt-project message, or an unpointed-state-folder message |
 | `sessionTitle` | string | Only when a book project is found and its `book_title` is readable |
 | `initialUserMessage` | string | Only on the empty-state path, and only when the directory is truly empty (see below) |
 | `reloadSkills` | boolean (`true`) | Only when a book project is found and a generated `book-context` skill exists for it (see below) |
@@ -48,6 +48,18 @@ records sit in a folder the plugin does not expect, such as the legacy `.studio/
 folder name). `additionalContext` then names that folder and `/nonfiction-studio:nfs-doctor`, and
 the empty-state path never runs. Its new-book pointer would otherwise lead to a second, empty state
 folder beside the real one.
+
+A fourth message path covers a folder with no book project that already holds writing: Markdown
+files outside hidden folders and files, other than a top-level `README.md` (ADR-0016, adopting an
+existing book). A hidden name begins with a dot, as in `.git/`, `.claude/` or `.github/`; such
+folders hold tool state, not the author's writing. `additionalContext` then says that the plugin cannot adopt an existing book yet
+and names `/nonfiction-studio:nfs-quick-scan` for a first look at the writing. It never names the
+new-book flow or `nfs-start`, because starting a new book there would set up an empty project
+beside the author's manuscript, and `initialUserMessage` is never set. The hook finds the writing
+with `hooks/lib/existing-writing.mjs`, a breadth-first walk that stops after 2,000 directory
+entries. When the walk runs out of entries or cannot read the folder, the hook falls back to the
+empty-state message. That fallback is safe because the hook only advises: `nfs-new-book`'s own
+first check refuses to stamp a project over existing writing.
 
 ### `initialUserMessage`: opening the studio dispatcher unprompted
 
