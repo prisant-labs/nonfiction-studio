@@ -112,7 +112,7 @@ The plan lives in `ns-doctor` rather than in a new CLI. It passes ADR-0009's fir
 
 ### The front door recognizes existing writing
 
-A directory holds existing writing when it has no book root and contains Markdown files outside `.git/` and `.claude/`, other than a top-level `README.md`. In such a directory:
+A directory holds existing writing when it has no book root and contains Markdown files outside hidden folders and files, other than a top-level `README.md`. A hidden name begins with a dot, as in `.git/`, `.claude/` or `.github/`. Such folders hold tool state rather than the author's writing, and a fresh folder for a new book may well contain them. In such a directory:
 
 - the session start's message says that no Nonfiction Studio book was found, that the folder already holds writing, and that `/nonfiction-studio:nfs-adopt` brings it in. It names neither the new-book flow nor `nfs-start`'s new-book path;
 - `nfs-start` offers adoption as its first path in place of a new book;
