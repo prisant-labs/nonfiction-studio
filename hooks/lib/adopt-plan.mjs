@@ -149,10 +149,13 @@ function proposeBoundary(texts) {
  * @param {object} [opts]
  * @param {object|null} [opts.git] - the caller's git probe result: null, or
  *   {work_tree: boolean, uncommitted: number}
+ * @param {string|null} [opts.chaptersDir] - the candidate folder to list chapters for; the
+ *   candidate with the most Markdown files when null
  * @param {string} [opts.platform]
  * @returns {object} the plan; see docs/reference/cli/ns-doctor.md for its fields
+ * @throws {Error} with code NOT_A_CANDIDATE when chaptersDir names no candidate folder
  */
-export function buildAdoptPlan(dir, { git = null, platform = process.platform } = {}) {
+export function buildAdoptPlan(dir, { git = null, chaptersDir = null, platform = process.platform } = {}) {
   const pointer = pointerOf(dir, platform);
   const stateFolders = findStateFolderCandidates(dir);
   const stateNames = new Set([DEFAULT_STATE_DIR, LEGACY_STATE_DIR, pointer.stateDir, ...stateFolders]);
@@ -168,17 +171,34 @@ export function buildAdoptPlan(dir, { git = null, platform = process.platform } 
   }
   chaptersCandidates.sort((a, b) => b.markdown_files - a.markdown_files || byCodeUnit(a.folder, b.folder));
 
-  // The first candidate's chapters, counted on prose with the proposed boundary.
+  // The chosen candidate's chapters, counted on prose with the proposed boundary, and as whole
+  // files for an author who declines it.
+  let chosen = chaptersCandidates.length > 0 ? chaptersCandidates[0].folder : null;
+  if (chaptersDir !== null) {
+    if (!chaptersCandidates.some((c) => c.folder === chaptersDir)) {
+      const err = new Error('"' + chaptersDir + '" is not a chapters folder candidate; the candidates are: ' +
+        (chaptersCandidates.map((c) => c.folder).join(', ') || 'none'));
+      err.code = 'NOT_A_CANDIDATE';
+      throw err;
+    }
+    chosen = chaptersDir;
+  }
   let chapters = [];
   let proseBoundary = null;
-  if (chaptersCandidates.length > 0) {
-    const folder = join(dir, chaptersCandidates[0].folder);
+  if (chosen !== null) {
+    const folder = join(dir, chosen);
     const files = markdownFilesIn(folder).map((name) => ({ name, text: readText(join(folder, name)) || '' }));
     proseBoundary = proposeBoundary(files.map((f) => f.text));
     const heading = proseBoundary ? proseBoundary.heading : null;
     chapters = files.map(({ name, text }) => {
       const slug = name.slice(0, -'.md'.length);
-      return { file: name, slug, title: firstH1(text) || slugTitle(slug), words: countWords(proseOf(text, heading)) };
+      return {
+        file: name,
+        slug,
+        title: firstH1(text) || slugTitle(slug),
+        words: countWords(proseOf(text, heading)),
+        words_whole_file: countWords(text),
+      };
     });
   }
 
@@ -214,6 +234,7 @@ export function buildAdoptPlan(dir, { git = null, platform = process.platform } 
     pointer: pointer.report,
     state_folders: stateFolders,
     chapters_candidates: chaptersCandidates,
+    chapters_folder: chosen,
     chapters,
     prose_boundary: proseBoundary,
     shared_folders: sharedFolders,

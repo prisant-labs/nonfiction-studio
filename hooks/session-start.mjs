@@ -64,13 +64,13 @@ function isTrulyEmptyDir(dir) {
 }
 
 // The empty-state message for a directory that already holds writing (ADR-0016, adopting an
-// existing book). It names what works without a project and never names the new-book flow or
-// the front door, which offers that flow.
+// existing book). It names the skill that adopts the writing in place, and never names the
+// new-book flow or the front door's new-book path.
 const EXISTING_WRITING_MSG =
   'No book project was found in this directory, but it already holds writing. ' +
-  'Nonfiction Studio cannot adopt an existing book yet. ' +
+  'To bring this writing in as it is, run /nonfiction-studio:nfs-adopt: it plans the adoption ' +
+  'first, asks before it writes anything, and changes none of the author\'s files. ' +
   'Do not start a new book here, because that would set up an empty project beside this writing. ' +
-  'To try the studio on this writing now, paste a passage into /nonfiction-studio:nfs-quick-scan. ' +
   'To start a new book, open an empty folder.';
 
 // House-notes pointer line (Wave 1 exit Task 2): emitted after the five-element orientation

@@ -40,7 +40,7 @@ the author how to proceed (verify plugin installation or provide the path manual
 
 Carry the resolved path forward as `<plugin-root>`.
 
-**Shared plugin-root convention.** This resolver is the same command as `skills/nfs-new-book/SKILL.md` Step 4 and every other CLI-backed skill; `tests/checks/plugin-root-resolver.test.mjs` guards byte-for-byte parity across all eight.
+**Shared plugin-root convention.** This resolver is the same command as `skills/nfs-new-book/SKILL.md` Step 4 and every other CLI-backed skill; `tests/checks/plugin-root-resolver.test.mjs` guards byte-for-byte parity across every skill that carries it.
 
 ---
 

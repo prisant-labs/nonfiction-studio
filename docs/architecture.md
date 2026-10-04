@@ -8,7 +8,7 @@ The shape in one sentence: skills narrate and orchestrate, agents do scoped writ
 
 ### Skills narrate and orchestrate
 
-The 14 skills under `skills/` (each a `skills/<name>/SKILL.md`) are the front door for every author-facing flow: interview, outline, draft, fact-check, capture voice, build apparatus, check a chapter, and so on. A skill never computes a verdict itself. It resolves arguments, reads the bible files it needs, decides which agent (if any) to dispatch, and presents the result. `skills/nfs-draft/SKILL.md` is representative: it resolves the chapter argument against `structure/chapter-list.md`, loads the outline and evidence entries, dispatches `drafting-partner` and then `line-editor`, and confirms the write with a Read check - the skill is the orchestrator, the agents are the writers.
+The 15 skills under `skills/` (each a `skills/<name>/SKILL.md`) are the front door for every author-facing flow: interview, outline, draft, fact-check, capture voice, build apparatus, check a chapter, and so on. A skill never computes a verdict itself. It resolves arguments, reads the bible files it needs, decides which agent (if any) to dispatch, and presents the result. `skills/nfs-draft/SKILL.md` is representative: it resolves the chapter argument against `structure/chapter-list.md`, loads the outline and evidence entries, dispatches `drafting-partner` and then `line-editor`, and confirms the write with a Read check - the skill is the orchestrator, the agents are the writers.
 
 ### Agents do scoped work, with declared model tiers and a permitted chain
 

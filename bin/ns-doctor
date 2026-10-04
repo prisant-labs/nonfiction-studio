@@ -7,7 +7,7 @@
 //               can drive the engine directly without CLI overhead per S-07 section 4
 // usage:        ns-doctor [--check | --migrate | --report] [--project=<dir>]
 //                         [--validate-packs] [--json]
-//               ns-doctor --adopt-plan [--project=<dir>] [--json]
+//               ns-doctor --adopt-plan [--chapters-dir=<name>] [--project=<dir>] [--json]
 
 import { existsSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -31,6 +31,7 @@ try {
     { name: 'check', type: 'boolean' },
     { name: 'migrate', type: 'boolean' },
     { name: 'adopt-plan', type: 'boolean' },
+    { name: 'chapters-dir', type: 'string' },
     'report',
     'validate-packs',
     'project',
@@ -51,8 +52,9 @@ const startDir = opts.project ? resolve(opts.project) : process.cwd();
 // ---- --adopt-plan mode (ADR-0016, adopting an existing book) ---------------------
 // Reads the one directory it is given (the current directory, or --project), never walks up
 // to an enclosing book, and writes nothing. It always prints JSON, which is what the nfs-adopt
-// skill reads; --json is accepted and changes nothing. Exit 0 with a plan; 2 when the
-// directory cannot be read.
+// skill reads; --json is accepted and changes nothing. --chapters-dir=<name> lists the chapters
+// of that candidate folder instead of the one with the most Markdown files. Exit 0 with a plan;
+// 2 when the directory cannot be read or --chapters-dir names no candidate.
 
 /**
  * Whether dir is inside a git working tree, and how many paths under it git reports as
@@ -78,7 +80,14 @@ if (opts['adopt-plan']) {
     process.stderr.write('ns-doctor: --adopt-plan: not a readable directory: ' + startDir + '\n');
     process.exit(2);
   }
-  const plan = buildAdoptPlan(startDir, { git: gitProbe(startDir) });
+  let plan;
+  try {
+    plan = buildAdoptPlan(startDir, { git: gitProbe(startDir), chaptersDir: opts['chapters-dir'] || null });
+  } catch (err) {
+    if (err.code !== 'NOT_A_CANDIDATE') throw err;
+    process.stderr.write('ns-doctor: --adopt-plan: ' + err.message + '\n');
+    process.exit(2);
+  }
   process.stdout.write(JSON.stringify(plan, null, 2) + '\n');
   process.exit(0);
 }

@@ -37,6 +37,10 @@ because they may be intentional. Claim markers, `[UNVERIFIED]` tags, and
 is out of scope and is deferred to `developmental-editor`; voice scoring belongs
 to `voice-guardian`.
 
+## Chapters folder
+
+`<chapters-dir>` stands for the folder that holds the book's chapters: `chapters`, unless the book names another. The skill that dispatched you names that folder in your brief, and you never resolve it yourself. If your brief does not name it, read and write no chapter file, and say so in your reply. When you dispatch another agent, pass the same folder name in its brief.
+
 ## When to invoke
 
 - **Phase 1 polish after author acceptance.** The author accepts a chapter
@@ -55,12 +59,12 @@ to `voice-guardian`.
 
 - **Read** - opens `context/style-profile.md` at the start of every invocation
   to load the do-not list, rhythm description, and register rules; opens the
-  target chapter at `chapters/NN-*.md` to read the existing prose before
+  target chapter at `<chapters-dir>/<slug>.md` to read the existing prose before
   formulating any proposals. Both reads are required; the agent does not edit
   without reading the style profile first.
 - **Write** - writes the chapter file containing tracked diff proposals to
-  `chapters/`. The PreToolUse hook confines writes to `chapters/`, per D-13
-  (security posture): it denies any write outside `chapters/` once it identifies
+  `<chapters-dir>/`. The PreToolUse hook confines writes to `<chapters-dir>/`, per D-13
+  (security posture): it denies any write outside `<chapters-dir>/` once it identifies
   `line-editor` from the `agent_type` slug the platform reports in the hook
   envelope (ADR-0007, agent identity resolution). The agent does not write to
   `context/`, `structure/`, `research/`, or the state folder.
@@ -76,10 +80,10 @@ These are behavior contracts. The line-editor touches only the paths listed here
 - `context/style-profile.md` - the operational voice profile from `voice-capture`;
   provides the do-not list, sentence rhythm guidance, and register description.
   Read first at every invocation; the agent does not proceed without it.
-- `chapters/NN-*.md` - the target chapter; read before any proposal is formulated.
+- `<chapters-dir>/<slug>.md` - the target chapter; read before any proposal is formulated.
 
 **Writes:**
-- `chapters/NN-*.md` - a file of tracked diff proposals: PROPOSED REPLACEMENT
+- `<chapters-dir>/<slug>.md` - a file of tracked diff proposals: PROPOSED REPLACEMENT
   blocks for sentences or passages that need editing. No silent overwrite of
   existing content.
 
@@ -92,7 +96,7 @@ description, and diction guidance. These govern the entire editing pass.
 
 ### Step 2 - Read the chapter
 
-Read the target `chapters/NN-*.md`. Survey the full chapter before proposing any
+Read the target `<chapters-dir>/<slug>.md`. Survey the full chapter before proposing any
 change. Note claim markers, `[UNVERIFIED]` tags, and `[SOURCE-UNVERIFIABLE]` tags
 so they are never touched.
 

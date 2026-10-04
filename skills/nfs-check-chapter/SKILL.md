@@ -15,7 +15,7 @@ This skill is the surface-independent quality gate. It resolves the chapter argu
 Skill inputs read:
 - `<state-dir>/progress.json` (chapter resolution at Step 2 when no chapter argument is supplied; the progress layer is alive per TSK-050b (progress entry ownership))
 - `structure/chapter-list.md` (slug registry; probed at Step 2 to resolve a chapter argument to a canonical slug)
-- `chapters/<slug>.md` (target chapter; file-existence probed at Step 2)
+- `<chapters-dir>/<slug>.md` (target chapter; file-existence probed at Step 2)
 - `context/style-profile.md` (baseline pre-check at Step 3; absence triggers the degraded check subset)
 - `<state-dir>/config.json` (baseline pre-check at Step 3; `stylometry.baseline.markers` absence, or a `stylometry.baseline.marker_set_version` that is absent or does not match the engine's current version, also triggers the degraded check subset)
 
@@ -23,16 +23,21 @@ No skill chain edges exist for this skill.
 
 ---
 
+Elements this skill needs: none
+
 ## Locate the state folder
 
-This book keeps its machine-managed records in one state folder at the book root, the folder that holds `context/` and `chapters/`. In this skill, `<state-dir>` stands for that folder's name. Resolve it once, before any step below.
+This book keeps its machine-managed records in one state folder at the book root. The book root is the folder that holds `nonfiction-studio.json`, or else the folder that holds `context/` and `chapters/`. In this skill, `<state-dir>` stands for the state folder's name, and `<chapters-dir>` stands for the name of the folder that holds the chapters. Resolve both once, before any step below.
 
-1. Use the Read tool on `nonfiction-studio.json` at the book root. This Read is the skill's first tool call. If the file does not exist, `<state-dir>` is `_nonfiction-studio`; continue at item 4.
-2. If the file exists, it must hold a JSON object with a `state_dir` key whose value is a string that matches `^[A-Za-z0-9._-]{1,64}$`. The value may not be `.` or `..`. It may not be `context`, `structure`, `research`, `chapters`, `production`, `.git` or `.claude`; on Windows, compare these names without regard to case. The folder that it names must exist at the book root and hold `meta.json`. When every condition holds, `<state-dir>` is that value.
+1. Use the Read tool on `nonfiction-studio.json` at the book root. This Read is the skill's first tool call. If the file does not exist, `<state-dir>` is `_nonfiction-studio` and `<chapters-dir>` is `chapters`; continue at item 4.
+2. If the file exists, it must hold a JSON object with a `state_dir` key, a `chapters_dir` key, or both. Each value must be a string that matches `^[A-Za-z0-9._-]{1,64}$`, and neither may be `.` or `..`. The `state_dir` value may not be `context`, `structure`, `research`, `chapters`, `production`, `.git` or `.claude`. The `chapters_dir` value may not be `context`, `structure`, `research`, `production`, `.git`, `.claude` or the state folder's name. On Windows, compare these names without regard to case. The state folder must exist at the book root and hold `meta.json`, and a folder that `chapters_dir` names must exist at the book root. When every condition holds, `<state-dir>` is the `state_dir` value, or `_nonfiction-studio` when that key is absent, and `<chapters-dir>` is the `chapters_dir` value, or `chapters` when that key is absent.
 3. If the file exists but any condition in item 2 fails, stop. Tell the author which condition failed, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never fall back to `_nonfiction-studio`.
 4. If the file does not exist and `_nonfiction-studio/meta.json` does not exist either, list the folders at the book root, hidden folders included. If one of them holds both `meta.json` and `progress.json`, stop. Name that folder, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never create a second state folder beside it.
+5. Use the Read tool on `<state-dir>/meta.json`. If it has an `adoption` object, the book is an adopted one, and an element counts as adopted only when its entry under `adoption.elements` is exactly `"adopted"`. A book without the object has adopted all five elements: `chapters`, `style`, `brief`, `structure` and `claims`.
+6. The line `Elements this skill needs:` above names the elements this skill cannot run without. If any of them is not adopted, stop before your first write. Name the element, write nothing, and name `/nonfiction-studio:nfs-adopt <element>` as the way to adopt it. For `claims`, say instead that adopting claims is not available yet.
+7. Treat the files of every other element that is not adopted as absent. Never read, create or edit them, even when a file of that name exists, because in an adopted book such a file is the author's own. The `style` files are `context/style-profile.md` and the voice baseline in `<state-dir>/config.json`. The `brief` files are `context/brief.md`, `context/audience.md` and `context/decisions.md`. The `structure` files are those under `structure/`, plus `research/open-questions.md`. The `claims` files are `research/evidence-log.md`, `research/sources.md` and `research/packets/`.
 
-Before you run a command or open a path below, replace `<state-dir>` with the resolved name. When this skill dispatches an agent, name the resolved state folder in the dispatch brief, because agents never resolve it themselves.
+Before you run a command or open a path below, replace `<state-dir>` and `<chapters-dir>` with the resolved names. When this skill dispatches an agent, name both resolved folders in the dispatch brief, because agents never resolve them themselves.
 
 ---
 
@@ -67,10 +72,10 @@ test -f structure/chapter-list.md && echo HAS_REGISTRY || echo NO_REGISTRY
 After resolving the slug, probe the chapter file:
 
 ```
-test -f chapters/<slug>.md && echo HAS_CHAPTER || echo NO_CHAPTER
+test -f <chapters-dir>/<slug>.md && echo HAS_CHAPTER || echo NO_CHAPTER
 ```
 
-- `NO_CHAPTER`: halt immediately. State: "Chapter file `chapters/<slug>.md` was not found. Produce the chapter with `/nonfiction-studio:nfs-draft <slug>` before running the quality gate."
+- `NO_CHAPTER`: halt immediately. State: "Chapter file `<chapters-dir>/<slug>.md` was not found. Produce the chapter with `/nonfiction-studio:nfs-draft <slug>` before running the quality gate."
 - `HAS_CHAPTER`: carry the slug forward to Step 3.
 
 **Branch B - No chapter argument supplied.** Use the Bash tool to check whether the progress file is present:
@@ -87,7 +92,7 @@ test -f <state-dir>/progress.json && echo HAS_PROGRESS || echo NO_PROGRESS
 
   Once a chapter is selected, probe its file:
   ```
-  test -f chapters/<slug>.md && echo HAS_CHAPTER || echo NO_CHAPTER
+  test -f <chapters-dir>/<slug>.md && echo HAS_CHAPTER || echo NO_CHAPTER
   ```
   `NO_CHAPTER`: ask the author and halt. `HAS_CHAPTER`: carry the slug forward to Step 3.
 
@@ -149,7 +154,7 @@ the author how to proceed (verify plugin installation or provide the path manual
 
 Carry the resolved path forward as `<plugin-root>` for Step 5.
 
-**Shared plugin-root convention.** This resolver is the same command as `skills/nfs-new-book/SKILL.md` Step 4 and every other CLI-backed skill; `tests/checks/plugin-root-resolver.test.mjs` guards byte-for-byte parity across all eight.
+**Shared plugin-root convention.** This resolver is the same command as `skills/nfs-new-book/SKILL.md` Step 4 and every other CLI-backed skill; `tests/checks/plugin-root-resolver.test.mjs` guards byte-for-byte parity across every skill that carries it.
 
 ---
 
@@ -177,13 +182,13 @@ Parse stdout as the gate report JSON. Present the full verdict:
 
 - **Verdict `pass`:** state the gate outcome.
 
-  > Gate verdict: PASS for `chapters/<slug>.md`. All checks passed (or were skipped). This verdict is the deterministic layer only; the Stop hook's thesis-alignment judgment prompt (warn-only, CLI and Cowork only) is not part of this skill invocation and does not exist in v1 on chat.
+  > Gate verdict: PASS for `<chapters-dir>/<slug>.md`. All checks passed (or were skipped). This verdict is the deterministic layer only; the Stop hook's thesis-alignment judgment prompt (warn-only, CLI and Cowork only) is not part of this skill invocation and does not exist in v1 on chat.
 
   List the per-check results from `report.checks` as a compact table or list (check name, verdict, detail). A `session_write_flag` verdict of `skip` means no chapter writes were detected in the current session; note this if relevant.
 
 - **Verdict `warn`:** state the gate outcome and present the warn entries.
 
-  > Gate verdict: WARN for `chapters/<slug>.md`. The gate ran without a blocking condition (exit 0). Voice drift is warn-only by default; coverage and scrub issues block only when blocking mode is explicitly enabled. This verdict is the deterministic layer only.
+  > Gate verdict: WARN for `<chapters-dir>/<slug>.md`. The gate ran without a blocking condition (exit 0). Voice drift is warn-only by default; coverage and scrub issues block only when blocking mode is explicitly enabled. This verdict is the deterministic layer only.
 
   For each check with verdict `warn` or `block` (capped to `warn` by the top-level gate mode), present the check name, detail, and `next` action. List the remaining checks as pass or skip. Suggest next steps based on which checks warned.
 
@@ -191,7 +196,7 @@ Parse stdout as the gate report JSON. Present the full verdict:
 
 Parse stdout as the gate report JSON. The top-level `verdict` is `block`. State the block outcome prominently:
 
-> Gate verdict: BLOCK for `chapters/<slug>.md`. The chapter cannot proceed until the blocking conditions below are resolved.
+> Gate verdict: BLOCK for `<chapters-dir>/<slug>.md`. The chapter cannot proceed until the blocking conditions below are resolved.
 
 For each check entry with `verdict: block`, present the check name, detail, evidence pointers (if any), and next action. These are the specific conditions the author must address. For checks with other verdicts, list them as secondary context.
 

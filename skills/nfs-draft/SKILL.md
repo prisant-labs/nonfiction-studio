@@ -9,7 +9,7 @@ chain:
   - line-editor
 ---
 
-This skill is the drafting front door. It resolves the chapter argument against the slug registry, loads the chapter's outline entry and evidence set, alerts on an empty ledger and waits for explicit author confirmation before proceeding, orchestrates `drafting-partner` then `line-editor`, and confirms the final file via a Read check. The agents are the sole writers of `chapters/<slug>.md`; the skill orchestrates, confirms, and reports.
+This skill is the drafting front door. It resolves the chapter argument against the slug registry, loads the chapter's outline entry and evidence set, alerts on an empty ledger and waits for explicit author confirmation before proceeding, orchestrates `drafting-partner` then `line-editor`, and confirms the final file via a Read check. The agents are the sole writers of `<chapters-dir>/<slug>.md`; the skill orchestrates, confirms, and reports.
 
 **Writer alignment.** `drafting-partner` writes new chapter files directly and produces diff-proposal blocks for existing chapters (the author accepts or rejects each block individually; the agent then applies accepted changes and writes the updated file). `line-editor` always operates proposal-only; the author's acceptance completes the agent's write pass. The skill confirms the chapter file exists after each agent pass via a Read check. The PostToolBatch hook owns all `<state-dir>/progress.json` writes; the skill writes no `<state-dir>/` machine state.
 
@@ -19,8 +19,8 @@ Skill inputs read:
 - `research/evidence-log.md` (EV entries relevant to the chapter; read at Step 2)
 - `context/style-profile.md` (operational voice profile; passed to both agents)
 - `context/brief.md` (project context; passed to `drafting-partner`)
-- `chapters/<prior-slug>.md` (closing passage of the preceding chapter for continuity context; read at Step 2 when a prior chapter file exists)
-- `chapters/<slug>.md` (checked at Step 2 to determine whether the chapter already exists)
+- `<chapters-dir>/<prior-slug>.md` (closing passage of the preceding chapter for continuity context; read at Step 2 when a prior chapter file exists)
+- `<chapters-dir>/<slug>.md` (checked at Step 2 to determine whether the chapter already exists)
 
 Skill chain edges:
 - `nfs-draft -> drafting-partner` (new draft or diff-proposal, per `agents/_chain-permitted.yaml`)
@@ -28,16 +28,21 @@ Skill chain edges:
 
 ---
 
+Elements this skill needs: style, brief, structure, claims
+
 ## Locate the state folder
 
-This book keeps its machine-managed records in one state folder at the book root, the folder that holds `context/` and `chapters/`. In this skill, `<state-dir>` stands for that folder's name. Resolve it once, before any step below.
+This book keeps its machine-managed records in one state folder at the book root. The book root is the folder that holds `nonfiction-studio.json`, or else the folder that holds `context/` and `chapters/`. In this skill, `<state-dir>` stands for the state folder's name, and `<chapters-dir>` stands for the name of the folder that holds the chapters. Resolve both once, before any step below.
 
-1. Use the Read tool on `nonfiction-studio.json` at the book root. This Read is the skill's first tool call. If the file does not exist, `<state-dir>` is `_nonfiction-studio`; continue at item 4.
-2. If the file exists, it must hold a JSON object with a `state_dir` key whose value is a string that matches `^[A-Za-z0-9._-]{1,64}$`. The value may not be `.` or `..`. It may not be `context`, `structure`, `research`, `chapters`, `production`, `.git` or `.claude`; on Windows, compare these names without regard to case. The folder that it names must exist at the book root and hold `meta.json`. When every condition holds, `<state-dir>` is that value.
+1. Use the Read tool on `nonfiction-studio.json` at the book root. This Read is the skill's first tool call. If the file does not exist, `<state-dir>` is `_nonfiction-studio` and `<chapters-dir>` is `chapters`; continue at item 4.
+2. If the file exists, it must hold a JSON object with a `state_dir` key, a `chapters_dir` key, or both. Each value must be a string that matches `^[A-Za-z0-9._-]{1,64}$`, and neither may be `.` or `..`. The `state_dir` value may not be `context`, `structure`, `research`, `chapters`, `production`, `.git` or `.claude`. The `chapters_dir` value may not be `context`, `structure`, `research`, `production`, `.git`, `.claude` or the state folder's name. On Windows, compare these names without regard to case. The state folder must exist at the book root and hold `meta.json`, and a folder that `chapters_dir` names must exist at the book root. When every condition holds, `<state-dir>` is the `state_dir` value, or `_nonfiction-studio` when that key is absent, and `<chapters-dir>` is the `chapters_dir` value, or `chapters` when that key is absent.
 3. If the file exists but any condition in item 2 fails, stop. Tell the author which condition failed, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never fall back to `_nonfiction-studio`.
 4. If the file does not exist and `_nonfiction-studio/meta.json` does not exist either, list the folders at the book root, hidden folders included. If one of them holds both `meta.json` and `progress.json`, stop. Name that folder, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never create a second state folder beside it.
+5. Use the Read tool on `<state-dir>/meta.json`. If it has an `adoption` object, the book is an adopted one, and an element counts as adopted only when its entry under `adoption.elements` is exactly `"adopted"`. A book without the object has adopted all five elements: `chapters`, `style`, `brief`, `structure` and `claims`.
+6. The line `Elements this skill needs:` above names the elements this skill cannot run without. If any of them is not adopted, stop before your first write. Name the element, write nothing, and name `/nonfiction-studio:nfs-adopt <element>` as the way to adopt it. For `claims`, say instead that adopting claims is not available yet.
+7. Treat the files of every other element that is not adopted as absent. Never read, create or edit them, even when a file of that name exists, because in an adopted book such a file is the author's own. The `style` files are `context/style-profile.md` and the voice baseline in `<state-dir>/config.json`. The `brief` files are `context/brief.md`, `context/audience.md` and `context/decisions.md`. The `structure` files are those under `structure/`, plus `research/open-questions.md`. The `claims` files are `research/evidence-log.md`, `research/sources.md` and `research/packets/`.
 
-Before you run a command or open a path below, replace `<state-dir>` with the resolved name. When this skill dispatches an agent, name the resolved state folder in the dispatch brief, because agents never resolve it themselves.
+Before you run a command or open a path below, replace `<state-dir>` and `<chapters-dir>` with the resolved names. When this skill dispatches an agent, name both resolved folders in the dispatch brief, because agents never resolve them themselves.
 
 ---
 
@@ -59,7 +64,7 @@ Use the Read tool on `structure/chapter-list.md` to load the slug registry. Reso
 
 A chapter argument is required. Do not proceed without a resolved slug. Do not infer a chapter from conversation context.
 
-Once the slug is resolved, take the ai-use-log.jsonl count snapshot described in Step 6's Compliance append section for `chapters/<slug>.md`, before this flow's first write.
+Once the slug is resolved, take the ai-use-log.jsonl count snapshot described in Step 6's Compliance append section for `<chapters-dir>/<slug>.md`, before this flow's first write.
 
 ---
 
@@ -69,9 +74,9 @@ Use the Read tool on `structure/outline.md` to load the target chapter's promise
 
 Use the Read tool on `research/evidence-log.md` to identify EV entries relevant to the chapter's evidence-needed list.
 
-**Prior chapter continuity.** Identify the preceding chapter from registry order. If a prior chapter exists and its file is present at `chapters/<prior-slug>.md`, use the Read tool to extract the closing passage (approximately the last three paragraphs) and carry it forward to Step 4. If the preceding chapter file is absent, note the absence without halting.
+**Prior chapter continuity.** Identify the preceding chapter from registry order. If a prior chapter exists and its file is present at `<chapters-dir>/<prior-slug>.md`, use the Read tool to extract the closing passage (approximately the last three paragraphs) and carry it forward to Step 4. If the preceding chapter file is absent, note the absence without halting.
 
-**Existing chapter detection.** Use the Read tool on `chapters/<slug>.md` to determine whether a chapter file already exists. A successful read means existing prose is present and `drafting-partner` will operate in diff-proposal mode. An absent file means a first draft and the agent will write a new file.
+**Existing chapter detection.** Use the Read tool on `<chapters-dir>/<slug>.md` to determine whether a chapter file already exists. A successful read means existing prose is present and `drafting-partner` will operate in diff-proposal mode. An absent file means a first draft and the agent will write a new file.
 
 ---
 
@@ -107,9 +112,9 @@ Spawn `drafting-partner` via the `nfs-draft -> drafting-partner` chain edge, pas
 
 The agent runs three mandatory pre-flight checks before producing any prose: voice profile present (hard halt if absent), outline entry present (hard halt if absent), and EV entries present (alert only, not a hard halt per the agent's check-3 asymmetry). If the author already confirmed an empty-ledger proceed in Step 3, pass that confirmation to the agent so it proceeds directly to drafting.
 
-**New chapter mode (file absent):** `drafting-partner` writes `chapters/<slug>.md` with every factual assertion carrying either a `[claim: EV-nnnn]` anchor referencing an existing evidence log entry or an `[UNVERIFIED]` tag per D-07 (claim ledger anchor discipline). After the agent completes, use the Read tool on `chapters/<slug>.md` to confirm the file is present and non-empty. Present the draft to the author and ask them to accept it as structurally ready or request revisions: per `line-editor`'s Phase 1 invocation rule, the author's acceptance is the structural clearance that stands in for `developmental-editor` (not yet in the Phase 1 pipeline). Proceed to Step 5 only after the author accepts; if the author requests revisions, address them before proceeding.
+**New chapter mode (file absent):** `drafting-partner` writes `<chapters-dir>/<slug>.md` with every factual assertion carrying either a `[claim: EV-nnnn]` anchor referencing an existing evidence log entry or an `[UNVERIFIED]` tag per D-07 (claim ledger anchor discipline). After the agent completes, use the Read tool on `<chapters-dir>/<slug>.md` to confirm the file is present and non-empty. Present the draft to the author and ask them to accept it as structurally ready or request revisions: per `line-editor`'s Phase 1 invocation rule, the author's acceptance is the structural clearance that stands in for `developmental-editor` (not yet in the Phase 1 pipeline). Proceed to Step 5 only after the author accepts; if the author requests revisions, address them before proceeding.
 
-**Existing chapter mode (file present):** `drafting-partner` produces PROPOSED ADDITION and PROPOSED REPLACEMENT blocks. Present each block to the author for individual acceptance or rejection. After the author accepts the proposals they want applied, the agent writes the updated `chapters/<slug>.md`. Use the Read tool to confirm the file.
+**Existing chapter mode (file present):** `drafting-partner` produces PROPOSED ADDITION and PROPOSED REPLACEMENT blocks. Present each block to the author for individual acceptance or rejection. After the author accepts the proposals they want applied, the agent writes the updated `<chapters-dir>/<slug>.md`. Use the Read tool to confirm the file.
 
 If `drafting-partner` halts on check 1 (voice profile absent) or check 2 (outline entry absent), surface the agent's halt message and the suggested remediation step. Do not proceed to Step 5 while a hard halt is pending.
 
@@ -118,18 +123,18 @@ If `drafting-partner` halts on check 1 (voice profile absent) or check 2 (outlin
 ## Step 5 - Delegate to line-editor
 
 Spawn `line-editor` via the `nfs-draft -> line-editor` chain edge, passing:
-- The chapter slug and the current content of `chapters/<slug>.md` confirmed at the end of Step 4
+- The chapter slug and the current content of `<chapters-dir>/<slug>.md` confirmed at the end of Step 4
 - The content of `context/style-profile.md`
 
 The `line-editor` reads the style profile first, then reads the chapter, then produces PROPOSED REPLACEMENT blocks for sentence clarity, grammar and consistency, and rhythm. Claim markers (`[claim: EV-nnnn]`, `[UNVERIFIED]`, `[SOURCE-UNVERIFIABLE]`) are never removed or altered. Meaning-altering changes are prefixed with `[MEANING CHANGE: <reason>]`.
 
-Present the proposals to the author for review. The author accepts or rejects each proposal individually. When the author accepts proposals, the agent applies the accepted changes and writes the updated `chapters/<slug>.md`. The skill does not write the chapter file directly.
+Present the proposals to the author for review. The author accepts or rejects each proposal individually. When the author accepts proposals, the agent applies the accepted changes and writes the updated `<chapters-dir>/<slug>.md`. The skill does not write the chapter file directly.
 
 ---
 
 ## Step 6 - Confirm chapter file, chat compliance, and gate close
 
-Use the Read tool on `chapters/<slug>.md` to confirm the file is present and non-empty after both agent passes complete.
+Use the Read tool on `<chapters-dir>/<slug>.md` to confirm the file is present and non-empty after both agent passes complete.
 
 - If the file is missing or empty: report the gap, name the last successful step, and offer to re-run from Step 4.
 - If the file is present: continue.
@@ -138,28 +143,28 @@ Use the Read tool on `chapters/<slug>.md` to confirm the file is present and non
 
 This flow's writes may already be logged automatically by a hook on this surface; this skill never assumes which surfaces do or do not fire that hook, and it never assumes the flow is running on any particular surface. Before this flow's first write, read `<state-dir>/ai-use-log.jsonl` and count how many records currently target each file this flow is about to write (the file's path appearing in that record's `targets` array). Hold that starting count per file. After this flow's writes complete, re-read `<state-dir>/ai-use-log.jsonl` and count the records targeting each of those files again. For each file: if the count increased between the two reads, a hook already appended a record for this write on this surface, and this skill appends nothing further for that file. If the count did not increase, append the flow's record or records for that file to `<state-dir>/ai-use-log.jsonl`, per the record template below, using the six-field shape in `docs/formats/ai-use-log.md` (S-08 section 5): `ts`, `agent`, `surface`, `scope`, `targets`, `summary` - with `surface` set honestly to the surface this flow is actually running on. A record already sitting in the log before this flow started, from an earlier session, does not by itself suppress the append; only a count increase observed between this flow's own two reads does. This skill never appends twice for the same write.
 
-**Record template for this flow.** One record per agent that touched `chapters/<slug>.md` and needed the append (per the count-delta check above):
+**Record template for this flow.** One record per agent that touched `<chapters-dir>/<slug>.md` and needed the append (per the count-delta check above):
 
 For a new chapter (drafting-partner wrote the file):
 ```json
-{"ts":"<RFC 3339 UTC>","agent":"drafting-partner","surface":"<actual surface>","scope":"generated","targets":["chapters/<slug>.md"],"summary":"Drafted <slug> with claim anchors from the evidence ledger."}
+{"ts":"<RFC 3339 UTC>","agent":"drafting-partner","surface":"<actual surface>","scope":"generated","targets":["<chapters-dir>/<slug>.md"],"summary":"Drafted <slug> with claim anchors from the evidence ledger."}
 ```
 
 For an existing chapter revised via diff proposals:
 ```json
-{"ts":"<RFC 3339 UTC>","agent":"drafting-partner","surface":"<actual surface>","scope":"assisted","targets":["chapters/<slug>.md"],"summary":"Revised <slug> via diff proposals accepted by the author."}
+{"ts":"<RFC 3339 UTC>","agent":"drafting-partner","surface":"<actual surface>","scope":"assisted","targets":["<chapters-dir>/<slug>.md"],"summary":"Revised <slug> via diff proposals accepted by the author."}
 ```
 
 For a line-editor pass where the author accepted at least one proposal:
 ```json
-{"ts":"<RFC 3339 UTC>","agent":"line-editor","surface":"<actual surface>","scope":"assisted","targets":["chapters/<slug>.md"],"summary":"Applied sentence-level polish proposals to <slug>."}
+{"ts":"<RFC 3339 UTC>","agent":"line-editor","surface":"<actual surface>","scope":"assisted","targets":["<chapters-dir>/<slug>.md"],"summary":"Applied sentence-level polish proposals to <slug>."}
 ```
 
-`surface` is `claude-code`, `cowork`, or `chat` per `docs/formats/ai-use-log.md` - whichever this flow is actually running on. On CLI and Cowork the PostToolBatch hook normally covers `chapters/<slug>.md` already, so the count-delta check above typically finds no append needed there; on chat it typically does. Omit the line-editor record when the author accepted no proposals.
+`surface` is `claude-code`, `cowork`, or `chat` per `docs/formats/ai-use-log.md` - whichever this flow is actually running on. On CLI and Cowork the PostToolBatch hook normally covers `<chapters-dir>/<slug>.md` already, so the count-delta check above typically finds no append needed there; on chat it typically does. Omit the line-editor record when the author accepted no proposals.
 
 **Quality gate prompt (all surfaces).** On all surfaces, close with an explicit prompt:
 
-> The draft of `chapters/<slug>.md` is complete. Run the quality gate to check claim coverage, voice drift, and prompt scrub:
+> The draft of `<chapters-dir>/<slug>.md` is complete. Run the quality gate to check claim coverage, voice drift, and prompt scrub:
 > `/nonfiction-studio:nfs-check-chapter <slug>`
 >
 > Or advance the EV entries from `status: pending` to verified first:
@@ -181,6 +186,6 @@ The skill writes no `<state-dir>/progress.json` and no other `<state-dir>/` mach
 
 **Drafting-partner pre-flight halts.** If the agent halts on check 1 (voice profile absent) or check 2 (outline entry absent), the skill surfaces the agent's halt message and the suggested next step. Step 5 is not triggered while a hard halt is pending. The author resolves the issue and re-invokes the skill.
 
-**Partial draft resume.** If the session ends mid-chapter after the agent has written content to `chapters/<slug>.md`, the partial draft persists on disk. On re-invocation the Step 2 Read check detects the existing file and `drafting-partner` runs in diff-proposal mode to extend or revise from the saved state.
+**Partial draft resume.** If the session ends mid-chapter after the agent has written content to `<chapters-dir>/<slug>.md`, the partial draft persists on disk. On re-invocation the Step 2 Read check detects the existing file and `drafting-partner` runs in diff-proposal mode to extend or revise from the saved state.
 
 **Line-editor proposals not applied.** If the author accepts no line-editor proposals, the chapter file retains the drafting-partner output verbatim. This is a valid outcome. The quality gate accepts the drafting-partner output without requiring a line-editor pass.

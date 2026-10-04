@@ -17,6 +17,7 @@
       "voice-capture"
     ],
     "skills": [
+      "nfs-adopt",
       "nfs-build-apparatus",
       "nfs-capture-voice",
       "nfs-check-chapter",

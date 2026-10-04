@@ -3,7 +3,7 @@ name: nfs-new-book
 user-invocable: true
 argument-hint: "[book title] [guided|blank]"
 description: "Scaffolds the flat bible tree (context/, structure/, chapters/, research/, production/) and creates the state folder's files for a new nonfiction book project. Use when an author starts a new book or follows the studio Path 1 prompt."
-when_to_use: "Use when the author explicitly wants to initialize, start, or set up a new book project, says 'create a new book', or is routed here from the studio dispatcher Path 1 prompt. Do not invoke for authors with an existing book project layout (a state folder or context/brief.md) unless they explicitly ask to re-initialize only the missing pieces. Do not invoke in a folder that already holds the author's own writing; Step 1 stops there, because adopting an existing book is not available yet."
+when_to_use: "Use when the author explicitly wants to initialize, start, or set up a new book project, says 'create a new book', or is routed here from the studio dispatcher Path 1 prompt. Do not invoke for authors with an existing book project layout (a state folder or context/brief.md) unless they explicitly ask to re-initialize only the missing pieces. Do not invoke in a folder that already holds the author's own writing, or in a book that was adopted in place; Step 1 stops in both and names nfs-adopt, which brings existing writing in."
 ---
 
 This skill scaffolds a new nonfiction book project. It is surface-independent: no hooks or subagents are needed.
@@ -21,20 +21,29 @@ Skill inputs read:
 - `context/brief.md`, `context/style-profile.md`, `structure/outline.md` (Step 7a content-assembly sources)
 - `bin/ns-claims` (Step 7a, invoked via the Bash tool for the open-claims count)
 
+Elements this skill needs: none
+
 ## Locate the state folder
 
-This book keeps its machine-managed records in one state folder at the book root, the folder that holds `context/` and `chapters/`. In this skill, `<state-dir>` stands for that folder's name. Resolve it once, before any step below.
+This book keeps its machine-managed records in one state folder at the book root. The book root is the folder that holds `nonfiction-studio.json`, or else the folder that holds `context/` and `chapters/`. In this skill, `<state-dir>` stands for the state folder's name, and `<chapters-dir>` stands for the name of the folder that holds the chapters. Resolve both once, before any step below.
 
-1. Use the Read tool on `nonfiction-studio.json` at the book root. This Read is the skill's first tool call. If the file does not exist, `<state-dir>` is `_nonfiction-studio`; continue at item 4.
-2. If the file exists, it must hold a JSON object with a `state_dir` key whose value is a string that matches `^[A-Za-z0-9._-]{1,64}$`. The value may not be `.` or `..`. It may not be `context`, `structure`, `research`, `chapters`, `production`, `.git` or `.claude`; on Windows, compare these names without regard to case. The folder that it names must exist at the book root and hold `meta.json`. When every condition holds, `<state-dir>` is that value.
+1. Use the Read tool on `nonfiction-studio.json` at the book root. This Read is the skill's first tool call. If the file does not exist, `<state-dir>` is `_nonfiction-studio` and `<chapters-dir>` is `chapters`; continue at item 4.
+2. If the file exists, it must hold a JSON object with a `state_dir` key, a `chapters_dir` key, or both. Each value must be a string that matches `^[A-Za-z0-9._-]{1,64}$`, and neither may be `.` or `..`. The `state_dir` value may not be `context`, `structure`, `research`, `chapters`, `production`, `.git` or `.claude`. The `chapters_dir` value may not be `context`, `structure`, `research`, `production`, `.git`, `.claude` or the state folder's name. On Windows, compare these names without regard to case. The state folder must exist at the book root and hold `meta.json`, and a folder that `chapters_dir` names must exist at the book root. When every condition holds, `<state-dir>` is the `state_dir` value, or `_nonfiction-studio` when that key is absent, and `<chapters-dir>` is the `chapters_dir` value, or `chapters` when that key is absent.
 3. If the file exists but any condition in item 2 fails, stop. Tell the author which condition failed, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never fall back to `_nonfiction-studio`.
 4. If the file does not exist and `_nonfiction-studio/meta.json` does not exist either, list the folders at the book root, hidden folders included. If one of them holds both `meta.json` and `progress.json`, stop. Name that folder, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never create a second state folder beside it.
+5. Use the Read tool on `<state-dir>/meta.json`. If it has an `adoption` object, the book is an adopted one, and an element counts as adopted only when its entry under `adoption.elements` is exactly `"adopted"`. A book without the object has adopted all five elements: `chapters`, `style`, `brief`, `structure` and `claims`.
+6. The line `Elements this skill needs:` above names the elements this skill cannot run without. If any of them is not adopted, stop before your first write. Name the element, write nothing, and name `/nonfiction-studio:nfs-adopt <element>` as the way to adopt it. For `claims`, say instead that adopting claims is not available yet.
+7. Treat the files of every other element that is not adopted as absent. Never read, create or edit them, even when a file of that name exists, because in an adopted book such a file is the author's own. The `style` files are `context/style-profile.md` and the voice baseline in `<state-dir>/config.json`. The `brief` files are `context/brief.md`, `context/audience.md` and `context/decisions.md`. The `structure` files are those under `structure/`, plus `research/open-questions.md`. The `claims` files are `research/evidence-log.md`, `research/sources.md` and `research/packets/`.
 
-Before you run a command or open a path below, replace `<state-dir>` with the resolved name. When this skill dispatches an agent, name the resolved state folder in the dispatch brief, because agents never resolve it themselves.
+Before you run a command or open a path below, replace `<state-dir>` and `<chapters-dir>` with the resolved names. When this skill dispatches an agent, name both resolved folders in the dispatch brief, because agents never resolve them themselves.
 
 ---
 
 ## Step 1 - Run the existence check (first tool call after the state folder is located)
+
+**If the stanza found an `adoption` object in `<state-dir>/meta.json`, stop before this check.** The book was adopted in place, so its own files are its record, and this skill never stamps a bible beside them. Write nothing, and output:
+
+> This book was adopted in place, so its own files stay its record, and starting a new book here would set up plugin files beside them. Nothing was written. To take on another part of the bible, such as the brief or the outline, run /nonfiction-studio:nfs-adopt with that element. To start a new book, run this skill in an empty folder.
 
 Use the Bash tool to run:
 ```
@@ -48,7 +57,7 @@ The first line checks for a second state folder: any other folder at the book ro
 
 When no book project is found, the second line also looks for existing writing, per ADR-0016 (adopting an existing book). A `WRITING:` line names a Markdown file outside hidden folders and files (names beginning with a dot, such as `.git/`, `.claude/` or `.github/`), other than a top-level `README.md`; the search prints at most three. It never runs for a book project, so a book's own chapters never trigger it. **If any line starts with `WRITING:`, stop.** Write nothing, and output:
 
-> This folder already holds writing, for example [each path named on a `WRITING:` line], and it has no Nonfiction Studio project. Nonfiction Studio cannot adopt an existing book yet. Starting a new book here would set up an empty project beside that writing, so nothing was written. To start a new book, run this skill again in an empty folder. To try the studio on this writing now, paste a passage into /nonfiction-studio:nfs-quick-scan.
+> This folder already holds writing, for example [each path named on a `WRITING:` line], and it has no Nonfiction Studio project. Starting a new book here would set up an empty project beside that writing, so nothing was written. To bring this writing in as it is, run /nonfiction-studio:nfs-adopt: it plans the adoption first and changes none of your files. To start a new book, run this skill again in an empty folder.
 
 Otherwise the last line of the output is exactly one of two values:
 - `REINIT` - this directory already contains a book project
@@ -145,7 +154,7 @@ If the output is `TEMPLATE_NOT_FOUND`: halt. Report the exact path that was not 
 
 **Shared plugin-root convention.** This resolver is the same command as every other
 CLI-backed skill (`skills/nfs-build-apparatus/SKILL.md` Step 1 and the rest);
-`tests/checks/plugin-root-resolver.test.mjs` guards byte-for-byte parity across all eight.
+`tests/checks/plugin-root-resolver.test.mjs` guards byte-for-byte parity across every skill that carries it.
 
 ### Step 4b - Confirm the working directory (uncertain surface only)
 

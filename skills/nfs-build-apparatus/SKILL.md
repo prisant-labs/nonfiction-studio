@@ -6,20 +6,36 @@ description: "Generates publisher-ready back matter from the evidence ledger in 
 when_to_use: "Use when the author types /nfs-build-apparatus, asks to generate or regenerate the bibliography or endnotes, wants to prepare back matter for a publisher or agent submission, or asks what in the ledger still needs a locator or source before the book can go out. Do not invoke for claim-coverage or quote-fidelity checks (use nfs-fact-check), for the deterministic quality gate (use nfs-check-chapter), or for editing chapter prose directly."
 ---
 
-This skill fronts the read-only-over-the-ledger `bin/ns-notes` engine in a single Bash call and presents its verdict. `bin/ns-notes` never writes to `research/evidence-log.md`, `research/sources.md`, or `chapters/*.md` (OPP-D05, apparatus generator: read-then-emit only); it writes exactly four files under `production/` - `endnotes.md`, `bibliography.md`, `index-candidates.md`, and `apparatus-attention.md` - the author-facing directory that already holds `front-matter.md` and `back-matter.md`. `production/` is not state-folder machine state, so D-06 (single-writer state discipline) is not implicated. Regeneration is deterministic: running this skill twice over an unchanged ledger reproduces byte-identical files, so it is always safe to re-run.
+This skill fronts the read-only-over-the-ledger `bin/ns-notes` engine in a single Bash call and presents its verdict. `bin/ns-notes` never writes to `research/evidence-log.md`, `research/sources.md`, or `<chapters-dir>/*.md` (OPP-D05, apparatus generator: read-then-emit only); it writes exactly four files under `production/` - `endnotes.md`, `bibliography.md`, `index-candidates.md`, and `apparatus-attention.md` - the author-facing directory that already holds `front-matter.md` and `back-matter.md`. `production/` is not state-folder machine state, so D-06 (single-writer state discipline) is not implicated. Regeneration is deterministic: running this skill twice over an unchanged ledger reproduces byte-identical files, so it is always safe to re-run.
 
 **No agents invoked.** This is a deterministic-CLI-only skill. No chain edges exist.
 
 Skill inputs read (by the engine via `--project=.`):
 - `research/evidence-log.md` (EV entries: claim, source, locator, confidence, status)
 - `research/sources.md` (SRC records: type, author, title, year, publisher, identifier, url, accessed)
-- `chapters/*.md` (scanned for `[claim: EV-nnnn]` anchors)
+- `<chapters-dir>/*.md` (scanned for `[claim: EV-nnnn]` anchors)
 - `hooks/lib/citation-styles/chicago.json` (the Chicago style, expressed as data)
 
 Skill outputs written (by the engine, always attempted regardless of verdict):
 - `production/endnotes.md`, `production/bibliography.md`, `production/index-candidates.md`, `production/apparatus-attention.md`
 
 No skill chain edges exist for this skill.
+
+Elements this skill needs: claims
+
+## Locate the state folder
+
+This book keeps its machine-managed records in one state folder at the book root. The book root is the folder that holds `nonfiction-studio.json`, or else the folder that holds `context/` and `chapters/`. In this skill, `<state-dir>` stands for the state folder's name, and `<chapters-dir>` stands for the name of the folder that holds the chapters. Resolve both once, before any step below.
+
+1. Use the Read tool on `nonfiction-studio.json` at the book root. This Read is the skill's first tool call. If the file does not exist, `<state-dir>` is `_nonfiction-studio` and `<chapters-dir>` is `chapters`; continue at item 4.
+2. If the file exists, it must hold a JSON object with a `state_dir` key, a `chapters_dir` key, or both. Each value must be a string that matches `^[A-Za-z0-9._-]{1,64}$`, and neither may be `.` or `..`. The `state_dir` value may not be `context`, `structure`, `research`, `chapters`, `production`, `.git` or `.claude`. The `chapters_dir` value may not be `context`, `structure`, `research`, `production`, `.git`, `.claude` or the state folder's name. On Windows, compare these names without regard to case. The state folder must exist at the book root and hold `meta.json`, and a folder that `chapters_dir` names must exist at the book root. When every condition holds, `<state-dir>` is the `state_dir` value, or `_nonfiction-studio` when that key is absent, and `<chapters-dir>` is the `chapters_dir` value, or `chapters` when that key is absent.
+3. If the file exists but any condition in item 2 fails, stop. Tell the author which condition failed, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never fall back to `_nonfiction-studio`.
+4. If the file does not exist and `_nonfiction-studio/meta.json` does not exist either, list the folders at the book root, hidden folders included. If one of them holds both `meta.json` and `progress.json`, stop. Name that folder, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never create a second state folder beside it.
+5. Use the Read tool on `<state-dir>/meta.json`. If it has an `adoption` object, the book is an adopted one, and an element counts as adopted only when its entry under `adoption.elements` is exactly `"adopted"`. A book without the object has adopted all five elements: `chapters`, `style`, `brief`, `structure` and `claims`.
+6. The line `Elements this skill needs:` above names the elements this skill cannot run without. If any of them is not adopted, stop before your first write. Name the element, write nothing, and name `/nonfiction-studio:nfs-adopt <element>` as the way to adopt it. For `claims`, say instead that adopting claims is not available yet.
+7. Treat the files of every other element that is not adopted as absent. Never read, create or edit them, even when a file of that name exists, because in an adopted book such a file is the author's own. The `style` files are `context/style-profile.md` and the voice baseline in `<state-dir>/config.json`. The `brief` files are `context/brief.md`, `context/audience.md` and `context/decisions.md`. The `structure` files are those under `structure/`, plus `research/open-questions.md`. The `claims` files are `research/evidence-log.md`, `research/sources.md` and `research/packets/`.
+
+Before you run a command or open a path below, replace `<state-dir>` and `<chapters-dir>` with the resolved names. When this skill dispatches an agent, name both resolved folders in the dispatch brief, because agents never resolve them themselves.
 
 ---
 
@@ -49,7 +65,7 @@ the author how to proceed (verify plugin installation or provide the path manual
 
 Carry the resolved path forward as `<plugin-root>` for Step 2.
 
-**Shared plugin-root convention.** This resolver is the same command as `skills/nfs-new-book/SKILL.md` Step 4 and every other CLI-backed skill; `tests/checks/plugin-root-resolver.test.mjs` guards byte-for-byte parity across all eight.
+**Shared plugin-root convention.** This resolver is the same command as `skills/nfs-new-book/SKILL.md` Step 4 and every other CLI-backed skill; `tests/checks/plugin-root-resolver.test.mjs` guards byte-for-byte parity across every skill that carries it.
 
 ---
 
@@ -83,7 +99,7 @@ Parse stdout as JSON. Group the `findings` array by the `file` field (the chapte
 
 Surface the stderr content and halt. This exit is never treated as a pass.
 
-> Apparatus error (exit 2): [first non-empty line of stderr, or "ns-notes exited with code 2 with no message on stderr" if stderr is empty]. The apparatus run did not complete; no `production/` files were written or updated by this invocation. Check that this is a valid project bible (the state folder's `meta.json`, `research/evidence-log.md`, `research/sources.md`, and a `chapters/` directory must all be present). Run `/nonfiction-studio:nfs-doctor` to diagnose a broader structural problem.
+> Apparatus error (exit 2): [first non-empty line of stderr, or "ns-notes exited with code 2 with no message on stderr" if stderr is empty]. The apparatus run did not complete; no `production/` files were written or updated by this invocation. Check that this is a valid project bible (the state folder's `meta.json`, `research/evidence-log.md`, `research/sources.md`, and a `<chapters-dir>/` directory must all be present). Run `/nonfiction-studio:nfs-doctor` to diagnose a broader structural problem.
 
 ---
 
@@ -95,4 +111,4 @@ Surface the stderr content and halt. This exit is never treated as a pass.
 
 **Project root not found.** If `findBookRoot` cannot locate the state folder's `meta.json` from the current directory, the CLI exits 2 with a `BibleError` message on stderr. Surface it: "Apparatus error: [BibleError message]. Ensure this skill is invoked from within a Nonfiction Studio project bible (the state folder's `meta.json` must be present at or above the current directory)."
 
-**Evidence log, sources registry, or chapters/ missing.** The CLI exits 2 naming the missing path on stderr. Surface it verbatim; do not guess at a fix.
+**Evidence log, sources registry, or the chapters folder missing.** The CLI exits 2 naming the missing path on stderr. Surface it verbatim; do not guess at a fix.

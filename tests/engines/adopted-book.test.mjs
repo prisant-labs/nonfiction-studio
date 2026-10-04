@@ -248,6 +248,31 @@ test('the plan counts each chapter\'s words on prose only, with titles from the 
   assert.equal(ch01.title, 'The First Question');
 });
 
+test('the plan also counts each chapter\'s whole file, for an author who declines the boundary', () => {
+  const root = track(copyFixture('plan-whole'));
+  const { json } = plan(root);
+  assert.equal(json.chapters_folder, 'manuscript');
+  for (const c of json.chapters) {
+    const text = readFileSync(join(root, 'manuscript', c.file), 'utf8');
+    assert.equal(c.words_whole_file, countWords(text), c.file);
+  }
+  const ch01 = json.chapters.find((c) => c.slug === 'ch01-the-first-question');
+  assert.ok(ch01.words < ch01.words_whole_file, 'the apparatus is counted only in the whole-file figure');
+});
+
+test('--chapters-dir plans another candidate folder, and refuses a folder that is not one', () => {
+  const root = track(copyFixture('plan-chosen'));
+  const chosen = cli('ns-doctor', ['--adopt-plan', '--json', '--chapters-dir=evidence'], root);
+  assert.equal(chosen.status, 0, chosen.stderr);
+  const json = JSON.parse(chosen.stdout);
+  assert.equal(json.chapters_folder, 'evidence');
+  assert.deepEqual(json.chapters.map((c) => c.file), ['claim-ledger.md']);
+  const refused = cli('ns-doctor', ['--adopt-plan', '--json', '--chapters-dir=research'], root);
+  assert.equal(refused.status, 2);
+  assert.match(refused.stderr, /research/);
+  assert.match(refused.stderr, /manuscript/, 'the refusal names the candidates');
+});
+
 test('the plan is read-only and byte-identical across runs', () => {
   const root = track(copyFixture('plan-pure'));
   const before = snapshotTree(root);

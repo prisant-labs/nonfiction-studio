@@ -42,6 +42,10 @@ generate formatted citations from memory, and does not write to the state folder
 state. Those roles belong to `line-editor`, `voice-guardian`, `citation-manager`,
 and the PostToolBatch hook respectively, per D-06 (single-writer state discipline).
 
+## Chapters folder
+
+`<chapters-dir>` stands for the folder that holds the book's chapters: `chapters`, unless the book names another. The skill that dispatched you names that folder in your brief, and you never resolve it yourself. If your brief does not name it, read and write no chapter file, and say so in your reply. When you dispatch another agent, pass the same folder name in its brief.
+
 ## When to invoke
 
 - **New chapter draft.** The author or the `nfs-draft` skill invokes this
@@ -61,13 +65,13 @@ and the PostToolBatch hook respectively, per D-06 (single-writer state disciplin
   (required; the pre-flight halts if the file is absent or empty); opens
   `structure/outline.md` to read the target chapter's entry, promise, beats, and
   evidence-needed list; opens `research/evidence-log.md` to read the structured
-  EV ledger per D-07 (claim ledger); and opens `chapters/NN-*.md` when a chapter
+  EV ledger per D-07 (claim ledger); and opens `<chapters-dir>/<slug>.md` when a chapter
   file already exists to determine whether diff proposal mode is required. Reads
-  span `structure/`, `context/`, `research/`, and `chapters/`.
-- **Write** - writes new chapter files to `chapters/` and, in diff proposal mode,
+  span `structure/`, `context/`, `research/`, and `<chapters-dir>/`.
+- **Write** - writes new chapter files to `<chapters-dir>/` and, in diff proposal mode,
   writes a file containing the PROPOSED ADDITION and PROPOSED REPLACEMENT blocks
-  to `chapters/`. Writes are confined to `chapters/`. The PreToolUse hook enforces
-  this per D-13 (security posture): it denies any write outside `chapters/` once
+  to `<chapters-dir>/`. Writes are confined to `<chapters-dir>/`. The PreToolUse hook enforces
+  this per D-13 (security posture): it denies any write outside `<chapters-dir>/` once
   it identifies `drafting-partner` from the `agent_type` slug the platform reports
   in the hook envelope (ADR-0007, agent identity resolution). The agent does not
   write to `structure/`, `context/`, `research/`, or the state folder.
@@ -88,11 +92,11 @@ here.
 - `research/evidence-log.md` - the structured EV ledger per D-07 (claim ledger);
   read to resolve which EV IDs are available for anchoring and to determine
   whether the relevant EV set is non-empty.
-- `chapters/NN-*.md` - read when the file already exists to trigger diff
+- `<chapters-dir>/<slug>.md` - read when the file already exists to trigger diff
   proposal mode.
 
 **Writes:**
-- `chapters/NN-*.md` - new chapter draft on first invocation for a chapter; diff
+- `<chapters-dir>/<slug>.md` - new chapter draft on first invocation for a chapter; diff
   proposal file on subsequent invocations when the chapter already exists. The
   agent does not write to any other path.
 
@@ -162,7 +166,7 @@ Phase 2 agent responsible for citation output.
 
 ### Diff proposal mode
 
-When `chapters/NN-*.md` already contains prose, the agent produces additions and
+When `<chapters-dir>/<slug>.md` already contains prose, the agent produces additions and
 replacements as clearly delimited blocks:
 
 ```

@@ -1,10 +1,11 @@
 // tests/checks/plugin-root-resolver.test.mjs
 // what-it-is:   parity + behavior tests for the shared plugin-root resolver line embedded in
-//               the eight CLI-backed skills (nfs-build-apparatus, nfs-check-chapter, nfs-doctor,
-//               nfs-fact-check, nfs-new-book, nfs-quick-scan, nfs-status-dashboard, nfs-tour)
-// what-it-does: (1) extracts the resolver's `node -e "..."` line from each of the eight
+//               the nine CLI-backed skills (nfs-adopt, nfs-build-apparatus, nfs-check-chapter,
+//               nfs-doctor, nfs-fact-check, nfs-new-book, nfs-quick-scan, nfs-status-dashboard,
+//               nfs-tour)
+// what-it-does: (1) extracts the resolver's `node -e "..."` line from each of the nine
 //               SKILL.md files under the heading "## Step <n> - (Find|Resolve) the plugin
-//               root" and asserts every skill carries it and all eight are byte-identical (the
+//               root" and asserts every skill carries it and all nine are byte-identical (the
 //               parity guard: a skill that regresses to its own bespoke lookup, or a fix
 //               applied to only some skills, is caught here) - (2) executes the extracted JS
 //               with node itself (never a real `bash`, so this suite has no shell dependency
@@ -43,7 +44,8 @@ import { fileURLToPath } from 'node:url';
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = join(__dirname, '..', '..');
 
-// The eight CLI-backed skills this hotfix touches, in the order the bug report names them.
+// The CLI-backed skills: the eight this hotfix touched, in the order the bug report names them,
+// then nfs-adopt (ADR-0016, adopting an existing book), which runs ns-doctor --adopt-plan.
 const SKILLS = [
   'nfs-build-apparatus',
   'nfs-check-chapter',
@@ -53,6 +55,7 @@ const SKILLS = [
   'nfs-quick-scan',
   'nfs-status-dashboard',
   'nfs-tour',
+  'nfs-adopt',
 ];
 
 // Matches "## Step 4 - Resolve the plugin root" and nfs-new-book's "## Step 4 - Find the
