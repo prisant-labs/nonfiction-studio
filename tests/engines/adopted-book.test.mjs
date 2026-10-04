@@ -111,6 +111,19 @@ test('overlap reports that it had nothing to compare against rather than passing
   assert.match(e.detail, /nothing to compare|no source material/i, e.detail);
 });
 
+test('without claims, overlap never reads an author\'s evidence-log.md in a shared research folder', () => {
+  const root = adopted('eng-overlap-author-ledger');
+  // A real 25-word span of ch01's prose, so a gate that read this ledger would flag a lift.
+  const lifted = 'She did not ask whether people had enjoyed the class. She asked what they planned to do ' +
+    'the next day that they would not have done otherwise.';
+  writeFileSync(join(root, 'research', 'evidence-log.md'),
+    '### EV-0001 (mine)\n- claim: x\n- source: SRC-0001\n- locator:\n- confidence: high\n- status: verified\n' +
+    '- added-by: author\n- date: 2026-10-04\n- verbatim: ' + lifted + '\n');
+  const e = entry(runGate(root, {}).report, 'overlap');
+  assert.equal(e.verdict, 'pass', JSON.stringify(e));
+  assert.match(e.detail, /nothing to compare|no source material/i, e.detail);
+});
+
 test('prompt_scrub and continuity run on the adopted book', () => {
   const report = runGate(adopted('eng-scrub'), {}).report;
   for (const name of ['prompt_scrub', 'continuity']) {
@@ -162,6 +175,39 @@ test('the doctor reports each unadopted element as a notice that names nfs-adopt
 test('an adopted element is checked like a plugin-created book\'s', () => {
   const { findings } = runChecks(adopted('doc-style-adopted', { elements: { style: 'adopted' } }));
   assert.ok(findings.some((f) => /style-profile\.md/.test(f.path || f.message)), JSON.stringify(findings));
+});
+
+test('without claims, the doctor never reads an author\'s own evidence-log.md in a shared research folder', () => {
+  const root = adopted('doc-author-ledger');
+  // In the plugin's own grammar, with a bad status and an unknown source, so a doctor that read it
+  // would report it - as the control below, with claims adopted, shows.
+  const ledger =
+    '# Evidence Log\n\n### EV-0001 (mine)\n- claim: x\n- source: SRC-0009\n- locator:\n- confidence: high\n' +
+    '- status: maybe\n- added-by: author\n- date: 2026-10-04\n';
+  const claimsTypes = (findings) => findings.filter((f) => /^ev-grammar|^src-ref|^claim-marker/.test(f.type));
+  writeFileSync(join(root, 'research', 'evidence-log.md'), ledger);
+  assert.deepEqual(claimsTypes(runChecks(root).findings), []);
+  const control = adopted('doc-author-ledger-control', { elements: { claims: 'adopted' } });
+  writeFileSync(join(control, 'research', 'evidence-log.md'), ledger);
+  assert.ok(claimsTypes(runChecks(control).findings).length > 0, 'with claims adopted the same ledger is read');
+});
+
+test('a malformed adoption record is a named finding, not a silent "not adopted"', () => {
+  const root = adopted('doc-bad-record');
+  const metaPath = join(root, '_nonfiction-studio', 'meta.json');
+  const meta = JSON.parse(readFileSync(metaPath, 'utf8'));
+  meta.adoption.elements.style = 'yes';
+  meta.adoption.date = '4 October';
+  writeFileSync(metaPath, JSON.stringify(meta, null, 2) + '\n');
+  const bad = runChecks(root).findings.filter((f) => f.type === 'shape.meta-violation');
+  assert.ok(bad.some((f) => /adoption\.elements\.style/.test(f.path)), JSON.stringify(bad));
+  assert.ok(bad.some((f) => /adoption\.date/.test(f.path)), JSON.stringify(bad));
+});
+
+test('an adoption record that leaves chapters unadopted is a finding: adoption always adopts chapters', () => {
+  const root = adopted('doc-no-chapters', { elements: { chapters: 'not-adopted' } });
+  const bad = runChecks(root).findings.filter((f) => f.type === 'shape.meta-violation');
+  assert.ok(bad.some((f) => /adoption\.elements\.chapters/.test(f.path)), JSON.stringify(bad));
 });
 
 test('ns-doctor exits 0 on a freshly adopted book', () => {

@@ -273,6 +273,35 @@ test('sorted enumeration: discoverCorpora returns packets and verbatim entries i
   }
 });
 
+test('corpus discovery: with claims not adopted, research/ contributes nothing; prior work still does (ADR-0016)', () => {
+  const base = mkdtempSync(join(os.tmpdir(), 'ns-overlap-noclaims-'));
+  try {
+    mkdirSync(join(base, 'research', 'packets'), { recursive: true });
+    mkdirSync(join(base, 'context', 'prior-work'), { recursive: true });
+    writeFileSync(join(base, 'research', 'packets', 'a.md'), 'Packet text.\n');
+    writeFileSync(join(base, 'research', 'evidence-log.md'), [
+      '### EV-0001 (an author entry)',
+      '- claim: A claim.',
+      '- source: SRC-0001',
+      '- locator:',
+      '- confidence: high',
+      '- status: verified',
+      '- added-by: author',
+      '- date: 2026-10-04',
+      '- verbatim: author ledger verbatim text.',
+    ].join('\n'));
+    writeFileSync(join(base, 'context', 'prior-work', 'essay.md'), 'An earlier essay.\n');
+    assert.deepEqual(discoverCorpora(base, { claims: false }).map(c => c.source), ['context/prior-work/essay.md']);
+    assert.deepEqual(discoverCorpora(base).map(c => c.source), [
+      'research/packets/a.md',
+      'research/evidence-log.md#EV-0001',
+      'context/prior-work/essay.md',
+    ]);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
 test('corpus discovery: a missing context/prior-work/ directory contributes nothing and does not error', () => {
   const base = mkdtempSync(join(os.tmpdir(), 'ns-overlap-noprior-'));
   try {

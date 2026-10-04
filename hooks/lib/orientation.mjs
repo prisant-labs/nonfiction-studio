@@ -12,6 +12,7 @@ import { readFileSync, appendFileSync, mkdirSync, statSync, readdirSync } from '
 import { join } from 'node:path';
 import { readProgress, stateDirOf, chaptersDirOf } from './bible.mjs';
 import { parseEvidenceLog, resolvedStatuses } from './ledger.mjs';
+import { ELEMENTS, adoptionOf } from './adoption.mjs';
 
 /**
  * Appends one JSONL error record to _nonfiction-studio/logs/errors.jsonl.
@@ -56,6 +57,11 @@ function logError(root, hookName, msg, err) {
  * Each element is fail-open: a read or parse error logs one JSONL line to
  * _nonfiction-studio/logs/errors.jsonl and the element is omitted from the returned block.
  *
+ * In an adopted book (ADR-0016, adopting an existing book), elements 2, 4 and 5 read the brief,
+ * style and claims elements' files. For an element the book has not adopted, the read is
+ * skipped without an error record - the file is absent by design, or is the author's own - and
+ * a closing "Not adopted:" line names every unadopted element instead.
+ *
  * @param {string}      root     - absolute path to the confirmed book root
  * @param {object|null} meta     - meta object from findBookRoot (provides book_title for callers)
  * @param {string}      hookName - calling hook name (used in errors.jsonl records)
@@ -66,6 +72,7 @@ function logError(root, hookName, msg, err) {
 export function buildOrientation(root, meta, hookName) {
   const lines = [];
   let hasActiveChapter = false;
+  const { elements } = adoptionOf(meta);
 
   // --- Element 1: Gate debt ---------------------------------------------------
   // Debt is present when last-gate.json is absent (gateTsMs 0) or its newest ts
@@ -112,7 +119,7 @@ export function buildOrientation(root, meta, hookName) {
 
   // --- Element 2: Thesis one-liner from context/brief.md ----------------------
   // Extraction rule: first non-empty, non-heading line after the "## 2. Thesis" heading.
-  try {
+  if (elements.brief) try {
     const briefPath = join(root, 'context', 'brief.md');
     const briefLines = readFileSync(briefPath, 'utf8').split('\n');
     let thesis = null;
@@ -156,7 +163,7 @@ export function buildOrientation(root, meta, hookName) {
   // --- Element 4: Top three style rules from context/style-profile.md ---------
   // Extraction rule (S-08 section 9 format): collect bullet lines (starting with "- ")
   // under "## Do" and "## Do not" headings in document order; take first three.
-  try {
+  if (elements.style) try {
     const stylePath = join(root, 'context', 'style-profile.md');
     const styleLines = readFileSync(stylePath, 'utf8').split('\n');
     const rules = [];
@@ -186,7 +193,7 @@ export function buildOrientation(root, meta, hookName) {
 
   // --- Element 5: Open-claims count from research/evidence-log.md -------------
   // Count entries whose status is not in resolvedStatuses (the sole authority from ledger.mjs).
-  try {
+  if (elements.claims) try {
     const logPath = join(root, 'research', 'evidence-log.md');
     const logText = readFileSync(logPath, 'utf8');
     const entries = parseEvidenceLog(logText);
@@ -194,6 +201,12 @@ export function buildOrientation(root, meta, hookName) {
     lines.push('Open claims: ' + openCount);
   } catch (err) {
     logError(root, hookName, 'evidence-log read failed', err);
+  }
+
+  // --- Unadopted elements (ADR-0016) -------------------------------------------
+  const notAdopted = ELEMENTS.filter((name) => !elements[name]);
+  if (notAdopted.length > 0) {
+    lines.push('Not adopted: ' + notAdopted.join(', ') + ' (see /nonfiction-studio:nfs-adopt)');
   }
 
   const bookTitle = (meta && typeof meta.book_title === 'string') ? meta.book_title : null;

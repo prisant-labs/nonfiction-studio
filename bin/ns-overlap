@@ -18,6 +18,7 @@ import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
 import { findBookRoot, BibleError, chaptersDirNameOf } from '../hooks/lib/bible.mjs';
 import { proseOf, proseBoundaryAt } from '../hooks/lib/prose.mjs';
 import { findOverlaps, discoverCorpora, DEFAULT_MIN_WORDS } from '../hooks/lib/overlap-engine.mjs';
+import { adoptionAt } from '../hooks/lib/adoption.mjs';
 
 const USAGE =
   'ns-overlap [--chapter=<slug>|--all] [--project=<dir>] [--min-words=<n>] [--json]\n' +
@@ -138,7 +139,8 @@ for (const absPath of chapterPaths) {
 
 // ---- corpus discovery (hooks/lib/overlap-engine.mjs; shared with a future gate check) ---
 
-const corpora = discoverCorpora(root);
+// In a book that has not adopted claims, research/ holds the author's files (ADR-0016).
+const corpora = discoverCorpora(root, { claims: adoptionAt(root).elements.claims });
 
 // ---- run overlap engine ----------------------------------------------------------
 
@@ -165,7 +167,9 @@ if (opts.json) {
   process.stdout.write(JSON.stringify(json, null, 2) + '\n');
 } else {
   const prefix = '[overlap]';
-  if (findings.length === 0) {
+  if (corpora.length === 0) {
+    process.stdout.write(prefix + ' pass: nothing to compare: no source material on file\n');
+  } else if (findings.length === 0) {
     process.stdout.write(prefix + ' pass: no overlap findings (' + corpora.length + ' corpus text(s) checked)\n');
   } else {
     process.stdout.write(prefix + ' ' + findings.length + ' finding(s):\n');

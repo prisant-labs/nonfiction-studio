@@ -333,11 +333,14 @@ function adoptedPointerOf(dir, platform) {
  * candidates, so hooks stay silent while session start and the doctor name the folder). The
  * walk stops there rather than attaching to an enclosing book.
  *
+ * Exported for `ns-doctor --adopt-plan` (ADR-0016), which asks about one directory and must
+ * not walk up.
+ *
  * @param {string} dir - absolute directory path to test
- * @param {string} platform
+ * @param {string} [platform] - defaults to process.platform; injectable for tests
  * @returns {object|null}
  */
-function tryBookRoot(dir, platform) {
+export function tryBookRoot(dir, platform = process.platform) {
   const hasPointer = existsSync(join(dir, POINTER_FILE));
   let pointer;
   if (existsSync(join(dir, 'context')) && existsSync(join(dir, DEFAULT_CHAPTERS_DIR))) {

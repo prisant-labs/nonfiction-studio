@@ -39,7 +39,7 @@
           { "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/stop-gate.mjs" },
           {
             "type": "prompt",
-            "prompt": "Review the thesis-alignment of the last written section. Reply 'pass' if the content advances the thesis, or 'warn: <one-sentence reason>' if it drifts. This check is advisory only in v1.",
+            "prompt": "Review the thesis-alignment of the last written section. Reply 'pass' if the content advances the thesis, or 'warn: <one-sentence reason>' if it drifts. If the input states no thesis to compare against, as in a book that has not adopted its structure element, reply 'skip: no thesis on record; adopt structure with /nonfiction-studio:nfs-adopt structure' instead: a skip is neither a pass nor a warning. This check is advisory only in v1.",
             "timeout": 30
           }
         ]

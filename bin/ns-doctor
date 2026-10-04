@@ -7,9 +7,11 @@
 //               can drive the engine directly without CLI overhead per S-07 section 4
 // usage:        ns-doctor [--check | --migrate | --report] [--project=<dir>]
 //                         [--validate-packs] [--json]
+//               ns-doctor --adopt-plan [--project=<dir>] [--json]
 
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
 import { findBookRoot, BibleError, DEFAULT_STATE_DIR, POINTER_FILE } from '../hooks/lib/bible.mjs';
 import {
@@ -17,6 +19,7 @@ import {
   checkSchemaVersion,
   runChecks
 } from '../hooks/lib/doctor-engine.mjs';
+import { buildAdoptPlan } from '../hooks/lib/adopt-plan.mjs';
 
 // ---- arg parsing ---------------------------------------------------------------
 
@@ -27,6 +30,7 @@ try {
     // shared FLAG_DEFS defines it as a list; see note in S-07 section 4).
     { name: 'check', type: 'boolean' },
     { name: 'migrate', type: 'boolean' },
+    { name: 'adopt-plan', type: 'boolean' },
     'report',
     'validate-packs',
     'project',
@@ -43,6 +47,41 @@ try {
 // ---- book root discovery -------------------------------------------------------
 
 const startDir = opts.project ? resolve(opts.project) : process.cwd();
+
+// ---- --adopt-plan mode (ADR-0016, adopting an existing book) ---------------------
+// Reads the one directory it is given (the current directory, or --project), never walks up
+// to an enclosing book, and writes nothing. It always prints JSON, which is what the nfs-adopt
+// skill reads; --json is accepted and changes nothing. Exit 0 with a plan; 2 when the
+// directory cannot be read.
+
+/**
+ * Whether dir is inside a git working tree, and how many paths under it git reports as
+ * changed. Null when git is not installed or dir is not in a working tree. The plan module
+ * never spawns a process, so the probe lives here.
+ */
+function gitProbe(dir) {
+  const inside = spawnSync('git', ['-C', dir, 'rev-parse', '--is-inside-work-tree'], { encoding: 'utf8' });
+  if (inside.error || inside.status !== 0 || inside.stdout.trim() !== 'true') return null;
+  const status = spawnSync('git', ['-C', dir, 'status', '--porcelain', '--', '.'], { encoding: 'utf8' });
+  if (status.error || status.status !== 0) return null;
+  return { work_tree: true, uncommitted: status.stdout.split('\n').filter((l) => l.trim() !== '').length };
+}
+
+if (opts['adopt-plan']) {
+  let isDir = false;
+  try {
+    isDir = statSync(startDir).isDirectory();
+  } catch {
+    isDir = false;
+  }
+  if (!isDir) {
+    process.stderr.write('ns-doctor: --adopt-plan: not a readable directory: ' + startDir + '\n');
+    process.exit(2);
+  }
+  const plan = buildAdoptPlan(startDir, { git: gitProbe(startDir) });
+  process.stdout.write(JSON.stringify(plan, null, 2) + '\n');
+  process.exit(0);
+}
 
 /**
  * Reports a book whose state folder cannot be resolved (ADR-0015, state folder name) in the

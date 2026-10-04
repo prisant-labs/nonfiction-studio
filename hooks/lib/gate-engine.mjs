@@ -26,6 +26,7 @@ import {
 } from 'node:fs';
 import { join, relative } from 'node:path';
 import { stateDirOf, stateDirNameOf, chaptersDirOf } from './bible.mjs';
+import { adoptionAt } from './adoption.mjs';
 import { proseOf, proseBoundaryAt } from './prose.mjs';
 import { computeCoverage, scanChapter, scanQuoteAnchors, computeQuoteFindings } from './claims-engine.mjs';
 import { measureBook, measureChapter, countWords, computeDrift } from './stylometry-engine.mjs';
@@ -300,6 +301,22 @@ function makeEntry(checkName, verdict, detail, evidence, next) {
 }
 
 /**
+ * The skip entry for a check whose element the book has not adopted (ADR-0016, adopting an
+ * existing book). It names the element and how to adopt it, and it is never an engine error:
+ * a skip counts as neither a pass nor a failure.
+ *
+ * @param {string} checkName
+ * @param {string} element - 'style' or 'claims'
+ * @returns {{ check, verdict, detail, evidence, next }}
+ */
+function notAdoptedEntry(checkName, element) {
+  const next = element === 'claims'
+    ? 'This book has not adopted claims, and adopting claims is not available yet; the book\'s own claim system stays its record.'
+    : 'Adopt it with /nonfiction-studio:nfs-adopt ' + element + '.';
+  return makeEntry(checkName, 'skip', 'element "' + element + '" is not adopted; ' + checkName + '.not-adopted', [], next);
+}
+
+/**
  * Derives the effective verdict for a check given its config and whether it has findings.
  *
  * Rules per brief:
@@ -375,6 +392,9 @@ export function runGate(root, opts = {}) {
     }
   }
 
+  // Which elements the book has adopted; a plugin-created book has adopted all five (ADR-0016).
+  const adoption = adoptionAt(root);
+
   let hasEngineError = false;
   const checkEntries = [];
 
@@ -387,6 +407,8 @@ export function runGate(root, opts = {}) {
       checkEntries.push(makeEntry(reportName, 'skip', 'check disabled in config', [], null));
     } else if ((ccConfig.mode || 'warn') === 'off') {
       checkEntries.push(makeEntry(reportName, 'skip', 'check mode is off in config', [], null));
+    } else if (!adoption.elements.claims) {
+      checkEntries.push(notAdoptedEntry(reportName, 'claims'));
     } else if (chapters.length === 0) {
       // No chapters: 100% coverage by definition
       checkEntries.push(makeEntry(reportName, 'pass', 'no chapters to scan; claim_coverage.pass', [], null));
@@ -446,6 +468,8 @@ export function runGate(root, opts = {}) {
       checkEntries.push(makeEntry(reportName, 'skip', 'check disabled in config', [], null));
     } else if ((qfConfig.mode || 'warn') === 'off') {
       checkEntries.push(makeEntry(reportName, 'skip', 'check mode is off in config', [], null));
+    } else if (!adoption.elements.claims) {
+      checkEntries.push(notAdoptedEntry(reportName, 'claims'));
     } else if (chapters.length === 0) {
       checkEntries.push(makeEntry(reportName, 'pass', 'no chapters to scan; quote_fidelity.pass', [], null));
     } else {
@@ -496,6 +520,8 @@ export function runGate(root, opts = {}) {
       checkEntries.push(makeEntry(reportName, 'skip', 'check disabled in config', [], null));
     } else if ((styloConfig.mode || 'warn') === 'off') {
       checkEntries.push(makeEntry(reportName, 'skip', 'check mode is off in config', [], null));
+    } else if (!adoption.elements.style) {
+      checkEntries.push(notAdoptedEntry(reportName, 'style'));
     } else if (chapters.length === 0 || chapters.every(c => countWords(c.text) === 0)) {
       // No chapters, or every chapter file measures to zero scored words (a stranger edge case
       // than a single stub -- every chapter would have to be genuinely empty text -- but
@@ -817,7 +843,7 @@ export function runGate(root, opts = {}) {
       checkEntries.push(makeEntry(reportName, 'pass', 'no chapters to scan; overlap.pass', [], null));
     } else {
       try {
-        const corpora = discoverCorpora(root);
+        const corpora = discoverCorpora(root, { claims: adoption.elements.claims });
         // thresholds.overlap_min_words reaches the engine through loadGateConfig's own
         // thresholds object (settings-overridable per Wave 1 exit Task 2); default 15
         // (DEFAULT_MIN_WORDS, the engine's own constant) when absent.
@@ -829,7 +855,12 @@ export function runGate(root, opts = {}) {
         const verdict = deriveVerdict(overlapConfig, hasFindings);
 
         let detail, evidence, next;
-        if (!hasFindings) {
+        if (corpora.length === 0) {
+          // ADR-0016: an empty corpus is a pass that says nothing was compared, never a silent one.
+          detail = 'nothing to compare: no source material on file (research packets, evidence-log excerpts, or context/prior-work/); overlap.no-corpus';
+          evidence = [];
+          next = null;
+        } else if (!hasFindings) {
           detail = 'no overlap findings against the local research corpus (' + corpora.length + ' corpus text(s) checked)';
           if (excluded > 0) {
             detail += '; ' + excluded + ' span(s) excluded as properly quoted';
