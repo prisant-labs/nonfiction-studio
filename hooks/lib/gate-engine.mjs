@@ -26,6 +26,7 @@ import {
 } from 'node:fs';
 import { join, relative } from 'node:path';
 import { stateDirOf, stateDirNameOf, chaptersDirOf } from './bible.mjs';
+import { proseOf, proseBoundaryAt } from './prose.mjs';
 import { computeCoverage, scanChapter, scanQuoteAnchors, computeQuoteFindings } from './claims-engine.mjs';
 import { measureBook, measureChapter, countWords, computeDrift } from './stylometry-engine.mjs';
 import { scrub } from './scrub-engine.mjs';
@@ -263,9 +264,11 @@ function loadChapters(root, chapterSlug) {
     names = readdirSync(chapterDir).filter(f => f.endsWith('.md')).sort();
   }
 
+  // ADR-0016 (adopting an existing book): every check measures prose only.
+  const boundary = proseBoundaryAt(root);
   return names.map(name => {
     const absPath = join(chapterDir, name);
-    const text = readFileSync(absPath, 'utf8');
+    const text = proseOf(readFileSync(absPath, 'utf8'), boundary);
     const file = relative(root, absPath).replace(/\\/g, '/');
     return { file, text };
   });

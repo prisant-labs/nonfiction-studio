@@ -21,6 +21,7 @@
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { DEFAULT_STATE_DIR, stateDirOf, stateDirNameOf, chaptersDirNameOf } from './bible.mjs';
+import { proseOf, proseBoundaryAt } from './prose.mjs';
 import { fileURLToPath } from 'node:url';
 
 import { parseEvidenceLog, parseSources } from './ledger.mjs';
@@ -249,13 +250,16 @@ export function checkWordCountCoherence(root) {
 
   const chaptersName = chaptersDirNameOf(root);
   const chaptersDir = join(root, chaptersName);
+  // ADR-0016 (adopting an existing book): progress.json records a count of prose only.
+  const boundary = proseBoundaryAt(root);
+  const where = boundary === null ? '' : ' above the prose boundary "' + boundary.replace(/\s+$/, '') + '"';
   for (const chEntry of progress.chapters) {
     if (!chEntry.slug || typeof chEntry.word_count !== 'number') continue;
     const chFile = join(chaptersDir, chEntry.slug + '.md');
     if (!existsSync(chFile)) continue;
     let chText;
     try {
-      chText = readFileSync(chFile, 'utf8');
+      chText = proseOf(readFileSync(chFile, 'utf8'), boundary);
     } catch {
       continue;
     }
@@ -266,7 +270,7 @@ export function checkWordCountCoherence(root) {
         path: chaptersName + '/' + chEntry.slug + '.md',
         message:
           'chapter ' + chEntry.slug + ': progress.json records ' + chEntry.word_count +
-          ' words but the file contains ' + actualCount + ' words (by stylometry tokenizer)'
+          ' words but the file contains ' + actualCount + ' words' + where + ' (by stylometry tokenizer)'
       });
     }
   }
@@ -950,8 +954,10 @@ export function runChecks(root) {
 
   // ---- 6. Orphan claim markers ----------------------------------------------
   // Uses claims-engine.mjs scanChapter to find [claim: EV-nnnn] markers that
-  // reference EV IDs absent from the ledger (same logic as ns-claims coverage).
+  // reference EV IDs absent from the ledger (same logic as ns-claims coverage), in prose only
+  // (ADR-0016, adopting an existing book), as ns-claims reads it.
   const chaptersName = chaptersDirNameOf(root);
+  const proseBoundary = proseBoundaryAt(root);
   const chaptersDir = join(root, chaptersName);
   let chapterFiles = [];
   if (existsSync(chaptersDir)) {
@@ -968,7 +974,7 @@ export function runChecks(root) {
     const absPath = join(chaptersDir, filename);
     let chText;
     try {
-      chText = readFileSync(absPath, 'utf8');
+      chText = proseOf(readFileSync(absPath, 'utf8'), proseBoundary);
     } catch {
       continue;
     }

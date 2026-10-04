@@ -14,6 +14,7 @@ import { join, relative, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
 import { findBookRoot, BibleError, chaptersDirNameOf } from '../hooks/lib/bible.mjs';
+import { proseOf, proseBoundaryAt } from '../hooks/lib/prose.mjs';
 import { parseEvidenceLog, parseSources } from '../hooks/lib/ledger.mjs';
 import { makeReport, addFinding, finalize } from '../hooks/lib/report.mjs';
 import {
@@ -91,6 +92,8 @@ try {
 
 const chaptersName = chaptersDirNameOf(root);
 const chapterDir = join(root, chaptersName);
+// ADR-0016 (adopting an existing book): every chapter read below measures prose only.
+const proseBoundary = proseBoundaryAt(root);
 if (!existsSync(chapterDir)) {
   process.stderr.write('ns-notes: chapters folder ' + chaptersName + '/ not found at ' + chapterDir + '\n');
   process.exit(2);
@@ -102,7 +105,7 @@ let chapters;
 try {
   chapters = chapterFiles.map((f) => {
     const absPath = join(chapterDir, f);
-    const text = readFileSync(absPath, 'utf8');
+    const text = proseOf(readFileSync(absPath, 'utf8'), proseBoundary);
     const relFile = relative(root, absPath).replace(/\\/g, '/');
     return { file: relFile, text };
   });

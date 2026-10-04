@@ -233,3 +233,31 @@ test('ns-scrub, ns-overlap and ns-status find the book\'s own chapters folder', 
     assert.ok(status.includes(slug), 'ns-status lists ' + slug);
   }
 });
+
+test('ns-scrub scans prose only: a template marker below the boundary is not a finding, above it is', () => {
+  const root = adopted('cli-scrub-boundary');
+  const ch01 = join(root, 'manuscript', 'ch01-the-first-question.md');
+  const original = readFileSync(ch01, 'utf8');
+  writeFileSync(ch01, original + '| [TODO] recheck the count | C1.4 | open |\n');
+  const below = cli('ns-scrub', ['--all', '--json'], root);
+  assert.doesNotMatch(below.stdout, /\[TODO\]/, 'the apparatus is not scanned');
+  writeFileSync(ch01, original.replace(FIXTURE_BOUNDARY, 'Still to check. [TODO]\n\n' + FIXTURE_BOUNDARY));
+  const above = cli('ns-scrub', ['--all', '--json'], root);
+  assert.match(above.stdout, /\[TODO\]/, 'the same marker in the prose is found');
+});
+
+test('ns-stylometry --measure counts prose only for a file in the chapters folder, and raw text elsewhere', () => {
+  const root = adopted('cli-measure');
+  const inside = join(root, 'manuscript', 'ch01-the-first-question.md');
+  const text = readFileSync(inside, 'utf8');
+  const outside = join(root, 'sample.md');
+  writeFileSync(outside, text);
+  const measured = (path) => {
+    const result = cli('ns-stylometry', ['--measure=' + path], root);
+    assert.equal(result.status, 0, result.stderr);
+    return JSON.parse(result.stdout).totalWords;
+  };
+  assert.equal(measured(inside), proseWords(text));
+  assert.equal(measured(outside), countWords(text));
+  assert.notEqual(proseWords(text), countWords(text), 'the fixture chapter has an apparatus to cut');
+});

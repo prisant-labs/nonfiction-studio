@@ -8,11 +8,11 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, rmSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 
 import * as prose from '../../hooks/lib/prose.mjs';
-import { ADOPTED_FIXTURE, FIXTURE_BOUNDARY, FIXTURE_CHAPTERS_DIR } from './adopted-books.mjs';
+import { ADOPTED_FIXTURE, FIXTURE_BOUNDARY, FIXTURE_CHAPTERS_DIR, adoptFixture } from './adopted-books.mjs';
 
 const HEADING = '## Drafting apparatus';
 
@@ -64,4 +64,17 @@ test('on the fixture, the boundary removes each apparatus table and leaves files
   assert.ok(!cut.includes('C1.1'), 'the apparatus table is not prose');
   const note = readFileSync(join(dir, 'authors-note.md'), 'utf8');
   assert.equal(prose.proseOf(note, FIXTURE_BOUNDARY), note);
+});
+
+test('proseBoundaryAt reads the adopted book\'s config, and is null for a book without one', () => {
+  const withBoundary = adoptFixture('prose-at-yes');
+  const without = adoptFixture('prose-at-no', { boundary: false });
+  try {
+    assert.equal(prose.proseBoundaryAt(withBoundary), FIXTURE_BOUNDARY);
+    assert.equal(prose.proseBoundaryAt(without), null);
+    assert.equal(prose.proseBoundaryAt(join(withBoundary, 'no-such-book')), null);
+  } finally {
+    rmSync(dirname(withBoundary), { recursive: true, force: true });
+    rmSync(dirname(without), { recursive: true, force: true });
+  }
 });
