@@ -30,8 +30,13 @@ const KNOWN_EVENTS = new Set([
 ]);
 
 // Required command pattern per the platform hook contract.
-// Every command entry in hooks.json must match this pattern exactly.
-const COMMAND_PATTERN = /^node \$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/[a-z-]+\.mjs$/;
+// Every command entry in hooks.json must match this pattern exactly. The placeholder is
+// quoted because the plugin system substitutes the install path before the shell runs the
+// command: unquoted, a path with a space splits into several words, and the platform's strict
+// validator (`claude plugin validate --strict`) rejects the unquoted form. The capture group
+// is the script path relative to the plugin root.
+const COMMAND_PATTERN = /^node "\$\{CLAUDE_PLUGIN_ROOT\}\/(hooks\/[a-z-]+\.mjs)"$/;
+const COMMAND_PATTERN_TEXT = '^node "${CLAUDE_PLUGIN_ROOT}/hooks/[a-z-]+\\.mjs"$';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -192,12 +197,13 @@ for (const event of eventNames) {
           findings.push(event + ': command entry "command" field must be a string');
           continue;
         }
-        // Command-string pattern: must be ^node ${CLAUDE_PLUGIN_ROOT}/hooks/[a-z-]+\.mjs$
-        // This is in addition to the script-existence stat below.
-        if (!COMMAND_PATTERN.test(entry.command)) {
+        // Command-string pattern (COMMAND_PATTERN_TEXT), checked before the script-existence
+        // stat below, which needs the path the pattern captures.
+        const commandMatch = COMMAND_PATTERN.exec(entry.command);
+        if (!commandMatch) {
           findings.push(
             event + ': command "' + entry.command + '" does not match required pattern ' +
-            '^node ${CLAUDE_PLUGIN_ROOT}/hooks/[a-z-]+\\.mjs$'
+            COMMAND_PATTERN_TEXT
           );
         }
         // SessionStart timeout pin: command entry timeout must be exactly 60.
@@ -208,15 +214,13 @@ for (const event of eventNames) {
             findings.push('SessionStart: command entry "timeout" must be exactly 60; got: ' + entry.timeout);
           }
         }
-        // Interpolate ${CLAUDE_PLUGIN_ROOT} to repo root and stat the script
-        const interpolated = entry.command.replace('${CLAUDE_PLUGIN_ROOT}', REPO_ROOT);
-        // Extract the node script path (command is: node <path>)
-        const parts = interpolated.trim().split(/\s+/);
-        if (parts[0] !== 'node' || parts.length < 2) {
-          findings.push(event + ': command must start with "node <script>"; got: ' + entry.command);
+        // Stat the script the pattern captured, resolved against the repo root. The path is
+        // taken from the capture rather than by splitting on whitespace, so a repo root whose
+        // path contains a space resolves correctly.
+        if (!commandMatch) {
           continue;
         }
-        const scriptPath = parts[1];
+        const scriptPath = join(REPO_ROOT, commandMatch[1]);
         if (!existsSync(scriptPath)) {
           findings.push(event + ': command script not found: ' + scriptPath + ' (from: ' + entry.command + ')');
         }
