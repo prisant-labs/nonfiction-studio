@@ -48,7 +48,7 @@ import {
 } from 'node:fs';
 import { join, resolve, sep, basename, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findBookRoot, stateDirOf, stateDirNameOf } from './lib/bible.mjs';
+import { findBookRoot, stateDirOf, stateDirNameOf, chaptersDirNameOf } from './lib/bible.mjs';
 import {
   resolveActiveAgent,
   checkAgentWriteConstraint,
@@ -725,11 +725,11 @@ if (isMain) {
     process.exit(0);
   }
 
-  // Step 3d: chapters/ targets - session-write flag plus optional snapshot.
-  if (
-    targetNorm === rootNorm + sep + 'chapters' ||
-    targetNorm.startsWith(rootNorm + sep + 'chapters' + sep)
-  ) {
+  // Step 3d: chapters-folder targets - session-write flag plus optional snapshot. The folder is
+  // the book's resolved chapters folder (ADR-0016, adopting an existing book), folded like the
+  // target (F-HK-13).
+  const chaptersDirNorm = rootNorm + sep + foldForCompare(chaptersDirNameOf(resolvedRoot));
+  if (targetNorm === chaptersDirNorm || targetNorm.startsWith(chaptersDirNorm + sep)) {
     // --- Session-write flag (_nonfiction-studio/gate/.session-write-flag) ---
     // Atomic write-then-rename; creating _nonfiction-studio/gate/ if needed.
     // Fail-open: flag write error is logged and the write is still allowed.

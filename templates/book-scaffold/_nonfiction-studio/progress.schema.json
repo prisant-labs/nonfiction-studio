@@ -25,8 +25,8 @@
         "properties": {
           "slug": {
             "type": "string",
-            "pattern": "^[0-9]{2}-[a-z0-9-]+$",
-            "description": "Two-digit ordinal plus kebab title, matches the chapter filename stem."
+            "pattern": "^[^./\\\\\\u0000-\\u001f][^/\\\\\\u0000-\\u001f]*$",
+            "description": "The chapter file's name without .md. A book the plugin created uses a two-digit ordinal plus kebab title; an adopted book (ADR-0016) keeps its own file names, so any name that is not hidden and has no path separator."
           },
           "title": { "type": "string" },
           "status": {

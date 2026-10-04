@@ -84,8 +84,11 @@ test('parseGateFilename: returns null when the timestamp segment is not the comp
   assert.equal(parseGateFilename('01-a.not-a-timestamp.json'), null);
 });
 
-test('parseGateFilename: returns null when there are more than three dot-segments', () => {
-  assert.equal(parseGateFilename('01-a.extra.20260810T091000Z.json'), null);
+test('parseGateFilename: a slug may contain dots and spaces; the timestamp is the second-to-last segment (ADR-0016)', () => {
+  assert.deepEqual(parseGateFilename('01-a.extra.20260810T091000Z.json'), { slug: '01-a.extra', timestamp: '20260810T091000Z' });
+  assert.deepEqual(parseGateFilename("Author's Note.20260810T091000Z.json"), { slug: "Author's Note", timestamp: '20260810T091000Z' });
+  assert.equal(parseGateFilename('.20260810T091000Z.json'), null, 'an empty slug is not a report');
+  assert.equal(parseGateFilename('01-a.20260810T091000Z.extra.json'), null, 'the timestamp must sit right before .json');
 });
 
 test('parseGateFilename: a slug that is a prefix of another slug never false-matches', () => {
@@ -751,8 +754,27 @@ test('linksNameChapter: returns false for blank, null, or non-string links', () 
   assert.equal(linksNameChapter(undefined, '03-the-signal'), false);
 });
 
-test('linksNameChapter: returns false when slug itself is not schema-shaped (defensive, never guesses)', () => {
-  assert.equal(linksNameChapter('chapters/not-a-slug.md', 'not-a-slug'), false);
+test('linksNameChapter: matches a free-form slug as a whole token (ADR-0016)', () => {
+  assert.equal(linksNameChapter('manuscript/ch01-the-first-question.md', 'ch01-the-first-question'), true);
+  assert.equal(linksNameChapter("manuscript/Author's Note.md", "Author's Note"), true);
+  assert.equal(linksNameChapter('manuscript/introduction-notes.md', 'introduction'), false);
+  assert.equal(linksNameChapter('manuscript/Intro_2.md', 'Intro'), false);
+});
+
+test('linksNameChapter: a dotted slug never attests the shorter slug it starts with, or ends with', () => {
+  assert.equal(linksNameChapter('manuscript/ch01.x.md', 'ch01.x'), true);
+  assert.equal(linksNameChapter('manuscript/ch01.x.md', 'ch01'), false);
+  assert.equal(linksNameChapter('manuscript/ch01.x.md', 'x'), false);
+  assert.equal(linksNameChapter('_nonfiction-studio/gate/ch01.20260717T154022Z.json', 'ch01'), true);
+  assert.equal(linksNameChapter('Signed off 03-the-signal.', '03-the-signal'), true);
+  assert.equal(linksNameChapter('chapters/Cafe-two.md', 'Cafe'), false);
+  assert.equal(linksNameChapter('chapters/Caf\u00e9.md', 'Caf'), false);
+});
+
+test('linksNameChapter: never matches an empty or non-string slug (defensive, never guesses)', () => {
+  assert.equal(linksNameChapter('chapters/x.md', ''), false);
+  assert.equal(linksNameChapter('chapters/x.md', '  '), false);
+  assert.equal(linksNameChapter('chapters/x.md', null), false);
 });
 
 // ---- isEligibleForFinal (THE SHARED ELIGIBILITY PREDICATE) -----------------

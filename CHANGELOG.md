@@ -90,6 +90,12 @@ This file is written from the commit history of the branch it ships from, not fr
   forms, the counter, and any chapter file name. The hook's prune also stopped treating another
   chapter's snapshots as its own when that chapter's name starts with the same text followed by a
   dot: chapter `ch01` used to prune, and could delete, the snapshots of `ch01.x`.
+- **Gating one chapter no longer prunes another chapter's gate reports.** The gate keeps the ten
+  newest timestamped reports per chapter under `_nonfiction-studio/gate/`. It matched them by
+  file-name prefix alone, so gating chapter `ch01` counted, and could delete, the reports of a
+  chapter named `ch01.x`. The prune now accepts only `<slug>.<timestamp>.json` for the chapter
+  being gated. The status board also parses a report's file name from the right, so a chapter
+  whose name contains dots keeps its gate verdict on the board.
 
 ## [0.1.1] - 2026-09-24
 

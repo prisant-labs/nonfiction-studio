@@ -25,7 +25,7 @@ import {
   readdirSync, unlinkSync
 } from 'node:fs';
 import { join, relative } from 'node:path';
-import { stateDirOf, stateDirNameOf } from './bible.mjs';
+import { stateDirOf, stateDirNameOf, chaptersDirOf } from './bible.mjs';
 import { computeCoverage, scanChapter, scanQuoteAnchors, computeQuoteFindings } from './claims-engine.mjs';
 import { measureBook, measureChapter, countWords, computeDrift } from './stylometry-engine.mjs';
 import { scrub } from './scrub-engine.mjs';
@@ -243,14 +243,15 @@ export function loadGateConfig(root, stderrFn) {
 }
 
 /**
- * Reads all chapter files from the book root, optionally filtered by slug.
+ * Reads all chapter files from the book's chapters folder (chapters/, or the folder an adopted
+ * book names, per ADR-0016), optionally filtered by slug.
  *
  * @param {string}      root        - absolute book root
  * @param {string|null} chapterSlug - single slug or null for all
  * @returns {{ file: string, text: string }[]} bible-relative file + text pairs
  */
 function loadChapters(root, chapterSlug) {
-  const chapterDir = join(root, 'chapters');
+  const chapterDir = chaptersDirOf(root);
   if (!existsSync(chapterDir)) return [];
 
   let names;
@@ -994,10 +995,12 @@ export function writeGateReport(root, report) {
  */
 function pruneGateReports(gateDir, slug) {
   const prefix = slug + '.';
-  const suffix = '.json';
 
+  // A file is this slug's report only when everything after "<slug>." is exactly a timestamp
+  // and ".json". A chapter slug may contain dots in an adopted book (ADR-0016), so a prefix
+  // match alone would let slug "ch01" claim, and prune, the reports of a chapter named "ch01.x".
   const files = readdirSync(gateDir)
-    .filter(f => f.startsWith(prefix) && f.endsWith(suffix))
+    .filter(f => f.startsWith(prefix) && /^\d{8}T\d{6}Z\.json$/.test(f.slice(prefix.length)))
     .sort(); // lexicographic = chronological for YYYYMMDDTHHMMSSZ
 
   if (files.length > 10) {

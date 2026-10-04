@@ -10,7 +10,7 @@
 import { readFileSync, readdirSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
-import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
+import { findBookRoot, BibleError, chaptersDirNameOf } from '../hooks/lib/bible.mjs';
 import { parseEvidenceLog } from '../hooks/lib/ledger.mjs';
 import { makeReport, addFinding, finalize } from '../hooks/lib/report.mjs';
 import {
@@ -79,15 +79,16 @@ try {
 
 // ---- chapter discovery ---------------------------------------------------------
 
-const chapterDir = join(root, 'chapters');
+const chaptersName = chaptersDirNameOf(root);
+const chapterDir = join(root, chaptersName);
 if (!existsSync(chapterDir)) {
-  process.stderr.write('ns-claims: chapters/ directory not found at ' + chapterDir + '\n');
+  process.stderr.write('ns-claims: chapters folder ' + chaptersName + '/ not found at ' + chapterDir + '\n');
   process.exit(2);
 }
 
 let chapterPaths;
 if (opts.chapter) {
-  // Single chapter by slug: look for chapters/<slug>.md
+  // Single chapter by slug: look for <chapters folder>/<slug>.md
   const p = join(chapterDir, opts.chapter + '.md');
   if (!existsSync(p)) {
     process.stderr.write('ns-claims: chapter not found: ' + p + '\n');
@@ -95,7 +96,7 @@ if (opts.chapter) {
   }
   chapterPaths = [p];
 } else {
-  // All chapters (--all or no scope flag): every .md file in chapters/, sorted by name
+  // All chapters (--all or no scope flag): every .md file in the chapters folder, sorted by name
   chapterPaths = readdirSync(chapterDir)
     .filter(f => f.endsWith('.md'))
     .sort()
@@ -123,7 +124,7 @@ if (opts.packets) {
     const relFile = relative(root, absPath).replace(/\\/g, '/');
     const slug = relFile.replace(/^chapters\//, '').replace(/\.md$/, '');
     const anchors = scanQuoteAnchors(text, ledgerEntries);
-    const packet = buildResearchPacket(slug, anchors);
+    const packet = buildResearchPacket(slug, anchors, chaptersName);
 
     try {
       mkdirSync(packetsDir, { recursive: true });

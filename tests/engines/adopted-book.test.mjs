@@ -11,10 +11,10 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, dirname, relative } from 'node:path';
 
-import { runGate } from '../../hooks/lib/gate-engine.mjs';
+import { runGate, writeGateReport } from '../../hooks/lib/gate-engine.mjs';
 import { runChecks } from '../../hooks/lib/doctor-engine.mjs';
 import { countWords } from '../../hooks/lib/stylometry-engine.mjs';
 import {
@@ -124,6 +124,23 @@ test('a single chapter with a free-form name can be gated by slug', () => {
   const { exitCode, report } = runGate(adopted('eng-slug'), { chapterSlug: 'authors-note' });
   assert.notEqual(exitCode, 2);
   assert.equal(report.chapter, 'authors-note');
+});
+
+test('pruning one chapter\'s gate reports never deletes another chapter\'s that share a prefix', () => {
+  const root = adopted('eng-prune');
+  writeFileSync(join(root, 'manuscript', 'ch01.md'), '# One\n\nA short chapter.\n');
+  writeFileSync(join(root, 'manuscript', 'ch01.x.md'), '# One, again\n\nAnother short chapter.\n');
+  const gateDir = join(root, '_nonfiction-studio', 'gate');
+  const others = [];
+  for (let i = 10; i < 22; i++) {
+    const name = 'ch01.x.20250101T0000' + i + 'Z.json';
+    others.push(name);
+    writeFileSync(join(gateDir, name), '{}\n');
+  }
+  const { report } = runGate(root, { chapterSlug: 'ch01' });
+  writeGateReport(root, report);
+  const left = readdirSync(gateDir);
+  for (const name of others) assert.ok(left.includes(name), 'kept ' + name);
 });
 
 // ---- the doctor -------------------------------------------------------------------------------

@@ -16,7 +16,8 @@
 //               field. See docs/adr/ADR-0007-agent-identity-resolution.md.
 
 import { sep, resolve } from 'node:path';
-import { stateDirNameOf } from './bible.mjs';
+import { stateDirNameOf, chaptersDirNameOf } from './bible.mjs';
+import { adoptionAt, PLUGIN_FILES } from './adoption.mjs';
 
 // ---------------------------------------------------------------------------
 // foldForCompare: case-fold a path for comparison only on case-insensitive
@@ -107,8 +108,8 @@ export function resolveAgentLabel(event) {
 //
 //   slug                 allowed prefixes            source of truth
 //   research-librarian   research/, <state-dir>/     agents/research-librarian.md:73-74
-//   drafting-partner     chapters/                    agents/drafting-partner.md:69-71
-//   line-editor          chapters/                    agents/line-editor.md:62-64
+//   drafting-partner     <chapters-dir>/              agents/drafting-partner.md:69-71
+//   line-editor          <chapters-dir>/              agents/line-editor.md:62-64
 //   structure-architect  structure/, research/        agents/structure-architect.md:67-69
 //   thesis-architect     context/, structure/         agents/thesis-architect.md:64-66
 //
@@ -124,18 +125,54 @@ export function resolveAgentLabel(event) {
 //   citation-manager    - a Phase 2 agent that does not exist on disk yet.
 //
 // STATE_DIR_SCOPE stands for the book's state folder, whose name is resolved
-// per book at check time (ADR-0015, state folder name), so no table entry ever
-// names a literal folder that a book might not use.
+// per book at check time (ADR-0015, state folder name), and CHAPTERS_DIR_SCOPE
+// for the book's chapters folder, resolved the same way (ADR-0016, adopting an
+// existing book), so no table entry ever names a literal folder that a book
+// might not use. A fixed chapters/ entry would deny the drafting agents'
+// legitimate writes to an adopted book's own chapters folder, and would leave a
+// stray chapters/ folder writable.
+//
+// Shared folders (ADR-0016): in an adopted book, a bible folder that also holds
+// the author's own files is listed in meta.json's adoption record. There, a
+// table entry naming the whole folder narrows to the plugin's own files in it
+// (PLUGIN_FILES in hooks/lib/adoption.mjs), so an agent can no longer reach the
+// author's files, such as an interview protocol in research/.
 // ---------------------------------------------------------------------------
 export const STATE_DIR_SCOPE = '<state-dir>/';
+export const CHAPTERS_DIR_SCOPE = '<chapters-dir>/';
 
 export const AGENT_WRITE_SCOPES = {
   'research-librarian': ['research/', STATE_DIR_SCOPE],
-  'drafting-partner': ['chapters/'],
-  'line-editor': ['chapters/'],
+  'drafting-partner': [CHAPTERS_DIR_SCOPE],
+  'line-editor': [CHAPTERS_DIR_SCOPE],
   'structure-architect': ['structure/', 'research/'],
   'thesis-architect': ['context/', 'structure/']
 };
+
+/**
+ * Resolves an agent's table entries to book-root-relative prefixes for one book: the
+ * placeholders become the book's folder names, and an entry naming a shared folder becomes that
+ * folder's plugin-owned files. A prefix ending in "/" is a folder; any other is one file.
+ */
+function resolvedPrefixes(agentSlug, bibleRoot, platformOverride) {
+  const shared = new Set(adoptionAt(bibleRoot).sharedFolders.map((s) => foldForCompare(s.folder, platformOverride)));
+  const prefixes = [];
+  for (const prefix of AGENT_WRITE_SCOPES[agentSlug]) {
+    if (prefix === STATE_DIR_SCOPE) {
+      prefixes.push(stateDirNameOf(bibleRoot) + '/');
+    } else if (prefix === CHAPTERS_DIR_SCOPE) {
+      prefixes.push(chaptersDirNameOf(bibleRoot) + '/');
+    } else {
+      const folder = prefix.slice(0, -1);
+      if (shared.has(foldForCompare(folder, platformOverride)) && PLUGIN_FILES[folder]) {
+        for (const file of PLUGIN_FILES[folder]) prefixes.push(folder + '/' + file);
+      } else {
+        prefixes.push(prefix);
+      }
+    }
+  }
+  return prefixes;
+}
 
 // ---------------------------------------------------------------------------
 // WEB_GATED_AGENTS (F-AG-02, web gate unenforced): agents that ship
@@ -187,13 +224,13 @@ export function checkAgentWriteConstraint(agentSlug, realTargetAbsPath, bibleRoo
 
   const rootNorm = foldForCompare(resolve(bibleRoot), platformOverride);
   const targetNorm = foldForCompare(resolve(realTargetAbsPath), platformOverride);
-  const prefixes = AGENT_WRITE_SCOPES[agentSlug].map((prefix) =>
-    prefix === STATE_DIR_SCOPE ? stateDirNameOf(bibleRoot) + '/' : prefix
-  );
+  const prefixes = resolvedPrefixes(agentSlug, bibleRoot, platformOverride);
 
+  // A prefix may span two segments (a plugin file in a shared folder), so its "/" separators
+  // become the platform's before the comparison against the resolved target.
   const inScope = prefixes.some((prefix) => {
     const bare = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix;
-    const full = rootNorm + sep + foldForCompare(bare, platformOverride);
+    const full = rootNorm + sep + foldForCompare(bare.split('/').join(sep), platformOverride);
     return targetNorm === full || targetNorm.startsWith(full + sep);
   });
 

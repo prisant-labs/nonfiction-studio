@@ -227,3 +227,12 @@ test('packet: a chapter with zero quote anchors still produces a deterministic, 
   assert.equal(packet1, packet2, 'zero-anchor packets are byte-identical across calls');
   assert.ok(/no.*quote.*anchor/i.test(packet1), 'packet says plainly that no quote anchors were found');
 });
+
+// ---- packet: names the book's own chapters folder (ADR-0016, adopting an existing book) ----
+
+test('packet: names the chapters folder it is given, and chapters/ by default', () => {
+  assert.match(buildResearchPacket('ch01', []), /`chapters\/ch01\.md`/);
+  const adopted = buildResearchPacket('ch01', [], 'manuscript');
+  assert.match(adopted, /`manuscript\/ch01\.md`/);
+  assert.doesNotMatch(adopted, /chapters\//);
+});

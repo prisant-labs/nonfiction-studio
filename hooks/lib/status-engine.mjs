@@ -58,22 +58,24 @@ import { stateDirOf } from './bible.mjs';
  *   per-chapter: <slug>.<YYYYMMDDTHHMMSSZ>.json
  *   whole-book:  all.<YYYYMMDDTHHMMSSZ>.json (slug is the literal string "all")
  * Returns null for anything else - for example last-gate.json (only two dot-separated
- * segments, no timestamp segment) or .session-write-flag. Deliberately strict: a filename
- * must split into EXACTLY three dot-separated segments, the last must be "json", and the
- * middle must match the compact YYYYMMDDTHHMMSSZ shape hooks/lib/gate-engine.mjs's own
- * formatTimestamp produces. This guards against a chapter slug that is a prefix of another
- * slug (for example "01-a" against a file actually named "01-ab.<ts>.json") ever
- * false-matching, since a chapter slug never contains a "." (the schema's own slug pattern,
- * templates/book-scaffold/_nonfiction-studio/progress.schema.json, permits only digits, lowercase
- * letters, and hyphens).
+ * segments, no timestamp segment) or .session-write-flag. The name is parsed from the right:
+ * the last dot-separated segment must be "json", the one before it must match the compact
+ * YYYYMMDDTHHMMSSZ shape hooks/lib/gate-engine.mjs's own formatTimestamp produces, and
+ * everything before that, joined back with its dots, is the slug. A chapter slug is the
+ * chapter's file name without .md, which in an adopted book may contain dots or spaces
+ * (ADR-0016, adopting an existing book), so the slug cannot be read as "the first segment".
+ * Because the slug is everything before the timestamp, a slug that is a prefix of another
+ * slug (for example "01-a" against a file named "01-ab.<ts>.json") never false-matches.
  *
  * @param {string} filename
  * @returns {{slug: string, timestamp: string}|null}
  */
 export function parseGateFilename(filename) {
   const parts = filename.split('.');
-  if (parts.length !== 3) return null;
-  const [slug, timestamp, ext] = parts;
+  if (parts.length < 3) return null;
+  const ext = parts[parts.length - 1];
+  const timestamp = parts[parts.length - 2];
+  const slug = parts.slice(0, -2).join('.');
   if (ext !== 'json') return null;
   if (!/^\d{8}T\d{6}Z$/.test(timestamp)) return null;
   if (!slug) return null;
@@ -227,10 +229,11 @@ export function extractDriftThreshold(report) {
 
 /**
  * The two-digit numeric prefix of a chapter slug (for example "01" from
- * "01-listening-before-speaking"), matching the schema's own slug pattern
- * (templates/book-scaffold/_nonfiction-studio/progress.schema.json: ^[0-9]{2}-[a-z0-9-]+$). Returns null
- * for a slug that does not start with that shape, rather than guessing: schema-required is not
- * schema-guaranteed against a hand-edited progress.json (the same defensive posture
+ * "01-listening-before-speaking"), the shape every chapter of a book the plugin created has.
+ * Returns null for a slug that does not start with that shape, rather than guessing: an
+ * adopted book's chapters keep their own file names (ADR-0016, adopting an existing book), so
+ * "introduction" or "ch01-the-first-question" has no number to show, and a hand-edited
+ * progress.json is never trusted to carry one (the same defensive posture
  * hooks/lib/statusline-engine.mjs's formatChapterSegment takes against the same file).
  *
  * @param {string} slug
@@ -505,21 +508,22 @@ export function validateDecisionEntry(entry) {
   return { valid: missing.length === 0, missing };
 }
 
-// A chapter slug, matching the schema's own pattern exactly
-// (templates/book-scaffold/_nonfiction-studio/progress.schema.json: ^[0-9]{2}-[a-z0-9-]+$).
-const CHAPTER_SLUG_RE = /^[0-9]{2}-[a-z0-9-]+$/;
-
 /**
  * Whether a decision entry's free-text `links` field names the given chapter
- * slug. Matches the slug as a whole token, bounded on both sides by either a
- * string edge or a character outside the slug alphabet (digits, lowercase
- * letters, hyphen) - so "03-the-signal" matches inside
- * "chapters/03-the-signal.md" and
- * "_nonfiction-studio/gate/03-the-signal.20260717T154022Z.json" (both real shapes used
- * in docs/formats/decisions.md's own worked examples) but never inside the
- * longer, different slug "03-the-signal-appendix". A slug not shaped like the
- * schema pattern never matches anything: this function gates a `final`
- * status, not a place to guess at a caller's typo.
+ * slug. A slug is the chapter file's name without `.md`, so since ADR-0016
+ * (adopting an existing book) it can be free-form ("ch01-the-first-question",
+ * "Author's Note", "ch01.x"). It matches as a whole token:
+ *   - before it: a string edge or a character that is not a letter, digit,
+ *     underscore, hyphen, or dot;
+ *   - after it: a string edge, such a character, or a dot that starts `.md`,
+ *     a gate or snapshot timestamp, or the end of a sentence.
+ * So "03-the-signal" matches inside "chapters/03-the-signal.md" and
+ * "_nonfiction-studio/gate/03-the-signal.20260717T154022Z.json" (both real
+ * shapes used in docs/formats/decisions.md's own worked examples), but never
+ * inside the longer, different slug "03-the-signal-appendix", and "ch01"
+ * never matches inside "ch01.x.md". An empty slug never matches anything:
+ * this function gates a `final` status, not a place to guess at a caller's
+ * typo.
  *
  * @param {string|null} links
  * @param {string} slug
@@ -527,11 +531,11 @@ const CHAPTER_SLUG_RE = /^[0-9]{2}-[a-z0-9-]+$/;
  */
 export function linksNameChapter(links, slug) {
   if (typeof links !== 'string' || links === '') return false;
-  if (typeof slug !== 'string' || !CHAPTER_SLUG_RE.test(slug)) return false;
-  const escaped = slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const boundary = '[^0-9a-z-]';
-  const pattern = '(^|' + boundary + ')' + escaped + '($|' + boundary + ')';
-  return new RegExp(pattern).test(links);
+  if (typeof slug !== 'string' || slug.trim() === '') return false;
+  const escaped = slug.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  const before = '(?:^|[^\\p{L}\\p{N}_.-])';
+  const after = '(?=$|[^\\p{L}\\p{N}_.-]|\\.(?:md(?![\\p{L}\\p{N}_-])|\\d{8}T\\d{6}|\\s|$))';
+  return new RegExp(before + escaped + after, 'u').test(links);
 }
 
 /**

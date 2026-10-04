@@ -92,6 +92,34 @@ test('progress.json: unknown-field preservation (S-08 Rule 2) -- extra field doe
   }
 });
 
+/** A golden-fixture progress.json whose first chapter carries the given slug. */
+function progressWithSlug(slug) {
+  const progress = JSON.parse(readFileSync(join(GOLDEN, '_nonfiction-studio', 'progress.json'), 'utf8'));
+  progress.chapters[0].slug = slug;
+  return JSON.stringify(progress);
+}
+
+function slugFindings(slug) {
+  const tempDir = makeTempBible('_nonfiction-studio/progress.json', progressWithSlug(slug));
+  try {
+    return runChecks(tempDir).findings.filter(f => f.type === 'schema.progress-violation' && /slug/.test(f.message));
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+test('progress.json: a free-form chapter slug from an adopted book is valid (ADR-0016)', () => {
+  for (const slug of ['ch01-the-first-question', 'introduction', "Author's Note", 'ch01.x', 'Part One_2']) {
+    assert.deepEqual(slugFindings(slug), [], slug);
+  }
+});
+
+test('progress.json: a slug that cannot be a chapter file name is still a named finding', () => {
+  for (const slug of ['', '.hidden', 'manuscript/ch01', 'a\\b', 'tab\there']) {
+    assert.ok(slugFindings(slug).length > 0, JSON.stringify(slug));
+  }
+});
+
 // ---------------------------------------------------------------------------
 // 2. _nonfiction-studio/meta.json - valid instance and schema_version type check
 // ---------------------------------------------------------------------------

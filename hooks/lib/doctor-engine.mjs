@@ -20,7 +20,7 @@
 
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
-import { DEFAULT_STATE_DIR, stateDirOf, stateDirNameOf } from './bible.mjs';
+import { DEFAULT_STATE_DIR, stateDirOf, stateDirNameOf, chaptersDirNameOf } from './bible.mjs';
 import { fileURLToPath } from 'node:url';
 
 import { parseEvidenceLog, parseSources } from './ledger.mjs';
@@ -40,8 +40,8 @@ const PROGRESS_SCHEMA_PATH = join(
 export const SUPPORTED_MAJOR = '2';
 
 // Scaffold-mandated paths every valid bible must contain.
-// (bible.mjs isBookRoot already guarantees the state folder's meta.json, context/, and
-//  chapters/ exist before the doctor runs; these additional paths are checked here.)
+// (bible.mjs isBookRoot already guarantees the state folder's meta.json, context/, and the
+//  chapters folder exist before the doctor runs; these additional paths are checked here.)
 // State-folder entries are relative to the state folder, whose name is resolved per book.
 const REQUIRED_STATE_FILES = [
   'progress.json',
@@ -247,7 +247,8 @@ export function checkWordCountCoherence(root) {
 
   if (!progress || !Array.isArray(progress.chapters)) return findings;
 
-  const chaptersDir = join(root, 'chapters');
+  const chaptersName = chaptersDirNameOf(root);
+  const chaptersDir = join(root, chaptersName);
   for (const chEntry of progress.chapters) {
     if (!chEntry.slug || typeof chEntry.word_count !== 'number') continue;
     const chFile = join(chaptersDir, chEntry.slug + '.md');
@@ -262,7 +263,7 @@ export function checkWordCountCoherence(root) {
     if (actualCount !== chEntry.word_count) {
       findings.push({
         type: 'coherence.word-count-mismatch',
-        path: 'chapters/' + chEntry.slug + '.md',
+        path: chaptersName + '/' + chEntry.slug + '.md',
         message:
           'chapter ' + chEntry.slug + ': progress.json records ' + chEntry.word_count +
           ' words but the file contains ' + actualCount + ' words (by stylometry tokenizer)'
@@ -542,7 +543,7 @@ function checkStyleProfile(root, config, findings, notices) {
 // ns-doctor's job here is to surface log corruption to the author, not to read
 // through it silently; see that doc's ns-doctor reader entry for the same note.
 //
-// For each chapters/*.md file on disk, compares its filesystem mtime against the
+// For each *.md file in the chapters folder on disk, compares its filesystem mtime against the
 // newest record whose `targets` array names it (parsed from the record's `ts`
 // field). A chapter with no covering record at all, or whose mtime is strictly
 // newer than its newest covering record, is an "uncovered writing window" --
@@ -559,7 +560,8 @@ function checkStyleProfile(root, config, findings, notices) {
 
 function checkAiUseLogCoverage(root, findings, notices) {
   const AI_USE_LOG_REL_PATH = stateDirNameOf(root) + '/ai-use-log.jsonl';
-  const chaptersDir = join(root, 'chapters');
+  const chaptersName = chaptersDirNameOf(root);
+  const chaptersDir = join(root, chaptersName);
   let chapterFiles = [];
   if (existsSync(chaptersDir)) {
     try {
@@ -571,9 +573,9 @@ function checkAiUseLogCoverage(root, findings, notices) {
     }
   }
 
-  // Map: "chapters/<file>.md" -> newest covering record's ts, as epoch ms (-Infinity = none yet).
+  // Map: "<chapters folder>/<file>.md" -> newest covering record's ts, as epoch ms (-Infinity = none yet).
   const newestCoveringTs = new Map();
-  for (const f of chapterFiles) newestCoveringTs.set('chapters/' + f, -Infinity);
+  for (const f of chapterFiles) newestCoveringTs.set(chaptersName + '/' + f, -Infinity);
 
   const logPath = join(stateDirOf(root), 'ai-use-log.jsonl');
   if (existsSync(logPath)) {
@@ -621,7 +623,7 @@ function checkAiUseLogCoverage(root, findings, notices) {
 
   let covered = 0;
   for (const f of chapterFiles) {
-    const rel = 'chapters/' + f;
+    const rel = chaptersName + '/' + f;
     const newestTs = newestCoveringTs.get(rel);
     const hasAnyRecord = newestTs !== -Infinity;
     if (hasAnyRecord) covered++;
@@ -949,7 +951,8 @@ export function runChecks(root) {
   // ---- 6. Orphan claim markers ----------------------------------------------
   // Uses claims-engine.mjs scanChapter to find [claim: EV-nnnn] markers that
   // reference EV IDs absent from the ledger (same logic as ns-claims coverage).
-  const chaptersDir = join(root, 'chapters');
+  const chaptersName = chaptersDirNameOf(root);
+  const chaptersDir = join(root, chaptersName);
   let chapterFiles = [];
   if (existsSync(chaptersDir)) {
     try {
@@ -976,7 +979,7 @@ export function runChecks(root) {
       if (!m.resolved && m.form === 'claim' && m.reason && m.reason.includes('not found')) {
         findings.push({
           type: 'claim-marker.orphan-ev',
-          path: 'chapters/' + filename + ':' + m.line,
+          path: chaptersName + '/' + filename + ':' + m.line,
           message: 'chapter ' + filename + ' line ' + m.line + ': [claim: ' + m.id +
                    '] references ' + m.id + ' which is absent from research/evidence-log.md'
         });

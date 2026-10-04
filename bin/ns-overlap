@@ -15,7 +15,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
-import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
+import { findBookRoot, BibleError, chaptersDirNameOf } from '../hooks/lib/bible.mjs';
 import { findOverlaps, discoverCorpora, DEFAULT_MIN_WORDS } from '../hooks/lib/overlap-engine.mjs';
 
 const USAGE =
@@ -28,8 +28,8 @@ const USAGE =
   'and reported as an informational count, never silently dropped.\n' +
   '\n' +
   'Flags:\n' +
-  '  --chapter=<slug>   scan a single chapter file chapters/<slug>.md\n' +
-  '  --all              scan all .md files in chapters/ (default when no scope flag is given)\n' +
+  '  --chapter=<slug>   scan a single chapter file <chapters folder>/<slug>.md\n' +
+  '  --all              scan all .md files in the chapters folder (default when no scope flag is given)\n' +
   '  --project=<dir>    override the book root to <dir>\n' +
   '  --min-words=<n>    minimum merged-span word length to flag (default ' + DEFAULT_MIN_WORDS + ')\n' +
   '  --json             emit the full report as JSON to stdout\n' +
@@ -97,9 +97,10 @@ try {
 
 // ---- chapter discovery -----------------------------------------------------------
 
-const chapterDir = join(root, 'chapters');
+const chaptersName = chaptersDirNameOf(root);
+const chapterDir = join(root, chaptersName);
 if (!existsSync(chapterDir)) {
-  process.stderr.write('ns-overlap: chapters/ directory not found at ' + chapterDir + '\n');
+  process.stderr.write('ns-overlap: chapters folder ' + chaptersName + '/ not found at ' + chapterDir + '\n');
   process.exit(2);
 }
 
@@ -112,7 +113,7 @@ if (opts.chapter) {
   }
   chapterPaths = [p];
 } else {
-  // --all or no scope flag: every .md file in chapters/, sorted by name
+  // --all or no scope flag: every .md file in the chapters folder, sorted by name
   chapterPaths = readdirSync(chapterDir)
     .filter(f => f.endsWith('.md'))
     .sort()

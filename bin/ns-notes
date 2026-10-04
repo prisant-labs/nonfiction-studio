@@ -13,7 +13,7 @@ import { readFileSync, readdirSync, existsSync, mkdirSync, writeFileSync } from 
 import { join, relative, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
-import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
+import { findBookRoot, BibleError, chaptersDirNameOf } from '../hooks/lib/bible.mjs';
 import { parseEvidenceLog, parseSources } from '../hooks/lib/ledger.mjs';
 import { makeReport, addFinding, finalize } from '../hooks/lib/report.mjs';
 import {
@@ -89,9 +89,10 @@ try {
 
 // ---- chapter discovery -----------------------------------------------------------
 
-const chapterDir = join(root, 'chapters');
+const chaptersName = chaptersDirNameOf(root);
+const chapterDir = join(root, chaptersName);
 if (!existsSync(chapterDir)) {
-  process.stderr.write('ns-notes: chapters/ directory not found at ' + chapterDir + '\n');
+  process.stderr.write('ns-notes: chapters folder ' + chaptersName + '/ not found at ' + chapterDir + '\n');
   process.exit(2);
 }
 
@@ -124,7 +125,7 @@ const productionDir = join(root, 'production');
 try {
   mkdirSync(productionDir, { recursive: true });
   writeFileSync(join(productionDir, 'endnotes.md'), buildEndnotesMarkdown(result), 'utf8');
-  writeFileSync(join(productionDir, 'bibliography.md'), buildBibliographyMarkdown(result), 'utf8');
+  writeFileSync(join(productionDir, 'bibliography.md'), buildBibliographyMarkdown(result, chaptersName), 'utf8');
   writeFileSync(join(productionDir, 'index-candidates.md'), buildIndexCandidatesMarkdown(result), 'utf8');
   writeFileSync(join(productionDir, 'apparatus-attention.md'), buildAttentionMarkdown(result), 'utf8');
 } catch (err) {
