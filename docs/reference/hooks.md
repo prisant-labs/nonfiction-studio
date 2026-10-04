@@ -38,8 +38,8 @@ on either side. All four fields below follow this same nested placement.
 On a found book project, `additionalContext` carries the five-element orientation block (gate
 debt, thesis, active chapter, top style rules, open-claims count), assembled by
 `hooks/lib/orientation.mjs`, and `sessionTitle` carries the book's title from `_nonfiction-studio/meta.json`.
-In an adopted book (ADR-0016, adopting an existing book), the block reads only the elements the book
-has adopted: the thesis needs `brief`, the style rules need `style`, and the open-claims count needs
+In an adopted book, per [ADR-0016 (adopting an existing book)](../adr/ADR-0016-adopting-an-existing-book.md),
+the block reads only the elements the book has adopted: the thesis needs `brief`, the style rules need `style`, and the open-claims count needs
 `claims`. An element that is not adopted is skipped without an error record, and a closing
 `Not adopted:` line names each one. Gate debt is measured against the book's own chapters folder.
 On the empty-state path (no book project found anywhere in the ancestor chain) or the
@@ -54,8 +54,8 @@ the empty-state path never runs. Its new-book pointer would otherwise lead to a 
 folder beside the real one.
 
 A fourth message path covers a folder with no book project that already holds writing: Markdown
-files outside hidden folders and files, other than a top-level `README.md` (ADR-0016, adopting an
-existing book). A hidden name begins with a dot, as in `.git/`, `.claude/` or `.github/`; such
+files outside hidden folders and files, other than a top-level `README.md`, per
+[ADR-0016 (adopting an existing book)](../adr/ADR-0016-adopting-an-existing-book.md). A hidden name begins with a dot, as in `.git/`, `.claude/` or `.github/`; such
 folders hold tool state, not the author's writing. `additionalContext` then names
 `/nonfiction-studio:nfs-adopt`, which adopts the writing in place after a plan and an explicit yes.
 It never names the new-book flow or `nfs-start`, because starting a new book there would set up
