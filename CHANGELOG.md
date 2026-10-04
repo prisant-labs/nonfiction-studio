@@ -14,9 +14,9 @@ This file is written from the commit history of the branch it ships from, not fr
   yes; the author's files stay canonical and untouched. Word counts, snapshots, the AI-use log,
   the status board, and the gate's prose checks work at once. The style, brief, structure and
   claims elements are adopted one at a time, or never, and a book's own claim ledger is not
-  converted. A book can name a heading after which its chapter files hold no prose. No code
-  changes yet; a guard against stamping a new book over existing writing lands first, and the
-  adoption wave lands in its own pull request.
+  converted. A book can name a heading after which its chapter files hold no prose. The guard
+  against stamping a new book over existing writing has landed (see Fixed); adoption itself is
+  not implemented yet.
 - **ADR-0015 (state folder name), accepted 2026-09-30.** The record decides that each book's
   machine-managed state folder defaults to `_nonfiction-studio/` instead of `.studio/`. The new
   name identifies the plugin that owns the folder and stays visible in file browsers, and the
