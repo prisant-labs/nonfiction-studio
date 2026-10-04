@@ -14,9 +14,41 @@ This file is written from the commit history of the branch it ships from, not fr
   yes; the author's files stay canonical and untouched. Word counts, snapshots, the AI-use log,
   the status board, and the gate's prose checks work at once. The style, brief, structure and
   claims elements are adopted one at a time, or never, and a book's own claim ledger is not
-  converted. A book can name a heading after which its chapter files hold no prose. No code
-  changes yet; a guard against stamping a new book over existing writing lands first, and the
-  adoption wave lands in its own pull request.
+  converted. A book can name a heading after which its chapter files hold no prose. The
+  implementation is described in the entries below.
+- **`nfs-adopt`, a new skill: adopt an existing book in place** (ADR-0016). It plans with
+  `ns-doctor --adopt-plan`, shows what it will add, what works at once and what stays
+  unadopted, and only on an explicit yes writes the state folder, its README, and
+  `nonfiction-studio.json` naming the book's own chapters folder. It never changes an author
+  file, and it states how to undo the adoption. `nfs-adopt style`, `brief` or `structure` then
+  takes on one more element, asks once before the plugin writes into a folder that holds the
+  author's files, and hands off to `nfs-capture-voice`, `nfs-interview` or `nfs-outline`.
+  Adopting `claims` is not available yet, so claim coverage, fact-checking, the apparatus and
+  agent drafting stay unavailable in an adopted book.
+- **`ns-doctor --adopt-plan [--chapters-dir=<name>]`, a read-only adoption plan** (ADR-0016).
+  For one directory, without walking up, it reports the candidate chapters folders and their
+  chapters with titles and word counts, a repeated trailing heading to propose as the prose
+  boundary, bible folders that already hold the author's files, files that look like the
+  author's own claim ledger, the README's title, any state folder or pointer already there, and
+  uncommitted git changes. Its JSON is byte-identical across runs.
+- **The pointer can name the chapters folder** (ADR-0016). `nonfiction-studio.json` may hold
+  `"chapters_dir"` as well as, or instead of, `"state_dir"`. The name follows the state
+  folder's name rule, and may not be a bible folder other than the chapters folder, `.git`,
+  `.claude` or the state folder. Every hook, CLI and engine reads chapters from that folder,
+  and the drafting agents' write scope follows it.
+- **A prose boundary** (ADR-0016). `config.json` may set
+  `"prose": {"ends_at_heading": "## Drafting apparatus"}`; everything from the first line equal
+  to that heading to the end of a chapter file is working material, never counted, scored or
+  scanned. One function, `hooks/lib/prose.mjs`, applies it wherever a chapter is read: word
+  counts, the gate, the doctor, and the chapter loops of the CLIs. A book without the setting
+  is measured exactly as before, and snapshots still copy the whole file.
+- **The adoption record** (ADR-0016). An adopted book's `meta.json` carries an `adoption`
+  object: the date, each element's state, and the bible folders shared with the author's files.
+  The doctor reports each unadopted element as an `element-not-adopted` notice and reads none
+  of its files; a malformed record is a finding. The gate skips `claim_coverage` and
+  `quote_fidelity` without `claims`, and `stylometry` without `style`, naming the element. The
+  session start's orientation block ends with a `Not adopted:` line. In a shared folder, agent
+  write scopes narrow to the plugin's own files, so the author's files there stay out of reach.
 - **ADR-0015 (state folder name), accepted 2026-09-30.** The record decides that each book's
   machine-managed state folder defaults to `_nonfiction-studio/` instead of `.studio/`. The new
   name identifies the plugin that owns the folder and stays visible in file browsers, and the
@@ -57,6 +89,29 @@ This file is written from the commit history of the branch it ships from, not fr
 - A `state_dir` key in the personal settings file `.claude/nonfiction-studio.local.md` is
   dropped with a warning that names `nonfiction-studio.json`, because the folder's name belongs
   to the book, not to one author's settings.
+- **Skills stop on an element the book has not adopted** (ADR-0016). The shared "Locate the
+  state folder" section also resolves the chapters folder (`<chapters-dir>`), reads the
+  adoption record, and stops before any write when an element on the skill's new "Elements
+  this skill needs:" line is not adopted, naming `nfs-adopt <element>`. The files of any other
+  unadopted element are treated as absent, because in an adopted book they are the author's.
+  `nfs-build-apparatus` now carries the section, for its claims stop. Skills and agents name
+  `<chapters-dir>/` instead of `chapters/`, and `check-state-folder-stanza.mjs` enforces the
+  section, the Elements line and the new placeholder.
+- **Chapter file names can be free-form** (ADR-0016). An adopted book keeps its own file names,
+  such as `introduction.md` or `ch01-the-first-question.md`. The progress schema accepts any
+  name that is not hidden and has no path separator, the chapter-list registry reads any slug,
+  and a decision entry can attest `final` for any slug, matched as a whole token.
+- **`overlap` says when it had nothing to compare against.** In any book, an empty source corpus
+  is still a pass, but its detail now says that nothing was compared, rather than reporting a
+  clean result over zero texts. In a book that has not adopted `claims`, `research/` is left out
+  of the corpus.
+- **`nfs-start` offers adoption first in a folder of existing writing**, in place of a new book.
+  In an adopted book, it offers adopting another element in place of a new book, and marks the
+  paths whose elements are missing instead of hiding them. `nfs-new-book` stops in an adopted
+  book.
+- **The Stop hook's thesis-alignment prompt skips without a thesis.** The prompt is told to
+  reply with a skip, naming `nfs-adopt structure`, when its input states no thesis to compare
+  against. A prompt hook cannot read the adoption record, so this skip lives in the prompt text.
 
 ### Fixed
 
@@ -78,11 +133,11 @@ This file is written from the commit history of the branch it ships from, not fr
   with no book project holds existing writing when it contains Markdown files outside hidden
   folders and files (names beginning with a dot), other than a top-level `README.md`; ADR-0016 (adopting an existing book)
   records this definition. In such a folder, the skill's first check now stops and writes
-  nothing. It explains that adopting an existing book is not available yet, suggests an empty
-  folder for a new book, and names `nfs-quick-scan` for a first look at the writing. The
-  SessionStart hook recognizes the same folders through the new `hooks/lib/existing-writing.mjs`.
-  It sends a message there that names neither the new-book flow nor `nfs-start`, in place of
-  the two-sentence D-17 (guided front door) message. Adoption itself lands in a later release.
+  nothing. It names `nfs-adopt`, which adopts the writing in place, and suggests an empty folder
+  for a new book. The SessionStart hook recognizes the same folders through the new
+  `hooks/lib/existing-writing.mjs`. It sends a message there that names `nfs-adopt` and neither
+  the new-book flow nor `nfs-start`, in place of the two-sentence D-17 (guided front door)
+  message.
 - **`nfs-doctor` no longer reports every chapter snapshot as badly named.** The PreToolUse hook
   writes snapshot timestamps with milliseconds and adds a `-N` counter on a collision, but doctor
   check 10 accepted only whole seconds and no counter. After any chapter overwrite, the doctor

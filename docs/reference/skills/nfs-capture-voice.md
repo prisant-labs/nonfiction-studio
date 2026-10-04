@@ -58,7 +58,7 @@ The skill writes no `_nonfiction-studio/` state and no `context/samples/` files 
 
 The skill runs six steps in order.
 
-Before its first step, the skill locates the state folder: it reads `nonfiction-studio.json` at the book root, uses `_nonfiction-studio/` when that file does not exist, and stops without writing when the pointer is invalid or an unpointed state folder is found.
+Before its first step, the skill locates the state folder and the chapters folder: it reads `nonfiction-studio.json` at the book root, uses `_nonfiction-studio/` and `chapters/` for whatever that file does not name, and stops without writing when the pointer is invalid or an unpointed state folder is found. It then reads the adoption record in the state folder's `meta.json`, per [ADR-0016 (adopting an existing book)](../../adr/ADR-0016-adopting-an-existing-book.md). It needs `style`: when the book has not adopted it, the skill stops before its first write and names `/nonfiction-studio:nfs-adopt` with the missing element. In an adopted book, it treats the files of every other element the book has not adopted as absent, because such a file is the author's own.
 
 1. **Existing-profile check.** Uses a Bash tool call to detect whether `context/style-profile.md` exists. If so, offers re-capture or augmentation. States the profile's purpose in plain terms in both branches.
 

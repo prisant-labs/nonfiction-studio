@@ -60,7 +60,7 @@ Ledger writes are append-only. A partial session is safe: entries written before
 
 The skill runs five steps. Step 2 executes only when a chapter argument is supplied.
 
-Before its first step, the skill locates the state folder: it reads `nonfiction-studio.json` at the book root, uses `_nonfiction-studio/` when that file does not exist, and stops without writing when the pointer is invalid or an unpointed state folder is found.
+Before its first step, the skill locates the state folder and the chapters folder: it reads `nonfiction-studio.json` at the book root, uses `_nonfiction-studio/` and `chapters/` for whatever that file does not name, and stops without writing when the pointer is invalid or an unpointed state folder is found. It then reads the adoption record in the state folder's `meta.json`, per [ADR-0016 (adopting an existing book)](../../adr/ADR-0016-adopting-an-existing-book.md). It needs `claims`: when the book has not adopted it, the skill stops before its first write and names `/nonfiction-studio:nfs-adopt` with the missing element. Adopting `claims` is not available yet, so in an adopted book this skill always stops. In an adopted book, it treats the files of every other element the book has not adopted as absent, because such a file is the author's own.
 
 1. **Outline probe (first tool call after the state folder is located).** Uses a Bash tool call to test whether `structure/outline.md` is present. The output is a binary token: `NO_OUTLINE` halts chapter-scoped sessions immediately and routes to `nfs-outline`; for un-scoped sessions it warns and permits proceeding on explicit author confirmation; `HAS_OUTLINE` continues. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
 

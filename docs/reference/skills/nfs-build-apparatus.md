@@ -52,7 +52,9 @@ The skill writes no files itself. All writes are performed by `bin/ns-notes`, al
 
 ## Flow Summary
 
-The skill runs three steps.
+Before its first step, the skill locates the state folder and the chapters folder: it reads `nonfiction-studio.json` at the book root, uses `_nonfiction-studio/` and `chapters/` for whatever that file does not name, and stops without writing when the pointer is invalid or an unpointed state folder is found. It then reads the adoption record in the state folder's `meta.json`, per [ADR-0016 (adopting an existing book)](../../adr/ADR-0016-adopting-an-existing-book.md). It needs `claims`: when the book has not adopted it, the skill stops before its first write and names `/nonfiction-studio:nfs-adopt` with the missing element. Adopting `claims` is not available yet, so in an adopted book this skill always stops. The apparatus reads the claims element's ledger, so it has nothing to build from in a book without it.
+
+The skill then runs three steps.
 
 1. **Resolve the plugin root.** Reads `installed_plugins.json` in the Claude config directory first (a marketplace install, verified by confirming `bin/ns-stylometry` exists under the candidate path; the newest installed version wins if more than one is present), then a local self-marketplace entry in `settings.json`, then a plugins-cache scan (versioned and legacy layouts), then the current working directory. The same resolver `nfs-new-book` and every other CLI-backed skill uses. If nothing resolves, the skill halts and names the config directory and the `installed_plugins.json` path it attempted.
 

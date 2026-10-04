@@ -66,7 +66,7 @@ The skill writes no `_nonfiction-studio/` state. Craft-model selection belongs t
 
 The skill runs five steps. The scope argument determines which steps execute.
 
-Before its first step, the skill locates the state folder: it reads `nonfiction-studio.json` at the book root, uses `_nonfiction-studio/` when that file does not exist, and stops without writing when the pointer is invalid or an unpointed state folder is found.
+Before its first step, the skill locates the state folder and the chapters folder: it reads `nonfiction-studio.json` at the book root, uses `_nonfiction-studio/` and `chapters/` for whatever that file does not name, and stops without writing when the pointer is invalid or an unpointed state folder is found. It then reads the adoption record in the state folder's `meta.json`, per [ADR-0016 (adopting an existing book)](../../adr/ADR-0016-adopting-an-existing-book.md). It needs `brief` and `structure`: when the book has not adopted all of them, the skill stops before its first write and names `/nonfiction-studio:nfs-adopt` with the missing element. In an adopted book, it treats the files of every other element the book has not adopted as absent, because such a file is the author's own.
 
 1. **Confirmed-brief probe.** Uses a Bash tool call to test whether `context/brief.md` exists and contains no DRAFT-block markers. The output is a binary token: `UNCONFIRMED` halts immediately and routes to `nfs-interview`; `CONFIRMED` continues. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
 
