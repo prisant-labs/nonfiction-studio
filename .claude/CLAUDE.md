@@ -2,14 +2,14 @@
 
 Operating guide for AI coding agents (and humans) working IN this repository - the
 plugin's own source tree, not a book project built with it. If you are looking for
-author-facing usage, start at [README.md](README.md) instead.
+author-facing usage, start at [README.md](../README.md) instead.
 
 ## What this repo is
 
 This is the source for **Nonfiction Studio**, an open-source Claude Code plugin that turns
 Claude into a governed non-fiction book studio: specialist subagents draft, a plain-Markdown
 project bible holds the truth, and a deterministic quality gate decides what counts as done.
-See [README.md](README.md) for the author-facing pitch and [docs/README.md](docs/README.md)
+See [README.md](../README.md) for the author-facing pitch and [docs/README.md](../docs/README.md)
 for the full documentation index.
 
 ## Layout
@@ -44,7 +44,7 @@ There is no `npm test`. Two suites plus the Tier A checker battery are the whole
 
 1. `node scripts/test-engines.mjs` and `node scripts/test-fixtures.mjs` - the unit and
    fixture suites.
-2. Every `run:` line in [.github/workflows/tier-a.yml](.github/workflows/tier-a.yml), in
+2. Every `run:` line in [.github/workflows/tier-a.yml](../.github/workflows/tier-a.yml), in
    order. Read that file and enumerate its steps directly rather than globbing a directory -
    `scripts/checks/` also holds library modules with no standalone check of their own, so a
    glob over that directory runs things that are not checks and misses steps that live
@@ -62,7 +62,7 @@ means a determinism bug (see below), not a flaky runner.
 
 Tier B (`.github/workflows/tier-b.yml`) is separate: manual dispatch only, maintainer-only,
 authenticated with an OAuth token minted from the maintainer's own subscription rather than an
-API key, per [ADR-0010 (Tier B trigger and credential)](docs/adr/ADR-0010-tier-b-trigger-and-credential.md).
+API key, per [ADR-0010 (Tier B trigger and credential)](../docs/adr/ADR-0010-tier-b-trigger-and-credential.md).
 It never blocks a pull request, and only someone with write access to the repository (in
 practice, the maintainer) can dispatch it on GitHub. As a
 contributor you can still run its two scripts locally against your own `claude` CLI login:
@@ -85,7 +85,7 @@ for a keyless run that spends nothing.
   structural coercions) can raise `gate.mode` toward `block`, but settings can never un-coerce
   a structurally-coerced check back out of `warn`. A settings-file warning on one key must
   never silence an unrelated, validly-configured control. Read
-  [ADR-0013 (wave 1 exit surfaces)](docs/adr/ADR-0013-wave-1-exit-surfaces.md) before changing
+  [ADR-0013 (wave 1 exit surfaces)](../docs/adr/ADR-0013-wave-1-exit-surfaces.md) before changing
   settings, gate, or routing-enforcement behavior.
 - **Determinism.** Where a CLI's reference page promises byte-identical output (ns-status,
   ns-overlap `--json`, and the ns-claims / ns-notes regenerations), keep that promise: no

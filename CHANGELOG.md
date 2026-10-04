@@ -57,6 +57,11 @@ This file is written from the commit history of the branch it ships from, not fr
 - A `state_dir` key in the personal settings file `.claude/nonfiction-studio.local.md` is
   dropped with a warning that names `nonfiction-studio.json`, because the folder's name belongs
   to the book, not to one author's settings.
+- **The contributor guide for coding agents moved from `CLAUDE.md` to `.claude/CLAUDE.md`.** The
+  repository root is also the plugin root, and Claude Code's strict plugin validator now flags a
+  `CLAUDE.md` there, because a plugin cannot ship context that way. Claude Code still loads the
+  file as project instructions from its new place. `AGENTS.md` stays at the root as the mirror
+  for other agent tools.
 
 ### Fixed
 
@@ -83,6 +88,13 @@ This file is written from the commit history of the branch it ships from, not fr
   SessionStart hook recognizes the same folders through the new `hooks/lib/existing-writing.mjs`.
   It sends a message there that names neither the new-book flow nor `nfs-start`, in place of
   the two-sentence D-17 (guided front door) message. Adoption itself lands in a later release.
+- **Every hook command now quotes `${CLAUDE_PLUGIN_ROOT}`.** The plugin system substitutes the
+  install path before the shell runs a hook, so an install path containing a space split each
+  command into several words and every hook failed. Claude Code's strict plugin validator now
+  rejects the unquoted form, which failed Tier A's platform-validation step on every pull
+  request. `scripts/check-hooks-schema.mjs` now requires the quoted form, and it takes each
+  script path from its pattern match, so a checkout whose path contains a space no longer
+  breaks it. The hook-starter template follows the same form.
 
 ## [0.1.1] - 2026-09-24
 

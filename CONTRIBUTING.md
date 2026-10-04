@@ -139,7 +139,7 @@ This regenerates `scripts/checks/workspace-refs-manifest.json` (sha256 hashes on
 
 - [`docs/architecture.md`](docs/architecture.md) - how the plugin's pieces fit together.
 - [`docs/README.md`](docs/README.md) - the documentation index: a reference page for every skill, subagent, and CLI.
-- [`CLAUDE.md`](CLAUDE.md) - project-specific guidance for an AI assistant working in this repo.
+- [`.claude/CLAUDE.md`](.claude/CLAUDE.md) - project-specific guidance for an AI assistant working in this repo; [`AGENTS.md`](AGENTS.md) mirrors it for other agent tools.
 - [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) - the standards this project expects.
 - [`SECURITY.md`](SECURITY.md) - how to report a vulnerability privately.
 - [`docs/adr/`](docs/adr/) - the full architecture decision record set.
