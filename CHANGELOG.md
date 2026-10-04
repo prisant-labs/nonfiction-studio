@@ -83,6 +83,13 @@ This file is written from the commit history of the branch it ships from, not fr
   SessionStart hook recognizes the same folders through the new `hooks/lib/existing-writing.mjs`.
   It sends a message there that names neither the new-book flow nor `nfs-start`, in place of
   the two-sentence D-17 (guided front door) message. Adoption itself lands in a later release.
+- **`nfs-doctor` no longer reports every chapter snapshot as badly named.** The PreToolUse hook
+  writes snapshot timestamps with milliseconds and adds a `-N` counter on a collision, but doctor
+  check 10 accepted only whole seconds and no counter. After any chapter overwrite, the doctor
+  reported a `snapshot.bad-name` finding and exited 1. The check now accepts both timestamp
+  forms, the counter, and any chapter file name. The hook's prune also stopped treating another
+  chapter's snapshots as its own when that chapter's name starts with the same text followed by a
+  dot: chapter `ch01` used to prune, and could delete, the snapshots of `ch01.x`.
 
 ## [0.1.1] - 2026-09-24
 

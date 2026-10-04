@@ -58,7 +58,7 @@ Alternate entry points:
 | `_nonfiction-studio/meta.json` | Step 3 (via engine) | Schema-version check; required fields (schema_version, created, plugin_version_at_creation) |
 | `_nonfiction-studio/progress.json` | Step 3 (via engine) | Schema validation against `templates/book-scaffold/_nonfiction-studio/progress.schema.json` |
 | `_nonfiction-studio/config.json` | Step 3 (via engine) | Shape check (version integer, gate object, gate.mode enum); config-coercion notice |
-| `_nonfiction-studio/snapshots/` | Step 3 (via engine) | Filename conformance check against `<slug>.<YYYYMMDDTHHMMSSZ>.md` pattern |
+| `_nonfiction-studio/snapshots/` | Step 3 (via engine) | Filename conformance check against `<slug>.<YYYYMMDDTHHMMSS[mmm]Z>[-N].md` pattern |
 | `research/evidence-log.md` | Step 3 (via engine) | EV grammar (required fields, enum values, SRC ID format); orphan-marker cross-reference |
 | `research/sources.md` | Step 3 (via engine) | SRC grammar (type enum, retrieval-status enum); SRC cross-reference check |
 | `chapters/*.md` | Step 3 (via engine) | Scanned for `[claim: EV-nnnn]` markers in the orphan-marker check |
@@ -134,7 +134,7 @@ The engine runs twelve checks in order. The `type` prefix of each finding identi
 | Orphan SRC references | 7 | `src-ref` | SRC IDs referenced in EV entries but absent from sources.md; SRC IDs defined in sources.md but referenced by no EV entry |
 | Word-count coherence | 8 | `coherence` | Chapter word count in progress.json matches the file on disk (single authority: stylometry tokenizer per TSK-029b (state-coherence gate check)) |
 | Config-coercion notice | 9 | `config-coercion` | Reports `thesis_alignment.mode: block` as a notice (informational; never affects exit code; D-03 (layered Stop gate) coercion happens at gate time, not here) |
-| Snapshot naming | 10 | `snapshot` | Files in `_nonfiction-studio/snapshots/` match the pattern `<slug>.<YYYYMMDDTHHMMSSZ>.md` |
+| Snapshot naming | 10 | `snapshot` | Files in `_nonfiction-studio/snapshots/` match the pattern `<slug>.<YYYYMMDDTHHMMSS[mmm]Z>[-N].md` |
 | Style profile structure | 11 | `style-profile` | `context/style-profile.md` (F-CI-08, voice quality unchecked, deterministic half): a pre-capture stub is a notice unless `config.json` already carries a stylometry baseline (then a finding); once populated, all seven sections present and in order, the `Baseline reference` block's three required fields, agreement with `config.json`'s stylometry baseline when one exists, and Exemplars path resolution |
 | ai-use-log coverage | 12 | `ai-use-log` | `_nonfiction-studio/ai-use-log.jsonl` (Task 5, Wave 1 exit: chat compliance parity): parsed tolerantly, a non-blank line that fails to parse as JSON is a finding naming its line number; per `chapters/*.md` file, a mtime newer than its newest covering record (or no covering record at all) is an "uncovered writing window" notice; the coverage fraction ("ai-use-log covers N of M chapters with writes") is always stated as a notice |
 
@@ -151,7 +151,7 @@ When exit 1 is returned, findings are grouped by the prefix of their `type` fiel
 | `claim-marker` | Orphan claim markers | Run `/nonfiction-studio:nfs-fact-check <slug>` to reconcile chapter markers and the evidence ledger. |
 | `src-ref` | Orphan SRC references | Run `/nonfiction-studio:nfs-research` to add the missing SRC entry, or `/nonfiction-studio:nfs-fact-check` to reconcile cross-references. |
 | `coherence` | Word-count coherence | This typically self-resolves when the PostToolBatch hook runs on the next chapter write. If the mismatch persists, check whether a manual edit bypassed the hook. |
-| `snapshot` | Snapshot naming | Rename the file in `_nonfiction-studio/snapshots/` to match the pattern `<slug>.<YYYYMMDDTHHMMSSZ>.md`. |
+| `snapshot` | Snapshot naming | Rename the file in `_nonfiction-studio/snapshots/` to match the pattern `<slug>.<YYYYMMDDTHHMMSS[mmm]Z>[-N].md`. |
 | `style-profile` | Style profile structure | Edit `context/style-profile.md` to add the named missing section, reorder sections, fill in the named `Baseline reference` field, or fix the named `Exemplars` path. A `captured` or `sample_count` disagreement, or a stub sitting alongside an existing `config.json` baseline, typically means re-running `/nonfiction-studio:nfs-capture-voice` to resynchronize both files. |
 | `ai-use-log` | AI use log | Edit or remove the named line (by line number) in `_nonfiction-studio/ai-use-log.jsonl`; every other line is unaffected, since the file is append-only and each line is an independent record. |
 

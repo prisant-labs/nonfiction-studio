@@ -66,8 +66,11 @@ const EV_CONFIDENCE_VALID = new Set(['high', 'medium', 'low']);
 const SRC_TYPE_VALID = new Set(['book', 'article', 'web', 'interview', 'dataset', 'report', 'other']);
 const SRC_RETRIEVAL_VALID = new Set(['stable', 'unstable', 'unverifiable']);
 
-// Snapshot naming pattern: <slug>.<YYYYMMDDTHHMMSSZ>.md
-const SNAPSHOT_NAME_RE = /^[a-z0-9][a-z0-9-]*\.[0-9]{8}T[0-9]{6}Z\.md$/;
+// Snapshot naming pattern: <slug>.<YYYYMMDDTHHMMSS[mmm]Z>[-N].md. The slug is the chapter's file
+// name without .md, which may be any name in an adopted book (ADR-0016). The timestamp has whole
+// seconds or, as hooks/pre-tool-use.mjs writes it, milliseconds; -N is that hook's collision
+// counter. tests/hooks/snapshot-naming.test.mjs pins this against the hook's real output.
+const SNAPSHOT_NAME_RE = /^[^.].*\.[0-9]{8}T[0-9]{6}(?:[0-9]{3})?Z(?:-[0-9]+)?\.md$/;
 
 // Source-ID pattern
 const SRC_ID_RE = /^SRC-\d{4}$/;
@@ -1034,7 +1037,7 @@ export function runChecks(root) {
           type: 'snapshot.bad-name',
           path: SD + '/snapshots/' + fname,
           message: 'snapshot file "' + fname + '" does not match naming convention ' +
-                   '<slug>.<YYYYMMDDTHHMMSSZ>.md'
+                   '<slug>.<YYYYMMDDTHHMMSS[mmm]Z>[-N].md'
         });
       }
     }
