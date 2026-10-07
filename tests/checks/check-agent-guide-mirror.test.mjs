@@ -76,8 +76,9 @@ test('real repo: the mirror check passes, tolerating the header and the ../ link
 
 test('mutation proof: a one-word divergence planted in AGENTS.md body is flagged', () => {
   withClone('mirror-agents-diverge', (root) => {
-    mutate(root, AGENTS_MD, (t) =>
-      t.replace('Operating guide for AI coding agents', 'Operating guide for AI robot agents'));
+    // "plain-Markdown" sits well after the anchor line (in the "What this repo is" section), so
+    // this mutation leaves the anchor itself untouched and lands squarely inside the body.
+    mutate(root, AGENTS_MD, (t) => t.replace('a plain-Markdown', 'a PLAIN-MARKDOWN'));
     const result = runClonedChecker(root, SCRIPT);
     assert.equal(result.status, 1, result.combined);
     assert.match(result.combined, /AGENTS\.md:\d+/);

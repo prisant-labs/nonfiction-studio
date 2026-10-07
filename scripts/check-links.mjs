@@ -1,13 +1,22 @@
 // scripts/check-links.mjs
 // what-it-is:   relative Markdown link checker
-// what-it-does: scans all .md files under docs/ and the repo root, extracts relative
-//               Markdown link targets ([text](path) and [text](path#anchor)), and
-//               verifies each referenced target is a file tracked by git (matching what
-//               a clean CI checkout sees, since gitignored directories such as _local/
-//               and .superpowers/ are physically present in a working tree but absent
-//               from a clean checkout); reports named errors with file path and line
-//               number for every broken link. Falls back to plain filesystem existence
+// what-it-does: scans all .md files under docs/ and the repo root, plus .claude/CLAUDE.md
+//               specifically (added when the coding-agent guide moved there from the repo root -
+//               see the moved-but-unlinked note below), extracts relative Markdown link targets
+//               ([text](path) and [text](path#anchor)), and verifies each referenced target is a
+//               file tracked by git (matching what a clean CI checkout sees, since gitignored
+//               directories such as _local/ and .superpowers/ are physically present in a working
+//               tree but absent from a clean checkout); reports named errors with file path and
+//               line number for every broken link. Falls back to plain filesystem existence
 //               checks if git is unavailable or the directory is not a git repo.
+//               Moved-but-unlinked note: the root-level scan and the docs/ subtree walk both skip
+//               every hidden directory (any entry starting with "."), which is correct for .git/
+//               but also silently skips .claude/ - so .claude/CLAUDE.md, the coding-agent guide
+//               that moved there from the repo root (a CLAUDE.md at the plugin root trips `claude
+//               plugin validate --strict`), was invisible to this checker even though it carries
+//               its own relative links. Only that one file is added to the scanned set deliberately
+//               rather than the whole .claude/ directory, which also holds local, untracked
+//               settings this checker has no business reading.
 // why:          Q-02 1.2 link-check step; cross-references between docs must resolve on
 //               a clean checkout, not merely in the author's local working tree.
 // exit taxonomy: 0 = pass; 1 = named finding(s); 2 = operational error
@@ -163,6 +172,15 @@ try {
 const docsDir = join(REPO_ROOT, 'docs');
 if (existsSync(docsDir)) {
   collectMdFiles(docsDir, filesToScan);
+}
+
+// .claude/CLAUDE.md specifically - not the whole .claude/ directory, which also holds local,
+// untracked settings this checker has no business reading. See the moved-but-unlinked note in
+// the header comment above for why this one file needs naming explicitly: both scans above skip
+// every hidden directory, including .claude/.
+const claudeMdPath = join(REPO_ROOT, '.claude', 'CLAUDE.md');
+if (existsSync(claudeMdPath)) {
+  filesToScan.push(claudeMdPath);
 }
 
 // ---------------------------------------------------------------------------

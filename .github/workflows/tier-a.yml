@@ -169,14 +169,21 @@ jobs:
       - name: Skill versions
         run: node scripts/checks/check-skill-versions.mjs
 
-      # Live step 19: engine, lib, hook, and schema unit test suites (no API key required).
+      # Live step 19: agent-guide mirror checker - AGENTS.md and .claude/CLAUDE.md say they "must
+      # change together," and this is the gate that now enforces it: their bodies (everything from
+      # the shared "Operating guide for AI coding agents" line onward) must be byte-identical once
+      # .claude/CLAUDE.md's one-directory-deeper relative links are normalized back.
+      - name: Agent guide mirror
+        run: node scripts/checks/check-agent-guide-mirror.mjs
+
+      # Live step 20: engine, lib, hook, and schema unit test suites (no API key required).
       - name: Engine unit tests
         run: node scripts/test-engines.mjs
 
-      # Live step 20: bidirectional fixture matrix with temp-clone discipline.
+      # Live step 21: bidirectional fixture matrix with temp-clone discipline.
       - name: Fixture tests
         run: node scripts/test-fixtures.mjs
 
-      # Live step 21: sample book integrity - verifies resolution through marker-to-ledger-to-SRC chains.
+      # Live step 22: sample book integrity - verifies resolution through marker-to-ledger-to-SRC chains.
       - name: Sample book integrity
         run: node scripts/verify-sample-book.mjs

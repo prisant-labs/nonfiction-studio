@@ -32,6 +32,7 @@ Local battery (`CONTRIBUTING.md`, "The local battery" - every line below is one 
 - [ ] `node scripts/checks/check-compliance-stanza.mjs`
 - [ ] `node scripts/checks/check-state-folder-stanza.mjs`
 - [ ] `node scripts/checks/check-skill-versions.mjs`
+- [ ] `node scripts/checks/check-agent-guide-mirror.mjs`
 - [ ] `node scripts/test-engines.mjs`
 - [ ] `node scripts/test-fixtures.mjs`
 - [ ] `node scripts/verify-sample-book.mjs`

@@ -39,15 +39,16 @@ Every command below is one line of `.github/workflows/tier-a.yml`, in the order 
 15. `node scripts/checks/check-compliance-stanza.mjs` - every agent-dispatching skill (a skill whose frontmatter `chain:` list is non-empty) carries the byte-identical shared compliance stanza.
 16. `node scripts/checks/check-state-folder-stanza.mjs` - every skill that names `<state-dir>` carries the byte-identical "Locate the state folder" stanza before its first step, and no skill or agent names the state folder literally (ADR-0015, state folder name).
 17. `node scripts/checks/check-skill-versions.mjs` - every skill carries `metadata.version` and `metadata.updated`, its `HISTORY.md` agrees with them, and a skill changed since the latest release tag carries a version not yet released (ADR-0017, per-skill versioning). See "Versioning a skill," below.
-18. `node scripts/test-engines.mjs` - the engine, lib, hook, and schema unit test suites, **and** the checker unit tests under `tests/checks/`, all in one `node --test` invocation.
-19. `node scripts/test-fixtures.mjs` - the bidirectional fixture matrix, run against temp clones so committed fixtures are never touched.
-20. `node scripts/verify-sample-book.mjs` - sample-book integrity: marker-to-ledger-to-source resolution.
+18. `node scripts/checks/check-agent-guide-mirror.mjs` - `AGENTS.md` and `.claude/CLAUDE.md` say they "must change together"; this checker proves it, requiring their bodies to be byte-identical once each file's own header and `.claude/CLAUDE.md`'s one-directory-deeper relative links are normalized away.
+19. `node scripts/test-engines.mjs` - the engine, lib, hook, and schema unit test suites, **and** the checker unit tests under `tests/checks/`, all in one `node --test` invocation.
+20. `node scripts/test-fixtures.mjs` - the bidirectional fixture matrix, run against temp clones so committed fixtures are never touched.
+21. `node scripts/verify-sample-book.mjs` - sample-book integrity: marker-to-ledger-to-source resolution.
 
-`tier-a.yml` has twenty-two `run:` lines. Its comments number twenty-one of them "Live step 1" through "Live step 21", and Live step 1 is `npm ci` (see Setup). The twenty-second, `npm install -g @anthropic-ai/claude-code`, is marked inert scaffolding. Each item above is therefore numbered one lower than its "Live step" label in the workflow; installing the `claude` binary is a prerequisite already covered by "Prerequisites." Open a pull request only once every numbered step above passes locally.
+`tier-a.yml` has twenty-three `run:` lines. Its comments number twenty-two of them "Live step 1" through "Live step 22", and Live step 1 is `npm ci` (see Setup). The twenty-third, `npm install -g @anthropic-ai/claude-code`, is marked inert scaffolding. Each item above is therefore numbered one lower than its "Live step" label in the workflow; installing the `claude` binary is a prerequisite already covered by "Prerequisites." Open a pull request only once every numbered step above passes locally.
 
 ### The two suites, named directly
 
-Steps 18 and 19 are also referred to on their own, since they are what you reach for while iterating on a single change without re-running the whole battery:
+Steps 19 and 20 are also referred to on their own, since they are what you reach for while iterating on a single change without re-running the whole battery:
 
 - `node scripts/test-engines.mjs` - unit tests for the engines, libs, hooks, schemas, and the checkers themselves.
 - `node scripts/test-fixtures.mjs` - the golden-fixture-plus-planted-bad-fixture matrix across the bidirectional engine CLIs.

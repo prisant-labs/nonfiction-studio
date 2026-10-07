@@ -8,6 +8,16 @@ This file is written from the commit history of the branch it ships from, not fr
 
 ### Added
 
+- **`scripts/checks/check-agent-guide-mirror.mjs`, a new Tier A check.** AGENTS.md says it
+  mirrors `.claude/CLAUDE.md` for other agent tools and that the two "must change together,"
+  but nothing checked that. The new checker requires their bodies - everything from the shared
+  "Operating guide for AI coding agents" line onward - to be byte-identical once each file's own
+  header and `.claude/CLAUDE.md`'s one-directory-deeper `../` link prefixes are normalized away.
+  `scripts/check-links.mjs` now also scans `.claude/CLAUDE.md` specifically (not the rest of
+  `.claude/`, which holds local, untracked settings): both the root-level and `docs/` scans
+  silently skip hidden directories, so a broken relative link inside the coding-agent guide after
+  its move to `.claude/CLAUDE.md` was invisible to CI; one was found and fixed by hand before this
+  check closed the gap.
 - **ADR-0017 (per-skill versioning), accepted 2026-10-06.** Every skill now carries its own
   semantic version as `metadata.version` in its frontmatter, with `metadata.updated`, and keeps a
   `HISTORY.md` beside its `SKILL.md`, newest first. The plugin's own version is unchanged and still
