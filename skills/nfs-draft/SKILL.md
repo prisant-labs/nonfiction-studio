@@ -7,6 +7,9 @@ when_to_use: "Use when the author says 'write chapter N,' or studio routes here 
 chain:
   - drafting-partner
   - line-editor
+metadata:
+  version: "0.2.0"
+  updated: 2026-10-04
 ---
 
 This skill is the drafting front door. It resolves the chapter argument against the slug registry, loads the chapter's outline entry and evidence set, alerts on an empty ledger and waits for explicit author confirmation before proceeding, orchestrates `drafting-partner` then `line-editor`, and confirms the final file via a Read check. The agents are the sole writers of `<chapters-dir>/<slug>.md`; the skill orchestrates, confirms, and reports.

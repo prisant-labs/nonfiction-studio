@@ -6,6 +6,9 @@ description: "Conducts the adaptive intake interview to produce a confirmed cont
 when_to_use: "Use when the author says 'set up my book' or 'continue my interview', or follows nfs-new-book's closing prompt. Do not invoke for authors who already have a confirmed context/brief.md and are not resuming an interrupted intake, or for unrelated queries."
 chain:
   - interviewer
+metadata:
+  version: "0.2.0"
+  updated: 2026-10-04
 ---
 
 This skill is the interview front door. It checks for an interrupted intake, delegates the conversational interview to the `interviewer` agent, oversees the per-section DRAFT flush to `context/brief.md`, presents the draft brief for review, and closes with conditional next-step suggestions.

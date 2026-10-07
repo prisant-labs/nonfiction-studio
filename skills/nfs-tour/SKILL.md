@@ -4,6 +4,9 @@ user-invocable: true
 argument-hint: "[destination folder]"
 description: "Runs a guided walkthrough of the bundled sample book in a disposable copy per OPP-D17 (five-minute first win): shows the quality gate pass, including the stylometry check honestly reporting advice-only below the book-scale verdict floor rather than inventing a margin, plants a realistic AI-residue defect, shows the gate block with a named reason, then fixes it and shows the gate pass again, all without touching the shipped example or requiring a project. Use when the author wants to see what the quality gate actually catches before starting their own book, asks for a demo or a tour, or is new to the plugin and wants proof before committing to the intake interview."
 when_to_use: "Use when the author asks for a tour, demo, or walkthrough of the plugin, wants to see the quality gate catch a real problem before trusting it, or is newly installed and was pointed here from nfs-quick-scan or the README quickstart. Do not invoke inside an existing book project as a substitute for nfs-check-chapter; this skill only ever operates on a disposable copy of the bundled sample book, never the author's own project."
+metadata:
+  version: "0.1.2"
+  updated: 2026-10-04
 ---
 
 This skill is the guided-demonstration half of the five-minute first win per OPP-D17 (five-minute first win). It walks the author through `examples/sample-book` in a **disposable copy**, ending with the quality gate visibly failing on a planted defect and then passing again. **It never requires an initialized book project** and never modifies the shipped example; every write in this skill happens inside a fresh copy created in Step 2, never in `<plugin-root>/examples/`.

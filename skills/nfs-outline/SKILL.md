@@ -7,6 +7,9 @@ when_to_use: "Use when the author completes nfs-interview and wants to structure
 chain:
   - thesis-architect
   - structure-architect
+metadata:
+  version: "0.2.0"
+  updated: 2026-10-04
 ---
 
 This skill is the outline front door. It confirms the project brief via a deterministic Bash guard, optionally invokes `thesis-architect` when the controlling idea is absent, delegates all chapter architecture to `structure-architect`, presents the draft outline for author review, and confirms the written structure files via Read checks. The agents perform all structure file writes; the skill orchestrates, confirms, and reports.
