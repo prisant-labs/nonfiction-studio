@@ -146,7 +146,7 @@ Agents and output styles are unprefixed (for example `fact-checker`, `manuscript
 ## Skill versions
 
 Every skill carries its own version, per
-[ADR-0017 (per-skill versioning)](docs/adr/ADR-0017-per-skill-versioning.md). A pull request
+[ADR-0017 (per-skill versioning)](../docs/adr/ADR-0017-per-skill-versioning.md). A pull request
 that changes anything under `skills/<name>/` also moves that skill's `metadata.version` and
 `metadata.updated` in its `SKILL.md`, and the first row of its `HISTORY.md`, whose Release reads
 `unreleased` until the next tag. A skill moves one version per release: a later change in the same
