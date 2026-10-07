@@ -126,6 +126,11 @@ This file is written from the commit history of the branch it ships from, not fr
 - **The Stop hook's thesis-alignment prompt skips without a thesis.** The prompt is told to
   reply with a skip, naming `nfs-adopt structure`, when its input states no thesis to compare
   against. A prompt hook cannot read the adoption record, so this skip lives in the prompt text.
+- **The contributor guide for coding agents moved from `CLAUDE.md` to `.claude/CLAUDE.md`.** The
+  repository root is also the plugin root, and Claude Code's strict plugin validator now flags a
+  `CLAUDE.md` there, because a plugin cannot ship context that way. Claude Code still loads the
+  file as project instructions from its new place. `AGENTS.md` stays at the root as the mirror
+  for other agent tools.
 
 ### Fixed
 
@@ -165,6 +170,20 @@ This file is written from the commit history of the branch it ships from, not fr
   chapter named `ch01.x`. The prune now accepts only `<slug>.<timestamp>.json` for the chapter
   being gated. The status board also parses a report's file name from the right, so a chapter
   whose name contains dots keeps its gate verdict on the board.
+- **Every hook command now quotes `${CLAUDE_PLUGIN_ROOT}`.** The plugin system substitutes the
+  install path before the shell runs a hook, so an install path containing a space split each
+  command into several words and every hook failed. Claude Code's strict plugin validator now
+  rejects the unquoted form, which failed Tier A's platform-validation step on every pull
+  request. `scripts/check-hooks-schema.mjs` now requires the quoted form, and it takes each
+  script path from its pattern match, so a checkout whose path contains a space no longer
+  breaks it. The hook-starter template follows the same form.
+- **The plugin-root `settings.json` had the same unquoted `${CLAUDE_PLUGIN_ROOT}` defect in
+  `subagentStatusLine.command`, and nothing caught it.** `claude plugin validate` does not
+  inspect `settings.json`, and `scripts/check-hooks-schema.mjs` read only `hooks/hooks.json`, so
+  the fix above left this command splitting on an install path containing a space. The command
+  is now quoted the same way, and `scripts/check-hooks-schema.mjs` now also reads the
+  plugin-root `settings.json`, when one is present, and applies the identical quoting rule to
+  `subagentStatusLine.command`.
 
 ## [0.1.1] - 2026-09-24
 
