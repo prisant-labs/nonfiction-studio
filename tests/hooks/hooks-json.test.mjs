@@ -1,14 +1,18 @@
 // tests/hooks/hooks-json.test.mjs
 // what-it-is:   wrapper tests for scripts/check-hooks-schema.mjs
-// what-it-does: asserts the checker exits 0 for the committed hooks/hooks.json, and runs a copy
-//               of the checker inside a temp tree to prove its command-string rule: an unquoted
-//               ${CLAUDE_PLUGIN_ROOT} is a finding, and a quoted one passes even when the plugin
-//               root's path contains a space.
+// what-it-does: asserts the checker exits 0 for the committed hooks/hooks.json and the committed
+//               plugin-root settings.json, and runs a copy of the checker inside a temp tree to
+//               prove its command-string rule: an unquoted ${CLAUDE_PLUGIN_ROOT} is a finding,
+//               and a quoted one passes even when the plugin root's path contains a space. The
+//               same rule and the same temp-tree proof apply to settings.json's
+//               subagentStatusLine.command.
 // why:          all hook-schema logic lives in scripts/check-hooks-schema.mjs per TSK-055
 //               (Tier A check scripts) resolution 1 (single source of logic). The temp-tree
 //               cases are the mutation proof for the quoting rule, which exists because the
 //               platform's strict validator rejects an unquoted placeholder: an install path
-//               with a space would split the command into several words.
+//               with a space would split the command into several words. settings.json carries
+//               the same ${CLAUDE_PLUGIN_ROOT} substitution in subagentStatusLine.command, so it
+//               is in scope for the identical defect and the identical proof.
 // runner:       node --test "tests/hooks/*.test.mjs"
 
 import { test, after } from 'node:test';
@@ -24,6 +28,7 @@ const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, '..', '..');
 const SCRIPT = join(REPO_ROOT, 'scripts', 'check-hooks-schema.mjs');
 const HOOKS_JSON = join(REPO_ROOT, 'hooks', 'hooks.json');
+const SETTINGS_JSON = join(REPO_ROOT, 'settings.json');
 
 const made = [];
 after(() => {
@@ -57,12 +62,45 @@ function treeWith(label, transform) {
 
 const unquote = (text) => text.replace(/"node \\"\$\{CLAUDE_PLUGIN_ROOT\}\/([^"\\]+)\\""/g, '"node ${CLAUDE_PLUGIN_ROOT}/$1"');
 
-test('check-hooks-schema.mjs exits 0 for the committed hooks/hooks.json', () => {
+/**
+ * Builds the settings.json text for a temp plugin tree: a subagentStatusLine command either in
+ * the quoted form (the required one) or the unquoted form (the defect). Constructed via
+ * JSON.stringify rather than string surgery, so the embedded quotes always come out correct.
+ */
+function settingsText(quoted) {
+  const command = quoted
+    ? 'node "${CLAUDE_PLUGIN_ROOT}/bin/ns-statusline" --subagent'
+    : 'node ${CLAUDE_PLUGIN_ROOT}/bin/ns-statusline --subagent';
+  return JSON.stringify({ subagentStatusLine: { type: 'command', command } }, null, 2) + '\n';
+}
+
+/**
+ * Extends a treeWith() tree with a settings.json carrying subagentStatusLine.command (quoted or
+ * not) and a stub for the bin/ns-statusline script the command names.
+ */
+function treeWithSettings(label, quoted) {
+  const script = treeWith(label, (text) => text);
+  const root = dirname(dirname(script));
+  mkdirSync(join(root, 'bin'), { recursive: true });
+  writeFileSync(join(root, 'bin', 'ns-statusline'), '// stub\n');
+  writeFileSync(join(root, 'settings.json'), settingsText(quoted));
+  return script;
+}
+
+test('check-hooks-schema.mjs exits 0 for the committed hooks/hooks.json and settings.json', () => {
   const result = runChecker(SCRIPT, REPO_ROOT);
   assert.equal(
     result.status,
     0,
     'check-hooks-schema.mjs must exit 0; stderr: ' + (result.stderr || '').trim()
+  );
+});
+
+test('the committed settings.json quotes ${CLAUDE_PLUGIN_ROOT} in subagentStatusLine.command', () => {
+  const settings = JSON.parse(readFileSync(SETTINGS_JSON, 'utf8'));
+  assert.equal(
+    settings.subagentStatusLine.command,
+    'node "${CLAUDE_PLUGIN_ROOT}/bin/ns-statusline" --subagent'
   );
 });
 
@@ -80,4 +118,28 @@ test('an unquoted ${CLAUDE_PLUGIN_ROOT} is a finding for every command [mutation
   assert.equal(result.status, 1, 'stdout: ' + result.stdout + '\nstderr: ' + result.stderr);
   const commandFindings = (result.stdout + result.stderr).split('\n').filter((l) => l.includes('does not match required pattern'));
   assert.equal(commandFindings.length, 6, 'one finding per command entry:\n' + commandFindings.join('\n'));
+});
+
+test('a quoted ${CLAUDE_PLUGIN_ROOT} in settings.json subagentStatusLine.command passes, even when the plugin root path contains a space', () => {
+  const script = treeWithSettings('settings-quoted', true);
+  const settingsJson = readFileSync(join(dirname(dirname(script)), 'settings.json'), 'utf8');
+  assert.match(settingsJson, /"node \\"\$\{CLAUDE_PLUGIN_ROOT\}\/bin\/ns-statusline\\" --subagent"/, 'the fixture really is quoted');
+  const result = runChecker(script, dirname(dirname(script)));
+  assert.equal(result.status, 0, 'stdout: ' + result.stdout + '\nstderr: ' + result.stderr);
+});
+
+test('an unquoted ${CLAUDE_PLUGIN_ROOT} in settings.json subagentStatusLine.command is a finding [mutation-proof: accepting the unquoted form turns this red]', () => {
+  const script = treeWithSettings('settings-unquoted', false);
+  const settingsJson = readFileSync(join(dirname(dirname(script)), 'settings.json'), 'utf8');
+  assert.match(settingsJson, /"node \$\{CLAUDE_PLUGIN_ROOT\}\/bin\/ns-statusline --subagent"/, 'the fixture really is unquoted');
+  const result = runChecker(script, dirname(dirname(script)));
+  assert.equal(result.status, 1, 'stdout: ' + result.stdout + '\nstderr: ' + result.stderr);
+  const settingsFindings = (result.stdout + result.stderr).split('\n').filter((l) => l.includes('subagentStatusLine'));
+  assert.equal(settingsFindings.length, 1, 'one finding for the unquoted settings.json command:\n' + settingsFindings.join('\n'));
+});
+
+test('a missing settings.json is not an error', () => {
+  const script = treeWith('no-settings', (text) => text);
+  const result = runChecker(script, dirname(dirname(script)));
+  assert.equal(result.status, 0, 'stdout: ' + result.stdout + '\nstderr: ' + result.stderr);
 });
