@@ -1,7 +1,10 @@
 # AGENTS.md
 
-This file mirrors CLAUDE.md for other agent tools (Codex and others); the two must
-change together. Content below is identical to CLAUDE.md except for this header.
+This file mirrors [.claude/CLAUDE.md](.claude/CLAUDE.md) for other agent tools (Codex and
+others); the two must change together. Content below is identical to that file except for this
+header and for its relative links, which there start with `../`. The Claude Code copy lives
+under `.claude/` because a `CLAUDE.md` at the repository root sits at the plugin root, where
+Claude Code's plugin validator flags it.
 
 Operating guide for AI coding agents (and humans) working IN this repository - the
 plugin's own source tree, not a book project built with it. If you are looking for
