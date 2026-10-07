@@ -1,13 +1,22 @@
 // scripts/check-hooks-schema.mjs
-// what-it-is:   hooks.json schema validator
+// what-it-is:   hooks.json and plugin-root settings.json command-quoting validator
 // what-it-does: verifies hooks/hooks.json is well-formed (wrapper Form A), every declared
 //               event is a known platform event, the nested group layer is present, each
 //               event has exactly one command handler (D-06 single-writer state discipline),
 //               every command script resolves to a file on disk, there are no duplicate
-//               events, and the Stop event carries a prompt handler with a timeout.
+//               events, and the Stop event carries a prompt handler with a timeout. It also
+//               reads the plugin-root settings.json, when one is present, and applies the same
+//               ${CLAUDE_PLUGIN_ROOT}-quoting rule to subagentStatusLine.command: that file
+//               carries the identical substitution and the identical unquoted-path-with-a-space
+//               defect, and no other check reads its quoting.
 // why:          absorbs and supersedes tests/hooks/hooks-json.test.mjs per TSK-055; the
 //               interim shape test becomes a one-case wrapper asserting this script exits 0.
+//               An earlier fix quoted every hooks/hooks.json command but left
+//               settings.json's own subagentStatusLine.command in the same unquoted,
+//               space-splitting form, and nothing validated it; the settings.json coverage
+//               here closes that gap.
 // exit taxonomy: 0 = pass; 1 = named finding(s); 2 = operational error
+// determinism:   no wall-clock value or other run-to-run variance in this script's output.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
@@ -17,6 +26,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, '..');
 const HOOKS_JSON = join(REPO_ROOT, 'hooks', 'hooks.json');
+const SETTINGS_JSON = join(REPO_ROOT, 'settings.json');
 
 // Known platform event names (A-02 platform capability baseline; PostToolUse added
 // per OPP-P04 (untrusted-source envelope), roadmap row 1.2).
@@ -37,6 +47,13 @@ const KNOWN_EVENTS = new Set([
 // is the script path relative to the plugin root.
 const COMMAND_PATTERN = /^node "\$\{CLAUDE_PLUGIN_ROOT\}\/(hooks\/[a-z-]+\.mjs)"$/;
 const COMMAND_PATTERN_TEXT = '^node "${CLAUDE_PLUGIN_ROOT}/hooks/[a-z-]+\\.mjs"$';
+
+// Same substitution, same rule, applied to settings.json's subagentStatusLine.command: the
+// script it names is an extensionless bin/ CLI entry point rather than a hooks/*.mjs file, and
+// the command may carry trailing CLI arguments (for example " --subagent") after the closing
+// quote.
+const SETTINGS_COMMAND_PATTERN = /^node "\$\{CLAUDE_PLUGIN_ROOT\}\/(bin\/[a-z-]+)"(?: .*)?$/;
+const SETTINGS_COMMAND_PATTERN_TEXT = '^node "${CLAUDE_PLUGIN_ROOT}/bin/[a-z-]+"( .*)?$';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -255,6 +272,49 @@ if (stopGroups && Array.isArray(stopGroups) && stopGroups.length > 0) {
         findings.push('Stop: prompt entry is missing "timeout" field');
       } else if (pe.timeout !== 30) {
         findings.push('Stop: prompt entry "timeout" must be exactly 30; got: ' + pe.timeout);
+      }
+    }
+  }
+}
+
+// Step 7: plugin-root settings.json - same ${CLAUDE_PLUGIN_ROOT}-quoting rule, applied to
+// subagentStatusLine.command when the file and the key are present. A missing settings.json is
+// not an error: not every plugin ships one, and this file lives outside hooks/hooks.json's own
+// required shape.
+if (existsSync(SETTINGS_JSON)) {
+  let settingsParsed;
+  try {
+    settingsParsed = JSON.parse(readFileSync(SETTINGS_JSON, 'utf8'));
+  } catch (err) {
+    findings.push('settings.json is not valid JSON: ' + err.message);
+    settingsParsed = null;
+  }
+
+  if (settingsParsed !== null && typeof settingsParsed === 'object' && !Array.isArray(settingsParsed)) {
+    const statusLine = settingsParsed.subagentStatusLine;
+    if (statusLine !== undefined) {
+      if (typeof statusLine !== 'object' || statusLine === null || Array.isArray(statusLine)) {
+        findings.push('settings.json: subagentStatusLine must be an object');
+      } else if (!Object.prototype.hasOwnProperty.call(statusLine, 'command')) {
+        findings.push('settings.json: subagentStatusLine is missing required "command" field');
+      } else if (typeof statusLine.command !== 'string') {
+        findings.push('settings.json: subagentStatusLine.command must be a string');
+      } else {
+        const settingsMatch = SETTINGS_COMMAND_PATTERN.exec(statusLine.command);
+        if (!settingsMatch) {
+          findings.push(
+            'settings.json: subagentStatusLine.command "' + statusLine.command + '" does not match required pattern ' +
+            SETTINGS_COMMAND_PATTERN_TEXT
+          );
+        } else {
+          const settingsScriptPath = join(REPO_ROOT, settingsMatch[1]);
+          if (!existsSync(settingsScriptPath)) {
+            findings.push(
+              'settings.json: subagentStatusLine command script not found: ' + settingsScriptPath +
+              ' (from: ' + statusLine.command + ')'
+            );
+          }
+        }
       }
     }
   }

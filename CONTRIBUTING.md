@@ -22,7 +22,9 @@ Every command below is one line of `.github/workflows/tier-a.yml`, in the order 
 
 1. `node scripts/check.mjs --profile plain-plugin` - the Bronze spine-conformance check (the vendored agent-skills-toolkit spine, Standard 0.12; see `scripts/ATTRIBUTION.md`).
 2. `claude plugin validate --strict .` - platform schema validation of the authored manifests under `.claude-plugin/`; needs the `claude` CLI installed, no account or API key.
-3. `node scripts/check-hooks-schema.mjs` - `hooks/hooks.json` schema and script-existence check.
+3. `node scripts/check-hooks-schema.mjs` - `hooks/hooks.json` schema and script-existence check;
+   also checks the plugin-root `settings.json`'s `subagentStatusLine.command`, when that file is
+   present.
 4. `node scripts/check-frontmatter.mjs` - agent and skill frontmatter validation, including the `nfs-` skill naming convention (see below).
 5. `node scripts/check-docs-completeness.mjs` - every shipped component has a reference page under `docs/reference/`.
 6. `node scripts/check-links.mjs` - every relative Markdown link across `docs/` and the repo-root `.md` files resolves.

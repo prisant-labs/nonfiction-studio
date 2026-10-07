@@ -95,6 +95,13 @@ This file is written from the commit history of the branch it ships from, not fr
   request. `scripts/check-hooks-schema.mjs` now requires the quoted form, and it takes each
   script path from its pattern match, so a checkout whose path contains a space no longer
   breaks it. The hook-starter template follows the same form.
+- **The plugin-root `settings.json` had the same unquoted `${CLAUDE_PLUGIN_ROOT}` defect in
+  `subagentStatusLine.command`, and nothing caught it.** `claude plugin validate` does not
+  inspect `settings.json`, and `scripts/check-hooks-schema.mjs` read only `hooks/hooks.json`, so
+  the fix above left this command splitting on an install path containing a space. The command
+  is now quoted the same way, and `scripts/check-hooks-schema.mjs` now also reads the
+  plugin-root `settings.json`, when one is present, and applies the identical quoting rule to
+  `subagentStatusLine.command`.
 
 ## [0.1.1] - 2026-09-24
 
