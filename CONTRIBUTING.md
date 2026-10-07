@@ -22,7 +22,9 @@ Every command below is one line of `.github/workflows/tier-a.yml`, in the order 
 
 1. `node scripts/check.mjs --profile plain-plugin` - the Bronze spine-conformance check (the vendored agent-skills-toolkit spine, Standard 0.12; see `scripts/ATTRIBUTION.md`).
 2. `claude plugin validate --strict .` - platform schema validation of the authored manifests under `.claude-plugin/`; needs the `claude` CLI installed, no account or API key.
-3. `node scripts/check-hooks-schema.mjs` - `hooks/hooks.json` schema and script-existence check.
+3. `node scripts/check-hooks-schema.mjs` - `hooks/hooks.json` schema and script-existence check;
+   also checks the plugin-root `settings.json`'s `subagentStatusLine.command`, when that file is
+   present.
 4. `node scripts/check-frontmatter.mjs` - agent and skill frontmatter validation, including the `nfs-` skill naming convention (see below).
 5. `node scripts/check-docs-completeness.mjs` - every shipped component has a reference page under `docs/reference/`.
 6. `node scripts/check-links.mjs` - every relative Markdown link across `docs/` and the repo-root `.md` files resolves.
@@ -139,7 +141,7 @@ This regenerates `scripts/checks/workspace-refs-manifest.json` (sha256 hashes on
 
 - [`docs/architecture.md`](docs/architecture.md) - how the plugin's pieces fit together.
 - [`docs/README.md`](docs/README.md) - the documentation index: a reference page for every skill, subagent, and CLI.
-- [`CLAUDE.md`](CLAUDE.md) - project-specific guidance for an AI assistant working in this repo.
+- [`.claude/CLAUDE.md`](.claude/CLAUDE.md) - project-specific guidance for an AI assistant working in this repo; [`AGENTS.md`](AGENTS.md) mirrors it for other agent tools.
 - [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) - the standards this project expects.
 - [`SECURITY.md`](SECURITY.md) - how to report a vulnerability privately.
 - [`docs/adr/`](docs/adr/) - the full architecture decision record set.

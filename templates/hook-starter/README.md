@@ -94,7 +94,7 @@ Until TSK-055 lands, verify the file manually:
 | Placeholder | What to put there |
 |---|---|
 | `REPLACE-brief-description-of-what-these-hooks-do` | One sentence describing the plugin's hook set. Omit the `description` key entirely if not needed. |
-| `REPLACE-script-name` | Filename of the orchestrating Node script (without the `.mjs` extension, since the extension is already in the template). Example: `session-start` produces `node ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/session-start.mjs`. |
+| `REPLACE-script-name` | Filename of the orchestrating Node script (without the `.mjs` extension, since the extension is already in the template). Example: `session-start` produces `node "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/session-start.mjs"`. |
 | `REPLACE-judgment-question` | The natural-language question for the prompt-type Stop handler. Keep it specific and actionable. Example from S-07: `Review the thesis-alignment of the last written section. Reply 'pass' if the content advances the thesis, or 'warn: <one-sentence reason>' if it drifts.` |
 
 ---
@@ -106,7 +106,7 @@ Until TSK-055 lands, verify the file manually:
 ```json
 {
   "type": "command",
-  "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/REPLACE-script-name.mjs",
+  "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/REPLACE-script-name.mjs\"",
   "timeout": 600000
 }
 ```
@@ -114,6 +114,9 @@ Until TSK-055 lands, verify the file manually:
 - `timeout` is optional; the platform default for command handlers is 600000 ms.
 - Always use `${CLAUDE_PLUGIN_ROOT}` for script paths. The variable resolves to the plugin's
   versioned install directory and changes on every plugin update. Never store state there.
+- Wrap the placeholder in double quotes, as above. The plugin system substitutes the install
+  path before the shell runs the command, so an unquoted path that contains a space splits
+  into several words, and `claude plugin validate --strict` rejects the unquoted form.
 - `args` (array) is also accepted but not shown in this minimal template.
 
 ### prompt handler
@@ -149,7 +152,7 @@ event array items as match-group objects containing a nested `"hooks"` array:
 
 ```json
 "SessionStart": [
-  { "hooks": [ { "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/..." } ] }
+  { "hooks": [ { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/...\"" } ] }
 ]
 ```
 
