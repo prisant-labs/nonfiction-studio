@@ -8,6 +8,20 @@ This file is written from the commit history of the branch it ships from, not fr
 
 ### Added
 
+- **ADR-0017 (per-skill versioning), accepted 2026-10-06.** Every skill now carries its own
+  semantic version as `metadata.version` in its frontmatter, with `metadata.updated`, and keeps a
+  `HISTORY.md` beside its `SKILL.md`, newest first. The plugin's own version is unchanged and still
+  versions the plugin as a whole. The starting history was derived from git: every skill that
+  shipped in 0.1.0 starts there, the plugin-root fix adds a 0.1.1 row where it touched a skill, and
+  the unreleased state-folder and adoption work moves each changed skill to an `unreleased` 0.2.0,
+  or 0.1.2 where only wording changed. Standard 0.12, which this plugin pins, already required the
+  version field; nothing checked it.
+- **`scripts/checks/check-skill-versions.mjs`, a new Tier A check** (ADR-0017). It requires the
+  two frontmatter fields, a `HISTORY.md` whose first row matches them, and well-formed rows in
+  order. Against the latest release tag, a skill that changed must carry a version not yet
+  released. Tier A now checks out the full history so the check can see the tag, and under CI a
+  check that cannot see a tag fails instead of passing. With `--release <tag>`, `release.yml` runs
+  it on a tag push and refuses the release while any history row still says `unreleased`.
 - **ADR-0016 (adopting an existing book), accepted 2026-10-02.** The record decides how an
   author brings in a manuscript the plugin did not create. A new skill, `nfs-adopt`, adds only
   the state folder and a pointer that can name the book's own chapters folder, after an explicit

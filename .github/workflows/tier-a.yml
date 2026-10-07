@@ -29,9 +29,13 @@ jobs:
           - windows-latest
 
     steps:
-      # Inert scaffolding: required by GitHub Actions; no local equivalent.
+      # Inert scaffolding: required by GitHub Actions; no local equivalent. fetch-depth 0 brings
+      # the full history and the release tags, which the skill-versions step below compares each
+      # skill against (ADR-0017, per-skill versioning); a shallow checkout would leave it blind.
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       # Inert scaffolding: pins Node.js to the engines floor declared in package.json.
       - name: Set up Node.js
@@ -157,14 +161,22 @@ jobs:
       - name: State-folder stanza parity
         run: node scripts/checks/check-state-folder-stanza.mjs
 
-      # Live step 18: engine, lib, hook, and schema unit test suites (no API key required).
+      # Live step 18: per-skill versioning checker (ADR-0017, per-skill versioning) - every skill
+      # carries metadata.version and metadata.updated, its HISTORY.md agrees with them, and a skill
+      # that changed since the latest release tag carries a version not yet released. This step is
+      # the checker's only proof on the real tree's git history; it exits 2 under CI when no tag is
+      # visible, which is why the checkout above fetches the full history.
+      - name: Skill versions
+        run: node scripts/checks/check-skill-versions.mjs
+
+      # Live step 19: engine, lib, hook, and schema unit test suites (no API key required).
       - name: Engine unit tests
         run: node scripts/test-engines.mjs
 
-      # Live step 19: bidirectional fixture matrix with temp-clone discipline.
+      # Live step 20: bidirectional fixture matrix with temp-clone discipline.
       - name: Fixture tests
         run: node scripts/test-fixtures.mjs
 
-      # Live step 20: sample book integrity - verifies resolution through marker-to-ledger-to-SRC chains.
+      # Live step 21: sample book integrity - verifies resolution through marker-to-ledger-to-SRC chains.
       - name: Sample book integrity
         run: node scripts/verify-sample-book.mjs

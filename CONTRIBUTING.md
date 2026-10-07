@@ -36,18 +36,25 @@ Every command below is one line of `.github/workflows/tier-a.yml`, in the order 
 14. `node scripts/checks/check-component-counts.mjs` - a stated component count (skills, CLIs) has to match the tree's true count. See "Writing prose that survives this checker," below.
 15. `node scripts/checks/check-compliance-stanza.mjs` - every agent-dispatching skill (a skill whose frontmatter `chain:` list is non-empty) carries the byte-identical shared compliance stanza.
 16. `node scripts/checks/check-state-folder-stanza.mjs` - every skill that names `<state-dir>` carries the byte-identical "Locate the state folder" stanza before its first step, and no skill or agent names the state folder literally (ADR-0015, state folder name).
-17. `node scripts/test-engines.mjs` - the engine, lib, hook, and schema unit test suites, **and** the checker unit tests under `tests/checks/`, all in one `node --test` invocation.
-18. `node scripts/test-fixtures.mjs` - the bidirectional fixture matrix, run against temp clones so committed fixtures are never touched.
-19. `node scripts/verify-sample-book.mjs` - sample-book integrity: marker-to-ledger-to-source resolution.
+17. `node scripts/checks/check-skill-versions.mjs` - every skill carries `metadata.version` and `metadata.updated`, its `HISTORY.md` agrees with them, and a skill changed since the latest release tag carries a version not yet released (ADR-0017, per-skill versioning). See "Versioning a skill," below.
+18. `node scripts/test-engines.mjs` - the engine, lib, hook, and schema unit test suites, **and** the checker unit tests under `tests/checks/`, all in one `node --test` invocation.
+19. `node scripts/test-fixtures.mjs` - the bidirectional fixture matrix, run against temp clones so committed fixtures are never touched.
+20. `node scripts/verify-sample-book.mjs` - sample-book integrity: marker-to-ledger-to-source resolution.
 
-`tier-a.yml` has twenty-one `run:` lines. Its comments number twenty of them "Live step 1" through "Live step 20", and Live step 1 is `npm ci` (see Setup). The twenty-first, `npm install -g @anthropic-ai/claude-code`, is marked inert scaffolding. Each item above is therefore numbered one lower than its "Live step" label in the workflow; installing the `claude` binary is a prerequisite already covered by "Prerequisites." Open a pull request only once every numbered step above passes locally.
+`tier-a.yml` has twenty-two `run:` lines. Its comments number twenty-one of them "Live step 1" through "Live step 21", and Live step 1 is `npm ci` (see Setup). The twenty-second, `npm install -g @anthropic-ai/claude-code`, is marked inert scaffolding. Each item above is therefore numbered one lower than its "Live step" label in the workflow; installing the `claude` binary is a prerequisite already covered by "Prerequisites." Open a pull request only once every numbered step above passes locally.
 
 ### The two suites, named directly
 
-Steps 16 and 17 are also referred to on their own, since they are what you reach for while iterating on a single change without re-running the whole battery:
+Steps 18 and 19 are also referred to on their own, since they are what you reach for while iterating on a single change without re-running the whole battery:
 
 - `node scripts/test-engines.mjs` - unit tests for the engines, libs, hooks, schemas, and the checkers themselves.
 - `node scripts/test-fixtures.mjs` - the golden-fixture-plus-planted-bad-fixture matrix across the bidirectional engine CLIs.
+
+## Versioning a skill
+
+Every skill carries its own version, separate from the plugin's, per [ADR-0017 (per-skill versioning)](docs/adr/ADR-0017-per-skill-versioning.md). When a pull request changes anything under `skills/<name>/`, change three things in the same pull request: `metadata.version` and `metadata.updated` at the end of that skill's `SKILL.md` frontmatter, and the first row of its `HISTORY.md`. If the first row already says `unreleased`, another change earlier in this release cycle has already moved the version, so edit that row's date and summary (and raise its number if your change is larger) rather than adding a row. Otherwise add a new first row with Release `unreleased`. Move MINOR for anything an author can see the skill do differently - a new mode, a new stop, a new place it reads or writes - and PATCH for a fix or wording. Write the summary about that skill's change, not the plugin's. The release-preparation pull request replaces each `unreleased` with the new tag; `release.yml` refuses a tag while any row still says `unreleased`.
+
+A `HISTORY.md` sits under `skills/`, so the state-folder stanza checker scans it like any skill file: describe the state folder or the chapters folder in words rather than writing either folder's literal name.
 
 ## Writing prose that survives this checker
 

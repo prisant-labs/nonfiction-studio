@@ -146,6 +146,18 @@ comment.
 Skills are `nfs-<name>`; CLIs are `ns-<name>`. Keep new skills and CLIs inside those prefixes.
 Agents and output styles are unprefixed (for example `fact-checker`, `manuscript`).
 
+## Skill versions
+
+Every skill carries its own version, per
+[ADR-0017 (per-skill versioning)](docs/adr/ADR-0017-per-skill-versioning.md). A pull request
+that changes anything under `skills/<name>/` also moves that skill's `metadata.version` and
+`metadata.updated` in its `SKILL.md`, and the first row of its `HISTORY.md`, whose Release reads
+`unreleased` until the next tag. A skill moves one version per release: a later change in the same
+cycle edits the existing `unreleased` row rather than adding another. MINOR for anything an author
+can see change, PATCH for a fix or wording. `scripts/checks/check-skill-versions.mjs` enforces
+this against the latest release tag, and the release workflow refuses a tag while any row still
+says `unreleased`.
+
 ## CHANGELOG discipline
 
 `CHANGELOG.md`'s `Unreleased` section is written from what actually landed, not from a plan or
