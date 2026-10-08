@@ -4,6 +4,9 @@ user-invocable: true
 argument-hint: ""
 description: "Fronts the read-only bin/ns-status engine in a single Bash call: renders the per-chapter status board (status, word count, open claims, drift statistic, gate verdict) and whole-book totals directly from its JSON output, marking each row the CLI itself flags as highlighted (a drift statistic above that same row's own calibrated threshold, or a block gate verdict); writes nothing; routes to nfs-new-book when no book root or progress.json is found, and to nfs-doctor on any other engine error. Use when the author asks 'where am I on the book,' wants to 'check my progress,' or needs a quick status check before starting a session."
 when_to_use: "Use when the author asks how their book is going, or wants a project overview before starting a session. Do not invoke to run the quality gate (use nfs-check-chapter), diagnose project structure problems (use nfs-doctor), start a new project (use nfs-new-book), or for unrelated queries."
+metadata:
+  version: "0.1.2"
+  updated: 2026-10-04
 ---
 
 This skill is the read-only project status dashboard. It fronts `bin/ns-status` in a single Bash call, parses its JSON output, and renders the per-chapter board and whole-book totals directly from that output. The skill performs no arithmetic and parses no number out of prose: every status value, word count, open-claim count, drift statistic, gate verdict, threshold value, and highlight decision in the rendered table is read directly from a field `bin/ns-status` has already computed. The skill writes nothing to any file or state-folder path.

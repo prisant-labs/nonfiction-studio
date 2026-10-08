@@ -4,6 +4,9 @@ user-invocable: true
 argument-hint: "[element: style | brief | structure]"
 description: "Adopts an existing book in place, without changing any of the author's files: plans with bin/ns-doctor --adopt-plan, shows what it will add and what works at once, and on an explicit yes writes the state folder, its README, and a pointer naming the book's own chapters folder. With an element argument, takes on one more part of the bible (style, brief or structure) and hands off to the skill that creates it. Use when an author brings a book that already exists, or when the session start, nfs-start or nfs-new-book says the folder already holds writing."
 when_to_use: "Use when the author wants to bring an existing manuscript into Nonfiction Studio, says 'adopt this book' or 'use my existing chapters', or is routed here by the session start, nfs-start, or nfs-new-book's existing-writing stop. Use with an element argument to adopt style, brief or structure in a book that is already adopted. Do not invoke to start a new book in an empty folder (use nfs-new-book) or to repair a state folder or pointer (use nfs-doctor)."
+metadata:
+  version: "0.1.0"
+  updated: 2026-10-04
 ---
 
 This skill adopts an existing book in place, per ADR-0016 (adopting an existing book). The author's files stay canonical and untouched: the skill adds the plugin's state folder beside them and a pointer that names the folder holding the chapters, and it records which parts of the bible the book has taken on. The bible has five elements: `chapters` (always adopted at adoption), `style`, `brief`, `structure` and `claims`. Adopting `claims` is not available in this release.

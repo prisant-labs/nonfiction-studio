@@ -4,6 +4,9 @@ user-invocable: true
 argument-hint: "[book title] [guided|blank]"
 description: "Scaffolds the flat bible tree (context/, structure/, chapters/, research/, production/) and creates the state folder's files for a new nonfiction book project. Use when an author starts a new book or follows the studio Path 1 prompt."
 when_to_use: "Use when the author explicitly wants to initialize, start, or set up a new book project, says 'create a new book', or is routed here from the studio dispatcher Path 1 prompt. Do not invoke for authors with an existing book project layout (a state folder or context/brief.md) unless they explicitly ask to re-initialize only the missing pieces. Do not invoke in a folder that already holds the author's own writing, or in a book that was adopted in place; Step 1 stops in both and names nfs-adopt, which brings existing writing in."
+metadata:
+  version: "0.2.0"
+  updated: 2026-10-04
 ---
 
 This skill scaffolds a new nonfiction book project. It is surface-independent: no hooks or subagents are needed.

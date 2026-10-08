@@ -42,7 +42,14 @@ jobs:
       - name: Verify version agreement
         run: node scripts/check-release-tag.mjs "${{ github.ref_name }}"
 
-      # Live step 2: publishes a GitHub release for the pushed tag, with RELEASE-NOTES.md's
+      # Live step 2: every skill's HISTORY.md must be stamped for this release - no row may still
+      # say `unreleased`, and none may name a newer release (ADR-0017, per-skill versioning). Needs
+      # no git history, so the shallow checkout above is enough. Exit taxonomy: 0 = stamped;
+      # 1 = a named row is not; 2 = operational error.
+      - name: Verify skill histories are stamped
+        run: node scripts/checks/check-skill-versions.mjs --release "${{ github.ref_name }}"
+
+      # Live step 3: publishes a GitHub release for the pushed tag, with RELEASE-NOTES.md's
       # current contents as the release body. --verify-tag is a redundant belt-and-suspenders
       # check (the tag already exists on the remote, since it is what triggered this workflow).
       - name: Publish GitHub release

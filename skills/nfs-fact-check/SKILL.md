@@ -6,6 +6,9 @@ description: "Runs the adversarial verification pass on a drafted chapter: an en
 when_to_use: "Use when the author finishes drafting and wants claims verified, nfs-check-chapter reports unresolved claims, or nfs-start routes here from Path 3 (Research and verify). Do not invoke when no chapter argument is supplied (the skill halts if the chapter file is absent), or for unrelated queries."
 chain:
   - fact-checker
+metadata:
+  version: "0.2.0"
+  updated: 2026-10-04
 ---
 
 This skill is the verification front door. It resolves the chapter argument, runs an engine-backed marker inventory via `bin/ns-claims`, states the web gate status, delegates the authoritative verification pass to the `fact-checker` agent, confirms agent writes via Read checks, and formats the three counts from the agent's per-chapter report. The `fact-checker` agent is the sole writer of chapter markers and EV status transitions; the skill orchestrates, confirms, and reports. The skill writes no `<state-dir>/progress.json` - the open-claims total is maintained by the PostToolBatch hook per D-06 (single-writer state discipline).

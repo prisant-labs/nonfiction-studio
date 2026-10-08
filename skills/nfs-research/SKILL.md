@@ -6,6 +6,9 @@ description: "Runs a structured research session that populates the evidence led
 when_to_use: "Use when the author wants to gather sources before drafting, or nfs-start routes here from Path 3 (Research and verify). Do not invoke to verify existing claims (use nfs-fact-check for that), or for unrelated queries."
 chain:
   - research-librarian
+metadata:
+  version: "0.2.0"
+  updated: 2026-10-04
 ---
 
 This skill is the research front door. It confirms the chapter outline is present via a deterministic Bash guard, resolves any chapter scope argument against the slug registry, presents the research agenda with the web gate status, delegates all ledger writes to the `research-librarian` agent, and reports the three counts from the agent's session output. The `research-librarian` agent is the sole allocator of EV and SRC identifiers and the sole writer of the ledger files; the skill writes no ledger files and no `<state-dir>/` state.

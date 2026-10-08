@@ -6,6 +6,9 @@ description: "Builds and calibrates the author's stylometric voice baseline from
 when_to_use: "Use when the author says 'capture my voice', 'set my writing style', or 'I have samples to share'; accepts the nfs-capture-voice suggestion from nfs-interview; re-invokes to refresh a stale baseline after a voice-change decision is logged in context/decisions.md; or reports context/style-profile.md missing. Do not invoke for unrelated queries or when the author has a current, confirmed style profile and no intent to update it."
 chain:
   - voice-capture
+metadata:
+  version: "0.2.0"
+  updated: 2026-10-04
 ---
 
 This skill is the voice-capture front door. It orients the author to the profile's purpose, collects writing samples, assesses their word count against the calibration floor, discloses the calibration cost before delegating, delegates all computation and file writes to the `voice-capture` agent, confirms the output files via Read checks, relays the agent's regime disclosure, and previews selected baseline marker values in plain language. The `voice-capture` agent performs all computation and all writes.
