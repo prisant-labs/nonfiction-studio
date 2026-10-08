@@ -15,8 +15,10 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
-import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
+import { findBookRoot, BibleError, chaptersDirNameOf } from '../hooks/lib/bible.mjs';
+import { proseOf, proseBoundaryAt } from '../hooks/lib/prose.mjs';
 import { findOverlaps, discoverCorpora, DEFAULT_MIN_WORDS } from '../hooks/lib/overlap-engine.mjs';
+import { adoptionAt } from '../hooks/lib/adoption.mjs';
 
 const USAGE =
   'ns-overlap [--chapter=<slug>|--all] [--project=<dir>] [--min-words=<n>] [--json]\n' +
@@ -28,8 +30,8 @@ const USAGE =
   'and reported as an informational count, never silently dropped.\n' +
   '\n' +
   'Flags:\n' +
-  '  --chapter=<slug>   scan a single chapter file chapters/<slug>.md\n' +
-  '  --all              scan all .md files in chapters/ (default when no scope flag is given)\n' +
+  '  --chapter=<slug>   scan a single chapter file <chapters folder>/<slug>.md\n' +
+  '  --all              scan all .md files in the chapters folder (default when no scope flag is given)\n' +
   '  --project=<dir>    override the book root to <dir>\n' +
   '  --min-words=<n>    minimum merged-span word length to flag (default ' + DEFAULT_MIN_WORDS + ')\n' +
   '  --json             emit the full report as JSON to stdout\n' +
@@ -97,9 +99,12 @@ try {
 
 // ---- chapter discovery -----------------------------------------------------------
 
-const chapterDir = join(root, 'chapters');
+const chaptersName = chaptersDirNameOf(root);
+const chapterDir = join(root, chaptersName);
+// ADR-0016 (adopting an existing book): every chapter read below measures prose only.
+const proseBoundary = proseBoundaryAt(root);
 if (!existsSync(chapterDir)) {
-  process.stderr.write('ns-overlap: chapters/ directory not found at ' + chapterDir + '\n');
+  process.stderr.write('ns-overlap: chapters folder ' + chaptersName + '/ not found at ' + chapterDir + '\n');
   process.exit(2);
 }
 
@@ -112,7 +117,7 @@ if (opts.chapter) {
   }
   chapterPaths = [p];
 } else {
-  // --all or no scope flag: every .md file in chapters/, sorted by name
+  // --all or no scope flag: every .md file in the chapters folder, sorted by name
   chapterPaths = readdirSync(chapterDir)
     .filter(f => f.endsWith('.md'))
     .sort()
@@ -123,7 +128,7 @@ const chapters = [];
 for (const absPath of chapterPaths) {
   let text;
   try {
-    text = readFileSync(absPath, 'utf8');
+    text = proseOf(readFileSync(absPath, 'utf8'), proseBoundary);
   } catch (err) {
     process.stderr.write('ns-overlap: cannot read chapter ' + absPath + ': ' + err.message + '\n');
     process.exit(2);
@@ -134,7 +139,8 @@ for (const absPath of chapterPaths) {
 
 // ---- corpus discovery (hooks/lib/overlap-engine.mjs; shared with a future gate check) ---
 
-const corpora = discoverCorpora(root);
+// In a book that has not adopted claims, research/ holds the author's files (ADR-0016).
+const corpora = discoverCorpora(root, { claims: adoptionAt(root).elements.claims });
 
 // ---- run overlap engine ----------------------------------------------------------
 
@@ -161,7 +167,9 @@ if (opts.json) {
   process.stdout.write(JSON.stringify(json, null, 2) + '\n');
 } else {
   const prefix = '[overlap]';
-  if (findings.length === 0) {
+  if (corpora.length === 0) {
+    process.stdout.write(prefix + ' pass: nothing to compare: no source material on file\n');
+  } else if (findings.length === 0) {
     process.stdout.write(prefix + ' pass: no overlap findings (' + corpora.length + ' corpus text(s) checked)\n');
   } else {
     process.stdout.write(prefix + ' ' + findings.length + ' finding(s):\n');

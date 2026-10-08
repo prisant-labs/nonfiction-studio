@@ -11,7 +11,8 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
-import { findBookRoot, BibleError } from '../hooks/lib/bible.mjs';
+import { findBookRoot, BibleError, chaptersDirNameOf } from '../hooks/lib/bible.mjs';
+import { proseOf, proseBoundaryAt } from '../hooks/lib/prose.mjs';
 import { makeReport, addFinding, finalize } from '../hooks/lib/report.mjs';
 import { scrub } from '../hooks/lib/scrub-engine.mjs';
 
@@ -62,9 +63,12 @@ try {
 
 // ---- chapter discovery ---------------------------------------------------------
 
-const chapterDir = join(root, 'chapters');
+const chaptersName = chaptersDirNameOf(root);
+const chapterDir = join(root, chaptersName);
+// ADR-0016 (adopting an existing book): every chapter read below measures prose only.
+const proseBoundary = proseBoundaryAt(root);
 if (!existsSync(chapterDir)) {
-  process.stderr.write('ns-scrub: chapters/ directory not found at ' + chapterDir + '\n');
+  process.stderr.write('ns-scrub: chapters folder ' + chaptersName + '/ not found at ' + chapterDir + '\n');
   process.exit(2);
 }
 
@@ -77,7 +81,7 @@ if (opts.chapter) {
   }
   chapterPaths = [p];
 } else {
-  // --all or no scope flag: every .md file in chapters/, sorted by name
+  // --all or no scope flag: every .md file in the chapters folder, sorted by name
   chapterPaths = readdirSync(chapterDir)
     .filter(f => f.endsWith('.md'))
     .sort()
@@ -102,7 +106,7 @@ const chapters = [];
 for (const absPath of chapterPaths) {
   let text;
   try {
-    text = readFileSync(absPath, 'utf8');
+    text = proseOf(readFileSync(absPath, 'utf8'), proseBoundary);
   } catch (err) {
     process.stderr.write('ns-scrub: cannot read chapter ' + absPath + ': ' + err.message + '\n');
     process.exit(2);

@@ -107,6 +107,16 @@ Invariant 2, `hooks/lib/gate-engine.mjs:895`).
 | `state_coherence` | warn | No (warn only in Phase 1) |
 | `session_write_flag` | block | Yes |
 
+### In an adopted book
+
+Per [ADR-0016 (adopting an existing book)](../../adr/ADR-0016-adopting-an-existing-book.md), a check whose element the book has not adopted is a `skip`, never a pass, a failure, or an engine error: `claim_coverage` and `quote_fidelity` skip until `claims` is adopted, and `stylometry` skips until `style` is. The skip's `detail` names the element (`element "style" is not adopted; stylometry.not-adopted`), and its `next` names `/nonfiction-studio:nfs-adopt style`, or says that adopting claims is not available yet. `thesis_alignment` is the Stop hook's prompt, which cannot read the adoption record; its prompt tells the model to skip when it has no thesis to compare against.
+
+Every check reads the chapters in the folder the book's pointer names, and measures prose only: when `config.json` sets `prose.ends_at_heading`, each chapter is cut at the first line equal to that heading. `overlap` leaves `research/` out of its corpus until `claims` is adopted, because a shared `research/` folder holds the author's own files. An empty corpus, in any book, is a `pass` whose detail says nothing was compared:
+
+```
+  [overlap] pass: nothing to compare: no source material on file (research packets, evidence-log excerpts, or context/prior-work/); overlap.no-corpus
+```
+
 ## Output
 
 Human-readable summary:

@@ -48,7 +48,7 @@ import {
 } from 'node:fs';
 import { join, resolve, sep, basename, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findBookRoot, stateDirOf, stateDirNameOf } from './lib/bible.mjs';
+import { findBookRoot, stateDirOf, stateDirNameOf, chaptersDirNameOf } from './lib/bible.mjs';
 import {
   resolveActiveAgent,
   checkAgentWriteConstraint,
@@ -111,17 +111,21 @@ export function pickSnapshotName(slug, timestamp, existsFn) {
 // escalation). The timestamp itself never contains a hyphen (compactUtcNow
 // strips them), so any hyphen in the remainder is unambiguously the counter
 // separator. Returns null if fname does not belong to slug.
+//
+// The middle part must be exactly a timestamp, with or without a counter. A chapter slug may be
+// any file name (ADR-0016, adopting an existing book), so a prefix match alone would let slug
+// "ch01" claim the snapshots of a chapter named "ch01.x", and its prune would delete them.
+// The timestamp has whole seconds (the documented form) or milliseconds (compactUtcNow).
 // ---------------------------------------------------------------------------
+const SNAPSHOT_STAMP_RE = /^(\d{8}T\d{6}(?:\d{3})?Z)(?:-(\d+))?$/;
+
 function parseSnapshotName(fname, slug) {
   const prefix = slug + '.';
   const suffix = '.md';
   if (!fname.startsWith(prefix) || !fname.endsWith(suffix)) return null;
-  const middle = fname.slice(prefix.length, fname.length - suffix.length);
-  const m = middle.match(/^(.*)-(\d+)$/);
-  if (m) {
-    return { timestamp: m[1], counter: parseInt(m[2], 10) };
-  }
-  return { timestamp: middle, counter: 1 };
+  const m = fname.slice(prefix.length, fname.length - suffix.length).match(SNAPSHOT_STAMP_RE);
+  if (!m) return null;
+  return { timestamp: m[1], counter: m[2] ? parseInt(m[2], 10) : 1 };
 }
 
 // ---------------------------------------------------------------------------
@@ -721,11 +725,11 @@ if (isMain) {
     process.exit(0);
   }
 
-  // Step 3d: chapters/ targets - session-write flag plus optional snapshot.
-  if (
-    targetNorm === rootNorm + sep + 'chapters' ||
-    targetNorm.startsWith(rootNorm + sep + 'chapters' + sep)
-  ) {
+  // Step 3d: chapters-folder targets - session-write flag plus optional snapshot. The folder is
+  // the book's resolved chapters folder (ADR-0016, adopting an existing book), folded like the
+  // target (F-HK-13).
+  const chaptersDirNorm = rootNorm + sep + foldForCompare(chaptersDirNameOf(resolvedRoot));
+  if (targetNorm === chaptersDirNorm || targetNorm.startsWith(chaptersDirNorm + sep)) {
     // --- Session-write flag (_nonfiction-studio/gate/.session-write-flag) ---
     // Atomic write-then-rename; creating _nonfiction-studio/gate/ if needed.
     // Fail-open: flag write error is logged and the write is still allowed.
@@ -765,7 +769,7 @@ if (isMain) {
         // collision suffix would otherwise sort before its unsuffixed base name.
         try {
           const allForSlug = readdirSync(snapshotsDir)
-            .filter(f => f.startsWith(slug + '.') && f.endsWith('.md'));
+            .filter(f => parseSnapshotName(f, slug) !== null);
           allForSlug.sort((a, b) => compareSnapshotNames(a, b, slug)); // ascending = oldest first
           if (allForSlug.length > 10) {
             const toDelete = allForSlug.slice(0, allForSlug.length - 10);

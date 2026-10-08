@@ -777,6 +777,34 @@ test('TSK-050b-(a) create-if-absent: new entry has five fields, title from regis
   assert.equal(ch1.open_claim_count, 0, 'open_claim_count is 0 (content has no open markers)');
 });
 
+// ADR-0016 (adopting an existing book): an adopted book's chapter list names its chapters by
+// their own file names, so the registry row for a free-form slug still supplies the title.
+test('create-if-absent: a registry row with a free-form slug supplies the title (ADR-0016)', () => {
+  const book = cloneSampleBook('050b-free-slug');
+  const progressPath = join(book, '_nonfiction-studio', 'progress.json');
+  const registryPath = join(book, 'structure', 'chapter-list.md');
+  writeFileSync(registryPath, readFileSync(registryPath, 'utf8').replace(
+    '| 6 | 06-the-compounding-effect |',
+    "| 7 | Author's Note | A Last Word |  |  |\n| 6 | 06-the-compounding-effect |"
+  ), 'utf8');
+  const notePath = join(book, 'chapters', "Author's Note.md");
+  const content = 'A closing note from the author.\n';
+  writeFileSync(notePath, content, 'utf8');
+
+  const result = runHook(makeBatchEvent(book, [{
+    tool_name: 'Write',
+    tool_input: { file_path: notePath, content },
+    tool_use_id: 'toolu_050bfree',
+    tool_response: 'Written.'
+  }]));
+  assert.equal(result.status, 0, 'exit 0');
+
+  const after = JSON.parse(readFileSync(progressPath, 'utf8'));
+  const note = after.chapters.find(ch => ch.slug === "Author's Note");
+  assert.ok(note, 'entry created for the free-form slug');
+  assert.equal(note.title, 'A Last Word', 'title resolved from the registry, not derived from the slug');
+});
+
 // ---------------------------------------------------------------------------
 // TSK-050b-(b) create-if-absent without registry: title derived from slug
 //   when structure/chapter-list.md is absent.

@@ -551,3 +551,12 @@ test('generated markdown never contains a generation timestamp', () => {
   // ticks; its absence here is the direct proof, not an inference from the test above.
   assert.doesNotMatch(all, /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
 });
+
+test('buildBibliographyMarkdown: names the chapters folder it is given, and chapters/ by default (ADR-0016)', () => {
+  const { ledgerEntries, sourceEntries, chapters, style } = loadHappy();
+  const result = computeApparatus(chapters, ledgerEntries, sourceEntries, style);
+  assert.match(buildBibliographyMarkdown(result), /somewhere in `chapters\/`/);
+  const adopted = buildBibliographyMarkdown(result, 'manuscript');
+  assert.match(adopted, /somewhere in `manuscript\/`/);
+  assert.doesNotMatch(adopted, /chapters\//);
+});

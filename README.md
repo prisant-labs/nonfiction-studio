@@ -21,7 +21,7 @@ Most AI writing tools generate plausible prose and leave the verification to you
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/version-0.1.1-blue?style=flat-square" alt="Version 0.1.1">
   <img src="https://img.shields.io/badge/tier-universal%20(Bronze)-CD7F32?style=flat-square" alt="Conformance tier: universal (Bronze)">
-  <a href="#the-catalog"><img src="https://img.shields.io/badge/skills-14-brightgreen?style=flat-square" alt="14 skills"></a>
+  <a href="#the-catalog"><img src="https://img.shields.io/badge/skills-15-brightgreen?style=flat-square" alt="15 skills"></a>
   <a href="#subagents"><img src="https://img.shields.io/badge/subagents-8-brightgreen?style=flat-square" alt="Subagents: 8"></a>
   <a href="#command-line-engines"><img src="https://img.shields.io/badge/CLIs-9-brightgreen?style=flat-square" alt="9 CLIs"></a>
   <a href="https://agentskills.io/specification"><img src="https://img.shields.io/badge/spec-agentskills.io-orange?style=flat-square" alt="Agent Skills Spec"></a>
@@ -174,7 +174,7 @@ A verdict is `pass`, `warn`, or `block`, and a block names the check and the fin
 
 ## The catalog
 
-**14 skills, 8 subagents, 9 CLIs, and 2 output styles**, plus hooks on six events. Every component has a reference page under `docs/reference/`, indexed from [docs/README.md](docs/README.md), and most ship a worked example alongside it.
+**15 skills, 8 subagents, 9 CLIs, and 2 output styles**, plus hooks on six events. Every component has a reference page under `docs/reference/`, indexed from [docs/README.md](docs/README.md), and most ship a worked example alongside it.
 
 ### Skills
 
@@ -186,8 +186,9 @@ Skills are what you invoke, as `/nonfiction-studio:<name>`. Each one orchestrate
 - **[nfs-tour](docs/reference/skills/nfs-tour.md)** - a four-beat walkthrough of the bundled sample book: the gate passes, honestly reporting the stylometry check as advice-only below the book-scale verdict floor rather than inventing a margin, a realistic AI-residue defect is planted, the gate blocks with a named reason, the defect is fixed, and the gate passes again. Runs entirely in a disposable copy, so neither the shipped example nor any project of yours is touched.
 - **[nfs-start](docs/reference/skills/nfs-start.md)** - the guided front door. Presents six numbered paths (start a new book, continue writing, research and verify, review quality and status, troubleshoot, quick preview) and routes you to the right skill for where the book actually is. Use it when you are starting a session without a clear intent; the sixth path needs no project at all.
 
-**Set up the project (3)**
+**Set up the project (4)**
 
+- **[nfs-adopt](docs/reference/skills/nfs-adopt.md)** - brings a book that already exists into the studio in place, without changing any of your files. It plans first and shows you what it will add and what works at once, then, on your explicit yes, adds the state folder and a pointer to your own chapters folder. Word counts, snapshots, the status board, the doctor, and the gate's prose checks work on day one; the style profile, the brief, and the outline can each be taken on later with `nfs-adopt style`, `brief`, or `structure`.
 - **[nfs-new-book](docs/reference/skills/nfs-new-book.md)** - creates the project's folder structure in one pass: `context/` (brief, audience, decisions, style profile), `structure/` (thesis, outline, comps), `chapters/`, `research/` (evidence log, sources, open questions), and `production/` (front matter, back matter, exports), plus the `_nonfiction-studio/` state files the hooks and CLIs read. Every file sits at a predictable top-level path rather than buried in nested or generated directories, so you can find, read, and edit any of it without going through the plugin. It detects an existing project and offers to fill in only what is missing rather than overwriting your work.
 - **[nfs-interview](docs/reference/skills/nfs-interview.md)** - the adaptive intake session that produces a confirmed `context/brief.md`, walking ten sections from project basics and thesis through audience, comps, scope, voice, research posture, logistics, ethics, and your own definition of done. It is resumable: answers are flushed to the brief section by section, so an interrupted session picks up where it stopped instead of restarting. Budget 45 to 90 minutes, and expect a confirmed brief at the end, not a drafted chapter.
 - **[nfs-capture-voice](docs/reference/skills/nfs-capture-voice.md)** - builds the numeric voice baseline that every later drift statistic is measured against, from writing samples you supply. It produces two things: `context/style-profile.md`, readable prose rules you can edit by hand, and the marker vector `ns-stylometry` actually scores against. If you have no samples to hand, it falls back to a bootstrap loop where the studio generates three candidate passages and you react to them until the profile is right.
@@ -309,7 +310,7 @@ If you try Nonfiction Studio in Cowork, treat it as "should work" rather than "p
 |---|---|
 | **Current version** | `0.1.1` (source of truth: [`library.json`](library.json)) |
 | **Status** | Pre-1.0; Phase 1 complete, later phases in progress |
-| **Components** | 14 skills, 8 subagents, 9 CLIs, 2 output styles, hooks on six events |
+| **Components** | 15 skills, 8 subagents, 9 CLIs, 2 output styles, hooks on six events |
 | **Conformance** | `universal` (Bronze) at Standard 0.12 |
 | **Agent targets** | Claude Code (Cowork pending verification; chat is skills-only) |
 | **Runtime** | Node 22.12 or later; nothing to install at runtime (hooks and CLIs parse YAML with a vendored subset parser, `hooks/lib/mini-yaml.mjs`; the `yaml` package in `package.json` is used only by the repository's CI checkers) |

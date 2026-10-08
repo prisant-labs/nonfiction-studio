@@ -588,15 +588,17 @@ export function buildEndnotesMarkdown(result) {
  * bibliography form, sorted by author surname, then title, then year.
  *
  * @param {ReturnType<typeof computeApparatus>} result
+ * @param {string} [chaptersDirName] - the book's chapters folder (ADR-0016, adopting an existing
+ *   book); `chapters` in a book the plugin created
  * @returns {string}
  */
-export function buildBibliographyMarkdown(result) {
+export function buildBibliographyMarkdown(result, chaptersDirName = 'chapters') {
   const lines = [];
   lines.push('# Bibliography');
   lines.push('');
   lines.push(
     'Chicago-style bibliography generated from `research/sources.md`, limited to sources actually ' +
-    'cited by a `[claim: EV-nnnn]` anchor somewhere in `chapters/`. Do not hand-edit; regenerate ' +
+    'cited by a `[claim: EV-nnnn]` anchor somewhere in `' + chaptersDirName + '/`. Do not hand-edit; regenerate ' +
     'with `ns-notes`. Sorted by author surname, then title, then year.'
   );
 

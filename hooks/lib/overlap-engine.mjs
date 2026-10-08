@@ -297,14 +297,19 @@ export function findOverlaps(chapters, corpora, { minWords = DEFAULT_MIN_WORDS }
  * runs over an unchanged tree produce an identical corpus in an identical order,
  * independent of directory-listing order.
  *
+ * research/packets/ and the evidence log belong to the claims element of ADR-0016 (adopting an
+ * existing book). In a book that has not adopted claims, a research/ folder holds the author's
+ * own files, which the plugin does not read, so the caller passes `claims: false`.
+ *
  * @param {string} root - absolute path to the book root
+ * @param {{claims?: boolean}} [opts] - claims: false leaves research/ out of the corpus
  * @returns {{source: string, text: string}[]}
  */
-export function discoverCorpora(root) {
+export function discoverCorpora(root, { claims = true } = {}) {
   const corpora = [];
 
   const packetsDir = join(root, 'research', 'packets');
-  if (existsSync(packetsDir)) {
+  if (claims && existsSync(packetsDir)) {
     const files = readdirSync(packetsDir).filter(f => f.endsWith('.md')).sort();
     for (const f of files) {
       corpora.push({
@@ -315,7 +320,7 @@ export function discoverCorpora(root) {
   }
 
   const ledgerPath = join(root, 'research', 'evidence-log.md');
-  if (existsSync(ledgerPath)) {
+  if (claims && existsSync(ledgerPath)) {
     const entries = parseEvidenceLog(readFileSync(ledgerPath, 'utf8'));
     const withVerbatim = entries
       .filter(e => e.verbatim != null && e.verbatim !== '')

@@ -10,13 +10,13 @@ chain:
 
 This skill is the verification front door. It resolves the chapter argument, runs an engine-backed marker inventory via `bin/ns-claims`, states the web gate status, delegates the authoritative verification pass to the `fact-checker` agent, confirms agent writes via Read checks, and formats the three counts from the agent's per-chapter report. The `fact-checker` agent is the sole writer of chapter markers and EV status transitions; the skill orchestrates, confirms, and reports. The skill writes no `<state-dir>/progress.json` - the open-claims total is maintained by the PostToolBatch hook per D-06 (single-writer state discipline).
 
-**Writer alignment.** `fact-checker` writes all claim markers in `chapters/<slug>.md` (inserting `[UNVERIFIED]` or `[SOURCE-UNVERIFIABLE]` adjacent to unresolved markers and removing stale tags on re-checks that advance to `verified`; the `[claim: EV-nnnn]` marker is never removed) and all EV status transitions in `research/evidence-log.md`. The skill confirms both files via Read checks after the agent pass. It never eyeballs markers itself: the ns-claims engine is the deterministic inventory source.
+**Writer alignment.** `fact-checker` writes all claim markers in `<chapters-dir>/<slug>.md` (inserting `[UNVERIFIED]` or `[SOURCE-UNVERIFIABLE]` adjacent to unresolved markers and removing stale tags on re-checks that advance to `verified`; the `[claim: EV-nnnn]` marker is never removed) and all EV status transitions in `research/evidence-log.md`. The skill confirms both files via Read checks after the agent pass. It never eyeballs markers itself: the ns-claims engine is the deterministic inventory source.
 
 **Re-run idempotency.** Re-runs are safe because the agent's writes are status-field updates and tag insert-or-remove operations against current state, and its cache skips known-good claims per D-09 (learning checker agents). A session interrupted after partial agent writes leaves the chapter and ledger in a consistent intermediate state; re-running picks up from current state without duplicating changes.
 
 Skill inputs read:
 - `structure/chapter-list.md` (slug registry; probed at Step 1 to resolve the chapter argument)
-- `chapters/<slug>.md` (target chapter; file-existence probed at Step 1, confirmed via Read after agent pass)
+- `<chapters-dir>/<slug>.md` (target chapter; file-existence probed at Step 1, confirmed via Read after agent pass)
 - `research/evidence-log.md` (evidence ledger; passed to fact-checker, confirmed via Read after agent pass)
 - `research/sources.md` (source registry; passed to fact-checker for the session-start changed-flag scan and online pass)
 - `<state-dir>/config.json` (web gate check at Step 4)
@@ -26,16 +26,21 @@ Skill chain edge: `nfs-fact-check -> fact-checker` per `agents/_chain-permitted.
 
 ---
 
+Elements this skill needs: claims
+
 ## Locate the state folder
 
-This book keeps its machine-managed records in one state folder at the book root, the folder that holds `context/` and `chapters/`. In this skill, `<state-dir>` stands for that folder's name. Resolve it once, before any step below.
+This book keeps its machine-managed records in one state folder at the book root. The book root is the folder that holds `nonfiction-studio.json`, or else the folder that holds `context/` and `chapters/`. In this skill, `<state-dir>` stands for the state folder's name, and `<chapters-dir>` stands for the name of the folder that holds the chapters. Resolve both once, before any step below.
 
-1. Use the Read tool on `nonfiction-studio.json` at the book root. This Read is the skill's first tool call. If the file does not exist, `<state-dir>` is `_nonfiction-studio`; continue at item 4.
-2. If the file exists, it must hold a JSON object with a `state_dir` key whose value is a string that matches `^[A-Za-z0-9._-]{1,64}$`. The value may not be `.` or `..`. It may not be `context`, `structure`, `research`, `chapters`, `production`, `.git` or `.claude`; on Windows, compare these names without regard to case. The folder that it names must exist at the book root and hold `meta.json`. When every condition holds, `<state-dir>` is that value.
+1. Use the Read tool on `nonfiction-studio.json` at the book root. This Read is the skill's first tool call. If the file does not exist, `<state-dir>` is `_nonfiction-studio` and `<chapters-dir>` is `chapters`; continue at item 4.
+2. If the file exists, it must hold a JSON object with a `state_dir` key, a `chapters_dir` key, or both. Each value must be a string that matches `^[A-Za-z0-9._-]{1,64}$`, and neither may be `.` or `..`. The `state_dir` value may not be `context`, `structure`, `research`, `chapters`, `production`, `.git` or `.claude`. The `chapters_dir` value may not be `context`, `structure`, `research`, `production`, `.git`, `.claude` or the state folder's name. On Windows, compare these names without regard to case. The state folder must exist at the book root and hold `meta.json`, and a folder that `chapters_dir` names must exist at the book root. When every condition holds, `<state-dir>` is the `state_dir` value, or `_nonfiction-studio` when that key is absent, and `<chapters-dir>` is the `chapters_dir` value, or `chapters` when that key is absent.
 3. If the file exists but any condition in item 2 fails, stop. Tell the author which condition failed, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never fall back to `_nonfiction-studio`.
 4. If the file does not exist and `_nonfiction-studio/meta.json` does not exist either, list the folders at the book root, hidden folders included. If one of them holds both `meta.json` and `progress.json`, stop. Name that folder, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never create a second state folder beside it.
+5. When `<state-dir>/meta.json` exists, use the Read tool on it. If it has an `adoption` object, the book is an adopted one, and an element counts as adopted only when its entry under `adoption.elements` is exactly `"adopted"`. A book without the object counts as having adopted all five elements: `chapters`, `style`, `brief`, `structure` and `claims`. So does a folder that has no state folder yet.
+6. The line `Elements this skill needs:` above names the elements this skill cannot run without. If any of them is not adopted, stop before your first write. Name the element, write nothing, and name `/nonfiction-studio:nfs-adopt <element>` as the way to adopt it. For `claims`, say instead that adopting claims is not available yet.
+7. Treat the files of every other element that is not adopted as absent. Never read, create or edit them, even when a file of that name exists, because in an adopted book such a file is the author's own. The `style` files are `context/style-profile.md` and the voice baseline in `<state-dir>/config.json`. The `brief` files are `context/brief.md`, `context/audience.md` and `context/decisions.md`. The `structure` files are those under `structure/`, plus `research/open-questions.md`. The `claims` files are `research/evidence-log.md`, `research/sources.md` and `research/packets/`.
 
-Before you run a command or open a path below, replace `<state-dir>` with the resolved name. When this skill dispatches an agent, name the resolved state folder in the dispatch brief, because agents never resolve it themselves.
+Before you run a command or open a path below, replace `<state-dir>` and `<chapters-dir>` with the resolved names. When this skill dispatches an agent, name both resolved folders in the dispatch brief, because agents never resolve them themselves.
 
 ---
 
@@ -55,16 +60,16 @@ If `NO_REGISTRY`: use the supplied argument directly as the slug candidate.
 
 After resolving the slug, use the Bash tool:
 ```
-test -f chapters/<slug>.md && echo HAS_CHAPTER || echo NO_CHAPTER
+test -f <chapters-dir>/<slug>.md && echo HAS_CHAPTER || echo NO_CHAPTER
 ```
 
 The output is a binary token:
-- `NO_CHAPTER`: halt immediately. State: "Chapter file `chapters/<slug>.md` was not found. Produce the chapter with `/nonfiction-studio:nfs-draft <slug>` before running the verification pass."
+- `NO_CHAPTER`: halt immediately. State: "Chapter file `<chapters-dir>/<slug>.md` was not found. Produce the chapter with `/nonfiction-studio:nfs-draft <slug>` before running the verification pass."
 - `HAS_CHAPTER`: continue to Step 2.
 
 A chapter argument is required. Do not proceed without a resolved slug pointing to an existing chapter file.
 
-Once the slug is resolved, take the ai-use-log.jsonl count snapshot described in Step 6's Compliance append section for `chapters/<slug>.md` and `research/evidence-log.md`, before this flow's first write.
+Once the slug is resolved, take the ai-use-log.jsonl count snapshot described in Step 6's Compliance append section for `<chapters-dir>/<slug>.md` and `research/evidence-log.md`, before this flow's first write.
 
 ---
 
@@ -94,7 +99,7 @@ the author how to proceed (verify plugin installation or provide the path manual
 
 Carry the resolved path forward as `<plugin-root>` for Step 3.
 
-**Shared plugin-root convention.** This resolver is the same command as `skills/nfs-new-book/SKILL.md` Step 4 and every other CLI-backed skill; `tests/checks/plugin-root-resolver.test.mjs` guards byte-for-byte parity across all eight.
+**Shared plugin-root convention.** This resolver is the same command as `skills/nfs-new-book/SKILL.md` Step 4 and every other CLI-backed skill; `tests/checks/plugin-root-resolver.test.mjs` guards byte-for-byte parity across every skill that carries it.
 
 ---
 
@@ -129,7 +134,7 @@ Use the Read tool on `<state-dir>/config.json` to check whether `research.web_en
 - **On chat** (even when gate is open): "Note: WebSearch and WebFetch may not be available on the chat surface. Paste source content for any claims the agent cannot resolve from the evidence ledger alone."
 
 Spawn `fact-checker` via the `nfs-fact-check -> fact-checker` chain edge, passing:
-- The chapter slug and file path (`chapters/<slug>.md`)
+- The chapter slug and file path (`<chapters-dir>/<slug>.md`)
 - The ns-claims pre-count from Step 3 (total markers, resolved, coverage)
 - The web gate status from the config read
 - Any pasted source content provided by the author
@@ -138,7 +143,7 @@ The `fact-checker` agent runs its authoritative five-step pass per its contract:
 1. Session-start cache protocol: reads `research/sources.md` for `changed: true` flags, invalidates affected cache entries, loads the verified-claims cache from `.claude/agent-memory/nonfiction-studio-fact-checker/` per D-09 (learning checker agents)
 2. Resolves all `[claim: EV-nnnn]` markers against `research/evidence-log.md`
 3. Updates EV entry statuses (`verified`, `unverified`, `interpretation`, or `source-unverifiable`)
-4. Inserts `[UNVERIFIED]` adjacent to unverified markers in `chapters/<slug>.md`; removes stale `[UNVERIFIED]` or `[SOURCE-UNVERIFIABLE]` tags when an entry advances to `verified` on a re-check; never removes the original `[claim: EV-nnnn]` marker
+4. Inserts `[UNVERIFIED]` adjacent to unverified markers in `<chapters-dir>/<slug>.md`; removes stale `[UNVERIFIED]` or `[SOURCE-UNVERIFIABLE]` tags when an entry advances to `verified` on a re-check; never removes the original `[claim: EV-nnnn]` marker
 5. Runs the optional online DOI/URL pass when `research.web_enabled` is exactly the boolean `true`; inserts `[SOURCE-UNVERIFIABLE]` paired with the existing `[claim: EV-nnnn]` for online-pass failures; reports the gate as closed and the path to enable it when the gate is off
 
 The agent writes `<state-dir>/fact-check-reports/<NN>-report.md` at the end of every pass, including passes where all entries are verified.
@@ -150,7 +155,7 @@ The skill writes no chapter files, no ledger files, and no `<state-dir>/` machin
 ## Step 5 - Confirm agent writes via Read checks
 
 After the agent completes its pass, use the Read tool to confirm:
-- `chapters/<slug>.md` is present and non-empty
+- `<chapters-dir>/<slug>.md` is present and non-empty
 - `research/evidence-log.md` is readable
 - `<state-dir>/fact-check-reports/<NN>-report.md` exists (the report the agent writes at the end of every pass)
 
@@ -168,7 +173,7 @@ This flow's writes may already be logged automatically by a hook on this surface
 
 For the chapter marker edits:
 ```json
-{"ts":"<RFC 3339 UTC>","agent":"fact-checker","surface":"<actual surface>","scope":"assisted","targets":["chapters/<slug>.md"],"summary":"Updated claim markers in <slug> per the verification pass."}
+{"ts":"<RFC 3339 UTC>","agent":"fact-checker","surface":"<actual surface>","scope":"assisted","targets":["<chapters-dir>/<slug>.md"],"summary":"Updated claim markers in <slug> per the verification pass."}
 ```
 
 For the evidence-ledger status transitions:
@@ -176,7 +181,7 @@ For the evidence-ledger status transitions:
 {"ts":"<RFC 3339 UTC>","agent":"fact-checker","surface":"<actual surface>","scope":"mechanical","targets":["research/evidence-log.md"],"summary":"Advanced EV entry statuses for <slug> per the verification pass."}
 ```
 
-`surface` is `claude-code`, `cowork`, or `chat` per `docs/formats/ai-use-log.md` - whichever this flow is actually running on. On CLI and Cowork the PostToolBatch hook normally covers `chapters/<slug>.md` already (it watches Edit calls into `chapters/`), so the count-delta check above typically finds no append needed for that file there; `research/evidence-log.md` is outside the hook's watch on every surface, so this skill's own append is typically the only record for that file.
+`surface` is `claude-code`, `cowork`, or `chat` per `docs/formats/ai-use-log.md` - whichever this flow is actually running on. On CLI and Cowork the PostToolBatch hook normally covers `<chapters-dir>/<slug>.md` already (it watches Edit calls into `<chapters-dir>/`), so the count-delta check above typically finds no append needed for that file there; `research/evidence-log.md` is outside the hook's watch on every surface, so this skill's own append is typically the only record for that file.
 
 Format and present the three counts from the agent's per-chapter report at `<state-dir>/fact-check-reports/<NN>-report.md`:
 

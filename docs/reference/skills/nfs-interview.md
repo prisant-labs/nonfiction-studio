@@ -53,7 +53,7 @@ All outputs are written by the `interviewer` agent, not by the skill directly. T
 
 The skill runs six steps in order.
 
-Before its first step, the skill locates the state folder: it reads `nonfiction-studio.json` at the book root, uses `_nonfiction-studio/` when that file does not exist, and stops without writing when the pointer is invalid or an unpointed state folder is found.
+Before its first step, the skill locates the state folder and the chapters folder: it reads `nonfiction-studio.json` at the book root, uses `_nonfiction-studio/` and `chapters/` for whatever that file does not name, and stops without writing when the pointer is invalid or an unpointed state folder is found. It then reads the adoption record in the state folder's `meta.json`, per [ADR-0016 (adopting an existing book)](../../adr/ADR-0016-adopting-an-existing-book.md). It needs `brief`: when the book has not adopted it, the skill stops before its first write and names `/nonfiction-studio:nfs-adopt` with the missing element. In an adopted book, it treats the files of every other element the book has not adopted as absent, because such a file is the author's own.
 
 1. **Resumption check.** Reads `context/brief.md` for existing DRAFT blocks. If found, announces the resumption point and names the completed sections. If not, starts a new session.
 

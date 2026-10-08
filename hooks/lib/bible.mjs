@@ -46,11 +46,21 @@ export const DEFAULT_STATE_DIR = '_nonfiction-studio';
 export const LEGACY_STATE_DIR = '.studio';
 
 /**
- * The committed pointer file at a book root. Present only in a book whose state folder has
- * a non-default name: { "state_dir": "<name>" }. Read only from the book root itself, never
- * from an ancestor, so a pointer can never govern more than one book.
+ * The committed pointer file at a book root. Present only in a book whose state folder or
+ * chapters folder has a non-default name: { "state_dir": "<name>", "chapters_dir": "<name>" },
+ * either key optional but not both (ADR-0015, state folder name; ADR-0016, adopting an existing
+ * book). Read only from the book root itself, never from an ancestor, so a pointer can never
+ * govern more than one book.
  */
 export const POINTER_FILE = 'nonfiction-studio.json';
+
+/**
+ * The chapters folder: the one directory at the book root whose Markdown files are the
+ * manuscript. A plugin-created book uses DEFAULT_CHAPTERS_DIR; an adopted book's pointer can
+ * name its own folder (ADR-0016). Every hook, engine, and CLI reaches it through
+ * chaptersDirNameOf / chaptersDirOf below, never through a literal.
+ */
+export const DEFAULT_CHAPTERS_DIR = 'chapters';
 
 // One folder name: ASCII letters, digits, "_", "-", "."; 1 to 64 characters.
 export const STATE_DIR_NAME_RE = /^[A-Za-z0-9._-]{1,64}$/;
@@ -59,6 +69,12 @@ export const STATE_DIR_NAME_RE = /^[A-Za-z0-9._-]{1,64}$/;
 // folder (hooks/lib/agent-identity.mjs), so a pointer naming a bible folder would widen that
 // scope into the manuscript, and one naming .claude would let it plant a project skill.
 export const RESERVED_STATE_DIR_NAMES = ['context', 'structure', 'research', 'chapters', 'production', '.git', '.claude'];
+
+// Names a chapters folder may never take, besides the book's state folder. The drafting
+// agents' write scope follows the chapters folder (hooks/lib/agent-identity.mjs), so a pointer
+// naming .claude would let them plant a project skill, and one naming context or research would
+// widen their scope into the brief or the ledgers (ADR-0016, Security).
+export const RESERVED_CHAPTERS_DIR_NAMES = ['context', 'structure', 'research', 'production', '.git', '.claude'];
 
 /**
  * Checks a candidate state-folder name. Returns null when valid, or a one-clause reason.
@@ -87,6 +103,36 @@ export function validateStateDirName(name, platform = process.platform) {
 }
 
 /**
+ * Checks a candidate chapters-folder name, given the book's state-folder name. Returns null when
+ * valid, or a one-clause reason. Same name rule as the state folder; the reserved names and the
+ * state folder are compared without regard to case on win32 only (F-HK-13 convention).
+ *
+ * @param {*} name - the value of a pointer's chapters_dir
+ * @param {string} stateDirName - the book's resolved state-folder name
+ * @param {string} [platform] - defaults to process.platform; injectable for tests
+ * @returns {string|null}
+ */
+export function validateChaptersDirName(name, stateDirName, platform = process.platform) {
+  if (typeof name !== 'string') {
+    return 'chapters_dir must be a string';
+  }
+  if (!STATE_DIR_NAME_RE.test(name)) {
+    return 'chapters_dir must be one folder name of 1 to 64 ASCII letters, digits, "_", "-" or "."';
+  }
+  if (name === '.' || name === '..') {
+    return 'chapters_dir may not be "." or ".."';
+  }
+  const fold = (s) => (platform === 'win32' ? s.toLowerCase() : s);
+  if (RESERVED_CHAPTERS_DIR_NAMES.includes(fold(name))) {
+    return 'chapters_dir may not name the reserved folder "' + name + '"';
+  }
+  if (typeof stateDirName === 'string' && fold(name) === fold(stateDirName)) {
+    return 'chapters_dir may not name the state folder "' + name + '"';
+  }
+  return null;
+}
+
+/**
  * Builds the bad-pointer error: the corrupt-bible class, which write guards treat as
  * fail-closed. Carries the book root and the pointer path so a caller can tell the author
  * exactly which file to repair, and so the write guard can let that one repair through.
@@ -103,12 +149,74 @@ function pointerError(root, reason) {
   return err;
 }
 
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+
+/**
+ * Parses a pointer file's text. Returns the object, or throws a plain Error describing why the
+ * text is not a JSON object. Shared by readPointer and by root detection, which must look at a
+ * pointer's keys before deciding whether its directory is a book at all.
+ */
+function parsePointerText(text) {
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (err) {
+    throw new Error('it is not readable JSON (' + err.message + ')');
+  }
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error('it must be a JSON object');
+  }
+  return data;
+}
+
+/**
+ * Reads and validates the pointer at a book root: the single parser of POINTER_FILE. Returns
+ * null when there is no pointer. Otherwise returns { stateDir, chaptersDir, namesState,
+ * namesChapters }, where a key the pointer omits takes its default. A pointer that is
+ * unreadable, malformed, has neither key, or names an invalid folder throws
+ * STATE_POINTER_INVALID; it never falls back to a default, because a fallback would split the
+ * book's records across two folders (ADR-0015) or point the drafting agents at the wrong
+ * folder (ADR-0016).
+ *
+ * @param {string} root - absolute path to the book root
+ * @param {string} [platform] - defaults to process.platform; injectable for tests
+ * @returns {{ stateDir: string, chaptersDir: string, namesState: boolean, namesChapters: boolean }|null}
+ * @throws {BibleError} code STATE_POINTER_INVALID on a bad pointer
+ */
+export function readPointer(root, platform = process.platform) {
+  const pointerPath = join(root, POINTER_FILE);
+  if (!existsSync(pointerPath)) {
+    return null;
+  }
+  let data;
+  try {
+    data = parsePointerText(readFileSync(pointerPath, 'utf8'));
+  } catch (err) {
+    throw pointerError(root, err.message);
+  }
+  const namesState = hasOwn(data, 'state_dir');
+  const namesChapters = hasOwn(data, 'chapters_dir');
+  if (!namesState && !namesChapters) {
+    throw pointerError(root, 'it has neither a "state_dir" nor a "chapters_dir" key');
+  }
+  let stateDir = DEFAULT_STATE_DIR;
+  if (namesState) {
+    const reason = validateStateDirName(data.state_dir, platform);
+    if (reason) throw pointerError(root, reason);
+    stateDir = data.state_dir;
+  }
+  let chaptersDir = DEFAULT_CHAPTERS_DIR;
+  if (namesChapters) {
+    const reason = validateChaptersDirName(data.chapters_dir, stateDir, platform);
+    if (reason) throw pointerError(root, reason);
+    chaptersDir = data.chapters_dir;
+  }
+  return { stateDir, chaptersDir, namesState, namesChapters };
+}
+
 /**
  * Returns the state folder's name (a single path segment) for the given book root: the
- * pointer's state_dir when a pointer exists, otherwise DEFAULT_STATE_DIR. A pointer that is
- * unreadable, malformed, or carries an invalid name throws STATE_POINTER_INVALID; it never
- * falls back to the default, because a fallback would split the book's records across two
- * folders (ADR-0015).
+ * pointer's state_dir when it names one, otherwise DEFAULT_STATE_DIR.
  *
  * @param {string} root - absolute path to the book root
  * @param {string} [platform] - defaults to process.platform; injectable for tests
@@ -116,27 +224,34 @@ function pointerError(root, reason) {
  * @throws {BibleError} code STATE_POINTER_INVALID on a bad pointer
  */
 export function stateDirNameOf(root, platform = process.platform) {
-  const pointerPath = join(root, POINTER_FILE);
-  if (!existsSync(pointerPath)) {
-    return DEFAULT_STATE_DIR;
-  }
-  let data;
-  try {
-    data = JSON.parse(readFileSync(pointerPath, 'utf8'));
-  } catch (err) {
-    throw pointerError(root, 'it is not readable JSON (' + err.message + ')');
-  }
-  if (data === null || typeof data !== 'object' || Array.isArray(data)) {
-    throw pointerError(root, 'it must be a JSON object');
-  }
-  if (!Object.prototype.hasOwnProperty.call(data, 'state_dir')) {
-    throw pointerError(root, 'it has no "state_dir" key');
-  }
-  const reason = validateStateDirName(data.state_dir, platform);
-  if (reason) {
-    throw pointerError(root, reason);
-  }
-  return data.state_dir;
+  const pointer = readPointer(root, platform);
+  return pointer ? pointer.stateDir : DEFAULT_STATE_DIR;
+}
+
+/**
+ * Returns the chapters folder's name (a single path segment) for the given book root: the
+ * pointer's chapters_dir when it names one, otherwise DEFAULT_CHAPTERS_DIR (ADR-0016).
+ *
+ * @param {string} root - absolute path to the book root
+ * @param {string} [platform] - defaults to process.platform; injectable for tests
+ * @returns {string}
+ * @throws {BibleError} code STATE_POINTER_INVALID on a bad pointer
+ */
+export function chaptersDirNameOf(root, platform = process.platform) {
+  const pointer = readPointer(root, platform);
+  return pointer ? pointer.chaptersDir : DEFAULT_CHAPTERS_DIR;
+}
+
+/**
+ * Returns the absolute path of the chapters folder for the given book root.
+ *
+ * @param {string} root - absolute path to the book root
+ * @param {string} [platform] - defaults to process.platform; injectable for tests
+ * @returns {string}
+ * @throws {BibleError} code STATE_POINTER_INVALID on a bad pointer
+ */
+export function chaptersDirOf(root, platform = process.platform) {
+  return join(root, chaptersDirNameOf(root, platform));
 }
 
 /**
@@ -180,29 +295,75 @@ export function findStateFolderCandidates(root) {
 }
 
 /**
- * Tests one directory as a book root. Returns the loaded bible when it is one, null when it
- * is not (keep walking), and throws when it has the bible folders but its state folder is
- * missing behind a pointer (STATE_POINTER_INVALID) or sits under an unexpected name
- * (NO_BOOK_ROOT carrying the candidates, so hooks stay silent while session start and the
- * doctor name the folder). The walk stops there rather than attaching to an enclosing book.
- *
- * @param {string} dir - absolute directory path to test
- * @param {string} platform
- * @returns {object|null}
+ * Decides whether a directory without context/ and chapters/ is an adopted book, by its
+ * pointer alone (ADR-0016 amends ADR-0015 here). Returns the validated pointer when the pointer
+ * parses and names a chapters folder, and null when the directory is not a book: no pointer, a
+ * pointer that names no chapters folder (ignored, as under ADR-0015), or a malformed pointer
+ * with no state folder beside it (a stray file). A malformed pointer beside a state-folder
+ * candidate is an adopted book whose pointer broke, so it throws STATE_POINTER_INVALID rather
+ * than letting the book silently disappear.
  */
-function tryBookRoot(dir, platform) {
-  if (!existsSync(join(dir, 'context')) || !existsSync(join(dir, 'chapters'))) {
+function adoptedPointerOf(dir, platform) {
+  const pointerPath = join(dir, POINTER_FILE);
+  if (!existsSync(pointerPath)) {
     return null;
   }
+  let data;
+  try {
+    data = parsePointerText(readFileSync(pointerPath, 'utf8'));
+  } catch (err) {
+    if (findStateFolderCandidates(dir).length > 0) {
+      throw pointerError(dir, err.message);
+    }
+    return null;
+  }
+  if (!hasOwn(data, 'chapters_dir')) {
+    return null;
+  }
+  return readPointer(dir, platform);
+}
+
+/**
+ * Tests one directory as a book root. A directory is a candidate when it holds context/ and
+ * chapters/ (ADR-0015), or when its pointer names a chapters folder (ADR-0016). Returns the
+ * loaded bible when it is a book root, null when it is not (keep walking), and throws when it
+ * is a candidate whose pointer is bad or whose named chapters folder is missing
+ * (STATE_POINTER_INVALID), or whose state folder is missing behind a pointer
+ * (STATE_POINTER_INVALID) or sits under an unexpected name (NO_BOOK_ROOT carrying the
+ * candidates, so hooks stay silent while session start and the doctor name the folder). The
+ * walk stops there rather than attaching to an enclosing book.
+ *
+ * Exported for `ns-doctor --adopt-plan` (ADR-0016), which asks about one directory and must
+ * not walk up.
+ *
+ * @param {string} dir - absolute directory path to test
+ * @param {string} [platform] - defaults to process.platform; injectable for tests
+ * @returns {object|null}
+ */
+export function tryBookRoot(dir, platform = process.platform) {
   const hasPointer = existsSync(join(dir, POINTER_FILE));
-  const name = stateDirNameOf(dir, platform);
+  let pointer;
+  if (existsSync(join(dir, 'context')) && existsSync(join(dir, DEFAULT_CHAPTERS_DIR))) {
+    pointer = readPointer(dir, platform);
+  } else {
+    pointer = adoptedPointerOf(dir, platform);
+    if (!pointer) {
+      return null;
+    }
+  }
+  if (pointer && pointer.namesChapters && !existsSync(join(dir, pointer.chaptersDir))) {
+    throw pointerError(dir, 'it names the chapters folder "' + pointer.chaptersDir + '", which does not exist');
+  }
+  const name = pointer ? pointer.stateDir : DEFAULT_STATE_DIR;
+  const chaptersName = pointer ? pointer.chaptersDir : DEFAULT_CHAPTERS_DIR;
   if (existsSync(join(dir, name, 'meta.json'))) {
-    return loadBible(dir, name);
+    return loadBible(dir, name, chaptersName);
   }
   if (hasPointer) {
     throw pointerError(
       dir,
-      'it names the state folder "' + name + '", which ' +
+      (pointer.namesState ? 'it names the state folder "' : 'the book uses the default state folder "') +
+        name + '", which ' +
         (existsSync(join(dir, name)) ? 'holds no meta.json' : 'does not exist')
     );
   }
@@ -224,16 +385,17 @@ function tryBookRoot(dir, platform) {
 
 /**
  * Reads and parses meta.json and config.json from a confirmed book root.
- * Returns { root, meta, config, stateDir, stateDirName } where config is null when
- * config.json is absent, stateDir is the state folder's absolute path, and stateDirName
- * is its name.
+ * Returns { root, meta, config, stateDir, stateDirName, chaptersDir, chaptersDirName } where
+ * config is null when config.json is absent, stateDir and chaptersDir are absolute paths, and
+ * stateDirName and chaptersDirName are the folders' names.
  * Throws BibleError if meta.json is missing or contains invalid JSON.
  *
  * @param {string} root - absolute path to the confirmed book root
  * @param {string} stateDirName - the book's resolved state-folder name
- * @returns {{ root: string, meta: object, config: object|null, stateDir: string, stateDirName: string }}
+ * @param {string} chaptersDirName - the book's resolved chapters-folder name
+ * @returns {{ root: string, meta: object, config: object|null, stateDir: string, stateDirName: string, chaptersDir: string, chaptersDirName: string }}
  */
-function loadBible(root, stateDirName) {
+function loadBible(root, stateDirName, chaptersDirName) {
   const stateDir = join(root, stateDirName);
   const metaPath = join(stateDir, 'meta.json');
   const configPath = join(stateDir, 'config.json');
@@ -260,7 +422,7 @@ function loadBible(root, stateDirName) {
     }
   }
 
-  return { root, meta, config, stateDir, stateDirName };
+  return { root, meta, config, stateDir, stateDirName, chaptersDir: join(root, chaptersDirName), chaptersDirName };
 }
 
 /**
@@ -268,7 +430,8 @@ function loadBible(root, stateDirName) {
  *
  * Supports two layouts:
  *   1. Direct book root: the given directory itself holds meta.json in its state
- *      folder, with context/ and chapters/ siblings.
+ *      folder, with context/ and chapters/ siblings, or with a pointer that names its
+ *      chapters folder (an adopted book, ADR-0016).
  *   2. book/ subdirectory layout: the given directory contains a book/ subdirectory
  *      that is itself a valid book root.
  *
@@ -278,7 +441,7 @@ function loadBible(root, stateDirName) {
  *
  * @param {string} startDir - the directory to start walking from (any depth inside or at a book root)
  * @param {string} [platform] - defaults to process.platform; injectable for tests
- * @returns {{ root: string, meta: object, config: object|null, stateDir: string, stateDirName: string }}
+ * @returns {{ root: string, meta: object, config: object|null, stateDir: string, stateDirName: string, chaptersDir: string, chaptersDirName: string }}
  * @throws {BibleError} with exitCode 2: NO_BOOK_ROOT when no book root is found (with
  *   err.root and err.candidates when an unpointed state folder was found), or
  *   STATE_POINTER_INVALID (with err.root and err.pointerPath) on a bad pointer

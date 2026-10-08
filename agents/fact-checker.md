@@ -58,6 +58,10 @@ scope; D-13 (security posture) is not machine-enforced for this agent.
 
 `<state-dir>` stands for the book's state folder. The skill that dispatched you names that folder in your brief, and you never resolve it yourself. If your brief does not name it, read and write nothing under it, and say so in your reply. When you dispatch another agent, pass the same folder name in its brief.
 
+## Chapters folder
+
+`<chapters-dir>` stands for the folder that holds the book's chapters: `chapters`, unless the book names another. The skill that dispatched you names that folder in your brief, and you never resolve it yourself. If your brief does not name it, read and write no chapter file, and say so in your reply. When you dispatch another agent, pass the same folder name in its brief.
+
 ## When to invoke
 
 - **Pre-completion gate pass.** Any chapter must pass through `fact-checker` before
@@ -104,7 +108,7 @@ the project config; they are not used for any other purpose.
 These are behavior contracts. The fact-checker touches only the paths listed here.
 
 **Reads:**
-- `chapters/NN-*.md` - the target chapter; scanned for all `[claim: EV-NNNN]` markers
+- `<chapters-dir>/<slug>.md` - the target chapter; scanned for all `[claim: EV-NNNN]` markers
   at the start of the pass.
 - `research/evidence-log.md` - the evidence ledger; each marker is resolved to its EV
   entry here. Also read at session start to confirm statuses of entries flagged for
@@ -118,7 +122,7 @@ These are behavior contracts. The fact-checker touches only the paths listed her
 - `research/evidence-log.md` - updates the `status` field of reviewed EV entries;
   resets status to `pending` on cache invalidation. Never changes claim text or removes
   entries.
-- `chapters/NN-*.md` - inserts `[UNVERIFIED]` adjacent to the claim marker for
+- `<chapters-dir>/<slug>.md` - inserts `[UNVERIFIED]` adjacent to the claim marker for
   unverified entries; inserts `[SOURCE-UNVERIFIABLE]` for online-pass failures; removes
   `[UNVERIFIED]` or `[SOURCE-UNVERIFIABLE]` on a re-check when the entry advances to
   `verified`. The original `[claim: EV-NNNN]` marker is never removed.

@@ -39,11 +39,12 @@ import { REPO_ROOT } from './clone-helper.mjs';
 
 // ---------------------------------------------------------------------------
 // The pin. Derived by reading skills/nfs-start/SKILL.md's "Skills routed to (by
-// path)." summary line at HEAD: Path 1 nfs-new-book, then nfs-interview;
+// path)." summary line at HEAD: Path 1 nfs-new-book, then nfs-interview, or nfs-adopt in a
+// folder of existing writing or an adopted book (ADR-0016, adopting an existing book);
 // Path 2 nfs-outline or nfs-draft; Path 3 nfs-research or
 // nfs-fact-check; Path 4 nfs-status-dashboard, then nfs-check-chapter; Path 5
 // nfs-doctor (general questions get a direct answer, no skill); Path 6
-// nfs-quick-scan or nfs-tour. Eleven names, matching order of first mention on that
+// nfs-quick-scan or nfs-tour. Twelve names, matching order of first mention on that
 // line. "revise-pass" is deliberately absent: Step 4.2b and the Failure
 // behavior section both state it is a Phase 2 skill "not available in v1"
 // and it is never named on the routing summary line itself.
@@ -52,6 +53,7 @@ import { REPO_ROOT } from './clone-helper.mjs';
 const EXPECTED_ROUTING_TARGETS = [
   'nfs-new-book',
   'nfs-interview',
+  'nfs-adopt',
   'nfs-outline',
   'nfs-draft',
   'nfs-research',

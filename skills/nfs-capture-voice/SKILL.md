@@ -16,16 +16,21 @@ Skill inputs read:
 
 Skill chain edge: `nfs-capture-voice -> voice-capture` per `agents/_chain-permitted.yaml`.
 
+Elements this skill needs: style
+
 ## Locate the state folder
 
-This book keeps its machine-managed records in one state folder at the book root, the folder that holds `context/` and `chapters/`. In this skill, `<state-dir>` stands for that folder's name. Resolve it once, before any step below.
+This book keeps its machine-managed records in one state folder at the book root. The book root is the folder that holds `nonfiction-studio.json`, or else the folder that holds `context/` and `chapters/`. In this skill, `<state-dir>` stands for the state folder's name, and `<chapters-dir>` stands for the name of the folder that holds the chapters. Resolve both once, before any step below.
 
-1. Use the Read tool on `nonfiction-studio.json` at the book root. This Read is the skill's first tool call. If the file does not exist, `<state-dir>` is `_nonfiction-studio`; continue at item 4.
-2. If the file exists, it must hold a JSON object with a `state_dir` key whose value is a string that matches `^[A-Za-z0-9._-]{1,64}$`. The value may not be `.` or `..`. It may not be `context`, `structure`, `research`, `chapters`, `production`, `.git` or `.claude`; on Windows, compare these names without regard to case. The folder that it names must exist at the book root and hold `meta.json`. When every condition holds, `<state-dir>` is that value.
+1. Use the Read tool on `nonfiction-studio.json` at the book root. This Read is the skill's first tool call. If the file does not exist, `<state-dir>` is `_nonfiction-studio` and `<chapters-dir>` is `chapters`; continue at item 4.
+2. If the file exists, it must hold a JSON object with a `state_dir` key, a `chapters_dir` key, or both. Each value must be a string that matches `^[A-Za-z0-9._-]{1,64}$`, and neither may be `.` or `..`. The `state_dir` value may not be `context`, `structure`, `research`, `chapters`, `production`, `.git` or `.claude`. The `chapters_dir` value may not be `context`, `structure`, `research`, `production`, `.git`, `.claude` or the state folder's name. On Windows, compare these names without regard to case. The state folder must exist at the book root and hold `meta.json`, and a folder that `chapters_dir` names must exist at the book root. When every condition holds, `<state-dir>` is the `state_dir` value, or `_nonfiction-studio` when that key is absent, and `<chapters-dir>` is the `chapters_dir` value, or `chapters` when that key is absent.
 3. If the file exists but any condition in item 2 fails, stop. Tell the author which condition failed, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never fall back to `_nonfiction-studio`.
 4. If the file does not exist and `_nonfiction-studio/meta.json` does not exist either, list the folders at the book root, hidden folders included. If one of them holds both `meta.json` and `progress.json`, stop. Name that folder, write nothing, and name `/nonfiction-studio:nfs-doctor` as the fix. Never create a second state folder beside it.
+5. When `<state-dir>/meta.json` exists, use the Read tool on it. If it has an `adoption` object, the book is an adopted one, and an element counts as adopted only when its entry under `adoption.elements` is exactly `"adopted"`. A book without the object counts as having adopted all five elements: `chapters`, `style`, `brief`, `structure` and `claims`. So does a folder that has no state folder yet.
+6. The line `Elements this skill needs:` above names the elements this skill cannot run without. If any of them is not adopted, stop before your first write. Name the element, write nothing, and name `/nonfiction-studio:nfs-adopt <element>` as the way to adopt it. For `claims`, say instead that adopting claims is not available yet.
+7. Treat the files of every other element that is not adopted as absent. Never read, create or edit them, even when a file of that name exists, because in an adopted book such a file is the author's own. The `style` files are `context/style-profile.md` and the voice baseline in `<state-dir>/config.json`. The `brief` files are `context/brief.md`, `context/audience.md` and `context/decisions.md`. The `structure` files are those under `structure/`, plus `research/open-questions.md`. The `claims` files are `research/evidence-log.md`, `research/sources.md` and `research/packets/`.
 
-Before you run a command or open a path below, replace `<state-dir>` with the resolved name. When this skill dispatches an agent, name the resolved state folder in the dispatch brief, because agents never resolve it themselves.
+Before you run a command or open a path below, replace `<state-dir>` and `<chapters-dir>` with the resolved names. When this skill dispatches an agent, name both resolved folders in the dispatch brief, because agents never resolve them themselves.
 
 ---
 
@@ -118,7 +123,7 @@ This flow's writes may already be logged automatically by a hook on this surface
 {"ts":"<RFC 3339 UTC>","agent":"voice-capture","surface":"<actual surface>","scope":"mechanical","targets":["context/style-profile.md","<state-dir>/config.json"],"summary":"Captured the author's stylometric voice baseline into the style profile and config.json."}
 ```
 
-`surface` is `claude-code`, `cowork`, or `chat` per `docs/formats/ai-use-log.md` - whichever this flow is actually running on. Neither `context/style-profile.md` nor `<state-dir>/config.json` is watched by the PostToolBatch hook (it watches only `chapters/`), so the count-delta check above finds no prior coverage on any surface and this skill appends the record every time.
+`surface` is `claude-code`, `cowork`, or `chat` per `docs/formats/ai-use-log.md` - whichever this flow is actually running on. Neither `context/style-profile.md` nor `<state-dir>/config.json` is watched by the PostToolBatch hook (it watches only `<chapters-dir>/`), so the count-delta check above finds no prior coverage on any surface and this skill appends the record every time.
 
 State that the voice baseline is in place. If the agent reported writing any `stylometry.registers` buckets, name them here in one plain sentence (for example, "anecdotal and instructional register vectors were also captured, for diagnostic `--by-register` comparisons only - they carry no blocking verdict"). If register bucketing did not run, say nothing about it: this is a silent skip, not a reported gap.
 

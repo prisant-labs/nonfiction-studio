@@ -20,7 +20,9 @@
 
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
-import { DEFAULT_STATE_DIR, stateDirOf, stateDirNameOf } from './bible.mjs';
+import { DEFAULT_STATE_DIR, stateDirOf, stateDirNameOf, chaptersDirNameOf } from './bible.mjs';
+import { proseOf, proseBoundaryAt } from './prose.mjs';
+import { ELEMENTS, adoptionAt } from './adoption.mjs';
 import { fileURLToPath } from 'node:url';
 
 import { parseEvidenceLog, parseSources } from './ledger.mjs';
@@ -40,22 +42,85 @@ const PROGRESS_SCHEMA_PATH = join(
 export const SUPPORTED_MAJOR = '2';
 
 // Scaffold-mandated paths every valid bible must contain.
-// (bible.mjs isBookRoot already guarantees the state folder's meta.json, context/, and
-//  chapters/ exist before the doctor runs; these additional paths are checked here.)
+// (bible.mjs isBookRoot already guarantees the state folder's meta.json, context/, and the
+//  chapters folder exist before the doctor runs; these additional paths are checked here.)
 // State-folder entries are relative to the state folder, whose name is resolved per book.
 const REQUIRED_STATE_FILES = [
   'progress.json',
   'config.json',
   'ai-use-log.jsonl',
 ];
+// Each bible path belongs to one element of ADR-0016 (adopting an existing book): an adopted
+// book is required to have an element's files only once it has adopted that element.
 const REQUIRED_BIBLE_PATHS = [
-  'research/evidence-log.md',
-  'research/sources.md',
-  'context/style-profile.md',
-  'context/brief.md',
-  'structure/thesis.md',
-  'structure/outline.md',
+  { path: 'research/evidence-log.md', element: 'claims' },
+  { path: 'research/sources.md', element: 'claims' },
+  { path: 'context/style-profile.md', element: 'style' },
+  { path: 'context/brief.md', element: 'brief' },
+  { path: 'structure/thesis.md', element: 'structure' },
+  { path: 'structure/outline.md', element: 'structure' },
 ];
+
+// What each element brings, and how an adopted book takes it on, for the element-not-adopted
+// notice. Adopting claims is left to a later record (ADR-0016, A book's own claim ledger is not
+// converted), so its notice names no command.
+const ELEMENT_NOTICES = {
+  style: 'the style profile and voice baseline; the gate\'s stylometry check skips. Adopt it with /nonfiction-studio:nfs-adopt style.',
+  brief: 'the brief, audience, and decision log. Adopt it with /nonfiction-studio:nfs-adopt brief.',
+  structure: 'the thesis, outline, and chapter list; the thesis-alignment check skips. Adopt it with /nonfiction-studio:nfs-adopt structure once brief is adopted.',
+  claims: 'the evidence log and sources; claim coverage, quote fidelity, fact-checking, the apparatus, and agent drafting are unavailable. Adopting claims is not available yet; the book\'s own claim system stays its record.',
+};
+
+const ELEMENT_STATES = new Set(['adopted', 'not-adopted']);
+const ADOPTION_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Shape findings for meta.json's optional `adoption` object (ADR-0016). The adoption reader
+ * fails closed, so a malformed state silently reads as "not adopted"; this check makes it visible.
+ *
+ * @param {object} meta - the parsed meta.json
+ * @param {string} SD - the state folder's name
+ * @returns {object[]} findings
+ */
+function checkAdoptionShape(meta, SD) {
+  if (!Object.prototype.hasOwnProperty.call(meta, 'adoption')) return [];
+  const findings = [];
+  const at = (field, message) => findings.push({
+    type: 'shape.meta-violation',
+    path: SD + '/meta.json#adoption' + (field ? '.' + field : ''),
+    message: 'meta.json: adoption' + (field ? '.' + field : '') + ' ' + message
+  });
+  const record = meta.adoption;
+  if (!record || typeof record !== 'object' || Array.isArray(record)) {
+    at('', 'must be an object; got ' + typeOf(record));
+    return findings;
+  }
+  if (typeof record.date !== 'string' || !ADOPTION_DATE_RE.test(record.date)) {
+    at('date', 'must be a YYYY-MM-DD date; got ' + JSON.stringify(record.date));
+  }
+  const states = record.elements;
+  if (!states || typeof states !== 'object' || Array.isArray(states)) {
+    at('elements', 'must be an object; got ' + typeOf(states));
+  } else {
+    for (const name of ELEMENTS) {
+      if (!ELEMENT_STATES.has(states[name])) {
+        at('elements.' + name, 'must be "adopted" or "not-adopted"; got ' + JSON.stringify(states[name]));
+      } else if (name === 'chapters' && states[name] !== 'adopted') {
+        at('elements.chapters', 'must be "adopted": adoption always adopts the chapters folder');
+      }
+    }
+  }
+  if (record.shared_folders !== undefined) {
+    const list = record.shared_folders;
+    const valid = Array.isArray(list) && list.every((e) =>
+      e && typeof e === 'object' && typeof e.folder === 'string' && e.folder !== '' &&
+      (e.consented === null || (typeof e.consented === 'string' && ADOPTION_DATE_RE.test(e.consented))));
+    if (!valid) {
+      at('shared_folders', 'must be a list of {"folder": name, "consented": YYYY-MM-DD or null}');
+    }
+  }
+  return findings;
+}
 
 // EV field validation constants (S-08 section 6, corrected 2026-07-18 adjudication).
 const EV_REQUIRED_FIELDS = ['claim', 'source', 'locator', 'confidence', 'status', 'added-by', 'date'];
@@ -66,8 +131,11 @@ const EV_CONFIDENCE_VALID = new Set(['high', 'medium', 'low']);
 const SRC_TYPE_VALID = new Set(['book', 'article', 'web', 'interview', 'dataset', 'report', 'other']);
 const SRC_RETRIEVAL_VALID = new Set(['stable', 'unstable', 'unverifiable']);
 
-// Snapshot naming pattern: <slug>.<YYYYMMDDTHHMMSSZ>.md
-const SNAPSHOT_NAME_RE = /^[a-z0-9][a-z0-9-]*\.[0-9]{8}T[0-9]{6}Z\.md$/;
+// Snapshot naming pattern: <slug>.<YYYYMMDDTHHMMSS[mmm]Z>[-N].md. The slug is the chapter's file
+// name without .md, which may be any name in an adopted book (ADR-0016). The timestamp has whole
+// seconds or, as hooks/pre-tool-use.mjs writes it, milliseconds; -N is that hook's collision
+// counter. tests/hooks/snapshot-naming.test.mjs pins this against the hook's real output.
+const SNAPSHOT_NAME_RE = /^[^.].*\.[0-9]{8}T[0-9]{6}(?:[0-9]{3})?Z(?:-[0-9]+)?\.md$/;
 
 // Source-ID pattern
 const SRC_ID_RE = /^SRC-\d{4}$/;
@@ -244,14 +312,18 @@ export function checkWordCountCoherence(root) {
 
   if (!progress || !Array.isArray(progress.chapters)) return findings;
 
-  const chaptersDir = join(root, 'chapters');
+  const chaptersName = chaptersDirNameOf(root);
+  const chaptersDir = join(root, chaptersName);
+  // ADR-0016 (adopting an existing book): progress.json records a count of prose only.
+  const boundary = proseBoundaryAt(root);
+  const where = boundary === null ? '' : ' above the prose boundary "' + boundary.replace(/\s+$/, '') + '"';
   for (const chEntry of progress.chapters) {
     if (!chEntry.slug || typeof chEntry.word_count !== 'number') continue;
     const chFile = join(chaptersDir, chEntry.slug + '.md');
     if (!existsSync(chFile)) continue;
     let chText;
     try {
-      chText = readFileSync(chFile, 'utf8');
+      chText = proseOf(readFileSync(chFile, 'utf8'), boundary);
     } catch {
       continue;
     }
@@ -259,10 +331,10 @@ export function checkWordCountCoherence(root) {
     if (actualCount !== chEntry.word_count) {
       findings.push({
         type: 'coherence.word-count-mismatch',
-        path: 'chapters/' + chEntry.slug + '.md',
+        path: chaptersName + '/' + chEntry.slug + '.md',
         message:
           'chapter ' + chEntry.slug + ': progress.json records ' + chEntry.word_count +
-          ' words but the file contains ' + actualCount + ' words (by stylometry tokenizer)'
+          ' words but the file contains ' + actualCount + ' words' + where + ' (by stylometry tokenizer)'
       });
     }
   }
@@ -539,7 +611,7 @@ function checkStyleProfile(root, config, findings, notices) {
 // ns-doctor's job here is to surface log corruption to the author, not to read
 // through it silently; see that doc's ns-doctor reader entry for the same note.
 //
-// For each chapters/*.md file on disk, compares its filesystem mtime against the
+// For each *.md file in the chapters folder on disk, compares its filesystem mtime against the
 // newest record whose `targets` array names it (parsed from the record's `ts`
 // field). A chapter with no covering record at all, or whose mtime is strictly
 // newer than its newest covering record, is an "uncovered writing window" --
@@ -556,7 +628,8 @@ function checkStyleProfile(root, config, findings, notices) {
 
 function checkAiUseLogCoverage(root, findings, notices) {
   const AI_USE_LOG_REL_PATH = stateDirNameOf(root) + '/ai-use-log.jsonl';
-  const chaptersDir = join(root, 'chapters');
+  const chaptersName = chaptersDirNameOf(root);
+  const chaptersDir = join(root, chaptersName);
   let chapterFiles = [];
   if (existsSync(chaptersDir)) {
     try {
@@ -568,9 +641,9 @@ function checkAiUseLogCoverage(root, findings, notices) {
     }
   }
 
-  // Map: "chapters/<file>.md" -> newest covering record's ts, as epoch ms (-Infinity = none yet).
+  // Map: "<chapters folder>/<file>.md" -> newest covering record's ts, as epoch ms (-Infinity = none yet).
   const newestCoveringTs = new Map();
-  for (const f of chapterFiles) newestCoveringTs.set('chapters/' + f, -Infinity);
+  for (const f of chapterFiles) newestCoveringTs.set(chaptersName + '/' + f, -Infinity);
 
   const logPath = join(stateDirOf(root), 'ai-use-log.jsonl');
   if (existsSync(logPath)) {
@@ -618,7 +691,7 @@ function checkAiUseLogCoverage(root, findings, notices) {
 
   let covered = 0;
   for (const f of chapterFiles) {
-    const rel = 'chapters/' + f;
+    const rel = chaptersName + '/' + f;
     const newestTs = newestCoveringTs.get(rel);
     const hasAnyRecord = newestTs !== -Infinity;
     if (hasAnyRecord) covered++;
@@ -691,8 +764,24 @@ export function runChecks(root) {
   const findings = [];
   const notices = [];
 
+  // ---- 0. Adoption (ADR-0016, adopting an existing book) ---------------------
+  // An unadopted element is a notice, never a finding, and the doctor reads none of its files:
+  // the author's own files in a shared folder stay the author's.
+  const adoption = adoptionAt(root);
+  for (const name of ELEMENTS) {
+    if (adoption.elements[name] || !ELEMENT_NOTICES[name]) continue;
+    notices.push({
+      type: 'element-not-adopted',
+      element: name,
+      path: SD + '/meta.json#adoption.elements.' + name,
+      message: 'element "' + name + '" is not adopted: ' + ELEMENT_NOTICES[name]
+    });
+  }
+
   // ---- 1. Bible structure ---------------------------------------------------
-  const requiredPaths = REQUIRED_STATE_FILES.map((f) => SD + '/' + f).concat(REQUIRED_BIBLE_PATHS);
+  const requiredPaths = REQUIRED_STATE_FILES.map((f) => SD + '/' + f).concat(
+    REQUIRED_BIBLE_PATHS.filter((p) => adoption.elements[p.element]).map((p) => p.path)
+  );
   for (const rel of requiredPaths) {
     const parts = rel.split('/');
     if (!existsSync(join(root, ...parts))) {
@@ -774,6 +863,7 @@ export function runChecks(root) {
                  typeOf(meta.plugin_version_at_creation)
       });
     }
+    for (const f of checkAdoptionShape(meta, SD)) findings.push(f);
     // additionalProperties: unknown fields are tolerated per S-08 Rule 2 and banked adjudication 1.
   }
 
@@ -861,9 +951,11 @@ export function runChecks(root) {
   }
 
   // ---- 4. EV grammar validation ---------------------------------------------
+  // Sections 4 to 7 read the claims element's files, so they run only once claims is adopted:
+  // in a shared research/ folder, an evidence-log.md before then is the author's (ADR-0016).
   const ledgerPath = join(root, 'research', 'evidence-log.md');
   let evEntries = [];
-  if (existsSync(ledgerPath)) {
+  if (adoption.elements.claims && existsSync(ledgerPath)) {
     let ledgerText;
     try {
       ledgerText = readFileSync(ledgerPath, 'utf8');
@@ -912,7 +1004,7 @@ export function runChecks(root) {
   // ---- 5. SRC grammar validation -------------------------------------------
   const sourcesPath = join(root, 'research', 'sources.md');
   let srcEntries = [];
-  if (existsSync(sourcesPath)) {
+  if (adoption.elements.claims && existsSync(sourcesPath)) {
     let sourcesText;
     try {
       sourcesText = readFileSync(sourcesPath, 'utf8');
@@ -945,10 +1037,13 @@ export function runChecks(root) {
 
   // ---- 6. Orphan claim markers ----------------------------------------------
   // Uses claims-engine.mjs scanChapter to find [claim: EV-nnnn] markers that
-  // reference EV IDs absent from the ledger (same logic as ns-claims coverage).
-  const chaptersDir = join(root, 'chapters');
+  // reference EV IDs absent from the ledger (same logic as ns-claims coverage), in prose only
+  // (ADR-0016, adopting an existing book), as ns-claims reads it.
+  const chaptersName = chaptersDirNameOf(root);
+  const proseBoundary = proseBoundaryAt(root);
+  const chaptersDir = join(root, chaptersName);
   let chapterFiles = [];
-  if (existsSync(chaptersDir)) {
+  if (adoption.elements.claims && existsSync(chaptersDir)) {
     try {
       chapterFiles = readdirSync(chaptersDir)
         .filter(f => f.endsWith('.md'))
@@ -962,7 +1057,7 @@ export function runChecks(root) {
     const absPath = join(chaptersDir, filename);
     let chText;
     try {
-      chText = readFileSync(absPath, 'utf8');
+      chText = proseOf(readFileSync(absPath, 'utf8'), proseBoundary);
     } catch {
       continue;
     }
@@ -973,7 +1068,7 @@ export function runChecks(root) {
       if (!m.resolved && m.form === 'claim' && m.reason && m.reason.includes('not found')) {
         findings.push({
           type: 'claim-marker.orphan-ev',
-          path: 'chapters/' + filename + ':' + m.line,
+          path: chaptersName + '/' + filename + ':' + m.line,
           message: 'chapter ' + filename + ' line ' + m.line + ': [claim: ' + m.id +
                    '] references ' + m.id + ' which is absent from research/evidence-log.md'
         });
@@ -1034,14 +1129,15 @@ export function runChecks(root) {
           type: 'snapshot.bad-name',
           path: SD + '/snapshots/' + fname,
           message: 'snapshot file "' + fname + '" does not match naming convention ' +
-                   '<slug>.<YYYYMMDDTHHMMSSZ>.md'
+                   '<slug>.<YYYYMMDDTHHMMSS[mmm]Z>[-N].md'
         });
       }
     }
   }
 
   // ---- 11. Style profile structure and baseline consistency ---------------
-  checkStyleProfile(root, config, findings, notices);
+  // Only once style is adopted: before then, context/style-profile.md is not the plugin's.
+  if (adoption.elements.style) checkStyleProfile(root, config, findings, notices);
 
   // ---- 12. ai-use-log coverage and uncovered writing windows ---------------
   checkAiUseLogCoverage(root, findings, notices);

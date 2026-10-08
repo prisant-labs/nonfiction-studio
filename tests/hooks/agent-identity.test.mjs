@@ -21,6 +21,7 @@ import {
   resolveAgentLabel,
   AGENT_WRITE_SCOPES,
   STATE_DIR_SCOPE,
+  CHAPTERS_DIR_SCOPE,
   checkAgentWriteConstraint,
   isWebGatedAgent
 } from '../../hooks/lib/agent-identity.mjs';
@@ -135,6 +136,7 @@ test('resolveAgentLabel: field present but not a string returns null', () => {
 
 test('AGENT_WRITE_SCOPES: exactly the five table agents with their exact allowed prefixes', () => {
   assert.equal(STATE_DIR_SCOPE, '<state-dir>/', 'the state-folder token is resolved per book at check time');
+  assert.equal(CHAPTERS_DIR_SCOPE, '<chapters-dir>/', 'the chapters-folder token is resolved per book at check time (ADR-0016)');
   assert.deepEqual(
     AGENT_WRITE_SCOPES['research-librarian'],
     ['research/', STATE_DIR_SCOPE],
@@ -142,12 +144,12 @@ test('AGENT_WRITE_SCOPES: exactly the five table agents with their exact allowed
   );
   assert.deepEqual(
     AGENT_WRITE_SCOPES['drafting-partner'],
-    ['chapters/'],
+    [CHAPTERS_DIR_SCOPE],
     'drafting-partner per agents/drafting-partner.md:69-71'
   );
   assert.deepEqual(
     AGENT_WRITE_SCOPES['line-editor'],
-    ['chapters/'],
+    [CHAPTERS_DIR_SCOPE],
     'line-editor per agents/line-editor.md:62-64'
   );
   assert.deepEqual(

@@ -12,7 +12,7 @@ Gate report files follow this naming rule:
 _nonfiction-studio/gate/<chapter-slug>.<YYYYMMDDTHHMMSSZ>.json
 ```
 
-For example: `_nonfiction-studio/gate/03-the-signal.20260717T154022Z.json`. The timestamp is compact ISO 8601 in UTC, with no colons or hyphens in the time component. `<chapter-slug>` is the two-digit ordinal plus kebab title matching the chapter filename stem.
+For example: `_nonfiction-studio/gate/03-the-signal.20260717T154022Z.json`. The timestamp is compact ISO 8601 in UTC, with no colons or hyphens in the time component. `<chapter-slug>` is the chapter's file name without `.md`. In a book the plugin created, that is the two-digit ordinal plus kebab title. In an adopted book it can be any file name, per [ADR-0016 (adopting an existing book)](../adr/ADR-0016-adopting-an-existing-book.md), including one with dots or spaces. A reader therefore parses a report's file name from the right: the extension is the last dot-separated segment, the timestamp is the one before it, and everything before that is the slug.
 
 ## Record structure
 

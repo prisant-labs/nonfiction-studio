@@ -25,6 +25,17 @@
 //                    LITERAL_ALLOWLIST below names the files exempt in full;
 //                 6. an agent that names `<state-dir>` carries AGENT_NOTE verbatim, and no agent
 //                    carries the skill stanza: agents never resolve the folder themselves.
+//               ADR-0016 (adopting an existing book) extends each rule to the chapters folder:
+//                 - `<chapters-dir>` counts as a placeholder for rule 1, and an agent that names it
+//                   carries CHAPTERS_AGENT_NOTE verbatim (rule 6);
+//                 - the sentinels add the chapters_dir rule, the adoption read, and every element
+//                   name, from bible.mjs and adoption.mjs (rule 4);
+//                 - every stanza carrier has exactly one "Elements this skill needs:" line outside
+//                   the stanza, naming `none` or elements from the five, since the stanza's stop
+//                   rule reads it;
+//                 - no .md file under skills/ or agents/ names `chapters/` literally outside a
+//                   stanza (rule 5's shape: a "/"-prefixed path is exempt, and
+//                   CHAPTERS_LITERAL_ALLOWLIST names the files exempt in full).
 // why:          ADR-0015 (state folder name) - skills cannot import the resolver, so a prose
 //               stanza stands in for it, and "a policy asserted in prose and enforced by nothing
 //               is not a control" (the reasoning behind check-compliance-stanza.mjs) applies to
@@ -40,8 +51,11 @@ import {
   LEGACY_STATE_DIR,
   POINTER_FILE,
   RESERVED_STATE_DIR_NAMES,
-  STATE_DIR_NAME_RE
+  STATE_DIR_NAME_RE,
+  DEFAULT_CHAPTERS_DIR,
+  RESERVED_CHAPTERS_DIR_NAMES
 } from '../../hooks/lib/bible.mjs';
+import { ELEMENTS } from '../../hooks/lib/adoption.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -58,6 +72,8 @@ function fatal(message) {
 
 const STANZA_HEADING = '## Locate the state folder';
 const PLACEHOLDER = '<state-dir>';
+const CHAPTERS_PLACEHOLDER = '<chapters-dir>';
+const ELEMENTS_LINE_RE = /^Elements this skill needs: (.*)$/gm;
 
 // The one sentence every agent that names the placeholder carries, so each agent knows where the
 // name comes from and what to do when a brief leaves it out.
@@ -67,12 +83,24 @@ export const AGENT_NOTE =
   'and write nothing under it, and say so in your reply. When you dispatch another agent, pass ' +
   'the same folder name in its brief.';
 
+// The same note for the chapters folder (ADR-0016, adopting an existing book).
+export const CHAPTERS_AGENT_NOTE =
+  '`<chapters-dir>` stands for the folder that holds the book\'s chapters: `chapters`, unless the ' +
+  'book names another. The skill that dispatched you names that folder in your brief, and you ' +
+  'never resolve it yourself. If your brief does not name it, read and write no chapter file, and ' +
+  'say so in your reply. When you dispatch another agent, pass the same folder name in its brief.';
+
 // Files that may name the default or legacy folder outside a stanza, with the reason.
 const LITERAL_ALLOWLIST = new Map([
   [
     'skills/nfs-doctor/SKILL.md',
     'the doctor repairs a bad pointer and moves an unpointed folder, so it runs without the ' +
       'stanza (which stops on both) and must name the default and the legacy folder'
+  ],
+  [
+    'skills/nfs-adopt/SKILL.md',
+    'adoption creates the state folder under its default name in a folder that is not a book yet, ' +
+      'so it runs without the stanza (which assumes a book) and must name that folder (ADR-0016)'
   ]
 ]);
 
@@ -90,8 +118,32 @@ const STANZA_SENTINELS = [
   '/nonfiction-studio:nfs-doctor',
   'Never fall back to',
   'Never create a second state folder',
-  'dispatch brief'
+  'dispatch brief',
+  // ADR-0016 (adopting an existing book): the chapters folder and the adoption record.
+  '`state_dir`',
+  '`chapters_dir`',
+  '`' + CHAPTERS_PLACEHOLDER + '`',
+  '`' + DEFAULT_CHAPTERS_DIR + '`',
+  ...RESERVED_CHAPTERS_DIR_NAMES.map((name) => '`' + name + '`'),
+  ...ELEMENTS.map((name) => '`' + name + '`'),
+  '`adoption`',
+  'Elements this skill needs:',
+  '/nonfiction-studio:nfs-adopt'
 ];
+
+// Files that may name `chapters/` outside a stanza, with the reason.
+const CHAPTERS_LITERAL_ALLOWLIST = new Map([
+  ['skills/nfs-new-book/SKILL.md', 'it scaffolds a new book, whose chapters folder is always chapters/'],
+  [
+    'skills/nfs-doctor/SKILL.md',
+    'the doctor runs without the stanza and describes both the default layout and the pointer that ' +
+      'overrides it'
+  ]
+]);
+
+// A literal chapters folder path: not preceded by a word character, "/", "." or "-", so a path
+// inside a shipped tree such as `<tour-dir>/chapters/` is exempt, as rule 5 exempts the state folder.
+const CHAPTERS_LITERAL_RE = /(?<![\w/.-])chapters\//g;
 
 /** Escapes a string for use inside a RegExp. */
 function escapeRe(s) {
@@ -165,6 +217,36 @@ function literalHits(text, stanzas) {
   return hits;
 }
 
+/** Returns 1-based line numbers of literal `chapters/` paths in `text` outside the stanzas. */
+function chaptersLiteralHits(text, stanzas) {
+  const hits = [];
+  CHAPTERS_LITERAL_RE.lastIndex = 0;
+  let m;
+  while ((m = CHAPTERS_LITERAL_RE.exec(text)) !== null) {
+    const idx = m.index;
+    if (stanzas.some((s) => idx >= s.start && idx < s.end)) continue;
+    hits.push(text.slice(0, idx).split('\n').length);
+  }
+  return hits;
+}
+
+/** Findings for a carrier's "Elements this skill needs:" line, which must sit outside the stanza. */
+function elementsLineFindings(rel, outside) {
+  const lines = [...outside.matchAll(ELEMENTS_LINE_RE)].map((m) => m[1].replace(/\r$/, '').trim());
+  if (lines.length === 0) return [rel + ': carries the stanza but has no "Elements this skill needs:" line'];
+  if (lines.length > 1) return [rel + ': has ' + lines.length + ' "Elements this skill needs:" lines; carry one'];
+  if (lines[0] === 'none') return [];
+  const out = [];
+  const names = lines[0].split(',').map((s) => s.trim());
+  for (const name of names) {
+    if (!ELEMENTS.includes(name)) {
+      out.push(rel + ': "Elements this skill needs:" names "' + name + '", which is not one of: ' + ELEMENTS.join(', ') + ' (or write none)');
+    }
+  }
+  if (new Set(names).size !== names.length) out.push(rel + ': "Elements this skill needs:" names an element twice');
+  return out;
+}
+
 /** Lists every .md file under dir, recursively, sorted by code unit. */
 function listMarkdown(dir) {
   if (!existsSync(dir)) return [];
@@ -204,12 +286,16 @@ for (const abs of listMarkdown(SKILLS_DIR)) {
   const isSkillFile = rel.endsWith('/SKILL.md');
 
   if (isSkillFile) {
-    const usesPlaceholder = outsideStanzas(text, stanzas).includes(PLACEHOLDER);
-    if (usesPlaceholder && stanzas.length === 0) {
-      findings.push(rel + ': names ' + PLACEHOLDER + ' but lacks the "' + STANZA_HEADING + '" stanza');
+    const outside = outsideStanzas(text, stanzas);
+    const named = [PLACEHOLDER, CHAPTERS_PLACEHOLDER].filter((p) => outside.includes(p));
+    if (named.length > 0 && stanzas.length === 0) {
+      findings.push(rel + ': names ' + named.join(' and ') + ' but lacks the "' + STANZA_HEADING + '" stanza');
     }
-    if (!usesPlaceholder && stanzas.length > 0) {
-      findings.push(rel + ': carries the "' + STANZA_HEADING + '" stanza but names ' + PLACEHOLDER + ' nowhere outside it');
+    if (named.length === 0 && stanzas.length > 0) {
+      findings.push(rel + ': carries the "' + STANZA_HEADING + '" stanza but names neither ' + PLACEHOLDER + ' nor ' + CHAPTERS_PLACEHOLDER + ' outside it');
+    }
+    if (stanzas.length > 0) {
+      for (const f of elementsLineFindings(rel, outside)) findings.push(f);
     }
     if (stanzas.length > 1) {
       findings.push(rel + ': carries the "' + STANZA_HEADING + '" stanza ' + stanzas.length + ' times; carry it once');
@@ -233,6 +319,11 @@ for (const abs of listMarkdown(SKILLS_DIR)) {
   if (!LITERAL_ALLOWLIST.has(rel)) {
     for (const hit of literalHits(text, stanzas)) {
       findings.push(rel + ':' + hit.line + ': names the state folder "' + hit.name + '" literally; write ' + PLACEHOLDER + ' (after the stanza) or describe "the state folder" instead');
+    }
+  }
+  if (!CHAPTERS_LITERAL_ALLOWLIST.has(rel)) {
+    for (const line of chaptersLiteralHits(text, stanzas)) {
+      findings.push(rel + ':' + line + ': names the chapters folder "chapters/" literally; write ' + CHAPTERS_PLACEHOLDER + '/ (after the stanza) or describe "the chapters folder" instead');
     }
   }
 }
@@ -264,10 +355,16 @@ for (const abs of listMarkdown(AGENTS_DIR)) {
       findings.push(rel + ': names ' + PLACEHOLDER + ' but lacks the shared agent note: ' + AGENT_NOTE);
     }
   }
+  if (text.includes(CHAPTERS_PLACEHOLDER) && !text.includes(CHAPTERS_AGENT_NOTE)) {
+    findings.push(rel + ': names ' + CHAPTERS_PLACEHOLDER + ' but lacks the shared chapters note: ' + CHAPTERS_AGENT_NOTE);
+  }
   if (!LITERAL_ALLOWLIST.has(rel)) {
     for (const hit of literalHits(text, [])) {
       findings.push(rel + ':' + hit.line + ': names the state folder "' + hit.name + '" literally; write ' + PLACEHOLDER + ' or describe "the state folder" instead');
     }
+  }
+  for (const line of chaptersLiteralHits(text, [])) {
+    findings.push(rel + ':' + line + ': names the chapters folder "chapters/" literally; write ' + CHAPTERS_PLACEHOLDER + '/ or describe "the chapters folder" instead');
   }
 }
 

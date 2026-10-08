@@ -76,11 +76,10 @@ test('pin: the existing-writing search runs only on the NEWINIT branch', () => {
   assert.match(command, /! -path \.\/README\.md/, 'exempts only the top-level README.md');
 });
 
-test('pin: a WRITING line stops the flow, writes nothing, and advertises no unshipped skill', () => {
+test('pin: a WRITING line stops the flow, writes nothing, and names nfs-adopt (ADR-0016)', () => {
   const { section } = stepOneCommand();
   assert.match(section, /\*\*If any line starts with `WRITING:`, stop\.\*\* Write nothing/);
-  assert.ok(!section.includes('/nonfiction-studio:nfs-adopt'), 'adoption is planned, not shipped');
-  assert.match(section, /\/nonfiction-studio:nfs-quick-scan/, 'names what works without a project');
+  assert.match(section, /\/nonfiction-studio:nfs-adopt/, 'names the skill that adopts the writing in place');
 });
 
 test('pin: an UNPOINTED line stops the flow, writes nothing, and names nfs-doctor', () => {

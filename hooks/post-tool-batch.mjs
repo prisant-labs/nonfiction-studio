@@ -64,8 +64,9 @@
 import { readFileSync, appendFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, resolve, sep, relative, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findBookRoot, readProgress, writeProgressAtomic, stateDirOf } from './lib/bible.mjs';
+import { findBookRoot, readProgress, writeProgressAtomic, stateDirOf, chaptersDirOf } from './lib/bible.mjs';
 import { countWords } from './lib/stylometry-engine.mjs';
+import { proseOf, proseBoundaryAt } from './lib/prose.mjs';
 import { resolveAgentLabel, foldForCompare } from './lib/agent-identity.mjs';
 import { DEMOTION_FALLBACK_STATUS, parseDecisionsLog, isEligibleForFinal } from './lib/status-engine.mjs';
 
@@ -181,7 +182,8 @@ function appendAiUseLog(record) {
 
 // ---------------------------------------------------------------------------
 // Windows-safe chapter-path helpers.
-// chapters/ is the direct child of the book root holding prose files.
+// The chapters folder is the direct child of the book root holding prose files: chapters/, or
+// the folder an adopted book names in its pointer (ADR-0016, adopting an existing book).
 // Path comparison uses the platform separator so that partial-name collisions
 // (e.g. chapters-archive/) are excluded.
 //
@@ -198,7 +200,7 @@ function appendAiUseLog(record) {
 // the real process.platform exactly as the local copy it replaces did; behavior is
 // unchanged, only the implementation's home moved.
 // ---------------------------------------------------------------------------
-const chaptersDirNorm = foldForCompare(resolve(bookRoot, 'chapters'));
+const chaptersDirNorm = foldForCompare(chaptersDirOf(bookRoot));
 const chaptersDirPrefix = chaptersDirNorm + sep;
 
 function isChapterPath(absPath) {
@@ -232,8 +234,10 @@ function loadRegistryOrder(rootDir) {
     const text = readFileSync(join(rootDir, 'structure', 'chapter-list.md'), 'utf8');
     const rows = [];
     for (const line of text.split('\n')) {
-      // Match table data rows: | N | 01-slug-here | Title Here | ... |
-      const m = line.match(/^\|\s*\d+\s*\|\s*([0-9]{2}-[a-z0-9-]+)\s*\|\s*([^|]+?)\s*\|/);
+      // Match table data rows: | N | 01-slug-here | Title Here | ... |. The slug cell is any
+      // file name: an adopted book's chapters keep their own (ADR-0016, adopting an existing
+      // book). The numeric first cell is what keeps the header and separator rows out.
+      const m = line.match(/^\|\s*\d+\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|/);
       if (m) rows.push({ slug: m[1], title: m[2].trim() });
     }
     return rows.length > 0 ? rows : null;
@@ -362,11 +366,15 @@ if (chapterWrites.size === 0 && dispatches.length === 0 && !progressTouched) {
 // canonical stylometry tokenizer imported above. The TSK-028 adjudication
 // makes countWords the SINGLE counting authority: the doctor-engine coherence
 // check compares progress.json word counts against this exact tokenizer, so
-// any other counter breaks the gate.
+// any other counter breaks the gate. In an adopted book the count is of prose only, cut at
+// config.json's prose boundary (ADR-0016, adopting an existing book), as the doctor counts it.
 // ---------------------------------------------------------------------------
 
 // Single UTC timestamp for all records emitted by this batch run.
 const ts = new Date().toISOString();
+
+// proseBoundaryAt fails open to null (no cut), as a hook must.
+const proseBoundary = proseBoundaryAt(bookRoot);
 
 // Map: absPath -> { slug, newCount, markerCount, scope, relPath }
 const chapterDetails = new Map();
@@ -380,7 +388,7 @@ for (const [absPath, { scope }] of chapterWrites.entries()) {
   let newCount = 0;
   let markerCount = 0;
   try {
-    const text = readFileSync(absPath, 'utf8');
+    const text = proseOf(readFileSync(absPath, 'utf8'), proseBoundary);
     newCount = countWords(text);
     markerCount = countOpenMarkers(text);
   } catch (err) {

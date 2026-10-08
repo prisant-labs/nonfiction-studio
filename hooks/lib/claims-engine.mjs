@@ -479,14 +479,16 @@ export function computeQuoteFindings(chapters) {
  *
  * @param {string}   chapterSlug
  * @param {object[]} anchors - return value of scanQuoteAnchors for this chapter
+ * @param {string}   [chaptersDirName] - the book's chapters folder (ADR-0016, adopting an
+ *                   existing book); `chapters` in a book the plugin created
  * @returns {string} Markdown packet content
  */
-export function buildResearchPacket(chapterSlug, anchors) {
+export function buildResearchPacket(chapterSlug, anchors, chaptersDirName = 'chapters') {
   const lines = [];
   lines.push('# Research packet: ' + chapterSlug);
   lines.push('');
   lines.push(
-    'One verbatim excerpt per `[quote: EV-nnnn]` anchor in `chapters/' + chapterSlug + '.md`, ' +
+    'One verbatim excerpt per `[quote: EV-nnnn]` anchor in `' + chaptersDirName + '/' + chapterSlug + '.md`, ' +
     'generated from `research/evidence-log.md`. Regenerate with `ns-claims --packets`; do not hand-edit.'
   );
   lines.push('');

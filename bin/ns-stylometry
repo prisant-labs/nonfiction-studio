@@ -9,9 +9,11 @@
 //               [--calibrate=<path>[,<path>...]] [--project=<dir>] [--json] [--explain] [--by-register]
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { join, relative, resolve, dirname } from 'node:path';
 import { parseArgs, ArgsError } from '../hooks/lib/args.mjs';
-import { findBookRoot, BibleError, stateDirOf, stateDirNameOf } from '../hooks/lib/bible.mjs';
+import { findBookRoot, BibleError, stateDirOf, stateDirNameOf, chaptersDirNameOf, chaptersDirOf } from '../hooks/lib/bible.mjs';
+import { proseOf, proseBoundaryAt } from '../hooks/lib/prose.mjs';
+import { foldForCompare } from '../hooks/lib/agent-identity.mjs';
 import {
   measureChapter, measureBook, computeDrift, countWords, CURRENT_MARKER_SET_VERSION,
   compareRegister, locateWorstWindow,
@@ -24,6 +26,26 @@ import { calibrateBaseline } from '../hooks/lib/stylometry-calibration.mjs';
 const REGISTER_ADVISORY_LABEL =
   'advisory - no blocking verdict at register scale; register-sized text is far below the ' +
   'roughly 2,200 words a blocking verdict needs';
+
+/**
+ * The text --measure and --calibrate score for a file given by path: its prose when the file
+ * sits directly in the chapters folder of a book whose config.json sets a prose boundary
+ * (ADR-0016, adopting an existing book), so an adopted book's apparatus never enters a voice
+ * baseline; the whole file otherwise, including when no book is found.
+ *
+ * @param {string} absPath
+ * @param {string} text - the file's full text
+ * @returns {string}
+ */
+function scoredText(absPath, text) {
+  try {
+    const { root } = findBookRoot(dirname(absPath));
+    if (foldForCompare(dirname(absPath)) !== foldForCompare(chaptersDirOf(root))) return text;
+    return proseOf(text, proseBoundaryAt(root));
+  } catch {
+    return text;
+  }
+}
 
 // ---- arg parsing ---------------------------------------------------------------
 
@@ -44,7 +66,8 @@ try {
   throw err;
 }
 
-// ---- measure mode (read files, compute vector, print JSON; reads no config, writes nothing) -----
+// ---- measure mode (read files, compute vector, print JSON; writes nothing) -----------------------
+// Reads no config, except the prose boundary of the book a chapter file belongs to (scoredText).
 // usage: ns-stylometry --measure=<path>[,<path>...]
 // single file: measureChapter; multiple files: measureBook (aggregated counts before ratios).
 // JSON implied; exit 0 on success, exit 2 on missing or unreadable file.
@@ -69,7 +92,7 @@ if (opts.measure !== null) {
     const absPath = resolve(rawPath);
     let text;
     try {
-      text = readFileSync(absPath, 'utf8');
+      text = scoredText(absPath, readFileSync(absPath, 'utf8'));
     } catch (err) {
       process.stderr.write('ns-stylometry: cannot read file: ' + absPath + '\n');
       process.exit(2);
@@ -87,8 +110,9 @@ if (opts.measure !== null) {
   process.exit(0);
 }
 
-// ---- calibrate mode (read files, run the five-rung calibration recipe, print JSON; reads no
-// config, writes nothing) --------------------------------------------------------
+// ---- calibrate mode (read files, run the five-rung calibration recipe, print JSON; writes
+// nothing) -----------------------------------------------------------------------
+// Reads no config, except the prose boundary of the book a chapter file belongs to (scoredText).
 // usage: ns-stylometry --calibrate=<path>[,<path>...]
 // Deterministic: byte-identical stdout for identical input files (calibrateBaseline's own seed
 // default, 4242, is unconditional here -- there is no --seed flag). Exit 0 on success; exit 1
@@ -112,7 +136,7 @@ if (opts.calibrate !== null) {
     const absPath = resolve(rawPath);
     let text;
     try {
-      text = readFileSync(absPath, 'utf8');
+      text = scoredText(absPath, readFileSync(absPath, 'utf8'));
     } catch (err) {
       process.stderr.write('ns-stylometry: cannot read file: ' + absPath + '\n');
       process.exit(2);
@@ -262,9 +286,12 @@ if (opts['by-register']) {
 
 // ---- chapter discovery ---------------------------------------------------------
 
-const chapterDir = join(root, 'chapters');
+const chaptersName = chaptersDirNameOf(root);
+const chapterDir = join(root, chaptersName);
+// ADR-0016 (adopting an existing book): every chapter read below measures prose only.
+const proseBoundary = proseBoundaryAt(root);
 if (!existsSync(chapterDir)) {
-  process.stderr.write('ns-stylometry: chapters/ directory not found at ' + chapterDir + '\n');
+  process.stderr.write('ns-stylometry: chapters folder ' + chaptersName + '/ not found at ' + chapterDir + '\n');
   process.exit(2);
 }
 
@@ -277,7 +304,7 @@ if (opts.chapter) {
   }
   chapterPaths = [p];
 } else {
-  // --all or no scope: every .md file in chapters/, sorted by name
+  // --all or no scope: every .md file in the chapters folder, sorted by name
   chapterPaths = readdirSync(chapterDir)
     .filter(f => f.endsWith('.md'))
     .sort()
@@ -291,7 +318,7 @@ const chapterFiles = [];
 for (const absPath of chapterPaths) {
   let text;
   try {
-    text = readFileSync(absPath, 'utf8');
+    text = proseOf(readFileSync(absPath, 'utf8'), proseBoundary);
   } catch (err) {
     process.stderr.write('ns-stylometry: cannot read chapter ' + absPath + ': ' + err.message + '\n');
     process.exit(2);

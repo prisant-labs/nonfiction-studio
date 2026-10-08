@@ -110,6 +110,14 @@ Human-readable pass:
 [overlap] pass: no overlap findings (3 corpus text(s) checked)
 ```
 
+With no corpus text at all, the pass says that nothing was compared, rather than passing silently:
+
+```
+[overlap] pass: nothing to compare: no source material on file
+```
+
+In a book that has not adopted `claims` ([ADR-0016 (adopting an existing book)](../../adr/ADR-0016-adopting-an-existing-book.md)), the corpus leaves out `research/packets/` and the evidence log, because a shared `research/` folder holds the author's own files; `context/prior-work/` still counts. Chapters are read from the folder the book's pointer names, and only their prose is scanned.
+
 Human-readable findings, with the exclusion count always named when nonzero:
 
 ```

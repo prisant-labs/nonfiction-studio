@@ -64,16 +64,16 @@ The skill writes no files and performs no state mutations. All outputs are produ
 
 The skill runs five steps.
 
-Before its first step, the skill locates the state folder: it reads `nonfiction-studio.json` at the book root, uses `_nonfiction-studio/` when that file does not exist, and stops without writing when the pointer is invalid or an unpointed state folder is found.
+Before its first step, the skill locates the state folder and the chapters folder: it reads `nonfiction-studio.json` at the book root, uses `_nonfiction-studio/` and `chapters/` for whatever that file does not name, and stops without writing when the pointer is invalid or an unpointed state folder is found. It then reads the adoption record in the state folder's `meta.json`, per [ADR-0016 (adopting an existing book)](../../adr/ADR-0016-adopting-an-existing-book.md). It needs no element. In an adopted book it replaces the new-book path with adopting another element, and marks the paths whose elements are missing rather than hiding them. In an adopted book, it treats the files of every other element the book has not adopted as absent, because such a file is the author's own.
 
-1. **Progress file probe (first tool call after the state folder is located).** Uses a Bash probe (`test -f _nonfiction-studio/progress.json`) to detect whether a project exists (`HAS_PROGRESS`/`NO_PROGRESS`). On `NO_PROGRESS`, presents Path 1 and Path 6 (the two paths that need no project) and proceeds to the confirm-before-handoff for whichever the author picks. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
+1. **Progress file probe (first tool call after the state folder is located).** Uses a Bash probe (`test -f _nonfiction-studio/progress.json`) to detect whether a project exists (`HAS_PROGRESS`/`NO_PROGRESS`). On `NO_PROGRESS`, presents Path 1 and Path 6 (the two paths that need no project) and proceeds to the confirm-before-handoff for whichever the author picks. When the same probe finds existing writing (a `WRITING:` line: a Markdown file outside hidden folders and files, other than a top-level `README.md`), it offers `nfs-adopt` first, in place of a new book, and then Path 6. This is the deterministic-guard convention per S-06 1.1 (skill anatomy and discovery).
 
 2. **Parse progress.json and read book title.** On `HAS_PROGRESS`, reads `_nonfiction-studio/progress.json`. If the file is present but malformed or unreadable, routes directly to Path 5 naming `nfs-doctor`. On a valid parse, reads `_nonfiction-studio/meta.json` for `book_title`; falls back to "your book" if absent.
 
 3. **Greet and present six paths.** Greets the author by book title and presents all six paths as numbered choices with one-line descriptions. Waits for the author's choice. Skipped when Step 1 already routed via the `NO_PROGRESS` shortcut (see Path 6 below).
 
 4. **Route based on choice.** Implements each path:
-   - Path 1: confirms, then proceeds with `nfs-new-book`; chains to `nfs-interview` on completion.
+   - Path 1: confirms, then proceeds with `nfs-new-book`; chains to `nfs-interview` on completion. In an adopted book, Path 1 becomes adopting another element with `nfs-adopt <element>`, and Paths 2 and 3 are marked not available until their elements are adopted, rather than hidden.
    - Path 2: runs the chapter-list registry probe; routes to `nfs-outline` on `NO_REGISTRY`; on `HAS_REGISTRY` inspects the progress layer and chapter-list registry for the next chapter to work on, then routes to `nfs-draft`.
    - Path 3: asks whether to gather research or verify claims; routes to `nfs-research` or `nfs-fact-check`.
    - Path 4: proceeds with `nfs-status-dashboard`; offers `nfs-check-chapter` for chapters flagged by the dashboard.

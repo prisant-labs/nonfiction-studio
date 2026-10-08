@@ -38,6 +38,10 @@ on either side. All four fields below follow this same nested placement.
 On a found book project, `additionalContext` carries the five-element orientation block (gate
 debt, thesis, active chapter, top style rules, open-claims count), assembled by
 `hooks/lib/orientation.mjs`, and `sessionTitle` carries the book's title from `_nonfiction-studio/meta.json`.
+In an adopted book, per [ADR-0016 (adopting an existing book)](../adr/ADR-0016-adopting-an-existing-book.md),
+the block reads only the elements the book has adopted: the thesis needs `brief`, the style rules need `style`, and the open-claims count needs
+`claims`. An element that is not adopted is skipped without an error record, and a closing
+`Not adopted:` line names each one. Gate debt is measured against the book's own chapters folder.
 On the empty-state path (no book project found anywhere in the ancestor chain) or the
 corrupt-project path (a book root was found but its bible files could not be read, including a
 bad `nonfiction-studio.json`), `additionalContext` carries a short plain-text message instead,
@@ -50,12 +54,12 @@ the empty-state path never runs. Its new-book pointer would otherwise lead to a 
 folder beside the real one.
 
 A fourth message path covers a folder with no book project that already holds writing: Markdown
-files outside hidden folders and files, other than a top-level `README.md` (ADR-0016, adopting an
-existing book). A hidden name begins with a dot, as in `.git/`, `.claude/` or `.github/`; such
-folders hold tool state, not the author's writing. `additionalContext` then says that the plugin cannot adopt an existing book yet
-and names `/nonfiction-studio:nfs-quick-scan` for a first look at the writing. It never names the
-new-book flow or `nfs-start`, because starting a new book there would set up an empty project
-beside the author's manuscript, and `initialUserMessage` is never set. The hook finds the writing
+files outside hidden folders and files, other than a top-level `README.md`, per
+[ADR-0016 (adopting an existing book)](../adr/ADR-0016-adopting-an-existing-book.md). A hidden name begins with a dot, as in `.git/`, `.claude/` or `.github/`; such
+folders hold tool state, not the author's writing. `additionalContext` then names
+`/nonfiction-studio:nfs-adopt`, which adopts the writing in place after a plan and an explicit yes.
+It never names the new-book flow or `nfs-start`, because starting a new book there would set up
+an empty project beside the author's manuscript, and `initialUserMessage` is never set. The hook finds the writing
 with `hooks/lib/existing-writing.mjs`, a breadth-first walk that stops after 2,000 directory
 entries. When the walk runs out of entries or cannot read the folder, the hook falls back to the
 empty-state message. That fallback is safe because the hook only advises: `nfs-new-book`'s own

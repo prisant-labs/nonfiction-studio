@@ -612,7 +612,7 @@ function writeFilesUnder(root, files) {
   }
 }
 
-test('(u) existing writing: never names the new-book flow or the front door, names quick-scan, no initialUserMessage', () => {
+test('(u) existing writing: never names the new-book flow or the front door, names nfs-adopt, no initialUserMessage', () => {
   const tmpDir = makeTmpDir('existing-writing');
   writeFilesUnder(tmpDir, ['README.md', 'manuscript/ch01.md']);
 
@@ -627,7 +627,7 @@ test('(u) existing writing: never names the new-book flow or the front door, nam
   assert.ok(hso.additionalContext.includes('already holds writing'), 'names the existing writing');
   assert.ok(!hso.additionalContext.includes('nfs-new-book'), 'never points at the new-book flow');
   assert.ok(!hso.additionalContext.includes('nfs-start'), 'never points at the front door, which offers the new-book flow');
-  assert.ok(hso.additionalContext.includes('/nonfiction-studio:nfs-quick-scan'), 'names what works without a project');
+  assert.ok(hso.additionalContext.includes('/nonfiction-studio:nfs-adopt'), 'names the skill that adopts the writing in place (ADR-0016)');
   assert.equal(hso.initialUserMessage, undefined, 'never opens the front door unprompted');
   assert.equal(hso.sessionTitle, undefined, 'no sessionTitle without a book');
 });
