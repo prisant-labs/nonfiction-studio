@@ -147,6 +147,11 @@ This file is written from the commit history of the branch it ships from, not fr
   `CLAUDE.md` there, because a plugin cannot ship context that way. Claude Code still loads the
   file as project instructions from its new place. `AGENTS.md` stays at the root as the mirror
   for other agent tools.
+- **The existing-writing guard's behavior tests now run on the Windows leg of Tier A, under Git
+  Bash.** They were skipped on win32, because `bash` on PATH can resolve to WSL there, so the
+  guard was never tested in the shell Claude Code uses on Windows. The test file now finds Git
+  Bash from `git --exec-path` (or `NFS_TEST_GIT_BASH`), never uses WSL, and skips only when Git
+  Bash is absent.
 
 ### Fixed
 

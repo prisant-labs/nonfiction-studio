@@ -8,22 +8,76 @@
 //               on the NEWINIT branch only, the existing-writing search, which skips hidden folders and files; the prose stops the flow
 //               on an `UNPOINTED:` or a `WRITING:` line; (2) runs the command itself, with
 //               <state-dir> substituted as the stanza directs, against book and folder layouts
-//               and asserts its output. The behavior tests need a POSIX bash
-//               and are skipped on win32, where `bash` on a CI runner can resolve to WSL rather
-//               than Git Bash (the reason tests/checks/plugin-root-resolver.test.mjs never runs a
-//               real bash); the ubuntu leg runs them.
+//               and asserts its output. The behavior tests need a real POSIX bash. On win32,
+//               plain `bash` on PATH can resolve to WSL's bash.exe rather than Git Bash (the
+//               shell Claude Code's own Bash tool actually runs Windows commands through, and
+//               the reason tests/checks/plugin-root-resolver.test.mjs never runs a real bash at
+//               all), so this file locates Git Bash explicitly via `resolveGitBash()` below
+//               instead of trusting PATH: it reads `git --exec-path`, walks up to the Git for
+//               Windows install root, and looks for bin/bash.exe then usr/bin/bash.exe there,
+//               never WSL. `NFS_TEST_GIT_BASH` overrides that search with an explicit path, for
+//               a machine where Git for Windows is not laid out the way that walk expects. The
+//               spawned bash also gets the install root's usr/bin prepended to its PATH, so its
+//               `find` resolves to Git's own coreutils rather than anything else named `find` on
+//               the system (a defensive measure; this walk's own candidates already land inside
+//               that usr/bin, which the MSYS runtime also puts first on its own). The behavior
+//               tests now run on win32 too, under that resolved Git Bash; they are skipped only
+//               when no Git Bash can be found at all (and the skip message says so). The ubuntu
+//               leg is unaffected: it resolves plain `bash` from PATH as before.
 // runner:       node --test "tests/checks/*.test.mjs" (picked up by scripts/test-engines.mjs)
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { execFileSync, spawnSync } from 'node:child_process';
 
 import { REPO_ROOT, makeBook, makeTmpDir } from '../lib/state-folder-books.mjs';
 
 const SKILL = join(REPO_ROOT, 'skills', 'nfs-new-book', 'SKILL.md');
-const POSIX_ONLY = { skip: process.platform === 'win32' && 'needs a POSIX bash; the ubuntu leg runs it' };
+
+/**
+ * Locates a real Git Bash on win32, bypassing PATH (where plain `bash` can resolve to WSL's
+ * bash.exe ahead of Git's). `NFS_TEST_GIT_BASH` overrides the search outright. Otherwise reads
+ * `git --exec-path` (typically `<git-root>/mingw64/libexec/git-core`), walks up three levels to
+ * the Git for Windows install root, and checks `bin/bash.exe` then `usr/bin/bash.exe` there.
+ * Returns `{ bash: null, usrBin: null }` when no override is set and none of that resolves, so
+ * the caller can skip with a reason rather than risk running WSL's bash. On any other platform
+ * returns `{ bash: 'bash', usrBin: null }`, resolved from PATH exactly as before.
+ */
+function resolveGitBash() {
+  if (process.platform !== 'win32') return { bash: 'bash', usrBin: null };
+  const override = process.env.NFS_TEST_GIT_BASH;
+  if (override) return { bash: existsSync(override) ? override : null, usrBin: null };
+  let execPath;
+  try {
+    execPath = execFileSync('git', ['--exec-path'], { encoding: 'utf8' }).trim();
+  } catch {
+    return { bash: null, usrBin: null };
+  }
+  if (!execPath) return { bash: null, usrBin: null };
+  let root = execPath;
+  for (let i = 0; i < 3; i++) root = dirname(root);
+  const usrBin = join(root, 'usr', 'bin');
+  for (const rel of [['bin', 'bash.exe'], ['usr', 'bin', 'bash.exe']]) {
+    const candidate = join(root, ...rel);
+    if (existsSync(candidate)) return { bash: candidate, usrBin };
+  }
+  return { bash: null, usrBin: null };
+}
+
+const { bash: BASH, usrBin: USR_BIN } = resolveGitBash();
+
+/** PATH, with the Git for Windows usr/bin directory prepended when Git Bash was resolved by path. */
+function bashEnv() {
+  if (!USR_BIN) return process.env;
+  const pathKey = Object.keys(process.env).find((k) => k.toUpperCase() === 'PATH') || 'PATH';
+  return { ...process.env, [pathKey]: USR_BIN + ';' + (process.env[pathKey] || '') };
+}
+
+const POSIX_ONLY = {
+  skip: BASH === null && 'no Git Bash found (checked NFS_TEST_GIT_BASH and the git --exec-path walk); refusing to fall back to WSL bash',
+};
 
 const made = [];
 after(() => {
@@ -43,7 +97,7 @@ function stepOneCommand() {
 /** Runs Step 1's command in `cwd` with <state-dir> replaced by `stateDir`; returns stdout lines. */
 function runStepOne(cwd, stateDir) {
   const script = stepOneCommand().command.split('<state-dir>').join(stateDir);
-  const result = spawnSync('bash', ['-c', script], { cwd, encoding: 'utf8' });
+  const result = spawnSync(BASH, ['-c', script], { cwd, encoding: 'utf8', env: bashEnv() });
   assert.equal(result.error, undefined, String(result.error));
   return result.stdout.split('\n').filter(Boolean);
 }
@@ -52,6 +106,16 @@ function track(dir) {
   made.push(dir);
   return dir;
 }
+
+test('behavior: the resolved bash runs a real POSIX find, not Windows find.exe', POSIX_ONLY, () => {
+  const result = spawnSync(BASH, ['-c', 'command -v find'], { encoding: 'utf8', env: bashEnv() });
+  assert.equal(result.error, undefined, String(result.error));
+  const found = result.stdout.trim();
+  // Accepts any POSIX find (ubuntu's /usr/bin/find, Git for Windows' /usr/bin/find); rejects
+  // Windows' own find.exe or anything that looks like it came from System32 or a .exe path.
+  assert.match(found, /\/find$/, found);
+  assert.doesNotMatch(found, /\.exe$|[Ww]indows|[Ss]ystem32/, found);
+});
 
 test('pin: Step 1 runs the unpointed-folder loop in the same call as the existence check', () => {
   const { command } = stepOneCommand();
