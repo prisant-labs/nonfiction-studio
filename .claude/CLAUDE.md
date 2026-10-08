@@ -56,6 +56,11 @@ There is no `npm test`. Two suites plus the Tier A checker battery are the whole
    pointing at a path that will not survive a clean checkout (see "Committed-content rules"),
    and the second locks the shared compliance stanza across every agent-dispatching skill.
    Both are easy to break silently with an unrelated edit nearby.
+4. This file and its mirror are kept byte-identical, from the shared "Operating guide for AI
+   coding agents" line onward, by
+   [scripts/checks/check-agent-guide-mirror.mjs](../scripts/checks/check-agent-guide-mirror.mjs),
+   part of the Tier A battery above; each file's own header, and the `../` prefix on the nested
+   copy's relative links, are the only exceptions.
 
 Both OS legs (`ubuntu-latest`, `windows-latest`) must be green; a failure on only one usually
 means a determinism bug (see below), not a flaky runner.
@@ -111,7 +116,9 @@ Every new file must obey these; several are CI-enforced.
   instead of naming one.
 - No ephemeral register IDs (planning-register numbers of the PF- series). Cite an established
   ADR or a locked decision with a short handle on first use, e.g. "ADR-0007 (agent identity
-  resolution)" or "D-04 (Node everywhere)".
+  resolution)" or "D-04 (Node everywhere)". The rule governs new content: IDs already in the tree
+  stay unless the surrounding text is rewritten, and `CHANGELOG.md` keeps its own citation
+  convention.
 - Skill and CLI counts in prose are machine-checked
   (`scripts/checks/check-component-counts.mjs`; agent and output-style counts are outside its
   scope): state a count only when it matches the tree (the README's "At a glance" table
