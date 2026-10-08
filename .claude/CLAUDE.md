@@ -116,7 +116,9 @@ Every new file must obey these; several are CI-enforced.
   instead of naming one.
 - No ephemeral register IDs (planning-register numbers of the PF- series). Cite an established
   ADR or a locked decision with a short handle on first use, e.g. "ADR-0007 (agent identity
-  resolution)" or "D-04 (Node everywhere)".
+  resolution)" or "D-04 (Node everywhere)". The rule governs new content: IDs already in the tree
+  stay unless the surrounding text is rewritten, and `CHANGELOG.md` keeps its own citation
+  convention.
 - Skill and CLI counts in prose are machine-checked
   (`scripts/checks/check-component-counts.mjs`; agent and output-style counts are outside its
   scope): state a count only when it matches the tree (the README's "At a glance" table

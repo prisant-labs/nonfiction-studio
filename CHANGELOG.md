@@ -132,7 +132,13 @@ This file is written from the commit history of the branch it ships from, not fr
 - **`nfs-start` offers adoption first in a folder of existing writing**, in place of a new book.
   In an adopted book, it offers adopting another element in place of a new book, and marks the
   paths whose elements are missing instead of hiding them. `nfs-new-book` stops in an adopted
-  book.
+  book. Its description now names the adoption path as well.
+- **Contributor records state what the code already does.** The coding-agent guides say the
+  rule against planning-register IDs governs new content, which is how it has been applied.
+  `agents/_chain-permitted.yaml` records that top-level `chain:` is a deliberate divergence from
+  Standard section 3.7 and names its three readers. `scripts/ATTRIBUTION.md` lists the
+  repository-authored files that sit inside the vendored folders. The U13 suppression in
+  `askit.config.json` no longer states a skill count.
 - **The Stop hook's thesis-alignment prompt skips without a thesis.** The prompt is told to
   reply with a skip, naming `nfs-adopt structure`, when its input states no thesis to compare
   against. A prompt hook cannot read the adoption record, so this skip lives in the prompt text.

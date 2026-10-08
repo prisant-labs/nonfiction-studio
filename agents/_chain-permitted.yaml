@@ -25,6 +25,16 @@
 # agent-to-agent edge shape is, since Agent/Task dispatch is the only event this hook
 # observes; skill invocation carries no equivalent PreToolUse signal.
 #
+# Field placement: the six skill callers declare `chain:` at the top level of their
+# SKILL.md frontmatter, not under `metadata:` where Standard section 3.7 places it.
+# That is a deliberate divergence, kept because three readers take the top-level field:
+# scripts/checks/chain-contract.mjs (vendored), scripts/check-frontmatter.mjs, and
+# scripts/checks/check-compliance-stanza.mjs, which derives its set of
+# agent-dispatching skills from it. The toolkit's metadata-placement check (U16) would
+# flag the six; it is not vendored here. A re-sync of the vendored spine, or adopting
+# upstream tooling that reads `metadata.chain`, must move the field and all three
+# readers together: a chain contract that is no longer read fails open, not loudly.
+#
 # Every edge is derived from a spec sentence; the per-edge comment cites the source.
 # No Phase 2 or Phase 3 agents appear here (developmental-editor, voice-guardian,
 # continuity-checker, citation-manager, comps-analyst, compliance-auditor, etc.).

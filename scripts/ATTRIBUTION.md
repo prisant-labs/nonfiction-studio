@@ -50,6 +50,28 @@ different count. Upstream is the truth; the catalog counts came from a review sn
 30), and upstream lib/ has 16 .mjs modules (3 more than the catalog stated 13). All
 upstream files were copied; nothing was omitted or added.
 
+## Repository-authored files in these folders
+
+These files sit inside the vendored `checks/` and `lib/` folders but were written for this
+repository; none exists in the upstream tree at the commit SHA above. They are not covered by
+the verbatim-copy statement above, and a re-sync must leave them in place. Every other file in
+those folders is upstream's.
+
+- `checks/check-advertised-invocations.mjs`
+- `checks/check-agent-guide-mirror.mjs`
+- `checks/check-component-counts.mjs`
+- `checks/check-compliance-stanza.mjs`
+- `checks/check-inventory.mjs`
+- `checks/check-link-labels.mjs`
+- `checks/check-plugin-root.mjs`
+- `checks/check-skill-cli-targets.mjs`
+- `checks/check-skill-versions.mjs`
+- `checks/check-state-folder-stanza.mjs`
+- `checks/check-workspace-refs.mjs`
+- `checks/workspace-refs-manifest.json`
+- `lib/credential-mode.mjs`
+- `lib/dispatch-threshold.mjs`
+
 ## Contract gap: tier-report.mjs
 
 Q-02 (CI pipeline) section 3.1 lists the vendor files but does not explicitly name
