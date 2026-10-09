@@ -18,6 +18,12 @@ coverage/
 .claude/agent-memory/
 .claude/agent-memory-local/
 
+# Claude Code local settings. .claude/CLAUDE.md is tracked; these are not. Agent worktrees
+# under .claude/worktrees/ are left out on purpose: they are full checkouts, and ignoring
+# them would make check-workspace-refs treat every tracked file name as a scratch name.
+.claude/settings.json
+.claude/settings.local.json
+
 # OS
 .DS_Store
 Thumbs.db
