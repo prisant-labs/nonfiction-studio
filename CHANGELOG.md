@@ -156,7 +156,7 @@ This file is written from the commit history of the branch it ships from, not fr
   Bash is absent.
 - **`.gitignore` now ignores Claude Code's local settings files**, `.claude/settings.json` and
   `.claude/settings.local.json`. Since the coding-agent guide became the one tracked file in
-  `.claude/`, both showed as untracked in every contributor's checkout.
+  `.claude/`, both showed as untracked in any checkout where Claude Code had written them.
 - **The release runbook names the skill-history step.** `docs/releasing.md` now tells the
   maintainer to stamp every `unreleased` row in `skills/*/HISTORY.md` with the new tag and to
   bump `package-lock.json` with the three manifests, and it describes the release workflow's

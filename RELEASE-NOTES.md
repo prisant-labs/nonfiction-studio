@@ -39,7 +39,7 @@ The marketplace entry pins to `v0.2.0`.
 
 - Cowork is expected to work the same way as the Claude Code CLI but is unverified: the Cowork hook-execution spike named above has not run yet.
 - An adopted book cannot adopt its claims yet. Until it can, claim coverage, fact-checking, the back-matter apparatus and agent drafting stay unavailable in an adopted book, and the gate skips its claim checks there.
-- Tier B (maintainer-run, model-integration CI) has not run live on this release. Every check in this release ran in keyless Tier A CI. The eval harness's known limitation, recorded in [issue #5](https://github.com/prisant-labs/nonfiction-studio/issues/5), is unchanged.
+- This release was verified by keyless Tier A CI only. Tier B (maintainer-run, model-integration CI) has not run on it. The eval harness's known limitation, recorded in [issue #5](https://github.com/prisant-labs/nonfiction-studio/issues/5), is unchanged.
 - This is a pre-1.0 release: breaking changes to a book's own schema are possible in a future version. See [MIGRATION.md](https://github.com/prisant-labs/nonfiction-studio/blob/v0.2.0/MIGRATION.md) for what counts as a breaking change and how compatibility is handled.
 
 ### Known regressions
