@@ -4,4 +4,4 @@ Versions of this skill, newest first. [ADR-0017 (per-skill versioning)](../../do
 
 | Version | Date | Release | Type | Summary |
 |---|---|---|---|---|
-| 0.1.0 | 2026-10-04 | unreleased | added | First version. Plans with the doctor's adoption plan, shows what it will add, and only on an explicit yes writes the state folder, its README and a pointer naming the book's own chapters folder, changing no author file. With an element argument it takes on style, brief or structure one at a time (ADR-0016, adopting an existing book). |
+| 0.1.0 | 2026-10-04 | v0.2.0 | added | First version. Plans with the doctor's adoption plan, shows what it will add, and only on an explicit yes writes the state folder, its README and a pointer naming the book's own chapters folder, changing no author file. With an element argument it takes on style, brief or structure one at a time (ADR-0016, adopting an existing book). |
