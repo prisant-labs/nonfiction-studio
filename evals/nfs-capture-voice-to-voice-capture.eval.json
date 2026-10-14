@@ -7,7 +7,7 @@
       "expect": "voice-capture agent is dispatched to analyze the sample and write context/style-profile.md"
     },
     {
-      "given": "nfs-capture-voice skill runs and the author supplies two paragraphs of prose",
+      "given": "nfs-capture-voice skill runs and the author supplies samples of their own prose totalling about 2,500 words",
       "expect": "voice-capture agent is invoked to score the sample and produce a style profile"
     }
   ]
