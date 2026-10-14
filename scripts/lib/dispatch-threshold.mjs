@@ -6,20 +6,25 @@
 // why:          roadmap row 1.12 requires that a deliberately broken dispatch table turns a
 //               live Tier B run red. Before this module existed, scripts/run-evals.mjs always
 //               exited 0 once every case had been graded, whatever the pass rate: dispatch
-//               accuracy was advisory signal only, never a gate. 70% is the chosen threshold,
-//               carried forward unchanged through F-CI-10 (weak eval grading)'s fail-closed
-//               DISPATCH-token grading rewrite (see scripts/run-evals.mjs's grading contract):
-//               re-tuning it is a decision for the maintainer's next live Tier B run, once the
-//               actual pass rate under the stricter contract has been observed, not something
-//               either change should guess at. Against the evals/ set's size when this was
-//               written (34 cases across 16 files, verified by counting the .eval.json
-//               cases[] arrays directly rather than trusting a comment elsewhere), a healthy
-//               table can absorb roughly a third of cases missing before this gate fails it,
-//               while a genuinely broken table (most of an eval file, or several files,
-//               misrouting) drops well below it. Chosen to catch severe breakage without
-//               flagging normal grading variance; not a claim that 70% is the ceiling of a
-//               healthy table, and not pinned to the exact case count above, which will drift
-//               as evals/ grows.
+//               accuracy was advisory signal only, never a gate.
+//
+//               The threshold is 70%. It was chosen, not derived, in ADR-0010 (Tier B trigger
+//               and credential), and re-examined on 2026-10-14 against the graded set that
+//               ADR-0018 (Tier B eval harness contract) defines: 18 chain cases across 10 files.
+//               The 16 hook cases no longer count. At 70%, 13 of 18 must pass, so the gate
+//               absorbs 5 misses (13 of 18 is 72%) and fails at 6 (12 of 18 is 67%). A chain
+//               file holds one or two cases. Three two-case files misrouting completely therefore
+//               fail the run, and one or two files misrouting pass it. The report lists every
+//               failed case, and that list, not this gate, is the per-edge signal.
+//
+//               Three live runs under the ADR-0018 harness scored 14 of 18 (78%) before four
+//               case texts were corrected, then 16 of 18 (89%) and 15 of 18 (83%). One miss
+//               recurs in every run and is a real defect: the nfs-capture-voice skill's
+//               description says it delegates only when no samples are available. The other
+//               misses moved between cases from run to run. The threshold is deliberately not set
+//               to an observed score. It is meant to fail a table where several edges break, and
+//               to absorb one genuine defect plus ordinary haiku variance, which these runs put
+//               at one or two cases.
 // used-by:      scripts/run-evals.mjs
 // exit taxonomy: n/a (library module; the caller chooses its own exit code)
 
