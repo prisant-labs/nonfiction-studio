@@ -4,6 +4,6 @@ Versions of this skill, newest first. [ADR-0017 (per-skill versioning)](../../do
 
 | Version | Date | Release | Type | Summary |
 |---|---|---|---|---|
-| 0.1.2 | 2026-10-04 | unreleased | changed | Follows the sample book's renamed state folder when it switches the tour copy to block mode (ADR-0015, state folder name), and updates the shared plugin-root note. |
+| 0.1.2 | 2026-10-04 | v0.2.0 | changed | Follows the sample book's renamed state folder when it switches the tour copy to block mode (ADR-0015, state folder name), and updates the shared plugin-root note. |
 | 0.1.1 | 2026-09-24 | v0.1.1 | fixed | Finds the plugin root from the installed-plugins record instead of a scan of the plugin cache, so the right copy is used when several versions are cached (ADR-0014, plugin-root resolution). |
 | 0.1.0 | 2026-09-23 | v0.1.0 | added | First released version: a guided walkthrough of the bundled sample book in a disposable copy. |

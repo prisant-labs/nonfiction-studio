@@ -2,6 +2,50 @@
 
 Curated, author-facing highlights of each Nonfiction Studio release, newest first: what a release means for someone writing a book with the plugin. For the complete, chronological record of every change, see [CHANGELOG.md](https://github.com/prisant-labs/nonfiction-studio/blob/main/CHANGELOG.md).
 
+## 0.2.0 - 2026-10-13
+
+You can now bring in a book you already started, and each book's records move to a visible folder. The folder move is a breaking change for a book created by 0.1.x, and one command fixes it.
+
+### What this means for you
+
+- **Breaking: a book created by 0.1.x needs one command after the update.** The plugin now keeps a book's records in a visible `_nonfiction-studio/` folder instead of the hidden `.studio/` folder. Nothing is deleted or rewritten, but the plugin no longer finds `.studio/` by itself. Every skill, CLI and session-start message stops and names the fix: run `/nonfiction-studio:nfs-doctor migrate`. It asks before it writes anything. It either renames the folder, using `git mv` inside a git repository, or keeps the old name and records it in a new `nonfiction-studio.json` file at the book root. Commit the result. See the [state-folder note in MIGRATION.md](https://github.com/prisant-labs/nonfiction-studio/blob/v0.2.0/MIGRATION.md) for details.
+- **You can adopt a manuscript you already have.** Run `/nonfiction-studio:nfs-adopt` in the book's folder. It shows what it will add and writes only after you say yes. It adds the state folder and a pointer to your own chapters folder, and it never changes a file you wrote. Word counts, chapter snapshots, the AI-use log, the status board and the gate's prose checks work at once. Your chapter files keep their own names.
+- **You adopt the rest of the workflow one element at a time.** `nfs-adopt style`, `nfs-adopt brief` and `nfs-adopt structure` each take on one more element and hand off to the matching skill. A skill that needs an element you have not adopted stops before it writes and names the command that adopts it.
+- **`nfs-new-book` no longer creates an empty project beside your manuscript.** In a folder that already holds Markdown writing, it stops, writes nothing, and points you to `nfs-adopt`. `nfs-start` offers adoption first in such a folder.
+- **Working notes at the end of a chapter can stay out of the counts.** If your chapter files end with planning material under a fixed heading, set `"prose": {"ends_at_heading": "..."}` in the state folder's `config.json`. Everything from that heading down is then never counted, scored or scanned.
+- **Each skill now shows its own version.** Every skill carries a version number and a `HISTORY.md` file that says what changed in it, so you can see which skills this release touched.
+- **Fixes.** Hooks now work when the plugin is installed under a path that contains a space. `nfs-doctor` no longer reports every chapter snapshot as badly named. Saving or gating one chapter no longer deletes another chapter's snapshots or gate reports when one chapter's name begins with the other's, such as `ch01` and `ch01.x`.
+
+To update an existing install, run `/plugin update nonfiction-studio@prisant-labs`.
+
+### Install
+
+```
+/plugin marketplace add prisant-labs/agent-plugins
+/plugin install nonfiction-studio@prisant-labs
+```
+
+The marketplace entry pins to `v0.2.0`.
+
+### Surface support
+
+| Surface | Tested depth |
+|---|---|
+| Claude Code CLI | Full: exercised end to end by keyless Tier A CI on Ubuntu and Windows, including the existing-writing guard's tests under Git Bash on Windows |
+| Cowork | Expected to work the same way, but unverified; treat as "should work," not "proven to work" (see [ADR-0002](https://github.com/prisant-labs/nonfiction-studio/blob/v0.2.0/docs/adr/ADR-0002-cowork-hook-execution.md), Cowork hook execution) |
+| claude.ai chat | Skills only: hooks do not fire on chat, so the quality gate does not run automatically; run `/nonfiction-studio:nfs-check-chapter` yourself for a verdict |
+
+### Known limitations
+
+- Cowork is expected to work the same way as the Claude Code CLI but is unverified: the Cowork hook-execution spike named above has not run yet.
+- An adopted book cannot adopt its claims yet. Until it can, claim coverage, fact-checking, the back-matter apparatus and agent drafting stay unavailable in an adopted book, and the gate skips its claim checks there.
+- Tier B (maintainer-run, model-integration CI) ran live on this release's candidate commit on 2026-10-13. It ran from the maintainer's own Claude Code login, not on a GitHub runner. The integration flow passed. The eval dispatch-accuracy step scored 11 of 34 cases (32%) against a 70% threshold, so that step finished red. This is the eval-harness limitation tracked in [issue #5](https://github.com/prisant-labs/nonfiction-studio/issues/5), not a product regression. All 16 hook cases expect an event name, but Claude Code runs hooks itself, and no model dispatches them. Three chain answers named the right agent but added reasoning on the same line, which the grader rejects. As for 0.1.0, the maintainer treats that step as advisory for this release.
+- This is a pre-1.0 release: breaking changes to a book's own schema are possible in a future version. See [MIGRATION.md](https://github.com/prisant-labs/nonfiction-studio/blob/v0.2.0/MIGRATION.md) for what counts as a breaking change and how compatibility is handled.
+
+### Known regressions
+
+None.
+
 ## 0.1.1 - 2026-09-24
 
 A hotfix for marketplace installs: skills that shell out to a CLI could not find it.

@@ -6,6 +6,8 @@ This file is written from the commit history of the branch it ships from, not fr
 
 ## Unreleased
 
+## [0.2.0] - 2026-10-13
+
 ### Added
 
 - **`scripts/checks/check-agent-guide-mirror.mjs`, a new Tier A check.** AGENTS.md says it
@@ -152,6 +154,14 @@ This file is written from the commit history of the branch it ships from, not fr
   guard was never tested in the shell Claude Code uses on Windows. The test file now finds Git
   Bash from `git --exec-path` (or `NFS_TEST_GIT_BASH`), never uses WSL, and skips only when Git
   Bash is absent.
+- **`.gitignore` now ignores Claude Code's local settings files**, `.claude/settings.json` and
+  `.claude/settings.local.json`. Since the coding-agent guide became the one tracked file in
+  `.claude/`, both showed as untracked in any checkout where Claude Code had written them.
+- **The release runbook names the skill-history step.** `docs/releasing.md` now tells the
+  maintainer to stamp every `unreleased` row in `skills/*/HISTORY.md` with the new tag and to
+  bump `package-lock.json` with the three manifests, and it describes the release workflow's
+  second check, which refuses a tag while any row still says `unreleased` (ADR-0017, per-skill
+  versioning). It also says the version bump lands through a release-preparation pull request.
 
 ### Fixed
 

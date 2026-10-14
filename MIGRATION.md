@@ -153,7 +153,7 @@ This release (ADR-0013, wave 1 exit surfaces) adds seven author-visible surfaces
 
 ## State-folder note (2026-10-01): `.studio/` becomes `_nonfiction-studio/` (not a schema_version change)
 
-Independent of `meta.json`'s `schema_version` (unchanged by this release), the folder that holds each book's machine-managed records has moved. Books created by earlier releases keep those records in the hidden `.studio/` folder. Books created by this release keep them in the visible `_nonfiction-studio/` folder, which also carries a short `README.md` explaining itself. [ADR-0015 (state folder name)](docs/adr/ADR-0015-state-folder-name.md) records why. This is a breaking change under "What counts as a breaking change" above: it moves the state folder's default location.
+Independent of `meta.json`'s `schema_version` (unchanged by this release), the folder that holds each book's machine-managed records has moved, starting with v0.2.0. Books created by 0.1.x releases keep those records in the hidden `.studio/` folder. Books created by v0.2.0 or later keep them in the visible `_nonfiction-studio/` folder, which also carries a short `README.md` explaining itself. [ADR-0015 (state folder name)](docs/adr/ADR-0015-state-folder-name.md) records why. This is a breaking change under "What counts as a breaking change" above: it moves the state folder's default location.
 
 **What happens if you take this update without doing anything.** Your book's records stay exactly where they are, and nothing is deleted or rewritten. The plugin no longer finds them by itself, though, and every surface says so instead of guessing:
 
