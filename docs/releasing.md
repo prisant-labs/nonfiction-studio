@@ -51,7 +51,7 @@ This plugin has no release automation beyond the tag-triggered workflow, so cutt
 
 1. Confirm Tier A is green on `main`, and confirm that Tier B ran live on the release candidate rather than skipping. Either of two runs counts as live evidence:
    - A dispatched run of `.github/workflows/tier-b.yml` counts when `CLAUDE_CODE_OAUTH_TOKEN` was set for it. The Actions tab shows whether the run went live or took the named skip.
-   - A local run of `node scripts/run-integration.mjs` and `node scripts/run-evals.mjs`, from the maintainer's own authenticated `claude` CLI, counts when each script's first line reports `credential decision: live`. Version 0.2.0 used this path, because the repository's token was not yet set.
+   - A local run of `node scripts/run-integration.mjs` and `node scripts/run-evals.mjs`, from the maintainer's own authenticated `claude` CLI, counts when each script's first line reports `credential decision: live`. Version 0.2.0 used this path, because the repository's token was not yet set. A local run's child sessions also load the maintainer's user-level Claude Code configuration (global instructions, hooks and installed plugins), which a runner does not have, so a dispatched run remains the cleaner evidence once the token is set.
 
    A skip, or a local run that fell back to `dry-run`, is a valid green state day to day, but it proves nothing about the release candidate. Do not cut a release on that evidence alone. Wherever the release notes mention Tier B, say which of the two runs supplied the evidence.
 2. Decide the new version number using the breaking / feature-additive / patch categories in `MIGRATION.md`'s compatibility section, applied to what actually changed since the last release.
