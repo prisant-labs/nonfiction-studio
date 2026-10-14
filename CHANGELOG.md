@@ -6,6 +6,15 @@ This file is written from the commit history of the branch it ships from, not fr
 
 ## Unreleased
 
+### Changed
+
+- **The release runbook accepts a local Tier B run as release evidence.** Step 1 of
+  `docs/releasing.md` named only a dispatched GitHub run, but 0.2.0's evidence came from the
+  maintainer running both Tier B scripts on their own authenticated `claude` CLI, because the
+  repository's token was not yet set. Step 1 now names both paths and how to tell a live run from
+  a skip or a dry-run. The runbook's introduction also records that 0.2.0, like 0.1.0, released
+  with the eval dispatch-accuracy step red and disclosed.
+
 ## [0.2.0] - 2026-10-13
 
 ### Added
