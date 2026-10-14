@@ -8,12 +8,37 @@ This file is written from the commit history of the branch it ships from, not fr
 
 ### Changed
 
+- **CONTRIBUTING.md and the release runbook describe the isolated eval run.** CONTRIBUTING.md
+  no longer quotes ADR-0010's "$1 to $2.50 per run" for a local Tier B run. The runbook's caveat
+  about a local run loading the maintainer's own configuration now applies to
+  `scripts/run-integration.mjs` only.
+
 - **The release runbook accepts a local Tier B run as release evidence.** Step 1 of
   `docs/releasing.md` named only a dispatched GitHub run, but 0.2.0's evidence came from the
   maintainer running both Tier B scripts on their own authenticated `claude` CLI, because the
   repository's token was not yet set. Step 1 now names both paths and how to tell a live run from
   a skip or a dry-run. The runbook's introduction also records that 0.2.0, like 0.1.0, released
   with the eval dispatch-accuracy step red and disclosed.
+
+### Fixed
+
+- **The Tier B eval harness now measures dispatch, not guessing** (issue #5, ADR-0018 (Tier B
+  eval harness contract)). `scripts/run-evals.mjs` loads the plugin with `--plugin-dir` and runs
+  every call from an empty temporary folder, with user settings, every hook and every
+  `CLAUDE.md` turned off and no tool allowed. Before, the model was never shown the plugin, could
+  read the repository instead, loaded the maintainer's own instructions, and fired the
+  maintainer's own hooks; loading the plugin alone also let its Stop hook replace the answer.
+  Only the 18 chain cases count toward dispatch accuracy. The 16 hook cases stay under `evals/`
+  for the G3 conformance rule, but no model dispatches a hook, so none is graded. The grader
+  reads the component name at the start of the `DISPATCH:` line, strips the
+  `nonfiction-studio:` namespace and ignores reasoning after the name, but still fails a hedge
+  such as "drafting-partner or line-editor". The prompt asks for an agent or skill, never a hook
+  handler. Each call gets 180 seconds, with one retry on timeout only, and the run logs the
+  `claude` CLI version. Five eval case texts that did not name their caller, contradicted the
+  shipped skill, or read two ways now say what they mean; no `expect` changed. Three live runs
+  scored 14, 16 and 15 of 18 for about 7 cents each. The 70% threshold stays, re-examined
+  against 18 cases, and the budget cap falls from $1.50 to $0.50; both rationales are recorded
+  beside their constants.
 
 ## [0.2.0] - 2026-10-13
 
