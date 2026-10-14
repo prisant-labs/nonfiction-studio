@@ -1,92 +1,88 @@
 // scripts/run-evals.mjs
 // what-it-is:   Tier B eval batch runner
-// what-it-does: reads every evals/*.eval.json file, sends each case's "given"
-//               trigger to the Claude API using haiku, and grades whether the
-//               response names the correct callee via an exclusive DISPATCH:
-//               token (see the grading contract below); produces a
-//               dispatch-accuracy report per Q-01 section 5.3, and fails the
-//               run if the pass rate drops below scripts/lib/dispatch-threshold.mjs's
-//               documented threshold (roadmap row 1.12: a genuinely broken
-//               dispatch table must turn a live run red).
+// what-it-does: reads every evals/*.eval.json file, sends each chain case's "given" trigger to
+//               the claude CLI using haiku with this plugin loaded, and grades whether the
+//               response names the correct callee via an exclusive DISPATCH: token (see the
+//               grading contract below); produces a dispatch-accuracy report per Q-01 section
+//               5.3, and fails the run if the pass rate drops below
+//               scripts/lib/dispatch-threshold.mjs's documented threshold (roadmap row 1.12: a
+//               genuinely broken dispatch table must turn a live run red).
 // why:          Q-01 section 5.3; the batch runner measures routing accuracy.
 //               A chain edge with 100% dispatch but poor output quality is a
 //               separate concern, addressed by behavioral evals or
 //               deterministic checkers, not this gate. OQ-002 (batch eval
 //               runner ownership) resolved: toolkit v1.6.0 does not ship a
 //               runner; this is the in-house Node.js + haiku implementation.
+//               ADR-0018 (Tier B eval harness contract) records what a live call loads, what
+//               is graded, and how the grader reads a reply.
 // used-by:      .github/workflows/tier-b.yml
 //
-// Grading contract (F-CI-10 (weak eval grading), replacing a prior substring check): the
-// construction code below never states the expected callee anywhere, in any form - not the
-// callee name, not the covers description it is derived from - except where an eval case's own
-// "given" text names its hook literally (e.g. post-tool-use.eval.json's given text opens
-// "PostToolUse fires for a WebFetch result..."), a pre-existing eval-content property this
-// change does not touch: all 16 cases across the 6 hook eval files (post-tool-batch,
-// post-tool-use, pre-compact, pre-tool-use, session-start, stop) name their hook this way, while
-// the 10 chain eval files' 18 cases describe a triggering situation without naming the callee.
-// The model is asked only to name the component it believes would be dispatched, as exactly one
-// line of the form
-// "DISPATCH: <component-name>", optionally followed by one sentence of reasoning. Grading
-// (gradeResponse, exported below and unit-tested directly with zero model calls in
-// tests/checks/run-evals.test.mjs) parses the FIRST such line out of the reply - a later,
-// correct DISPATCH: line never rescues an earlier wrong one - normalizes it (trim, lowercase,
-// strip whitespace and hyphens, so a covers.hook value written PascalCase such as "PostToolUse"
-// compares equal to a reply written "post-tool-use" or "post tool use"; the same rule applies
-// uniformly to chain callees, which already ship kebab-case), and PASSes only on an exact match
-// against the expected callee (covers.chain[1] or covers.hook). No DISPATCH: line anywhere in
-// the reply, an empty name after the colon, or a different name are all FAIL. This is
-// fail-closed by construction, modeled on scripts/run-integration.mjs's exclusive-token design
-// (its SCAFFOLD_OK / SCAFFOLD_MISSING pattern): naming the right callee only in prose, with no
-// DISPATCH: line, still fails - that used to pass under the deleted callee-echo fallback
-// (`gradeResponse(c.expect, r.text) || r.text.includes(callee)`), because the model was simply
-// repeating text an earlier version of this prompt had handed it directly in a line reading
-// "Expected callee: " plus that same callee. Each case's "expect" field in evals/*.eval.json
-// keeps its documentation value - what a human reviewer should recognize as correct behavior -
-// but is no longer read by the grader at all.
+// What is graded (ADR-0018): chain evals only. A chain eval's covers.chain names a caller and
+// the callee it dispatches, and a model genuinely chooses that callee. Hook evals stay under
+// evals/, because the G3 conformance rule (scripts/checks/library-regression.mjs) requires an
+// eval case for every hook event, and dry-run still validates them. They never count toward
+// dispatch accuracy: Claude Code fires a hook when its event happens, no model dispatches one,
+// and tests/hooks/ proves hook behavior deterministically in Tier A.
 //
-// Pass rates from before this change are NOT comparable to pass rates after it: the deleted
-// grader passed on a loose substring match against a callee the model had already been handed
-// in the prompt, which is a fundamentally easier task than answering cold with an exclusive
-// token it was never shown. No live run against evals/ has been made since this change landed
-// (no live model calls are made by this task's tests or by its own verification), so the new
-// pass rate under the stricter contract is not yet known. Pass rates are also not comparable
-// ACROSS the two eval shapes for the reason noted above: the 6 hook files' cases name their
-// hook inside "given" itself, so their pass rate measures something closer to reading
-// comprehension than the 10 chain files' cold-inference task, and will tend to run higher for
-// that reason alone, not because chain dispatch is less reliable. The dispatch-accuracy
-// threshold in scripts/lib/dispatch-threshold.mjs is deliberately left untouched at 0.70:
-// re-tuning it is a decision for the maintainer's next live Tier B run, once the actual pass
-// rate under this contract has been observed, not something this change should guess at.
+// How each live call runs (ADR-0018): from an empty temp folder created once per run, never from
+// the repository, with the plugin loaded through --plugin-dir. User settings are left out
+// (--setting-sources project), every hook is off (--settings disableAllHooks), every CLAUDE.md is
+// off (CLAUDE_CODE_DISABLE_CLAUDE_MDS=1 in the child's environment), no tool may run
+// (--permission-mode dontAsk), and nothing is saved (--no-session-persistence). Before this, the
+// children ran in the repository with the caller's own settings: they read the repository
+// instead of the plugin, loaded its coding-agent guide and the user's global instructions, and
+// fired the user's hooks. Loading the plugin without disabling hooks is not enough either: in an
+// empty folder, the plugin's prompt-based Stop hook replaced the model's answer. --bare would
+// isolate in one flag but refuses OAuth, which Tier B authenticates with (ADR-0010).
+//
+// Grading contract (F-CI-10 (weak eval grading), amended by ADR-0018): the construction code
+// below never states the expected callee anywhere, in any form. The model is asked to name the
+// agent or skill it believes would be dispatched, as a first line of the form
+// "DISPATCH: <component-name>", with any reasoning on the next line. Grading (gradeResponse,
+// exported below and unit-tested directly with zero model calls in
+// tests/checks/run-evals.test.mjs) reads the FIRST such line out of the reply - a later,
+// correct DISPATCH: line never rescues an earlier wrong one - and takes the component name at
+// its start: leading markdown wrapping (asterisks, underscores, backticks, quotes) and a leading
+// "/" are skipped, then the literal plugin namespace ("nonfiction-studio:", read from
+// .claude-plugin/plugin.json) is stripped, then the name is the first run of letters, digits,
+// hyphens and underscores. Whatever follows the name is ignored, so "DISPATCH: voice-capture
+// (agent)" passes, unless it starts a hedge: "/", ",", ";", "&", "+", "or" or "and" before a
+// second name fails the reply even when the first name is right. Only the literal namespace is
+// stripped, never an arbitrary "<word>:" prefix, because the model also sees unprefixed
+// built-in agents and skills. The name is normalized (lowercase, hyphens removed) and PASSes only
+// on an exact match against covers.chain[1]. No DISPATCH: line anywhere in the reply, no name
+// after the colon, a hedge, or a different name are all FAIL. This is fail-closed by
+// construction, modeled on scripts/run-integration.mjs's exclusive-token design: naming the
+// right callee only in prose, with no DISPATCH: line, still fails. Each case's "expect" field in
+// evals/*.eval.json keeps its documentation value - what a human reviewer should recognize as
+// correct behavior - but is not read by the grader.
+//
+// Pass rates are not comparable across the 2026-10-14 change (ADR-0018): before it, the 16
+// hook cases counted, the plugin was not loaded, and reasoning on the DISPATCH: line failed a
+// correct name. The threshold in scripts/lib/dispatch-threshold.mjs records the live run it was
+// re-tuned against.
 //
 // Exit taxonomy:
-//   0  - every case graded AND the dispatch-accuracy threshold was met, OR a named green skip
-//        when neither credential is configured on an unattended CI runner (expected until the
-//        maintainer sets the CLAUDE_CODE_OAUTH_TOKEN repo secret; see
+//   0  - every graded case graded AND the dispatch-accuracy threshold was met, OR a named green
+//        skip when neither credential is configured on an unattended CI runner (expected until
+//        the maintainer sets the CLAUDE_CODE_OAUTH_TOKEN repo secret; see
 //        scripts/lib/credential-mode.mjs), OR --dry-run / auto dry-run fallback validated every
 //        eval file with zero model calls
 //   1  - one or more eval files are malformed; runner aborted
 //   2  - dispatch accuracy below scripts/lib/dispatch-threshold.mjs's threshold: a genuinely
-//        broken dispatch table (roadmap row 1.12). RETIRED meaning, as of this task: this code
-//        used to mean "operational error: no model access (no API key and no usable claude
-//        CLI)"; that situation no longer reaches an error at all, since it now resolves to
-//        either the named skip above (unattended CI) or an automatic dry-run fallback
-//        (developer machine); see scripts/lib/credential-mode.mjs.
-//   3  - BUDGET_EXCEEDED: cumulative spend exceeded the $1.50 cap
+//        broken dispatch table (roadmap row 1.12). RETIRED meaning: this code used to mean
+//        "operational error: no model access (no API key and no usable claude CLI)"; that
+//        situation no longer reaches an error at all, since it now resolves to either the named
+//        skip above (unattended CI) or an automatic dry-run fallback (developer machine); see
+//        scripts/lib/credential-mode.mjs.
+//   3  - BUDGET_EXCEEDED: cumulative spend exceeded BUDGET_CAP_USD
 //
-// Budget note (recalibrated 2026-08-08, case count corrected 2026-08-09): 34 eval cases across
-// 16 files (counted directly from each file's cases[] array; the file originally said 28
-// across 15, which had gone stale as evals/ grew). The $0.037-per-haiku-call and ~$1.04-total
-// figures below are carried forward from the 2026-08-08 measurement and are NOT re-measured
-// against the corrected 34-case count; treat them as an estimate from an earlier case count,
-// not a re-verified one. Comfortably inside the $1.50 cap either way. A live batch is expected
-// to grade every case and exit 0; the old $0.10 cap covered barely two calls, so it tripped
-// BUDGET_EXCEEDED partway through every single run by design, not in response to any real
-// overrun. Hitting BUDGET_EXCEEDED (exit 3) now means a genuine regression in spend, not the
-// previously guaranteed outcome.
+// Budget note: see BUDGET_CAP_USD below for the arithmetic and the live run it rests on.
 
 import { spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync, existsSync } from 'node:fs';
-import { join, resolve, dirname } from 'node:path';
+import { readdirSync, readFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { join, resolve, dirname, relative, isAbsolute } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { decideCredentialMode } from './lib/credential-mode.mjs';
 import { DISPATCH_ACCURACY_THRESHOLD, meetsDispatchThreshold } from './lib/dispatch-threshold.mjs';
@@ -96,8 +92,27 @@ const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, '..');
 const EVALS_DIR = join(REPO_ROOT, 'evals');
 
-const BUDGET_CAP_USD = 1.50;
+// Budget (re-tuned 2026-10-14, ADR-0018). Three live runs of the 18 graded chain cases cost
+// $0.0655, $0.0682 and $0.0656, about $0.0037 a call, with the plugin loaded and no tool use.
+// The cap covers the worst case this design allows. If every call timed out once and was
+// retried, a run would cost about 2 x $0.068 = $0.14. If, on top of that, every reply tried a
+// tool, was denied, and took three turns, it would cost about 3 x $0.14 = $0.41. The three-turn
+// figure is an assumption, taken from a probe whose plugin hooks were still on. $0.50 sits just
+// above $0.41, so exit 3 means a genuine spend regression, such as a change that lets tools run,
+// not an ordinary batch. The previous $1.50 cap was sized for 34 cases whose children read the
+// repository.
+const BUDGET_CAP_USD = 0.50;
 const MODEL = 'haiku';
+
+/** Per-call timeout. Raised from 60 seconds (issue #5): five calls on the 2026-09-23 GitHub run
+ *  timed out and were graded as failures. A timeout is retried once; nothing else is. */
+export const CALL_TIMEOUT_MS = 180000;
+
+// The plugin's own name, which Claude Code puts in front of every component it loads from this
+// plugin ("nonfiction-studio:thesis-architect"). Read from the manifest rather than repeated
+// here, so a rename cannot leave the grader stripping a namespace that no longer exists.
+const PLUGIN_NAMESPACE =
+  JSON.parse(readFileSync(join(REPO_ROOT, '.claude-plugin', 'plugin.json'), 'utf8')).name + ':';
 
 // ---------------------------------------------------------------------------
 // CLI parsing
@@ -145,29 +160,84 @@ function loadEvalFiles() {
   return { sets, malformed };
 }
 
+/** The callee a set is graded against, or null when the set is not a dispatch eval. Only a
+ *  chain eval is: a model chooses its callee. A hook eval is validated but never graded, because
+ *  Claude Code fires hooks itself (ADR-0018). */
+export function dispatchCallee(covers) {
+  if (covers && Array.isArray(covers.chain) && covers.chain.length >= 2) return covers.chain[1];
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Prompt
+// ---------------------------------------------------------------------------
+
+/** Builds the prompt for one case. It interpolates the case's "given" text and nothing that
+ *  names a callee. It asks for an agent or skill only: the 2026-10-13 live run showed that asking
+ *  for a "hook handler" draws a script path as the answer. */
+export function buildPrompt(given) {
+  return (
+    'Context: you are being evaluated on the Nonfiction Studio plugin, which is loaded in this ' +
+    'session. Do not call any tool; answer from the agents and skills you can see.\n' +
+    'Given: ' + given + '\n\n' +
+    'Task: Name the one agent or skill that would be dispatched in this situation. Your first ' +
+    'line must be exactly "DISPATCH: <component-name>", with nothing else on that line. If you ' +
+    'add reasoning, put one sentence on the next line. Say nothing before the DISPATCH: line.'
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Claude caller
 // ---------------------------------------------------------------------------
 
-let totalSpendUsd = 0;
-
-function callClaude(prompt) {
-  const args = [
+/** The claude arguments for one live call (ADR-0018). Exported so a test pins every flag, and
+ *  every absence: no --dangerously-skip-permissions, because no tool may run; no --bare, because
+ *  it refuses OAuth. */
+export function buildClaudeArgs(prompt, { repoRoot, model }) {
+  return [
     '-p', prompt,
-    '--model', MODEL,
-    '--dangerously-skip-permissions',
+    '--model', model,
     '--output-format', 'json',
+    '--plugin-dir', repoRoot,
+    '--setting-sources', 'project',
+    '--settings', JSON.stringify({ disableAllHooks: true }),
+    '--permission-mode', 'dontAsk',
+    '--no-session-persistence',
   ];
-  const result = spawnSync('claude', args, {
+}
+
+/** The child's environment: the caller's, so the credential and PATH carry through, with every
+ *  CLAUDE.md turned off. --setting-sources does not cover the user's ~/.claude/CLAUDE.md; this
+ *  documented variable does, and leaves authentication alone. */
+export function buildChildEnv(baseEnv) {
+  return { ...baseEnv, CLAUDE_CODE_DISABLE_CLAUDE_MDS: '1' };
+}
+
+function isInside(parent, child) {
+  const rel = relative(resolve(parent), resolve(child));
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
+function callOnce(prompt, { repoRoot, cwd, model, env, spawn, timeoutMs }) {
+  const result = spawn('claude', buildClaudeArgs(prompt, { repoRoot, model }), {
+    cwd,
     encoding: 'utf8',
-    env: process.env,
-    timeout: 60000,
+    env,
+    timeout: timeoutMs,
   });
-  if (result.error) return { ok: false, error: result.error.message, costUsd: 0, text: '' };
-  if (!result.stdout) return { ok: false, error: 'empty stdout (exit ' + result.status + ')', costUsd: 0, text: '' };
+  if (result.error) {
+    return {
+      ok: false,
+      timedOut: result.error.code === 'ETIMEDOUT',
+      error: result.error.message,
+      costUsd: 0,
+      text: '',
+    };
+  }
+  if (!result.stdout) return { ok: false, timedOut: false, error: 'empty stdout (exit ' + result.status + ')', costUsd: 0, text: '' };
   let parsed;
   try { parsed = JSON.parse(result.stdout); } catch {
-    return { ok: false, error: 'non-JSON stdout', costUsd: 0, text: '' };
+    return { ok: false, timedOut: false, error: 'non-JSON stdout', costUsd: 0, text: '' };
   }
   // The CLI emits total_cost_usd. A response missing it is a hard failure,
   // because continuing would grade the rest of the batch with no working
@@ -182,66 +252,104 @@ function callClaude(prompt) {
   if (costUsd === null) {
     return {
       ok: false,
+      timedOut: false,
       error: 'CLI JSON carried no total_cost_usd field; '
         + 'refusing to continue without a working budget cap',
       costUsd: 0,
       text: '',
     };
   }
-  totalSpendUsd += costUsd;
   return {
     ok: !parsed.is_error,
+    timedOut: false,
     costUsd,
     text: typeof parsed.result === 'string' ? parsed.result : '',
     error: parsed.is_error ? (parsed.result || 'model error') : null,
   };
 }
 
+/**
+ * One live call, retried once if and only if it timed out (issue #5). Refuses to run inside the
+ * repository: a child there reads the repository's files and its coding-agent guide instead of
+ * answering from the loaded plugin. A timed-out attempt reports no cost, because the CLI never
+ * printed one; the budget cap therefore undercounts by at most one partial call per retry.
+ * `spawn` is injectable so the retry rule is unit-tested with zero model calls.
+ */
+export function callClaudeWithRetry(prompt, { repoRoot, cwd, model, env, spawn = spawnSync, timeoutMs = CALL_TIMEOUT_MS }) {
+  if (!cwd || isInside(repoRoot, cwd)) {
+    throw new Error(
+      'refusing to run a dispatch eval inside the repository (cwd: ' + cwd + '): the child would ' +
+      'read the repository instead of answering from the loaded plugin'
+    );
+  }
+  const opts = { repoRoot, cwd, model, env, spawn, timeoutMs };
+  const first = callOnce(prompt, opts);
+  if (!first.timedOut) return { ...first, attempts: 1 };
+  const second = callOnce(prompt, opts);
+  return { ...second, attempts: 2 };
+}
+
+/** The installed claude CLI's version, logged so a CI-only failure can be told apart from CLI
+ *  version drift (issue #5). Never fatal: an unreachable CLI logs "unknown" and the run goes on to
+ *  fail, or not, on its own terms. */
+function claudeCliVersion() {
+  const r = spawnSync('claude', ['--version'], { encoding: 'utf8', timeout: 20000 });
+  if (r.error) return 'unknown (probe failed: ' + (r.error.code || r.error.message) + ')';
+  if (r.status !== 0) return 'unknown (probe exited ' + r.status + ')';
+  return (r.stdout || '').trim() || 'unknown (empty output)';
+}
+
 // ---------------------------------------------------------------------------
-// Grader: does the response mention the expected callee?
+// Grader: does the response name the expected callee?
 // ---------------------------------------------------------------------------
 
-// Parses the FIRST "DISPATCH: <name>" line out of a model reply. Case-insensitive on the
-// "DISPATCH:" label itself (so "dispatch:" still parses), but only the first matching line is
-// ever consulted, even if a later line would have graded correctly - the model does not get a
-// second guess. Returns the trimmed name (which may be empty if the line has nothing after the
-// colon), or null if no such line exists anywhere in the reply.
-// A line is captured verbatim after the colon, so trailing prose on the same line ("DISPATCH:
-// drafting-partner is right") becomes part of the captured name and fails normalized comparison
-// against a bare callee - the prompt asks for the component name alone on that line, and a
-// reply that does not follow that shape is graded on what it actually said, not on what it
-// probably meant.
-function extractDispatchName(text) {
+// Returns the text after "DISPATCH:" on the FIRST line that carries the label (case-insensitive
+// on the label), or null if no line does. Only the first such line is ever consulted, even if a
+// later line would have graded correctly - the model does not get a second guess.
+function extractDispatchLine(text) {
   if (typeof text !== 'string') return null;
   for (const line of text.split(/\r?\n/)) {
     const m = /^\s*DISPATCH:\s*(.*)$/i.exec(line);
-    if (m) return m[1].trim();
+    if (m) return m[1];
   }
   return null;
 }
 
-// Normalizes a component name for comparison: trim, lowercase, strip all whitespace and
-// hyphens. This is the hook-name normalization rule: it makes a covers.hook value written
-// PascalCase (e.g. "PostToolUse") compare equal to a kebab-case or spaced form a model might
-// answer with ("post-tool-use", "post tool use") - all three normalize to "posttooluse". The
-// same rule applies uniformly to chain callees, which already ship kebab-case (e.g.
-// "drafting-partner"), so one normalization covers both callee shapes without a separate branch
-// for hooks vs. chain members.
-function normalizeComponentName(name) {
-  return String(name == null ? '' : name).trim().toLowerCase().replace(/[\s-]+/g, '');
+const LEADING_WRAPPERS = /^[\s*_`"']+/;
+const TRAILING_WRAPPERS = /^[*_`"']+/;
+const NAME_TOKEN = /^[A-Za-z0-9][A-Za-z0-9_-]*/;
+// A second name offered as an alternative: "a or b", "a/b", "a, b", "a and b", "a & b", "a + b",
+// "a; b". A reply that hedges has not chosen, so it fails even when its first name is right.
+const HEDGE = /^\s*(?:[/,;&+]|or\b|and\b)/i;
+
+// Reads the component name at the start of a DISPATCH: line, per the grading contract in this
+// file's header. Returns null when the line carries no name or hedges between two.
+function parseDispatchName(rest) {
+  let s = rest.replace(LEADING_WRAPPERS, '');
+  if (s.startsWith('/')) s = s.slice(1);
+  if (s.toLowerCase().startsWith(PLUGIN_NAMESPACE.toLowerCase())) s = s.slice(PLUGIN_NAMESPACE.length);
+  const m = NAME_TOKEN.exec(s);
+  if (!m) return null;
+  const after = s.slice(m[0].length).replace(TRAILING_WRAPPERS, '');
+  if (HEDGE.test(after)) return null;
+  return m[0];
 }
 
-// Fail-closed grader for F-CI-10 (weak eval grading). PASS only if the reply's FIRST
-// "DISPATCH: <name>" line names the expected callee, compared via normalizeComponentName above.
-// No DISPATCH: line anywhere in the reply, a DISPATCH: line with an empty name, or a DISPATCH:
-// line naming something other than the expected callee are all FAIL - including a reply that
-// names the correct callee only in prose, with no DISPATCH: line at all, which is exactly the
-// shape the deleted callee-echo fallback (`|| text.includes(callee)`) used to let through. This
-// function no longer takes an eval case's "expect" sentence as its first argument: it takes the
-// expected callee (covers.chain[1] or covers.hook) directly, since "expect" is documentation
-// for a human reader now, not a grading signal.
+// Normalizes a component name for comparison: lowercase, hyphens removed. It makes a name
+// written PascalCase ("PostToolUse") compare equal to its kebab-case form ("post-tool-use").
+// Whitespace never reaches it: the name ends at the first space.
+function normalizeComponentName(name) {
+  return String(name == null ? '' : name).trim().toLowerCase().replace(/-+/g, '');
+}
+
+// Fail-closed grader. PASS only if the reply's FIRST "DISPATCH:" line starts with the expected
+// callee, read and compared per the grading contract in this file's header. It takes the
+// expected callee (covers.chain[1]) directly; a case's "expect" sentence is documentation for a
+// human reader, not a grading signal.
 export function gradeResponse(expectedCallee, text) {
-  const name = extractDispatchName(text);
+  const rest = extractDispatchLine(text);
+  if (rest === null) return false;
+  const name = parseDispatchName(rest);
   if (!name) return false;
   return normalizeComponentName(name) === normalizeComponentName(expectedCallee);
 }
@@ -264,7 +372,7 @@ function describeCovers(covers) {
 function log(msg) { process.stdout.write(msg + '\n'); }
 
 // Everything below runs only when this file is executed directly (node scripts/run-evals.mjs),
-// never when it is imported for its exported functions (gradeResponse). Without this guard,
+// never when it is imported for its exported functions. Without this guard,
 // importing the module - as tests/checks/run-evals.test.mjs does to unit-test gradeResponse
 // with zero spawns - would execute the entire credential decision, eval loading, and (on a
 // machine with a real authenticated claude CLI on PATH, which this repo's own test helper
@@ -335,17 +443,25 @@ if (malformed.length > 0) {
   process.exit(1);
 }
 
+let gradedCaseCount = 0;
+let hookCaseCount = 0;
+let otherCaseCount = 0;
+for (const s of sets) {
+  if (dispatchCallee(s.data.covers)) gradedCaseCount += s.data.cases.length;
+  else if (s.data.covers.hook) hookCaseCount += s.data.cases.length;
+  else otherCaseCount += s.data.cases.length;
+}
+
 log('[run-evals] found ' + sets.length + ' eval file(s)');
 if (decisionMode === 'dry-run') {
   log('[run-evals] DRY-RUN: files validated (zero model calls)');
-  let dryRunTotalCases = 0;
   for (const s of sets) {
-    dryRunTotalCases += s.data.cases.length;
     log('  ok: ' + s.file + ' (' + describeCovers(s.data.covers) + ', ' + s.data.cases.length + ' case(s))');
   }
   log(
     '[run-evals] dry-run complete: all ' + sets.length + ' eval files well-formed (' +
-    dryRunTotalCases + ' case(s))'
+    gradedCaseCount + ' graded chain case(s), ' + hookCaseCount + ' hook case(s) validated but not graded' +
+    (otherCaseCount ? ', ' + otherCaseCount + ' other case(s) validated but not graded' : '') + ')'
   );
   process.exit(0);
 }
@@ -354,16 +470,35 @@ if (decisionMode === 'dry-run') {
 // Live grading
 // ---------------------------------------------------------------------------
 
-log('[run-evals] model: ' + MODEL + ', budget cap: $' + BUDGET_CAP_USD);
+// One empty folder per run, removed on every exit path: process.exit() skips finally blocks, so
+// cleanup hangs off the process's own exit event instead.
+const evalCwd = mkdtempSync(join(tmpdir(), 'nfs-evals-'));
+process.on('exit', () => {
+  try { rmSync(evalCwd, { recursive: true, force: true }); } catch { /* best effort */ }
+});
+const childEnv = buildChildEnv(process.env);
+
+log('[run-evals] claude CLI version: ' + claudeCliVersion());
+log('[run-evals] model: ' + MODEL + ', budget cap: $' + BUDGET_CAP_USD + ', per-call timeout: ' +
+  (CALL_TIMEOUT_MS / 1000) + 's with one retry on timeout');
+log('[run-evals] isolation: each call runs in an empty temp folder with the plugin loaded from ' +
+  'the repository; user settings, every hook and every CLAUDE.md are off');
 log('');
 
 const results = [];
 let totalCases = 0;
 let passedCases = 0;
+let totalSpendUsd = 0;
 
 for (const s of sets) {
   const covers = s.data.covers;
   const coversDesc = describeCovers(covers);
+  const callee = dispatchCallee(covers);
+  if (!callee) {
+    log('[' + s.file + '] ' + coversDesc + ' - ' + s.data.cases.length + ' case(s) not graded ' +
+      '(not a dispatch eval: Claude Code fires hooks itself; tests/hooks/ covers their behavior)');
+    continue;
+  }
   log('[' + s.file + '] ' + coversDesc + ' - ' + s.data.cases.length + ' case(s)');
 
   for (let i = 0; i < s.data.cases.length; i++) {
@@ -375,33 +510,21 @@ for (const s of sets) {
       process.exit(3);
     }
 
-    // Build prompt: the construction code here injects nothing that names the callee it is
-    // being graded against. Deliberately excludes coversDesc (used above and below for the
-    // runner's own logging only): describeCovers() renders "chain: nfs-draft ->
-    // drafting-partner" or "hook: PostToolUse", which names the expected callee just as
-    // directly as the deleted "Expected callee: " line did, so it must never reach the prompt.
-    // This is a claim about what this code adds, not about the prompt as sent: c.given is
-    // interpolated verbatim below, and for the 6 hook eval files (post-tool-batch,
-    // post-tool-use, pre-compact, pre-tool-use, session-start, stop) that eval-authored text
-    // already names the hook itself (e.g. "PostToolUse fires for..."), a pre-existing property
-    // of those eval files this change does not touch. The 10 chain eval files' given text does
-    // not name their callee, so only those cases exercise a genuinely cold inference.
-    const callee = covers.chain ? covers.chain[1] : covers.hook;
-    const prompt =
-      'Context: Nonfiction Studio plugin evaluation.\n' +
-      'Given: ' + c.given + '\n\n' +
-      'Task: Answer with exactly one line of the form "DISPATCH: <component-name>", naming the ' +
-      'agent, skill, or hook handler that would be dispatched in this situation. You may follow ' +
-      'that line with one sentence of reasoning, but say nothing before the DISPATCH: line.';
-
-    const r = callClaude(prompt);
+    const r = callClaudeWithRetry(buildPrompt(c.given), {
+      repoRoot: REPO_ROOT,
+      cwd: evalCwd,
+      model: MODEL,
+      env: childEnv,
+    });
+    totalSpendUsd += r.costUsd;
     const grade = r.ok ? gradeResponse(callee, r.text) : false;
     if (grade) passedCases++;
 
     const verdict = grade ? 'PASS' : (r.ok ? 'FAIL' : 'ERROR');
-    log('  case ' + (i + 1) + ': ' + verdict + ' ($' + r.costUsd.toFixed(6) + ') - ' + c.given.slice(0, 60));
+    const retried = r.attempts > 1 ? ', retried after a timeout' : '';
+    log('  case ' + (i + 1) + ': ' + verdict + ' ($' + r.costUsd.toFixed(6) + retried + ') - ' + c.given.slice(0, 60));
     if (!r.ok) log('    error: ' + r.error);
-    if (r.ok && !grade) log('    response: ' + r.text.slice(0, 120).replace(/\n/g, ' '));
+    if (r.ok && !grade) log('    response: ' + r.text.slice(0, 160).replace(/\n/g, ' '));
 
     results.push({ file: s.file, caseIndex: i, verdict, costUsd: r.costUsd });
   }
@@ -417,6 +540,8 @@ log('[run-evals] eval files:  ' + sets.length);
 log('[run-evals] total cases: ' + totalCases);
 log('[run-evals] passed:      ' + passedCases + ' / ' + totalCases +
   ' (' + (totalCases > 0 ? Math.round(100 * passedCases / totalCases) : 0) + '%)');
+log('[run-evals] hook cases not graded: ' + hookCaseCount +
+  ' (hook events are fired by Claude Code, not dispatched by a model; tests/hooks/ covers their behavior)');
 log('[run-evals] total spend: $' + totalSpendUsd.toFixed(6) + ' of $' + BUDGET_CAP_USD + ' cap');
 
 const failedResults = results.filter(r => r.verdict !== 'PASS');

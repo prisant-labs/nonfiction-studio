@@ -3,7 +3,7 @@
   "description": "The interviewer agent invokes the nfs-new-book skill before asking any intake question when the book tree does not yet exist.",
   "cases": [
     {
-      "given": "intake interview starts and no project directory structure is present",
+      "given": "the interviewer agent starts an intake interview and no project directory structure is present",
       "expect": "nfs-new-book skill is invoked to scaffold the directory structure before the interview begins"
     },
     {

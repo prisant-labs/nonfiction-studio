@@ -7,7 +7,7 @@
       "expect": "line-editor agent is dispatched to perform the line-edit pass on the chapter"
     },
     {
-      "given": "nfs-draft skill is invoked for chapter 02 and the initial draft is written",
+      "given": "nfs-draft skill is invoked for chapter 02 and drafting-partner has already written the initial draft",
       "expect": "line-editor is dispatched to refine the chapter draft after drafting-partner completes"
     }
   ]
