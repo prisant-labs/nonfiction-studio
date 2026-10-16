@@ -17,7 +17,7 @@ This fixture exercises two distinct engine behaviors:
 
 - `bin/ns-doctor` (TSK-028 (ns-doctor engine)) exits 1. The chapter file word count no longer matches the recorded count in `_nonfiction-studio/progress.json`, naming chapter 2 and the two mismatched counts.
 
-- The semantic catch (an unmarked factual assertion present in the file) is exercised warn-tier by the gate's judgment prompt layer and the fact-checker agent, not by a deterministic engine.
+- The semantic catch (an unmarked factual assertion present in the file) is the fact-checker agent's job, not a deterministic engine's. (The Stop hook's judgment prompt that once shared it was removed in ADR-0019, Stop hook judgment layer.)
 
 (Expected behavior corrected 2026-07-18 per the TSK-020 (unsourced-claim fixture) adjudication.)
 

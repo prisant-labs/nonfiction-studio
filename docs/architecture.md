@@ -29,7 +29,7 @@ The CLIs under `bin/` (`ns-claims`, `ns-doctor`, `ns-gate`, `ns-notes`, `ns-over
 - **PreToolUse** (`hooks/pre-tool-use.mjs`) - the write-containment guard, the per-agent write-scope and web-research gates, and dispatch-routing enforcement (see "The enforcement layer" below).
 - **PostToolBatch** (`hooks/post-tool-batch.mjs`) - refreshes `_nonfiction-studio/progress.json` and writes AI-disclosure records to `_nonfiction-studio/ai-use-log.jsonl`.
 - **PostToolUse**, matched only on `WebFetch|WebSearch` (`hooks/post-tool-use.mjs`) - the untrusted-fetch envelope.
-- **Stop** (`hooks/stop-gate.mjs` plus a prompt-based thesis-alignment check) - the deterministic quality gate, run at the end of a turn.
+- **Stop** (`hooks/stop-gate.mjs`) - the deterministic quality gate, run at the end of a turn. It carries no prompt or agent handler: on Stop, either one can only continue the turn, per [ADR-0019 (Stop hook judgment layer)](adr/ADR-0019-stop-hook-judgment-layer.md).
 - **PreCompact** (`hooks/pre-compact.mjs`).
 
 ### Output styles

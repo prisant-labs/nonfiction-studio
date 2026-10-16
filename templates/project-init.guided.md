@@ -290,7 +290,7 @@ SECTION 10 - SUCCESS CRITERIA & DEFINITION OF DONE
         Maps to: gate.checks.continuity.mode
 
     [ ] Thesis alignment - chapter explicitly serves the controlling idea
-        (Judgment check; locked to warn-only in v1.)
+        (Reserved for a judgment check; none runs in v1.)
         Maps to: gate.checks.thesis_alignment.mode
 
 10.3 Anything else the studio should know

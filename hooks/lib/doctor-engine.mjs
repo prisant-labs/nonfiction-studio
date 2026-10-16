@@ -67,7 +67,7 @@ const REQUIRED_BIBLE_PATHS = [
 const ELEMENT_NOTICES = {
   style: 'the style profile and voice baseline; the gate\'s stylometry check skips. Adopt it with /nonfiction-studio:nfs-adopt style.',
   brief: 'the brief, audience, and decision log. Adopt it with /nonfiction-studio:nfs-adopt brief.',
-  structure: 'the thesis, outline, and chapter list; the thesis-alignment check skips. Adopt it with /nonfiction-studio:nfs-adopt structure once brief is adopted.',
+  structure: 'the thesis, outline, and chapter list. Adopt it with /nonfiction-studio:nfs-adopt structure once brief is adopted.',
   claims: 'the evidence log and sources; claim coverage, quote fidelity, fact-checking, the apparatus, and agent drafting are unavailable. Adopting claims is not available yet; the book\'s own claim system stays its record.',
 };
 

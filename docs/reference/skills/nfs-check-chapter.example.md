@@ -156,7 +156,7 @@ Gate exit code: 0. Parse stdout as JSON report. Top-level `verdict: pass`.
 >
 > Note: voice drift (stylometry) was skipped because `context/style-profile.md` was not found. Run `/nonfiction-studio:nfs-capture-voice` to establish a baseline and enable drift detection.
 >
-> This verdict is the deterministic layer only. On CLI and Cowork the Stop hook additionally runs a thesis-alignment judgment prompt (warn-only); that layer is not part of this skill invocation and does not exist in v1 on chat.
+> This verdict is the deterministic layer only; no thesis-alignment judgment runs in v1.
 >
 > Gate report written to `_nonfiction-studio/gate/02-finding-your-network.<ts>.json` by ns-gate.
 >
@@ -178,7 +178,7 @@ Gate exit code: 0. Parse stdout as JSON report. Top-level `verdict: pass`.
 
 - **Exit 0 maps to a presented verdict, never silent.** The skill parsed stdout as JSON, identified `verdict: pass`, and presented the full per-check table plus the voice-drift-skipped note. A pass verdict is never silently swallowed; the author always sees the result.
 
-- **The verdict is stated as deterministic-only.** The skill's output explicitly names that thesis-alignment judgment (warn-only, CLI and Cowork only) is not part of this invocation. On chat in v1 no judgment layer exists.
+- **The verdict is stated as deterministic-only.** The skill's output says explicitly that no thesis-alignment judgment runs in v1, on any surface.
 
 - **The skill writes no `_nonfiction-studio/` state.** Only `bin/ns-gate` wrote a file (the gate report at `_nonfiction-studio/gate/02-finding-your-network.<ts>.json` inside the temp clone). No `progress.json` write occurred; the `last_gate` per-chapter field is reserved and unpopulated in v1.
 

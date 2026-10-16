@@ -22,8 +22,9 @@ session and by `scripts/test-fixtures.mjs` in CI. It delegates to the shared eng
 functions from `hooks/lib/gate-engine.mjs` so the hook and the CLI share one implementation.
 
 The gate's deterministic checks (claim coverage, quote fidelity, prompt scrub, state
-coherence, continuity, overlap) always run. The judgment check (thesis alignment) always runs but
-can only emit warn, never block, in v1 per D-03. The quote-fidelity check (D-03 (layered
+coherence, continuity, overlap) always run. No judgment check runs in v1: the `thesis_alignment`
+key is reserved, per [ADR-0019 (Stop hook judgment layer)](../../adr/ADR-0019-stop-hook-judgment-layer.md),
+and a configured `block` is still coerced to warn. The quote-fidelity check (D-03 (layered
 Stop gate)) can likewise only emit warn, never block, until the quote normalization and
 adjudication policy ships (roadmap row 1.5); a configured
 `block` mode is structurally coerced to `warn`, the same mechanism D-03 uses for thesis
@@ -76,7 +77,7 @@ The `--check` flag accepts CLI flag names, not REPORT check names. The seven val
 | `overlap` | `overlap` |
 
 `session_write_flag` is always evaluated and is not selectable via `--check` (it is not a flag).
-`thesis_alignment` is the judgment layer and is never a gate check; it is not a valid `--check` value.
+`thesis_alignment` is reserved for a judgment check and is never a gate check; it is not a valid `--check` value.
 
 ## Exit taxonomy
 
@@ -103,7 +104,7 @@ Invariant 2, `hooks/lib/gate-engine.mjs:895`).
 | `stylometry` | warn | No (warn only) |
 | `continuity` | warn | No (warn only) |
 | `overlap` | warn | Yes (fully deterministic; NOT structurally coerced - opts in like any other deterministic check, roadmap OPP-D10 (local overlap check)) |
-| `thesis_alignment` | warn | No (judgment check; v1 never blocks) |
+| `thesis_alignment` | warn | No (reserved; no judgment check runs in v1, ADR-0019) |
 | `state_coherence` | warn | No (warn only in Phase 1) |
 | `session_write_flag` | block | Yes |
 

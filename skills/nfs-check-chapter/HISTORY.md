@@ -4,6 +4,7 @@ Versions of this skill, newest first. [ADR-0017 (per-skill versioning)](../../do
 
 | Version | Date | Release | Type | Summary |
 |---|---|---|---|---|
+| 0.2.1 | 2026-10-16 | unreleased | fixed | No longer tells the author that the Stop hook runs a thesis-alignment judgment prompt. That prompt was removed because it kept the turn from ending, and no judgment check runs in v1 (ADR-0019, Stop hook judgment layer). |
 | 0.2.0 | 2026-10-04 | v0.2.0 | changed | Finds the state folder through the shared "Locate the state folder" section, which reads the book's pointer file (ADR-0015, state folder name), and reads chapters from the folder the pointer names (ADR-0016, adopting an existing book). It needs no element, so it never stops on adoption, and it reads the adoption record only when one exists. |
 | 0.1.1 | 2026-09-24 | v0.1.1 | fixed | Finds the plugin root from the installed-plugins record instead of a scan of the plugin cache, so the right copy is used when several versions are cached (ADR-0014, plugin-root resolution). |
 | 0.1.0 | 2026-09-23 | v0.1.0 | added | First released version: runs the deterministic quality gate over a chapter through `bin/ns-gate` and reports the verdict with next actions. |
