@@ -2,13 +2,13 @@
 name: nfs-capture-voice
 user-invocable: true
 argument-hint: ""
-description: "Builds and calibrates the author's stylometric voice baseline from writing samples, producing context/style-profile.md and the calibrated marker vector that bin/ns-stylometry uses for drift scoring per D-08 (hybrid voice scoring). When no samples are available, delegates to the voice-capture agent's three-candidate bootstrap path per D-16 (collaborative voice bootstrap). Use when the author says 'capture my voice,' 'does this sound like me,' or wants to 'match my writing style' before drafting begins."
+description: "Builds and calibrates the author's stylometric voice baseline, producing context/style-profile.md and the calibrated marker vector that bin/ns-stylometry uses for drift scoring per D-08 (hybrid voice scoring). Always delegates the computation and the writes to the voice-capture agent: with writing samples, the agent calibrates from them; with none, it takes its three-candidate bootstrap path per D-16 (collaborative voice bootstrap). Use when the author says 'capture my voice,' 'does this sound like me,' or wants to 'match my writing style' before drafting begins."
 when_to_use: "Use when the author says 'capture my voice', 'set my writing style', or 'I have samples to share'; accepts the nfs-capture-voice suggestion from nfs-interview; re-invokes to refresh a stale baseline after a voice-change decision is logged in context/decisions.md; or reports context/style-profile.md missing. Do not invoke for unrelated queries or when the author has a current, confirmed style profile and no intent to update it."
 chain:
   - voice-capture
 metadata:
-  version: "0.2.0"
-  updated: 2026-10-04
+  version: "0.2.1"
+  updated: 2026-10-16
 ---
 
 This skill is the voice-capture front door. It orients the author to the profile's purpose, collects writing samples, assesses their word count against the calibration floor, discloses the calibration cost before delegating, delegates all computation and file writes to the `voice-capture` agent, confirms the output files via Read checks, relays the agent's regime disclosure, and previews selected baseline marker values in plain language. The `voice-capture` agent performs all computation and all writes.

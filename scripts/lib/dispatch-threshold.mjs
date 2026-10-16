@@ -19,10 +19,11 @@
 //
 //               Three live runs under the ADR-0018 harness scored 14 of 18 (78%) before four
 //               case texts were corrected, then 16 of 18 (89%) and 15 of 18 (83%). One miss
-//               recurs in every run and is a real defect: the nfs-capture-voice skill's
-//               description says it delegates only when no samples are available. The other
-//               misses moved between cases from run to run. The threshold is deliberately not set
-//               to an observed score. It is meant to fail a table where several edges break, and
+//               recurred in every run and was a real defect, since fixed (issue #22): the
+//               nfs-capture-voice skill's description said it delegates only when no samples
+//               are available. The other misses moved between cases from run to run. The
+//               first run after the fix scored 18 of 18 (2026-10-16). The threshold is
+//               deliberately not set to an observed score. It is meant to fail a table where several edges break, and
 //               to absorb one genuine defect plus ordinary haiku variance, which these runs put
 //               at one or two cases.
 // used-by:      scripts/run-evals.mjs
