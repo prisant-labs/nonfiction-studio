@@ -36,6 +36,31 @@ This file is written from the commit history of the branch it ships from, not fr
   config key stays, reserved, and is still coerced to warn. The adoption notice for `structure`
   no longer says a thesis-alignment check skips.
 
+- **`nfs-capture-voice` says when it hands work to `voice-capture`** (issue #22). Its
+  description said the skill delegates to the `voice-capture` agent only when no samples are
+  available, but the skill delegates every time: the agent calibrates from the author's samples,
+  or takes its bootstrap path when there are none. A request that came with samples was routed
+  elsewhere in all three earlier eval runs. The skill moves to 0.2.1.
+
+- **The `interviewer` agent no longer claims to scaffold the book tree** (issue #23). Its
+  description, its Role section and its "New project" bullet said it scaffolds the tree itself.
+  It has only the Read and Write tools, and its own Process steps hand scaffolding to
+  `nfs-new-book`, as `agents/_chain-permitted.yaml` declares. The agent's reference page agrees.
+
+- **The Tier B integration step loads the plugin and nothing of the caller's configuration**
+  (issue #24). `scripts/run-integration.mjs` ran every `claude -p` call with the caller's own
+  settings, hooks, plugins and `CLAUDE.md` files, and without this repository's plugin: a local
+  run on 2026-10-13 passed with no copy of the plugin loaded. Its calls now take `--plugin-dir`,
+  `--setting-sources project`, `--no-session-persistence` and `CLAUDE_CODE_DISABLE_CLAUDE_MDS=1`
+  from a new shared module, `scripts/lib/claude-isolation.mjs`, which `scripts/run-evals.mjs`
+  now uses too. The integration step keeps the plugin's own hooks on and its tools allowed, on
+  purpose. Its main flow no longer runs on import, and `tests/checks/run-integration.test.mjs`
+  pins every flag with zero model calls; a mutation proof covers the shared module and both
+  runners. A live integration run passed for $0.018, and the first eval run after the two
+  description fixes scored 18 of 18 for $0.068; neither left a record in a user-level
+  session-capture log. `docs/releasing.md`, `CONTRIBUTING.md` and ADR-0018 (Tier B eval harness
+  contract) are updated to match.
+
 - **The Tier B eval harness now measures dispatch, not guessing** (issue #5, ADR-0018 (Tier B
   eval harness contract)). `scripts/run-evals.mjs` loads the plugin with `--plugin-dir` and runs
   every call from an empty temporary folder, with user settings, every hook and every

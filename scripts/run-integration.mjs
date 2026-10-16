@@ -45,6 +45,17 @@
 //   Step 4 also gained a structural assertion of its own - it previously had
 //   none, unlike steps 1-3.
 //
+// Isolation (corrected 2026-10-16, issue #24):
+//   Each call now loads this repository's plugin with --plugin-dir and leaves the caller's own
+//   configuration out: --setting-sources project drops user settings, hooks and plugins,
+//   CLAUDE_CODE_DISABLE_CLAUDE_MDS=1 drops every CLAUDE.md, and --no-session-persistence saves
+//   nothing. The flags come from scripts/lib/claude-isolation.mjs, shared with run-evals.mjs.
+//   Before this, a call ran with the caller's whole configuration and without the plugin: on
+//   2026-10-13 a local run passed with no copy of the plugin loaded, because the maintainer's
+//   only install was scoped to another project. Unlike run-evals.mjs, the plugin's own hooks
+//   stay on, because this step tests the plugin as an author runs it, and tools stay allowed,
+//   because the prompts ask the model to inspect files.
+//
 // Flat-layout note (Q-02 section 2.1, 2026-07-19):
 //   The Q-02 sketch references a "book/" scaffold. The built flat reality has no
 //   book/ subdirectory: all project directories (context/, structure/, chapters/,
@@ -57,6 +68,7 @@ import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { decideCredentialMode } from './lib/credential-mode.mjs';
+import { isolationArgs, isolatedChildEnv } from './lib/claude-isolation.mjs';
 import { DEFAULT_STATE_DIR } from '../hooks/lib/bible.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -201,16 +213,33 @@ function runEngine(enginePath, args, cwd) {
 
 let totalSpendUsd = 0;
 
-function callClaude(prompt, model, cwd) {
-  const args = [
+/** The claude arguments for one live call (issue #24). The isolation flags come from
+ *  scripts/lib/claude-isolation.mjs, shared with run-evals.mjs, with one deliberate difference:
+ *  the plugin's own hooks stay on, because this step tests the plugin as an author runs it.
+ *  --dangerously-skip-permissions stays too, unlike the eval runner's --permission-mode dontAsk,
+ *  because these prompts ask the model to inspect the temp clone's files with its tools. */
+export function buildClaudeArgs(prompt, { repoRoot, model }) {
+  return [
     '-p', prompt,
     '--model', model,
-    '--dangerously-skip-permissions',
     '--output-format', 'json',
+    ...isolationArgs({ repoRoot, pluginHooks: true }),
+    '--dangerously-skip-permissions',
   ];
-  const result = spawnSync('claude', args, {
+}
+
+/** The child's environment, from scripts/lib/claude-isolation.mjs: every CLAUDE.md turned off. */
+export const buildChildEnv = isolatedChildEnv;
+
+/** One live call. `spawn` and `baseEnv` are injectable so a test pins the call with zero model
+ *  calls; the isolation is applied to whatever base environment is passed, so it cannot be
+ *  bypassed by injection. */
+export function callClaude(prompt, {
+  model, cwd, repoRoot = REPO_ROOT, baseEnv = process.env, spawn = spawnSync,
+}) {
+  const result = spawn('claude', buildClaudeArgs(prompt, { repoRoot, model }), {
     encoding: 'utf8',
-    env: process.env,
+    env: buildChildEnv(baseEnv),
     cwd,
     timeout: 120000,
   });
@@ -434,7 +463,7 @@ function runLiveMode(model) {
       'List which of these directories exist at the project root: context, structure, chapters, research, production, ' + DEFAULT_STATE_DIR + '. ' +
       'Reply with SCAFFOLD_OK if all six directories are present, or SCAFFOLD_MISSING followed by the names of any absent directories.';
 
-    const scaffoldResult = callClaude(scaffoldPrompt, model, tempDir);
+    const scaffoldResult = callClaude(scaffoldPrompt, { model, cwd: tempDir });
     log('  cost: $' + scaffoldResult.costUsd.toFixed(6) + ' (total: $' + totalSpendUsd.toFixed(6) + ')');
     if (!scaffoldResult.ok) {
       const msg = 'FAIL [nfs-new-book]: claude call failed: ' + scaffoldResult.error;
@@ -474,7 +503,7 @@ function runLiveMode(model) {
       'Check whether context/brief.md exists and contains at least one section header (a line starting with ##). ' +
       'Reply with BRIEF_OK if the file exists and contains section headers, or BRIEF_MISSING if the file is absent or empty.';
 
-    const briefResult = callClaude(briefPrompt, model, tempDir);
+    const briefResult = callClaude(briefPrompt, { model, cwd: tempDir });
     log('  cost: $' + briefResult.costUsd.toFixed(6) + ' (total: $' + totalSpendUsd.toFixed(6) + ')');
     if (!briefResult.ok) {
       const msg = 'FAIL [nfs-interview]: claude call failed: ' + briefResult.error;
@@ -507,7 +536,7 @@ function runLiveMode(model) {
       'Check whether the chapters/ directory contains at least one Markdown file (.md) with non-empty content. ' +
       'Reply with CHAPTER_OK if at least one non-empty .md file exists in chapters/, or CHAPTER_MISSING if chapters/ is absent or empty.';
 
-    const chapterResult = callClaude(chapterPrompt, model, tempDir);
+    const chapterResult = callClaude(chapterPrompt, { model, cwd: tempDir });
     log('  cost: $' + chapterResult.costUsd.toFixed(6) + ' (total: $' + totalSpendUsd.toFixed(6) + ')');
     if (!chapterResult.ok) {
       const msg = 'FAIL [nfs-draft]: claude call failed: ' + chapterResult.error;
@@ -541,7 +570,7 @@ function runLiveMode(model) {
       'Reply with MARKER_ABSENT if you do not see [UNVERIFIED] in any file, or MARKER_PRESENT if you do, followed by a one-line finding. ' +
       'Do not run any quality gate or write any files; read-only check only.';
 
-    const factResult = callClaude(factCheckPrompt, model, tempDir);
+    const factResult = callClaude(factCheckPrompt, { model, cwd: tempDir });
     log('  cost: $' + factResult.costUsd.toFixed(6) + ' (total: $' + totalSpendUsd.toFixed(6) + ')');
     if (!factResult.ok) {
       const msg = 'FAIL [nfs-fact-check]: claude call failed: ' + factResult.error;
@@ -630,8 +659,6 @@ function fatal(msg) { exitWithCode(2, msg); }
 // Main
 // ---------------------------------------------------------------------------
 
-const { dryRun, model } = parseArgs(process.argv.slice(2));
-
 // Live mode needs working model access, which is NOT the same thing as an API key. The claude
 // CLI authenticates from the active account when one is logged in, so an authenticated CLI
 // session is sufficient on a developer machine, with no credential env var required at all.
@@ -660,31 +687,45 @@ function claudeCliUsable() {
   return !probe.error && probe.status === 0;
 }
 
-if (dryRun) {
-  // An explicit developer request always wins, regardless of credential or CI state - the
-  // same precedence the pre-existing --dry-run flag always had.
-  runDryMode(model);
-} else {
-  // The two process.env reads immediately below are intentionally the only literal
-  // `ANTHROPIC_API_KEY`- and `CLAUDE_CODE_OAUTH_TOKEN`-shaped access in this file;
-  // scripts/lib/credential-mode.mjs takes already-read values instead, so it never touches
-  // process.env itself. See scripts/self-sufficiency-exceptions.json for the reviewed,
-  // still-current reason the ANTHROPIC_API_KEY read is allowed.
-  const decision = decideCredentialMode(
-    {
-      oauthToken: process.env.CLAUDE_CODE_OAUTH_TOKEN,
-      apiKey: process.env.ANTHROPIC_API_KEY,
-      ci: process.env.CI,
-    },
-    claudeCliUsable
-  );
-  log('[run-integration] credential decision: ' + decision.mode + ' (' + decision.reason + ')');
+function main() {
+  const { dryRun, model } = parseArgs(process.argv.slice(2));
 
-  if (decision.mode === 'skip') {
-    exitWithCode(0, 'SKIP - ' + decision.reason);
-  } else if (decision.mode === 'dry-run') {
+  if (dryRun) {
+    // An explicit developer request always wins, regardless of credential or CI state - the
+    // same precedence the pre-existing --dry-run flag always had.
     runDryMode(model);
   } else {
-    runLiveMode(model);
+    // The two process.env reads immediately below are intentionally the only literal
+    // `ANTHROPIC_API_KEY`- and `CLAUDE_CODE_OAUTH_TOKEN`-shaped access in this file;
+    // scripts/lib/credential-mode.mjs takes already-read values instead, so it never touches
+    // process.env itself. See scripts/self-sufficiency-exceptions.json for the reviewed,
+    // still-current reason the ANTHROPIC_API_KEY read is allowed.
+    const decision = decideCredentialMode(
+      {
+        oauthToken: process.env.CLAUDE_CODE_OAUTH_TOKEN,
+        apiKey: process.env.ANTHROPIC_API_KEY,
+        ci: process.env.CI,
+      },
+      claudeCliUsable
+    );
+    log('[run-integration] credential decision: ' + decision.mode + ' (' + decision.reason + ')');
+
+    if (decision.mode === 'skip') {
+      exitWithCode(0, 'SKIP - ' + decision.reason);
+    } else if (decision.mode === 'dry-run') {
+      runDryMode(model);
+    } else {
+      runLiveMode(model);
+    }
   }
+}
+
+// Run only when executed directly, never on import: tests/checks/run-integration.test.mjs imports
+// buildClaudeArgs, buildChildEnv and callClaude, and an unguarded main flow would make live model
+// calls as a side effect of that import. Same idiom as scripts/run-evals.mjs: a filename suffix
+// match, immune to Windows drive-letter casing. The test file's own name does not end in
+// "run-integration.mjs", and the spawn-based tests above would fail loudly if this stopped
+// matching the real script.
+if (process.argv[1]?.endsWith('run-integration.mjs')) {
+  main();
 }

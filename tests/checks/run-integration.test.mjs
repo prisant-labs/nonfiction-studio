@@ -36,10 +36,16 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { buildEnv, runNodeScript, pathWithoutClaudeCli } from './spawn-helper.mjs';
+// Importing the script runs nothing: its main flow is guarded, so these exports are tested with
+// zero model calls (issue #24, run-integration.mjs isolation).
+import { buildClaudeArgs, buildChildEnv, callClaude } from '../../scripts/run-integration.mjs';
 
 const SCRIPT = 'scripts/run-integration.mjs';
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 // ---------------------------------------------------------------------------
 // Requirement 1 + 4: unattended CI, no credential -> named green skip, exit 0. claude's
@@ -101,4 +107,62 @@ test('developer machine, no credential, claude unreachable -> dry-run fallback, 
   assert.equal(result.status, 0, 'must exit 0; got: ' + result.combined);
   assert.match(result.combined, /DRY-RUN mode/, 'must run the dry-run assertion suite');
   assert.match(result.combined, /dry-run complete: all assertions pass/);
+});
+
+// ---------------------------------------------------------------------------
+// Issue #24 (run-integration.mjs isolation): every live call loads this repository's plugin and
+// nothing of the caller's own configuration. The plugin's own hooks stay on, because this step
+// tests the plugin as an author runs it; tools stay allowed, because the prompts ask the model to
+// inspect files. Both differ from the eval runner on purpose (ADR-0018 note).
+// ---------------------------------------------------------------------------
+
+test('every live call loads the plugin with its own hooks on, and leaves user settings out', () => {
+  const args = buildClaudeArgs('PROMPT', { repoRoot: REPO_ROOT, model: 'haiku' });
+  assert.deepEqual(args, [
+    '-p', 'PROMPT',
+    '--model', 'haiku',
+    '--output-format', 'json',
+    '--plugin-dir', REPO_ROOT,
+    '--setting-sources', 'project',
+    '--no-session-persistence',
+    '--dangerously-skip-permissions',
+  ]);
+  assert.ok(!args.includes('--settings'), 'the plugin hooks under test must not be disabled');
+  assert.ok(!args.includes('--bare'), '--bare refuses OAuth, which Tier B authenticates with');
+});
+
+test('the child environment turns off every CLAUDE.md and keeps the credential', () => {
+  const env = buildChildEnv({ PATH: '/bin', CLAUDE_CODE_OAUTH_TOKEN: 'tok' });
+  assert.equal(env.CLAUDE_CODE_DISABLE_CLAUDE_MDS, '1');
+  assert.equal(env.CLAUDE_CODE_OAUTH_TOKEN, 'tok');
+  assert.equal(env.PATH, '/bin');
+});
+
+function fakeSpawn(stdout) {
+  const calls = [];
+  const fn = (cmd, args, opts) => {
+    calls.push({ cmd, args, opts });
+    return { status: 0, stdout, stderr: '' };
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+test('callClaude spawns claude with the isolated arguments, from the given folder, with the isolated environment', () => {
+  const spawn = fakeSpawn(JSON.stringify({ result: 'SCAFFOLD_OK', total_cost_usd: 0.004, is_error: false }));
+  const r = callClaude('PROMPT', { model: 'haiku', cwd: '/tmp/clone', repoRoot: REPO_ROOT, baseEnv: { PATH: '/bin' }, spawn });
+  assert.deepEqual(r, { ok: true, costUsd: 0.004, text: 'SCAFFOLD_OK', error: null });
+  assert.equal(spawn.calls.length, 1);
+  assert.equal(spawn.calls[0].cmd, 'claude');
+  assert.deepEqual(spawn.calls[0].args, buildClaudeArgs('PROMPT', { repoRoot: REPO_ROOT, model: 'haiku' }));
+  assert.equal(spawn.calls[0].opts.cwd, '/tmp/clone');
+  assert.equal(spawn.calls[0].opts.env.CLAUDE_CODE_DISABLE_CLAUDE_MDS, '1');
+  assert.equal(spawn.calls[0].opts.env.PATH, '/bin');
+});
+
+test('callClaude treats a reply with no total_cost_usd as a hard failure, never a silent zero', () => {
+  const spawn = fakeSpawn(JSON.stringify({ result: 'SCAFFOLD_OK', is_error: false }));
+  const r = callClaude('PROMPT', { model: 'haiku', cwd: '/tmp/clone', repoRoot: REPO_ROOT, baseEnv: {}, spawn });
+  assert.equal(r.ok, false);
+  assert.match(r.error, /total_cost_usd/);
 });
