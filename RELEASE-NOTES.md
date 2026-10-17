@@ -2,6 +2,47 @@
 
 Curated, author-facing highlights of each Nonfiction Studio release, newest first: what a release means for someone writing a book with the plugin. For the complete, chronological record of every change, see [CHANGELOG.md](https://github.com/prisant-labs/nonfiction-studio/blob/main/CHANGELOG.md).
 
+## 0.2.1 - 2026-10-16
+
+A fix release. The plugin's Stop hook no longer sends Claude back to work at the end of every turn. Update now if you run any earlier version.
+
+### What this means for you
+
+- **Claude ends its turn normally again.** Every earlier release, 0.1.0 through 0.2.0, shipped a thesis-alignment check on the Stop hook. With current Claude Code, that check sent Claude back to work at the end of each turn, up to nine times in a row, in any session that loaded the plugin. It never received your thesis, so its verdicts carried no information. It is removed, and every other check runs as before.
+- **No thesis-alignment judgment runs in this version.** The `thesis_alignment` setting in your book's `config.json` stays valid and changes nothing. `nfs-check-chapter` says plainly that its verdict is the deterministic gate alone.
+- **Asking to capture your voice from samples reaches the right helper.** `nfs-capture-voice` told Claude that it hands off to the voice-capture agent only when you have no samples, so a request that came with samples could be routed elsewhere. Its description now matches what it does.
+- **The interviewer agent's description is accurate.** It said the interviewer builds the book's folders itself; `nfs-new-book` does that, as before. Nothing about the interview changes.
+
+To update an existing install, run `/plugin update nonfiction-studio@prisant-labs`. No book needs a migration step.
+
+### Install
+
+```
+/plugin marketplace add prisant-labs/agent-plugins
+/plugin install nonfiction-studio@prisant-labs
+```
+
+The marketplace entry pins to `v0.2.1`.
+
+### Surface support
+
+| Surface | Tested depth |
+|---|---|
+| Claude Code CLI | Full: exercised end to end by keyless Tier A CI on Ubuntu and Windows, plus a live Tier B run on the release candidate |
+| Cowork | Not installable as shipped. Claude's [plugin platform-support page](https://claude.com/docs/plugins/platform-support) says Cowork refuses a plugin that keeps executables in a top-level `bin/` folder, and this plugin keeps its CLIs there. No upload has confirmed it yet. This corrects the 0.2.0 notes below, which said Cowork was expected to work |
+| claude.ai chat | Not installable as shipped, for the same `bin/` reason. This corrects the 0.2.0 notes below, which said chat supports the skills |
+
+### Known limitations
+
+- Cowork and chat cannot install the plugin as shipped, as the table says. Whether to move the CLIs out of the top-level `bin/` folder is an open decision, tracked with [ADR-0002](https://github.com/prisant-labs/nonfiction-studio/blob/v0.2.1/docs/adr/ADR-0002-cowork-hook-execution.md) (Cowork hook execution).
+- An adopted book still cannot adopt its claims. Until it can, claim coverage, fact-checking, the back-matter apparatus and agent drafting stay unavailable in an adopted book.
+- Tier B (maintainer-run, model-integration CI) ran live on this release's candidate commit on 2026-10-16, from the maintainer's own Claude Code login rather than a GitHub runner, under the isolated harness of [ADR-0018](https://github.com/prisant-labs/nonfiction-studio/blob/v0.2.1/docs/adr/ADR-0018-tier-b-eval-harness-contract.md) (Tier B eval harness contract). The integration flow passed. The eval dispatch-accuracy step scored 18 of 18 chain cases (100%) against its 70% threshold. It no longer grades the 16 hook cases, because Claude Code fires hooks itself. That fixes the harness gap behind the red eval step in 0.2.0; [issue #5](https://github.com/prisant-labs/nonfiction-studio/issues/5) stays open until a run dispatched on GitHub confirms it.
+- This is a pre-1.0 release: breaking changes to a book's own schema are possible in a future version. See [MIGRATION.md](https://github.com/prisant-labs/nonfiction-studio/blob/v0.2.1/MIGRATION.md) for what counts as a breaking change and how compatibility is handled.
+
+### Known regressions
+
+None.
+
 ## 0.2.0 - 2026-10-13
 
 You can now bring in a book you already started, and each book's records move to a visible folder. The folder move is a breaking change for a book created by 0.1.x, and one command fixes it.

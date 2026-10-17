@@ -19,7 +19,7 @@ Most AI writing tools generate plausible prose and leave the verification to you
 <p>
   <img src="https://img.shields.io/badge/status-pre--1.0-orange?style=flat-square" alt="Status: pre-1.0">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/version-0.2.0-blue?style=flat-square" alt="Version 0.2.0">
+  <img src="https://img.shields.io/badge/version-0.2.1-blue?style=flat-square" alt="Version 0.2.1">
   <img src="https://img.shields.io/badge/tier-universal%20(Bronze)-CD7F32?style=flat-square" alt="Conformance tier: universal (Bronze)">
   <a href="#the-catalog"><img src="https://img.shields.io/badge/skills-15-brightgreen?style=flat-square" alt="15 skills"></a>
   <a href="#subagents"><img src="https://img.shields.io/badge/subagents-8-brightgreen?style=flat-square" alt="Subagents: 8"></a>
@@ -263,15 +263,15 @@ Hooks on six events keep the studio honest without you asking: `SessionStart` re
 
 ## Surfaces
 
-Nonfiction Studio targets three places Claude runs, and they are not equally proven.
+Nonfiction Studio is built for the Claude Code CLI. The other two places Claude runs cannot install it as it ships today.
 
 | Surface | What to expect |
 |---|---|
 | **Claude Code CLI** | Full support. This is where the plugin has actually been built and exercised. |
-| **Cowork** | Expected to work the same way, but unverified. A hook-execution spike is still pending; see [ADR-0002 (Cowork hook execution)](docs/adr/ADR-0002-cowork-hook-execution.md). |
-| **claude.ai chat** | Skills only. Hooks do not fire on chat, so the quality gate does not run automatically there; run `/nonfiction-studio:nfs-check-chapter` yourself when you want a verdict. |
+| **Cowork** | Not installable as shipped. Claude's [plugin platform-support page](https://claude.com/docs/plugins/platform-support) says Cowork refuses a plugin that keeps executables in a top-level `bin/` folder, and this plugin keeps its CLIs there. No upload has confirmed it yet; see [ADR-0002 (Cowork hook execution)](docs/adr/ADR-0002-cowork-hook-execution.md). |
+| **claude.ai chat** | Not installable as shipped, for the same `bin/` reason. Chat ignores hooks and agents in any case, so it could offer only the skills. |
 
-If you try Nonfiction Studio in Cowork, treat it as "should work" rather than "proven to work" until ADR-0002 (Cowork hook execution) is resolved.
+Whether to move the CLIs so that Cowork and chat can install the plugin is an open decision. Until it is made, use the Claude Code CLI.
 
 <div align="right">(<a href="#readme-top">back to top</a>)</div>
 
@@ -302,17 +302,17 @@ If you try Nonfiction Studio in Cowork, treat it as "should work" rather than "p
 
 ## Project status
 
-**`v0.2.0`, pre-1.0.** `v0.1.0` was the first tagged release. Phase 1, the core authoring workflow, is complete and exercised. Later work (deeper research tooling, a revision pass, manuscript export, and further publishing-compliance features) is still being built, and rough edges are expected.
+**`v0.2.1`, pre-1.0.** `v0.1.0` was the first tagged release. Phase 1, the core authoring workflow, is complete and exercised. Later work (deeper research tooling, a revision pass, manuscript export, and further publishing-compliance features) is still being built, and rough edges are expected.
 
 ### At a glance
 
 |  |  |
 |---|---|
-| **Current version** | `0.2.0` (source of truth: [`library.json`](library.json)) |
+| **Current version** | `0.2.1` (source of truth: [`library.json`](library.json)) |
 | **Status** | Pre-1.0; Phase 1 complete, later phases in progress |
 | **Components** | 15 skills, 8 subagents, 9 CLIs, 2 output styles, hooks on six events |
 | **Conformance** | `universal` (Bronze) at Standard 0.12 |
-| **Agent targets** | Claude Code (Cowork pending verification; chat is skills-only) |
+| **Agent targets** | Claude Code (Cowork and chat cannot install it as shipped; see Surfaces) |
 | **Runtime** | Node 22.12 or later; nothing to install at runtime (hooks and CLIs parse YAML with a vendored subset parser, `hooks/lib/mini-yaml.mjs`; the `yaml` package in `package.json` is used only by the repository's CI checkers) |
 | **CI** | Two tiers. Tier A is keyless and deterministic and runs on every pull request across two operating systems; Tier B is model-integration, manual-dispatch, and advisory only. |
 | **Install** | [`prisant-labs/agent-plugins`](https://github.com/prisant-labs/agent-plugins) marketplace, or a local clone |
@@ -339,13 +339,13 @@ nonfiction-studio/
 
 ### Changelog
 
-Full technical detail in [`CHANGELOG.md`](CHANGELOG.md); curated, author-facing highlights in [`RELEASE-NOTES.md`](RELEASE-NOTES.md). `0.1.0`, tagged 2026-09-23, was the first release; `0.2.0`, tagged 2026-10-13, is the latest. Changes since then accumulate under `Unreleased` in `CHANGELOG.md` until the next version is cut.
+Full technical detail in [`CHANGELOG.md`](CHANGELOG.md); curated, author-facing highlights in [`RELEASE-NOTES.md`](RELEASE-NOTES.md). `0.1.0`, tagged 2026-09-23, was the first release; `0.2.0` was tagged 2026-10-13, and `0.2.1`, tagged 2026-10-16, is the latest. Changes since then accumulate under `Unreleased` in `CHANGELOG.md` until the next version is cut.
 
 <div align="right">(<a href="#readme-top">back to top</a>)</div>
 
 ## Self-sufficiency
 
-Nonfiction Studio runs entirely on a working Claude Code or Cowork login. Every skill, subagent, hook, and CLI here rides the model access your session already has. None of them call a model API directly, and none require a separate API key, account, or paid service.
+Nonfiction Studio runs entirely on a working Claude Code login. Every skill, subagent, hook, and CLI here rides the model access your session already has. None of them call a model API directly, and none require a separate API key, account, or paid service.
 
 Tier B (model-integration CI) stays inside that same boundary: it authenticates with `CLAUDE_CODE_OAUTH_TOKEN`, an OAuth token a maintainer mints from their own subscription with `claude setup-token`, not an API key. It runs on manual dispatch only, is advisory only, and is never required to open or merge a pull request; when the token secret is not set, the workflow skips green with a named reason instead of failing. Running it yourself needs only your existing `claude` CLI login. See [ADR-0010 (Tier B trigger and credential)](docs/adr/ADR-0010-tier-b-trigger-and-credential.md) for the full contract.
 

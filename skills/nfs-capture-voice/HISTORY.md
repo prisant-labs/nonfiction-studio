@@ -4,6 +4,6 @@ Versions of this skill, newest first. [ADR-0017 (per-skill versioning)](../../do
 
 | Version | Date | Release | Type | Summary |
 |---|---|---|---|---|
-| 0.2.1 | 2026-10-16 | unreleased | fixed | Its description now says it always delegates to the voice-capture agent, which calibrates from the author's samples or, with none, takes the bootstrap path. The description had said the skill delegates only when no samples are available, so a request that came with samples was routed elsewhere. |
+| 0.2.1 | 2026-10-16 | v0.2.1 | fixed | Its description now says it always delegates to the voice-capture agent, which calibrates from the author's samples or, with none, takes the bootstrap path. The description had said the skill delegates only when no samples are available, so a request that came with samples was routed elsewhere. |
 | 0.2.0 | 2026-10-04 | v0.2.0 | changed | Finds the state folder through the shared "Locate the state folder" section, which reads the book's pointer file (ADR-0015, state folder name), and reads chapters from the folder the pointer names (ADR-0016, adopting an existing book). It stops before its first write when style is not adopted, and names the way to adopt it. |
 | 0.1.0 | 2026-09-23 | v0.1.0 | added | First released version: builds and calibrates the author's stylometric voice baseline from writing samples. |

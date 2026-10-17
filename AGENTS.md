@@ -91,6 +91,13 @@ for a keyless run that spends nothing.
   a read, parse, or lookup failure is caught, logged (where a log target exists), and the
   script continues with whatever partial output it already has. A hook must never be the
   reason a session breaks.
+- **No judgment handler on Stop.** `hooks/hooks.json` carries no `prompt` or `agent` handler
+  on the Stop event. On Stop, either type can only continue the turn when it judges its
+  condition unmet, never warn, and the thesis-alignment prompt that once sat there kept the
+  turn from ending nine times in a row. `scripts/check-hooks-schema.mjs` refuses one. Put a
+  judgment check where it can report without holding the turn open, such as a skill the
+  author invokes. See
+  [ADR-0019 (Stop hook judgment layer)](docs/adr/ADR-0019-stop-hook-judgment-layer.md).
 - **Guards and settings precedence follow ADR-0013 (wave 1 exit surfaces).** The precedence
   chain (defaults, then `_nonfiction-studio/config.json`, then the per-project settings file, then
   structural coercions) can raise `gate.mode` toward `block`, but settings can never un-coerce
