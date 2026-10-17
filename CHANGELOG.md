@@ -20,6 +20,10 @@ This file is written from the commit history of the branch it ships from, not fr
   a skip or a dry-run. The runbook's introduction also records that 0.2.0, like 0.1.0, released
   with the eval dispatch-accuracy step red and disclosed.
 
+- **ADR-0010 points forward to ADR-0018.** ADR-0010 (Tier B trigger and credential) now notes, in
+  its header and in Decision 5, that ADR-0018 (Tier B eval harness contract) replaces Decision 5's
+  case counts and threshold rationale.
+
 ### Fixed
 
 - **The Stop hook no longer keeps the turn from ending** (issue #21, ADR-0019 (Stop hook
