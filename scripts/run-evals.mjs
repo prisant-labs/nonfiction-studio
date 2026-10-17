@@ -86,6 +86,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { decideCredentialMode } from './lib/credential-mode.mjs';
 import { DISPATCH_ACCURACY_THRESHOLD, meetsDispatchThreshold } from './lib/dispatch-threshold.mjs';
+import { isolationArgs, isolatedChildEnv } from './lib/claude-isolation.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -190,28 +191,22 @@ export function buildPrompt(given) {
 // Claude caller
 // ---------------------------------------------------------------------------
 
-/** The claude arguments for one live call (ADR-0018). Exported so a test pins every flag, and
- *  every absence: no --dangerously-skip-permissions, because no tool may run; no --bare, because
- *  it refuses OAuth. */
+/** The claude arguments for one live call (ADR-0018). The isolation flags come from
+ *  scripts/lib/claude-isolation.mjs, shared with run-integration.mjs, with every hook turned off.
+ *  Exported so a test pins every flag, and every absence: no --dangerously-skip-permissions,
+ *  because no tool may run; no --bare, because it refuses OAuth. */
 export function buildClaudeArgs(prompt, { repoRoot, model }) {
   return [
     '-p', prompt,
     '--model', model,
     '--output-format', 'json',
-    '--plugin-dir', repoRoot,
-    '--setting-sources', 'project',
-    '--settings', JSON.stringify({ disableAllHooks: true }),
+    ...isolationArgs({ repoRoot, pluginHooks: false }),
     '--permission-mode', 'dontAsk',
-    '--no-session-persistence',
   ];
 }
 
-/** The child's environment: the caller's, so the credential and PATH carry through, with every
- *  CLAUDE.md turned off. --setting-sources does not cover the user's ~/.claude/CLAUDE.md; this
- *  documented variable does, and leaves authentication alone. */
-export function buildChildEnv(baseEnv) {
-  return { ...baseEnv, CLAUDE_CODE_DISABLE_CLAUDE_MDS: '1' };
-}
+/** The child's environment, from scripts/lib/claude-isolation.mjs: every CLAUDE.md turned off. */
+export const buildChildEnv = isolatedChildEnv;
 
 function isInside(parent, child) {
   const rel = relative(resolve(parent), resolve(child));

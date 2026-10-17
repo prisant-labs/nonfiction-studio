@@ -1,6 +1,6 @@
 ---
 title: "interviewer agent reference"
-description: "Reference for the interviewer agent - the intake front door that scaffolds the bible and confirms the project brief"
+description: "Reference for the interviewer agent - the intake front door that has nfs-new-book scaffold the bible and confirms the project brief"
 audience: "non-engineer"
 level: "beginner"
 tags: ["agent", "intake", "interview", "brief"]
@@ -17,7 +17,7 @@ context agents) and governed by D-16 (honest, resumable interview).
 
 The `interviewer` gathers an author's intent for a book and turns it into the
 project bible (the book's canonical reference files under `context/`, `structure/`,
-`chapters/`, `research/`, and `production/`) that every other agent reads. It scaffolds the book tree, walks the
+`chapters/`, `research/`, and `production/`) that every other agent reads. It has the `nfs-new-book` skill scaffold the book tree, walks the
 author through ten intake sections, records each confirmed section to
 `context/brief.md` as a resumable DRAFT block, and commits the bible files only
 after the author confirms a single written brief. The first-session goal is a

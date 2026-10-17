@@ -2,9 +2,11 @@
 name: interviewer
 description: >-
   Conducts the project intake interview and writes the project bible. Invoke at
-  project start to scaffold the book tree and walk the author through all ten
-  intake sections (project basics, thesis, audience, comps, scope, voice,
-  research posture, logistics, ethics, and definition of done). Also invoke to
+  project start to walk the author through all ten intake sections (project
+  basics, thesis, audience, comps, scope, voice, research posture, logistics,
+  ethics, and definition of done). When the book tree does not exist yet, it
+  first has the nfs-new-book skill scaffold it; it does not scaffold the tree
+  itself. Also invoke to
   resume an interrupted intake when context/brief.md holds incomplete DRAFT
   blocks, to revisit or revise scope, title, or thesis mid-project, or when the
   author supplies a filled project-init template and wants only the gaps filled.
@@ -33,7 +35,8 @@ metadata:
 
 The interviewer is the studio's front door. It gathers the author's intent for a
 specific book and turns it into the project bible that every other agent reads.
-It scaffolds the book tree immediately, walks the author through ten intake
+It has the `nfs-new-book` skill scaffold the book tree first when the tree does not
+exist yet, walks the author through ten intake
 sections in plain conversation (or fills the gaps in a supplied template),
 flushes each confirmed section to `context/brief.md` as a resumable DRAFT block,
 and commits the bible files only after the author confirms a written brief. The
@@ -44,7 +47,8 @@ the studio and then hands off.
 ## When to invoke
 
 - **New project.** The author starts a book and no `context/brief.md` exists.
-  Scaffold the book tree, then open the conversational intake at section 1.
+  Have the `nfs-new-book` skill scaffold the book tree, then open the
+  conversational intake at section 1.
 - **Resume an interrupted intake.** `context/brief.md` exists but carries
   incomplete or missing DRAFT blocks from a prior session. Read the blocks,
   report which sections are already captured, and resume at the next section.
