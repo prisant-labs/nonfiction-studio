@@ -143,3 +143,44 @@ test('a missing settings.json is not an error', () => {
   const result = runChecker(script, dirname(dirname(script)));
   assert.equal(result.status, 0, 'stdout: ' + result.stdout + '\nstderr: ' + result.stderr);
 });
+
+// ADR-0019 (Stop hook judgment layer): on Stop, a prompt or agent handler's only output for a
+// condition it judges unmet is to continue the turn, so it can never be the warn-only check that
+// D-03 (layered Stop gate) asks for. The shipped Stop event carries the command handler alone, and
+// the checker refuses the other two types there.
+
+/** Returns a transform that appends `entry` to the Stop event's first group. */
+const withStopEntry = (entry) => (text) => {
+  const parsed = JSON.parse(text);
+  parsed.hooks.Stop[0].hooks.push(entry);
+  return JSON.stringify(parsed, null, 2) + '\n';
+};
+
+test('the committed hooks.json carries the command handler alone on Stop', () => {
+  const stop = JSON.parse(readFileSync(HOOKS_JSON, 'utf8')).hooks.Stop;
+  const types = stop.flatMap((group) => group.hooks.map((entry) => entry.type));
+  assert.deepEqual(types, ['command']);
+});
+
+test('Stop with the command handler alone passes', () => {
+  const script = treeWith('stop-command-only', (text) => {
+    const parsed = JSON.parse(text);
+    parsed.hooks.Stop[0].hooks = parsed.hooks.Stop[0].hooks.filter((entry) => entry.type === 'command');
+    return JSON.stringify(parsed, null, 2) + '\n';
+  });
+  const result = runChecker(script, dirname(dirname(script)));
+  assert.equal(result.status, 0, 'stdout: ' + result.stdout + '\nstderr: ' + result.stderr);
+});
+
+for (const type of ['prompt', 'agent']) {
+  test((type === 'agent' ? 'an ' : 'a ') + type + ' handler on Stop is a finding that cites ADR-0019 [mutation-proof: accepting it turns this red]', () => {
+    const script = treeWith('stop-' + type, withStopEntry({ type, prompt: 'Is the chapter on thesis?', timeout: 30 }));
+    const hooksJson = JSON.parse(readFileSync(join(dirname(dirname(script)), 'hooks', 'hooks.json'), 'utf8'));
+    assert.ok(hooksJson.hooks.Stop[0].hooks.some((entry) => entry.type === type), 'the fixture really carries a ' + type + ' handler');
+    const result = runChecker(script, dirname(dirname(script)));
+    assert.equal(result.status, 1, 'stdout: ' + result.stdout + '\nstderr: ' + result.stderr);
+    const findings = (result.stdout + result.stderr).split('\n').filter((l) => l.includes('ADR-0019'));
+    assert.equal(findings.length, 1, 'one ADR-0019 finding:\n' + (result.stdout + result.stderr));
+    assert.match(findings[0], new RegExp('Stop: ' + (type === 'agent' ? 'an ' : 'a ') + type + ' handler'));
+  });
+}

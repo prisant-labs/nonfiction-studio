@@ -4,7 +4,8 @@
 //               event is a known platform event, the nested group layer is present, each
 //               event has exactly one command handler (D-06 single-writer state discipline),
 //               every command script resolves to a file on disk, there are no duplicate
-//               events, and the Stop event carries a prompt handler with a timeout. It also
+//               events, and the Stop event carries no prompt or agent handler (ADR-0019,
+//               Stop hook judgment layer). It also
 //               reads the plugin-root settings.json, when one is present, and applies the same
 //               ${CLAUDE_PLUGIN_ROOT}-quoting rule to subagentStatusLine.command: that file
 //               carries the identical substitution and the identical unquoted-path-with-a-space
@@ -207,6 +208,8 @@ for (const event of eventNames) {
         findings.push(event + ': hook entry missing "type" field');
         continue;
       }
+      // A judgment handler on Stop is refused in Step 6, with its own reason.
+      if (event === 'Stop' && (entry.type === 'prompt' || entry.type === 'agent')) continue;
 
       if (entry.type === 'command') {
         // command string must be present and follow the plugin pattern
@@ -252,26 +255,22 @@ for (const event of eventNames) {
   }
 }
 
-// Step 6: Stop-specific contract - must have exactly two handler entries (one command, one prompt)
-//         with the prompt carrying a timeout pinned to exactly 30.
+// Step 6: Stop-specific contract - no prompt or agent handler, per ADR-0019 (Stop hook judgment
+//         layer). When either judges its condition unmet, the platform feeds its reason back
+//         to Claude and continues the turn, so neither can be the warn-only judgment check that
+//         D-03 (layered Stop gate) asks for. A live probe of the old thesis-alignment prompt kept
+//         the turn from ending nine times in a row.
 const stopGroups = hooks['Stop'];
-if (stopGroups && Array.isArray(stopGroups) && stopGroups.length > 0) {
-  const stopEntries = stopGroups[0] && Array.isArray(stopGroups[0].hooks) ? stopGroups[0].hooks : [];
-  // Stop must have exactly two entries: one command and one prompt.
-  if (stopEntries.length !== 2) {
-    findings.push(
-      'Stop: must have exactly 2 handler entries (one command, one prompt); found ' + stopEntries.length
-    );
-  }
-  const promptEntries = stopEntries.filter(e => e && e.type === 'prompt');
-  if (promptEntries.length === 0) {
-    findings.push('Stop: no prompt handler found; Stop must carry a prompt entry with a timeout per Q-01 section 3');
-  } else {
-    for (const pe of promptEntries) {
-      if (pe.timeout === undefined || pe.timeout === null) {
-        findings.push('Stop: prompt entry is missing "timeout" field');
-      } else if (pe.timeout !== 30) {
-        findings.push('Stop: prompt entry "timeout" must be exactly 30; got: ' + pe.timeout);
+if (stopGroups && Array.isArray(stopGroups)) {
+  for (const group of stopGroups) {
+    const stopEntries = group && Array.isArray(group.hooks) ? group.hooks : [];
+    for (const entry of stopEntries) {
+      if (entry && (entry.type === 'prompt' || entry.type === 'agent')) {
+        findings.push(
+          'Stop: ' + (entry.type === 'agent' ? 'an ' : 'a ') + entry.type + ' handler is refused: it can only ' +
+          'continue the turn, never warn, so it cannot be a warn-only judgment check; see ADR-0019 ' +
+          '(Stop hook judgment layer)'
+        );
       }
     }
   }

@@ -26,6 +26,20 @@ This file is written from the commit history of the branch it ships from, not fr
 
 ### Fixed
 
+- **The Stop hook no longer keeps the turn from ending** (issue #21, ADR-0019 (Stop hook
+  judgment layer)). The thesis-alignment prompt handler is gone from the Stop event in
+  `hooks/hooks.json`. On Stop, Claude Code feeds a prompt handler's reason back to Claude and
+  continues the turn whenever the handler judges its condition unmet, and the prompt never saw a
+  thesis to judge. In a copy of the sample book, a one-word `claude -p` request ran to 10 turns
+  until Claude Code's own cap ended it, in 2 of 2 probes. The deterministic gate in
+  `hooks/stop-gate.mjs` is unchanged. `scripts/check-hooks-schema.mjs` now refuses a `prompt` or
+  `agent` handler on Stop instead of requiring a prompt handler, with a mutation proof in
+  `tests/hooks/hooks-json.test.mjs`. `templates/hook-starter/` no longer teaches the pattern.
+  `nfs-check-chapter` (0.2.1), the `ns-gate` reference page, the architecture overview and both
+  project-init templates no longer describe a thesis-alignment judgment; the `thesis_alignment`
+  config key stays, reserved, and is still coerced to warn. The adoption notice for `structure`
+  no longer says a thesis-alignment check skips.
+
 - **The Tier B eval harness now measures dispatch, not guessing** (issue #5, ADR-0018 (Tier B
   eval harness contract)). `scripts/run-evals.mjs` loads the plugin with `--plugin-dir` and runs
   every call from an empty temporary folder, with user settings, every hook and every

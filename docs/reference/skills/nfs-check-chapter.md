@@ -14,7 +14,7 @@ The `nfs-check-chapter` skill is the surface-independent Definition-of-Done gate
 
 `nfs-check-chapter` bridges the deterministic gate layer and the author conversation. The `bin/ns-gate` orchestrator it invokes runs up to seven checks (claim coverage, quote fidelity, voice drift, prompt scrub, continuity, state coherence, and - since Wave 1 exit Task 7 - overlap against the author's own research corpus) composed into a single policy verdict; policy including D-03 coercions and the warn-cap lives inside the orchestrator per TSK-029 (ns-gate orchestrator). The skill's role is to pre-check the baseline, select the right check set, invoke the gate, and present the verdict honestly.
 
-**The verdict this skill presents is the deterministic layer only.** On CLI and Cowork the Stop hook additionally runs a thesis-alignment judgment prompt (warn-only, never blocks in Phase 1). That judgment layer is not available when invoking this skill directly; on chat it does not exist in v1 and the skill states this fact when presenting the verdict.
+**The verdict this skill presents is the deterministic layer only.** No thesis-alignment judgment runs in v1, on any surface: the Stop hook runs the same deterministic gate and nothing else, per [ADR-0019 (Stop hook judgment layer)](../../adr/ADR-0019-stop-hook-judgment-layer.md). The skill states this fact when presenting the verdict.
 
 **No agents invoked.** This is a deterministic-CLI-only skill in Phase 1. No chain edges exist. The Phase 2 deep mode, which would add `fact-checker`, `voice-guardian`, and `continuity-checker` as background subagents, is not implemented in v1; the `deep` argument is politely declined.
 

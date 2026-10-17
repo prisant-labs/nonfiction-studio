@@ -108,7 +108,7 @@ confirmed brief, not a drafted chapter.
         Maps to: gate.checks.continuity.mode
 
     [ ] Thesis alignment - chapter explicitly serves the controlling idea
-        (Judgment check; locked to warn-only in v1.)
+        (Reserved for a judgment check; none runs in v1.)
         Maps to: gate.checks.thesis_alignment.mode
 
 - Anything else:
