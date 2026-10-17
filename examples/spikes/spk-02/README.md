@@ -5,6 +5,8 @@
 **Results template:** examples/spikes/spk-02/RESULTS-TEMPLATE.md
 **Probe corrections:** 2026-09-25, before the first execution - see the "Probe corrections (2026-09-25)" section of ADR-0002 (Cowork hook execution).
 
+**Blocked (noted 2026-10-16):** Cowork refuses a plugin that keeps executables in a top-level `bin/` folder, according to Claude's plugin platform-support page, and this plugin keeps its CLIs there. Do not run this protocol until that is resolved; see the Status block of ADR-0002 (Cowork hook execution).
+
 This protocol is executed by a human with access to the Cowork desktop app. It takes roughly 10 minutes. Fill in RESULTS-TEMPLATE.md as you go, then paste the completed template into the ADR to update its status.
 
 ---

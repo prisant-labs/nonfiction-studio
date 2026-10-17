@@ -3,6 +3,7 @@
 **TL;DR:** SPK-02 (Cowork execution probe) tests whether SessionStart hooks and declared agents actually fire in a Cowork session. The probe artifacts and user protocol are built; execution is deferred to a human with Cowork access. The decision rule is pre-committed: all three observations positive means Cowork column verified full; any hook observation negative (whether or not the subagent fires) or any other shortfall means the fail branch fires.
 
 - Status: proposed - pending user execution
+- Blocked (noted 2026-10-16): Claude's [plugin platform-support page](https://claude.com/docs/plugins/platform-support) says Cowork and chat refuse the whole plugin when it keeps executables in a top-level `bin/` folder, and this plugin keeps its `ns-*` CLIs there. The probe cannot run until the CLIs move out of `bin/` or the plugin is declared Claude Code-only, and that decision is open. No upload has confirmed the refusal yet.
 - Date: 2026-07-18
 - Spike: SPK-02 (Cowork execution)
 - Task: TSK-008 (SPK-02 Cowork execution)

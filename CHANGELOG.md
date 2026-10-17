@@ -6,7 +6,19 @@ This file is written from the commit history of the branch it ships from, not fr
 
 ## Unreleased
 
+## [0.2.1] - 2026-10-16
+
 ### Changed
+
+- **The README and the agent guides describe what this release found.** The README's surface
+  table and "At a glance" row no longer say Cowork is expected to work or that chat is
+  skills-only. Claude's plugin platform-support page says a plugin with executables in a
+  top-level `bin/` folder cannot be installed in Cowork or chat, and this plugin keeps its CLIs
+  there. That has not been confirmed by an upload, and whether to move the CLIs is an open
+  decision (ADR-0002, Cowork hook execution). ADR-0002 and the SPK-02 protocol in
+  `examples/spikes/spk-02/README.md` now say the Cowork probe is blocked for that reason.
+  `.claude/CLAUDE.md` and `AGENTS.md` gain an engineering norm: no prompt or agent handler on
+  Stop, per ADR-0019 (Stop hook judgment layer).
 
 - **CONTRIBUTING.md and the release runbook describe the isolated eval run.** CONTRIBUTING.md
   no longer quotes ADR-0010's "$1 to $2.50 per run" for a local Tier B run. The runbook's caveat
