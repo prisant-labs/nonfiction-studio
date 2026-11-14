@@ -112,9 +112,9 @@ After selection, the skill probes the chapter file (`chapters/<slug>.md`) and ha
 
 This skill works identically across all three surfaces per D-14 (three-surface compatibility). `bin/ns-gate` runs via the Bash tool on all surfaces; no surface-conditional behavior is needed.
 
-**On CLI and Cowork.** The Stop hook fires the same `bin/ns-gate` call automatically at session end when a chapter write occurred during the session. Authors invoke this skill explicitly for an on-demand mid-session gate run or on surfaces where the hook does not fire. The Stop hook's thesis-alignment judgment prompt (warn-only) is separate from this skill; the skill's verdict does not include it.
+**On CLI and Cowork.** The Stop hook fires the same `bin/ns-gate` call automatically at session end when a chapter write occurred during the session. Authors invoke this skill explicitly for an on-demand mid-session gate run or on surfaces where the hook does not fire. The Stop hook runs the same deterministic gate and nothing else, per ADR-0019 (Stop hook judgment layer).
 
-**On chat.** The Stop hook does not fire. Any skill that produces chapter content closes with an explicit prompt to run `nfs-check-chapter`. This skill is the primary gate mechanism on chat. The thesis-alignment judgment layer does not exist in v1 on chat; the skill states this explicitly when presenting a verdict.
+**On chat.** The Stop hook does not fire. Any skill that produces chapter content closes with an explicit prompt to run `nfs-check-chapter`. This skill is the primary gate mechanism on chat. No thesis-alignment judgment runs on any surface in v1; the skill states this explicitly when presenting a verdict.
 
 ## Gate Report
 

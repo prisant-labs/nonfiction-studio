@@ -6,6 +6,21 @@ This file is written from the commit history of the branch it ships from, not fr
 
 ## Unreleased
 
+### Changed
+
+- **The README and docs describe what the gate actually checks.** Claim coverage counts claim
+  markers, not sentences, so a chapter with no markers scores 100 percent. The README no
+  longer says every factual assertion is anchored, and a new "What the gate does not check"
+  section names four limits: unmarked claims, whether a source supports its claim, the default
+  `warn` gate mode, and who wrote an attestation. The check table now says that quote fidelity
+  never blocks, that voice drift gives advice below 2,200 scored words, that continuity
+  compares name spelling only, and that overlap compares local files only. The README and
+  `docs/privacy.md` now say that Anthropic, the model provider, processes the text Claude
+  reads. `docs/reference/cli/ns-claims.md`, `docs/formats/claim-markers.md`, and
+  `docs/reference/skills/nfs-check-chapter.md` no longer describe a gate judgment layer, which
+  ADR-0019 (Stop hook judgment layer) removed. `docs/quickstart.md` gives the marketplace
+  install instead of saying no listing exists.
+
 ## [0.2.1] - 2026-10-16
 
 ### Changed

@@ -2,7 +2,7 @@
 
 Nonfiction Studio keeps a few small caches so it does not repeat work across sessions, and it keeps a compliance log to help you meet AI-disclosure requirements when you publish. This page explains what each one is, where it lives, and how to clear it.
 
-Nothing described on this page ever leaves your project folder and your own machine. Nonfiction Studio does not send your manuscript, your research, or your project state anywhere beyond your own Claude session.
+Nothing described on this page ever leaves your project folder and your own machine. The text Claude reads during a session, including manuscript and research files, is processed by Anthropic, the model provider, as in any Claude Code session. Nonfiction Studio itself sends nothing anywhere else.
 
 ## What gets stored, and where
 
