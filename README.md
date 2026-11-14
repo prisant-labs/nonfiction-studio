@@ -6,7 +6,7 @@
 
 **Turns Claude into a governed non-fiction book studio: specialist subagents draft, a plain-Markdown project bible (the book's own canonical files, all plain Markdown you own) holds the truth, and a deterministic quality gate decides what counts as done. For Claude Code.**
 
-Most AI writing tools generate plausible prose and leave the verification to you. Nonfiction Studio inverts that. Every factual assertion is anchored to a ledger entry or tagged `[UNVERIFIED]`, voice drift is measured rather than eyeballed, and no chapter reaches its terminal status until a gate you can run yourself says so and you attest to it by name. The author stays in charge throughout: the studio proposes, checks, and drafts; you accept, revise, or reject.
+Most AI writing tools generate plausible prose and leave the verification to you. Nonfiction Studio inverts that. The drafting agent anchors each factual assertion to a ledger entry or tags it `[UNVERIFIED]`, and a gate you can run yourself checks every marked claim against that ledger. Voice drift is measured against your own baseline rather than eyeballed, and no chapter reaches its terminal status until the gate passes it and you record an author attestation. The gate counts markers, not sentences: see [What the gate does not check](#what-the-gate-does-not-check). The author stays in charge throughout: the studio proposes, checks, and drafts; you accept, revise, or reject.
 
 <p>
   <a href="https://github.com/prisant-labs/nonfiction-studio/issues/new?labels=bug">Report a Bug</a>
@@ -122,12 +122,12 @@ Nonfiction Studio is a Claude Code plugin that runs a structured authoring workf
 
 | It is | It is not |
 |---|---|
-| **Evidence-anchored** - every factual assertion links to a ledger entry or carries an `[UNVERIFIED]` tag | A prose generator that leaves sourcing to you |
+| **Evidence-anchored** - drafted claims carry a ledger marker or an `[UNVERIFIED]` tag, and every marker is checked against the ledger | A prose generator that leaves sourcing to you |
 | **Deterministic where it matters** - drift, coverage, and coherence are measured by engines, not judged by a model | A model grading its own output |
-| **Author-governed** - a chapter reaches its terminal status only on a dated human attestation, and falls back automatically if it is edited afterward | An autonomous writer that decides when it is finished |
+| **Author-governed** - a chapter reaches its terminal status only on a dated author attestation, and falls back automatically if it is edited afterward | An autonomous writer that decides when it is finished |
 | **Yours, in plain files** - a Markdown bible in your own folder, readable and diffable without this plugin | A proprietary project format |
-| **Self-sufficient** - runs on the Claude login you already have, with no API key and no third-party service | A tool that needs a separate account or paid backend |
-| **Honest about compliance** - an AI-use log, chapter snapshots, and publisher-ready apparatus are first-class outputs | A tool that hides how the manuscript was made |
+| **Self-sufficient** - runs on the Claude login you already have, with no API key and no service beyond Anthropic's own | A tool that needs a separate account or paid backend |
+| **Honest about compliance** - an AI-use log, chapter snapshots, and back-matter drafts are first-class outputs | A tool that hides how the manuscript was made |
 
 <div align="right">(<a href="#readme-top">back to top</a>)</div>
 
@@ -158,17 +158,24 @@ flowchart LR
 
 | Check | What it asks |
 |---|---|
-| `claim_coverage` | Does every factual assertion resolve to an evidence-ledger entry, or is it honestly tagged? |
-| `quote_fidelity` | Does every verbatim quote match its recorded source text? |
-| `stylometry` | Has the prose drifted from the author's measured voice baseline, and by how much? |
+| `claim_coverage` | Does every claim marker in the chapter resolve to a `verified` or `interpretation` entry in the evidence ledger? |
+| `quote_fidelity` | Does every marked verbatim quote match its recorded source text exactly? It warns and never blocks. |
+| `stylometry` | Has the prose drifted from the author's measured voice baseline, and by how much? Below 2,200 scored words it gives advice rather than a verdict. |
 | `prompt_scrub` | Is there residue of AI instruction or scaffolding left in the manuscript? |
-| `continuity` | Do the facts, names, and commitments hold across chapters? |
+| `continuity` | Is each name spelled and capitalized the same way across chapters? |
 | `state_coherence` | Do the recorded word counts and project state agree with what is actually on disk? |
-| `overlap` | Does chapter prose overlap, unattributed, with the author's own research packets, verbatim quotes, or prior work? |
+| `overlap` | Does chapter prose overlap, unattributed, with the author's own research packets, verbatim quotes, or prior work? It compares local files only and is not a plagiarism check. |
 
 A verdict is `pass`, `warn`, or `block`, and a block names the check and the finding. The report is written into your project, so the next run, the status board, and you are all reading the same artifact. See [docs/formats/gate-report.md](docs/formats/gate-report.md) for the report format.
 
-**Promotion is a ceremony, not a status change.** Marking a chapter `final` requires a dated attestation entry in `context/decisions.md` naming you as the actor and the chapter as the subject. If an attested chapter is edited afterward, it falls back automatically, so the board cannot claim a chapter is finished after it changed. Recorded in [ADR-0011 (tranche 2 decisions)](docs/adr/ADR-0011-tranche-2-decisions.md).
+### What the gate does not check
+
+- **Unmarked claims.** Claim coverage counts markers, not sentences. A factual sentence with no marker is not counted, so a chapter with no markers scores 100 percent, and so does a chapter with one resolved marker and many unmarked claims. The drafting agent is told to mark every factual assertion, but text you write or paste in by hand carries no marker until you add one. Run `nfs-fact-check`, or read the chapter yourself, to catch these.
+- **Whether a source supports its claim.** A marker resolves when its ledger entry's status is `verified` or `interpretation`. The `fact-checker` agent sets that status; the engine trusts it and does not reread the source.
+- **Blocking, unless you turn it on.** The shipped configuration sets the top-level `gate.mode` to `warn`, so a failing check reports `warn` until you set `gate.mode` to `block` in `_nonfiction-studio/config.json`.
+- **Who attested.** An attestation records `author` as its actor. The plugin cannot tell who wrote that entry.
+
+**Promotion is a ceremony, not a status change.** Marking a chapter `final` requires a dated attestation entry in `context/decisions.md` with `author` as the actor and the chapter as the subject. If an attested chapter is edited afterward, it falls back automatically, so the board cannot claim a chapter is finished after it changed. Recorded in [ADR-0011 (tranche 2 decisions)](docs/adr/ADR-0011-tranche-2-decisions.md).
 
 <div align="right">(<a href="#readme-top">back to top</a>)</div>
 
@@ -201,7 +208,7 @@ Skills are what you invoke, as `/nonfiction-studio:<name>`. Each one orchestrate
 
 - **[nfs-research](docs/reference/skills/nfs-research.md)** - runs a structured research session that fills the evidence ledger with evidence entries and source references. It shows you the research agenda for approval before gathering anything, delegates every ledger write to `research-librarian`, and closes by reporting new sources, new evidence entries, and which claims in scope are still open. This is what makes later fact-checking possible at all: a claim can only be verified against a source that is already registered.
 - **[nfs-draft](docs/reference/skills/nfs-draft.md)** - produces a chapter draft that matches your measured voice and anchors every factual assertion to a ledger entry or tags it `[UNVERIFIED]`. It warns you if the evidence ledger is empty before drafting rather than inventing citations, routes new prose or diff proposals through `drafting-partner`, then passes the accepted text to `line-editor` for polish that arrives as proposals rather than as edits already made. Works on a new chapter or continues one already in progress.
-- **[nfs-fact-check](docs/reference/skills/nfs-fact-check.md)** - the adversarial verification pass over a drafted chapter. It runs an engine-backed claim inventory through `ns-claims` first, then hands the chapter to `fact-checker`, which advances each evidence entry from pending to verified, unverified, interpretation, or source-unverifiable and writes a per-chapter report. You get three counts back and the report path. Use this when you want claim-level truth; use the quality gate when you want a pass-or-block verdict on the whole chapter.
+- **[nfs-fact-check](docs/reference/skills/nfs-fact-check.md)** - the adversarial verification pass over a drafted chapter. It runs an engine-backed claim inventory through `ns-claims` first, then hands the chapter to `fact-checker`, which advances each evidence entry from pending to verified, unverified, interpretation, or source-unverifiable and writes a per-chapter report. You get three counts back and the report path. Use this when you want each claim checked against its source by the `fact-checker` agent; use the quality gate when you want a pass-or-block verdict on the whole chapter.
 
 **Check the state (3)**
 
@@ -302,7 +309,7 @@ Whether to move the CLIs so that Cowork and chat can install the plugin is an op
 
 ## Project status
 
-**`v0.2.1`, pre-1.0.** `v0.1.0` was the first tagged release. Phase 1, the core authoring workflow, is complete and exercised. Later work (deeper research tooling, a revision pass, manuscript export, and further publishing-compliance features) is still being built, and rough edges are expected.
+**`v0.2.1`, pre-1.0.** `v0.1.0` was the first tagged release. Phase 1, the core authoring workflow, is complete and covered by the test suites. Real-book use so far is the maintainer's own book, on an earlier release. Later work (deeper research tooling, a revision pass, manuscript export, and further publishing-compliance features) is still being built, and rough edges are expected.
 
 ### At a glance
 
@@ -359,7 +366,7 @@ The fact-checker keeps a small cache of verified claims at `.claude/agent-memory
 
 `nfs-new-book` can generate a `book-context` skill at `.claude/skills/book-context/SKILL.md`, committed into your project tree: your thesis one-liner, top style rules, chapter map, and open-claims count, each naming the file it was read from. It is generated only on an explicit yes; declining, or answering in a non-interactive session, writes nothing. Delete the file any time to remove it; a later `nfs-new-book` run then offers to regenerate it.
 
-Everything lives in your project folder and on your own machine. Nothing is sent anywhere beyond your own Claude session. See [docs/privacy.md](docs/privacy.md) for the fuller note, including the AI-use log and chapter snapshots.
+Everything the plugin stores lives in your project folder and on your own machine. The text Claude reads during a session is processed by Anthropic, the model provider, as in any Claude Code session; the plugin itself sends nothing anywhere else. See [docs/privacy.md](docs/privacy.md) for the fuller note, including the AI-use log and chapter snapshots.
 
 <div align="right">(<a href="#readme-top">back to top</a>)</div>
 
@@ -391,7 +398,7 @@ The validation tooling vendored under `scripts/` is licensed separately under th
 
 Built and maintained by **Jonathan Prisant** ([@jprisant](https://github.com/jprisant)). Nonfiction Studio started from a simple frustration: AI writes fluent non-fiction very fast, and fluent non-fiction with unsourced claims and a borrowed voice is worse than no draft at all. The fix is not a better prompt. It is governance the author controls and can audit: measured voice, anchored claims, a gate with a named verdict, and a terminal status nobody but you can grant.
 
-*If this plugin has kept you from shipping a claim you could not source, consider starring the repo.*
+*If this plugin has helped you keep track of your sources, consider starring the repo.*
 
 <p align="center">
   <strong>Built by <a href="https://github.com/prisant-labs">prisant-labs</a></strong><br>

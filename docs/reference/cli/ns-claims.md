@@ -24,8 +24,10 @@ and reports the resolution rate. A resolved marker is one whose EV ID appears in
 ledger with a resolved status (`verified` or `interpretation` per the 2026-07-18
 ledger-grammar adjudication). Unresolved markers are those whose EV ID is absent from
 the ledger or carries a non-resolved status (`pending`, `unverified`, `source-unverifiable`).
-An unmarked factual sentence is invisible to this deterministic engine; semantic judgment
-belongs to the `fact-checker` agent and the gate's advisory layer.
+An unmarked factual sentence is invisible to this deterministic engine, and a chapter with
+no markers at all reports 100 percent coverage. Only the `fact-checker` agent, run through
+`nfs-fact-check`, or a human reader can catch an unmarked claim; the gate has no judgment
+layer, per ADR-0019 (Stop hook judgment layer).
 
 ## Invocation
 

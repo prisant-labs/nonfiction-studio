@@ -4,14 +4,14 @@ This is the fast path: install the plugin, paste some of your own writing, and s
 
 ## 1. Install
 
-There is no public marketplace listing yet. Clone or download this repository, then install it from your local copy:
+Install from the marketplace, inside a Claude Code session:
 
 ```
-claude plugin marketplace add /path/to/nonfiction-studio
-claude plugin install nonfiction-studio@nonfiction-studio
+/plugin marketplace add prisant-labs/agent-plugins
+/plugin install nonfiction-studio@prisant-labs
 ```
 
-Replace `/path/to/nonfiction-studio` with wherever you cloned or unzipped it. See the [README](../README.md) for the fuller install and surface-support picture.
+To install from a local clone instead, run `claude plugin marketplace add /path/to/nonfiction-studio` and then `claude plugin install nonfiction-studio@nonfiction-studio`, replacing `/path/to/nonfiction-studio` with wherever you cloned or unzipped it. See the [README](../README.md) for the fuller install and surface-support picture.
 
 ## 2. Paste something and see three real outputs
 
