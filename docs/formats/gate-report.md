@@ -78,6 +78,10 @@ crashes the check, and an all-skipped book passes with an advisory detail. In bo
 verdict derives from the aggregate alone once it reaches the book-verdict word floor; below the
 floor the check reports pass-with-advice and never blocks, regardless of the aggregate statistic.
 
+### The claim_coverage entry
+
+Open markers follow the check's configured mode, as for any deterministic check. An unmarked chapter, one with no claim markers and at least 200 words of prose, is always `warn`, in every mode, per [ADR-0020 (zero-marker guard)](../adr/ADR-0020-zero-marker-guard.md); the entry's verdict is the more severe of the two. An unmarked chapter adds the signal token `claim_coverage.unmarked` to `detail` and its chapter path, with no line anchor, to `evidence`. The entry keeps the shape of every other check entry.
+
 ### The overlap check entry
 
 Since Wave 1 exit Task 7 (the seventh configurable gate check), `overlap` reports local n-gram

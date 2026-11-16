@@ -75,7 +75,7 @@ The skill runs three steps.
 | Words | `chapters[].wordCount` | always present |
 | Drift | `chapters[].drift` | `-` when `null` |
 | Threshold | `chapters[].threshold` (that SAME chapter's own newest report's resolved calibration-ladder threshold; ADR-0012, voice verdict scope, Decision 2) | `-` when `null` |
-| Open Claims | `chapters[].openClaimCount` | always present |
+| Open Claims | `chapters[].openClaimCount`, or `unmarked` when `chapters[].unmarked` is `true` and the count is 0 | always present; `unmarked` comes from the chapter's newest gate report, per [ADR-0020 (zero-marker guard)](../../adr/ADR-0020-zero-marker-guard.md) |
 | Gate | `chapters[].gate` | `-` when `null` |
 
 The totals row reads `totals.wordCount`, `totals.openClaimCount`, `totals.chaptersFinal`, and (when not `null`) `totals.chaptersTotal`; the top-level `wholeBookGate`, when not `null`, annotates the totals row. There is no board-wide threshold footer: since ADR-0012 (voice verdict scope) retired `thresholds.drift_score_max`, each row already carries its own Threshold cell above. When not `null`, `totals.chaptersRemaining` appears as its own line. See the [ns-status CLI reference](../cli/ns-status.md#json---json) for the full JSON shape.
@@ -99,11 +99,11 @@ The seven valid status values and their lifecycle position (from S-08 section 3 
 Presented after the table and footer, on exit 0 only:
 
 - For each chapter whose `gate` field is `null`: suggest `/nonfiction-studio:nfs-check-chapter <slug>`.
-- For each chapter whose `openClaimCount` is greater than 0: suggest `/nonfiction-studio:nfs-fact-check <slug>`.
+- For each chapter whose `openClaimCount` is greater than 0, or whose `unmarked` is `true`: suggest `/nonfiction-studio:nfs-fact-check <slug>`.
 - For each chapter with `highlighted: true` and `gate` equal to `block`: suggest `/nonfiction-studio:nfs-check-chapter <slug>` to inspect the blocking check details.
 - For each chapter with `highlighted: true` and `gate` not equal to `block`: note that `revise-pass` is Phase 2 scope and not available in v1; suggest `/nonfiction-studio:nfs-draft <slug>` to revise, then re-run `/nonfiction-studio:nfs-check-chapter <slug>`.
 - If any chapter has a non-null `gate` paired with a null `drift`: that chapter's stylometry check did not run on its latest gate report (most commonly a baseline missing or predating `marker_set_version`), even though the gate otherwise reads `pass`. Name every chapter matching this pairing and suggest `/nonfiction-studio:nfs-capture-voice`, then re-run `/nonfiction-studio:nfs-check-chapter <slug>` for each named chapter.
-- If every chapter has a non-null `gate`, no chapter has open claims, no chapter is highlighted, and no chapter pairs a non-null `gate` with a null `drift`: state that no immediate action is required and name the next un-started chapter (the first entry with `status` in `empty`, `outlined`, or `drafting`).
+- If every chapter has a non-null `gate`, no chapter has open claims, no chapter is unmarked, no chapter is highlighted, and no chapter pairs a non-null `gate` with a null `drift`: state that no immediate action is required and name the next un-started chapter (the first entry with `status` in `empty`, `outlined`, or `drafting`).
 
 ## Progress.json and the Totals Row
 

@@ -24,8 +24,9 @@ and reports the resolution rate. A resolved marker is one whose EV ID appears in
 ledger with a resolved status (`verified` or `interpretation` per the 2026-07-18
 ledger-grammar adjudication). Unresolved markers are those whose EV ID is absent from
 the ledger or carries a non-resolved status (`pending`, `unverified`, `source-unverifiable`).
-An unmarked factual sentence is invisible to this deterministic engine, and a chapter with
-no markers at all reports 100 percent coverage. Only the `fact-checker` agent, run through
+An unmarked factual sentence is invisible to this deterministic engine. A chapter with no
+markers at all and at least 200 words of prose is reported as unmarked, not covered, per
+[ADR-0020 (zero-marker guard)](../../adr/ADR-0020-zero-marker-guard.md); see "Unmarked chapters" below. Only the `fact-checker` agent, run through
 `nfs-fact-check`, or a human reader can catch an unmarked claim; the gate has no judgment
 layer, per ADR-0019 (Stop hook judgment layer).
 
@@ -91,7 +92,26 @@ On failure, a per-finding breakdown follows:
 ```
 
 With `--json`, the output is the S-08 section 11 gate-report shape extended with
-`totalMarkers`, `resolvedCount`, `coveragePct`, and a `chapters` array.
+`totalMarkers`, `resolvedCount`, `coveragePct`, a `chapters` array, and `unmarkedChapters`.
+
+### Unmarked chapters
+
+A chapter is unmarked when it has no claim markers and its prose has at least 200 words.
+Its `coveragePct` still computes 100.0, so read its `unmarked` field first. Each `chapters`
+entry carries `unmarked` (boolean) and `proseWords` (integer, the whitespace-separated words
+in the chapter's prose). The top-level `unmarkedChapters` lists their paths, sorted by code
+unit. When no marker is open but a chapter is unmarked, the JSON `verdict` is `warn` and the
+summary line drops the word `pass`:
+
+```
+[claim_coverage] coverage 100.0% (10/10 markers resolved)
+[claim_coverage] 1 chapter(s) unmarked: chapters/03-weak-ties.md
+  chapters/03-weak-ties.md [claim_coverage.unmarked]: no claim markers in 300 words of prose
+```
+
+An unmarked chapter does not change the exit code, which stays tied to open markers. An
+author attestation in `context/decisions.md` clears a chapter that makes no factual claims;
+see [docs/formats/decisions.md](../../formats/decisions.md).
 
 ## Quote fidelity and research packets
 

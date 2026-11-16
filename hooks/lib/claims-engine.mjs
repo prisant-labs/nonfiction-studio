@@ -10,6 +10,59 @@
 //               quoted-span exclusion rule)
 
 import { resolvedStatuses } from './ledger.mjs';
+import { validateDecisionEntry, linksNameChapter } from './status-engine.mjs';
+
+// ADR-0020 (zero-marker guard): a chapter with no claim markers is unmeasured, not covered.
+// A chapter is unmarked when it carries zero markers of the three resolvable forms and its
+// prose has at least this many whitespace-separated words. The floor is NOT calibrated (no
+// committed chapter has zero markers to tune it against); it exists so a dedication, an
+// epigraph or a stub never warns. It is a constant with no config key on purpose: changing it
+// is a code change with its own test.
+export const UNMARKED_WORD_FLOOR = 200;
+
+// The phrase an author attestation's `decision` field must contain to clear the unmarked
+// finding, so that a promotion attestation for the same chapter cannot clear it by accident.
+const CLAIM_FREE_PHRASE = 'no factual claims';
+
+/**
+ * Words in a chapter's prose: whitespace-separated tokens. Callers pass text already cut at
+ * the prose boundary (proseOf, ADR-0016), as they already do for scanChapter.
+ *
+ * @param {string} text
+ * @returns {number}
+ */
+export function countProseWords(text) {
+  if (typeof text !== 'string') return 0;
+  return text.split(/\s+/).filter(Boolean).length;
+}
+
+/**
+ * Whether the decision log holds an author attestation that this chapter makes no factual
+ * claims (ADR-0020, section 3). The match reuses the promotion ceremony's rule - `actor` is
+ * exactly "author", the required fields are present, and `links` names the chapter slug as a
+ * whole token - and adds one condition: `decision` contains "no factual claims" (any case).
+ * The attestation does not lapse on edit; the engine has no reliable edit signal.
+ *
+ * @param {string} slug - the chapter file name without .md
+ * @param {object[]} entries - parseDecisionsLog output (hooks/lib/status-engine.mjs)
+ * @returns {boolean}
+ */
+export function isAttestedClaimFree(slug, entries) {
+  if (!Array.isArray(entries)) return false;
+  for (const entry of entries) {
+    if (!entry || entry.actor !== 'author') continue;
+    if (!validateDecisionEntry(entry).valid) continue;
+    if (!entry.decision.toLowerCase().includes(CLAIM_FREE_PHRASE)) continue;
+    if (linksNameChapter(entry.links, slug)) return true;
+  }
+  return false;
+}
+
+/** The chapter slug for a book-relative chapter path: its file name without `.md`. */
+function slugOfFile(file) {
+  const base = String(file).split('/').pop();
+  return base.endsWith('.md') ? base.slice(0, -3) : base;
+}
 
 // Regex patterns for the three marker forms (S-08 section 8 grammar, docs/formats/claim-markers.md).
 // All three are used with /g so lastIndex must be reset before each per-line application.
@@ -124,19 +177,29 @@ export function scanChapter(text, ledgerEntries) {
  * Computes book-level or multi-chapter coverage from an array of pre-scanned chapter results.
  *
  * coveragePct = (resolved markers / total markers) * 100; returns 100.0 when total is zero.
+ * A chapter with zero markers still computes 100.0 there, so readers check `unmarked` first
+ * (ADR-0020, zero-marker guard): the unmarked rule is computed here, once, for every surface.
  *
- * @param {object[]} chapters - array of { file: string, markers: object[] }
- *   where markers is the return value of scanChapter
+ * @param {object[]} chapters - array of { file: string, markers: object[], text?: string }
+ *   where markers is the return value of scanChapter and text is the chapter's prose (already
+ *   cut at the prose boundary). Without text, a chapter's proseWords is null and it is never
+ *   counted as unmarked.
  * @param {object[]} [ledger] - parsed evidence entries from parseEvidenceLog;
  *   not re-resolved here (scanChapter already resolved), carried for caller convenience
+ * @param {object} [opts]
+ * @param {object[]} [opts.decisions] - parseDecisionsLog output for context/decisions.md; an
+ *   author attestation there clears a chapter's unmarked finding (isAttestedClaimFree)
  * @returns {{ coveragePct: number, openClaims: number, findings: object[],
- *             totalMarkers: number, resolvedCount: number, chapters: object[] }}
+ *             totalMarkers: number, resolvedCount: number, chapters: object[],
+ *             unmarkedChapters: string[], unmarkedFindings: object[] }}
  */
-export function computeCoverage(chapters, ledger) {
+export function computeCoverage(chapters, ledger, opts = {}) {
+  const decisions = Array.isArray(opts.decisions) ? opts.decisions : [];
   let totalMarkers = 0;
   let resolvedCount = 0;
   const findings = [];
   const chapterSummaries = [];
+  const unmarkedFindings = [];
 
   for (const chapter of chapters) {
     const { file, markers } = chapter;
@@ -162,16 +225,34 @@ export function computeCoverage(chapters, ledger) {
     resolvedCount += chapterResolved;
 
     const chapterPct = chapterTotal === 0 ? 100.0 : (chapterResolved / chapterTotal) * 100;
+    const proseWords = typeof chapter.text === 'string' ? countProseWords(chapter.text) : null;
+    const unmarked = chapterTotal === 0 &&
+      proseWords !== null && proseWords >= UNMARKED_WORD_FLOOR &&
+      !isAttestedClaimFree(slugOfFile(file), decisions);
+    if (unmarked) {
+      unmarkedFindings.push({
+        file,
+        line: null,
+        type: 'claim_coverage.unmarked',
+        excerpt: '',
+        detail: 'no claim markers in ' + proseWords + ' words of prose'
+      });
+    }
     chapterSummaries.push({
       file,
       totalMarkers: chapterTotal,
       resolvedCount: chapterResolved,
       openClaims: chapterOpen,
-      coveragePct: chapterPct
+      coveragePct: chapterPct,
+      proseWords,
+      unmarked
     });
   }
 
   const coveragePct = totalMarkers === 0 ? 100.0 : (resolvedCount / totalMarkers) * 100;
+
+  // Code-unit order, never localeCompare (determinism across the two CI legs).
+  unmarkedFindings.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
 
   return {
     coveragePct,
@@ -179,7 +260,9 @@ export function computeCoverage(chapters, ledger) {
     findings,
     totalMarkers,
     resolvedCount,
-    chapters: chapterSummaries
+    chapters: chapterSummaries,
+    unmarkedChapters: unmarkedFindings.map(f => f.file),
+    unmarkedFindings
   };
 }
 

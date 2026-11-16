@@ -21,6 +21,24 @@ This file is written from the commit history of the branch it ships from, not fr
   ADR-0019 (Stop hook judgment layer) removed. `docs/quickstart.md` gives the marketplace
   install instead of saying no listing exists.
 
+### Fixed
+
+- **A chapter with no claim markers is reported as unmarked, not 100 percent covered.**
+  Before this change, a chapter of factual prose with no markers passed `claim_coverage` with
+  "claim coverage 100%", even in block mode. Now a chapter with no markers and at least 200
+  words of prose gives a `claim_coverage.unmarked` finding. The finding always warns and never
+  blocks, in every gate mode, and open markers still block as before. An author clears it for
+  a chapter that makes no factual claims with an attestation in `context/decisions.md`.
+  `ns-claims --json` gains `unmarked` and `proseWords` on each chapter and a top-level
+  `unmarkedChapters`; its exit code is unchanged. The status board shows `unmarked` in the
+  Open Claims column. `nfs-fact-check` (0.3.0) and `nfs-status-dashboard` (0.2.0) report it.
+  Recorded in
+  [ADR-0020 (zero-marker guard)](docs/adr/ADR-0020-zero-marker-guard.md).
+- **`nfs-fact-check` no longer tells the agent to halt on a chapter with open claims.** Its
+  instructions said to halt whenever `ns-claims` exited non-zero, but `ns-claims` exits 1 whenever a chapter has open claims,
+  which is the input a fact-check exists for. The skill now halts only on exit code 2, an
+  operational error.
+
 ## [0.2.1] - 2026-10-16
 
 ### Changed

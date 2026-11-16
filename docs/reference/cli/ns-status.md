@@ -127,6 +127,7 @@ legacy prose-detail fallback described under JSON below):
       "drift": 10.86,
       "threshold": null,
       "gate": "pass",
+      "unmarked": false,
       "reportPath": "_nonfiction-studio/gate/01-listening-before-speaking.20260810T091000Z.json",
       "highlighted": false
     }
@@ -141,6 +142,11 @@ legacy prose-detail fallback described under JSON below):
   "wholeBookGate": null
 }
 ```
+
+`unmarked` is `true` when the chapter's newest gate report found the chapter unmarked: no claim
+markers in at least 200 words of prose, per [ADR-0020 (zero-marker guard)](../../adr/ADR-0020-zero-marker-guard.md). The
+Markdown board then shows `unmarked` in the Open Claims cell instead of 0. It is `false` when the
+chapter has no gate report on record.
 
 `reportPath` is always book-root-relative (for example `_nonfiction-studio/gate/<slug>.<timestamp>.json`),
 never an absolute filesystem path, and is `null` when the chapter has no gate report on record.

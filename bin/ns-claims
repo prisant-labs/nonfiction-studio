@@ -14,6 +14,7 @@ import { findBookRoot, BibleError, chaptersDirNameOf } from '../hooks/lib/bible.
 import { proseOf, proseBoundaryAt } from '../hooks/lib/prose.mjs';
 import { parseEvidenceLog } from '../hooks/lib/ledger.mjs';
 import { makeReport, addFinding, finalize } from '../hooks/lib/report.mjs';
+import { decisionEntriesAt } from '../hooks/lib/status-engine.mjs';
 import {
   scanChapter, computeCoverage,
   scanQuoteAnchors, computeQuoteFindings, buildResearchPacket
@@ -198,7 +199,8 @@ if (chapterPaths.length === 0) {
     totalMarkers: 0,
     resolvedCount: 0,
     coveragePct: 100.0,
-    chapters: []
+    chapters: [],
+    unmarkedChapters: []
   });
   if (opts.json) {
     process.stdout.write(JSON.stringify(fullJson, null, 2) + '\n');
@@ -223,12 +225,15 @@ for (const absPath of chapterPaths) {
   // Bible-relative path with forward slashes for portability across OS
   const relFile = relative(root, absPath).replace(/\\/g, '/');
   const markers = scanChapter(text, ledgerEntries);
-  scannedChapters.push({ file: relFile, markers });
+  scannedChapters.push({ file: relFile, markers, text });
 }
 
 // ---- coverage computation ------------------------------------------------------
 
-const coverage = computeCoverage(scannedChapters, ledgerEntries);
+// ADR-0020 (zero-marker guard): an author attestation in context/decisions.md clears a
+// chapter's unmarked finding. Unmarked chapters are reported but do not change the exit code,
+// which stays tied to open markers.
+const coverage = computeCoverage(scannedChapters, ledgerEntries, { decisions: decisionEntriesAt(root) });
 
 // ---- report building -----------------------------------------------------------
 
@@ -247,11 +252,21 @@ for (const finding of coverage.findings) {
 const { exitCode, json } = finalize(report);
 
 // Extend the gate-report shape with claims-specific fields per S-07 stdout description
+// ADR-0020 (zero-marker guard): with no open claims but an unmarked chapter, the report says
+// warn rather than pass. The exit code stays 0, as a gate warn does: nfs-fact-check runs this
+// CLI on exactly the chapters that need checking and must not halt on them.
+if (json.verdict === 'pass' && coverage.unmarkedChapters.length > 0) {
+  json.verdict = 'warn';
+  json.detail = coverage.unmarkedChapters.length + ' chapter(s) unmarked; claim_coverage.unmarked';
+  json.evidence = coverage.unmarkedChapters.slice();
+}
+
 const fullJson = Object.assign({}, json, {
   totalMarkers: coverage.totalMarkers,
   resolvedCount: coverage.resolvedCount,
   coveragePct: coverage.coveragePct,
-  chapters: coverage.chapters
+  chapters: coverage.chapters,
+  unmarkedChapters: coverage.unmarkedChapters
 });
 
 // ---- emit ----------------------------------------------------------------------
@@ -261,9 +276,11 @@ if (opts.json) {
 } else {
   const prefix = '[claim_coverage]';
   const pctStr = coverage.coveragePct.toFixed(1) + '%';
+  const unmarkedCount = coverage.unmarkedChapters.length;
   if (coverage.openClaims === 0) {
+    // ADR-0020 (zero-marker guard): never call a book "pass" while a chapter is unmarked.
     process.stdout.write(
-      prefix + ' pass: coverage ' + pctStr +
+      prefix + (unmarkedCount === 0 ? ' pass:' : '') + ' coverage ' + pctStr +
       ' (' + coverage.resolvedCount + '/' + coverage.totalMarkers + ' markers resolved)\n'
     );
   } else {
@@ -273,6 +290,14 @@ if (opts.json) {
     for (const f of coverage.findings) {
       const loc = f.file + ':' + f.line;
       process.stdout.write('  ' + loc + ' [' + f.type + ']: ' + f.detail + '\n');
+    }
+  }
+  if (unmarkedCount > 0) {
+    process.stdout.write(
+      prefix + ' ' + unmarkedCount + ' chapter(s) unmarked: ' + coverage.unmarkedChapters.join(', ') + '\n'
+    );
+    for (const f of coverage.unmarkedFindings) {
+      process.stdout.write('  ' + f.file + ' [' + f.type + ']: ' + f.detail + '\n');
     }
   }
 }

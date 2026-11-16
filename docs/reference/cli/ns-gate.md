@@ -98,7 +98,7 @@ Invariant 2, `hooks/lib/gate-engine.mjs:895`).
 
 | Check | Default mode | Blocks when mode=`block` and top-level `gate.mode` is not `warn`? |
 |---|---|---|
-| `claim_coverage` | block | Yes |
+| `claim_coverage` | block | Yes, for open markers. An unmarked chapter (no markers, at least 200 words of prose) always warns and never blocks, per [ADR-0020 (zero-marker guard)](../../adr/ADR-0020-zero-marker-guard.md) |
 | `quote_fidelity` | warn | No (structurally coerced to warn; block is unreachable until the quote normalization and adjudication policy ships, roadmap row 1.5) |
 | `prompt_scrub` | block | Yes |
 | `stylometry` | warn | No (warn only) |
