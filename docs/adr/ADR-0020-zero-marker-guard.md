@@ -1,11 +1,11 @@
 # ADR-0020: A Chapter With No Claim Markers Is Unmeasured, Not Covered
 
-**TL;DR:** Today a chapter with no claim markers scores 100 percent claim coverage and passes the gate, even in block mode. A chapter of unchecked, partly false prose therefore reads as fully covered. This record proposes that such a chapter, above a small word floor, gets a `warn` finding named `claim_coverage.unmarked`. The finding never blocks, in any mode. An author can clear it for a chapter that truly makes no factual claims by recording a dated attestation in `context/decisions.md`. Every surface stops calling the chapter "100%" and calls it "unmarked" instead.
+**TL;DR:** Before this record, a chapter with no claim markers scored 100 percent claim coverage and passed the gate, even in block mode. A chapter of unchecked, partly false prose therefore read as fully covered. This record decides that such a chapter, above a small word floor, gets a `warn` finding named `claim_coverage.unmarked`. The finding never blocks, in any mode. An author can clear it for a chapter that truly makes no factual claims by recording a dated attestation in `context/decisions.md`. No text an author reads calls the chapter "100%"; it says "unmarked" instead. The JSON keeps `coveragePct` at 100.0 for compatibility and adds an `unmarked` flag beside it.
 
 - Status: Accepted, Option A. The maintainer chose Option A on 2026-11-15, and the record ships with its implementation.
 - Date: 2026-11-15
 - Related: [ADR-0013 (wave 1 exit surfaces)](ADR-0013-wave-1-exit-surfaces.md) sets the gate's precedence and coercion rules, which the cap below follows. [ADR-0019 (Stop hook judgment layer)](ADR-0019-stop-hook-judgment-layer.md) rules out a model-judged check on Stop, which is why this guard is deterministic. [ADR-0016 (adopting an existing book)](ADR-0016-adopting-an-existing-book.md) owns the prose boundary that the word floor reuses. The claim-marker grammar is in [docs/formats/claim-markers.md](../formats/claim-markers.md).
-- Decision: A ZERO-MARKER CHAPTER ABOVE THE FLOOR WARNS AND NEVER BLOCKS; AN AUTHOR ATTESTATION CLEARS IT; THE JSON CONTRACT GROWS ADDITIVELY; NO SURFACE CALLS IT 100 PERCENT.
+- Decision: A ZERO-MARKER CHAPTER ABOVE THE FLOOR WARNS AND NEVER BLOCKS; AN AUTHOR ATTESTATION CLEARS IT; THE JSON CONTRACT GROWS ADDITIVELY; NO AUTHOR-FACING TEXT CALLS IT 100 PERCENT.
 
 ---
 
@@ -31,7 +31,7 @@ The claims engine counts a chapter as unmarked when it has zero claim markers of
 |---|---|---|
 | `ns-gate`, warn mode | `claim_coverage` pass: "claim coverage 100%; no open markers" | `claim_coverage` warn: "1 chapter(s) unmarked: no claim markers in 300 words of prose" |
 | `ns-gate`, block mode | pass, as above | warn, the same. The finding is capped at `warn`, so it cannot block |
-| `ns-claims` | "pass: coverage 100.0% (10/10 markers resolved)" | The same line without "pass", plus "1 chapter(s) unmarked: chapters/03-weak-ties.md". The JSON verdict is `warn`; the exit code is unchanged |
+| `ns-claims` | "pass: coverage 100.0% (10/10 markers resolved)" | The same line without "pass", plus "1 chapter(s) unmarked: chapters/03-weak-ties.md". For the unmarked chapter alone, "no claim markers found; coverage not measured". The JSON verdict is `warn`; the exit code is unchanged |
 | `ns-status` board, Open Claims column | 0 | "unmarked" |
 
 Option A is recommended because the gate is the place an author looks to learn whether a chapter was checked. A warning there is the smallest change that makes green honest. It never blocks, so a memoir passage or an opinion chapter costs the author one warning, or one attestation, and never a stopped turn.

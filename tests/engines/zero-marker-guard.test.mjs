@@ -246,6 +246,12 @@ test('ADR-0020: ns-claims reports the unmarked chapter, keeps its exit code, and
     const text = run(['--all']);
     assert.match(text.stdout, /1 chapter\(s\) unmarked: chapters\/03-weak-ties\.md/);
     assert.doesNotMatch(text.stdout, /\] pass:/, 'never "pass" while a chapter is unmarked');
+
+    // A single unmarked chapter has no markers to take a percentage of: no "100" anywhere.
+    const one = run(['--chapter=' + SLUG]);
+    assert.equal(one.status, 0, 'stderr: ' + one.stderr);
+    assert.match(one.stdout, /no claim markers found; coverage not measured/);
+    assert.doesNotMatch(one.stdout, /100/, 'a single unmarked chapter is never reported as 100 percent');
   });
 });
 

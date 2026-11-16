@@ -72,7 +72,7 @@ the default report is unchanged.
 
 | Exit code | Meaning |
 |---|---|
-| 0 | Pass - all claim markers resolved; coverage is 100% (default mode); or all quote anchors match `verbatim` exactly (`--quotes`); or packets were written successfully (`--packets`) |
+| 0 | No open claim markers (default mode), including a run that reports unmarked chapters, whose JSON verdict is `warn`; or all quote anchors match `verbatim` exactly (`--quotes`); or packets were written successfully (`--packets`) |
 | 1 | One or more unresolved claim markers (default mode); or one or more quote-fidelity findings (`--quotes`) |
 | 2 | Argument error, missing evidence log, or missing chapters directory |
 
@@ -101,7 +101,9 @@ Its `coveragePct` still computes 100.0, so read its `unmarked` field first. Each
 entry carries `unmarked` (boolean) and `proseWords` (integer, the whitespace-separated words
 in the chapter's prose). The top-level `unmarkedChapters` lists their paths, sorted by code
 unit. When no marker is open but a chapter is unmarked, the JSON `verdict` is `warn` and the
-summary line drops the word `pass`:
+summary line drops the word `pass`. When the scanned chapters carry no markers at all, the
+summary prints no percentage: `[claim_coverage] no claim markers found; coverage not measured`.
+A whole-book run with other, marked chapters looks like this:
 
 ```
 [claim_coverage] coverage 100.0% (10/10 markers resolved)

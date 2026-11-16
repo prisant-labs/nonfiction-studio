@@ -277,7 +277,11 @@ if (opts.json) {
   const prefix = '[claim_coverage]';
   const pctStr = coverage.coveragePct.toFixed(1) + '%';
   const unmarkedCount = coverage.unmarkedChapters.length;
-  if (coverage.openClaims === 0) {
+  if (coverage.totalMarkers === 0 && unmarkedCount > 0) {
+    // ADR-0020 (zero-marker guard): with no markers at all there is nothing to take a
+    // percentage of, so print none rather than the arithmetic's 100.0%.
+    process.stdout.write(prefix + ' no claim markers found; coverage not measured\n');
+  } else if (coverage.openClaims === 0) {
     // ADR-0020 (zero-marker guard): never call a book "pass" while a chapter is unmarked.
     process.stdout.write(
       prefix + (unmarkedCount === 0 ? ' pass:' : '') + ' coverage ' + pctStr +

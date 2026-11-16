@@ -207,7 +207,7 @@ Note: the per-chapter `open_claim_count` in `<state-dir>/progress.json` is maint
 
 Suggest next steps based on the counts:
 - Unresolved or source-unverifiable entries remain: run `/nonfiction-studio:nfs-research <slug>` to add source material, or paste source content and re-run `/nonfiction-studio:nfs-fact-check <slug>`.
-- Coverage is 100% and no open claims remain: run the quality gate: `/nonfiction-studio:nfs-check-chapter <slug>`.
+- Coverage is 100%, no open claims remain, and the chapter is not unmarked: run the quality gate: `/nonfiction-studio:nfs-check-chapter <slug>`.
 
 On the chat surface, state that the Stop hook gate does not fire automatically: "On chat the Stop hook gate does not fire automatically. Run `/nonfiction-studio:nfs-check-chapter <slug>` explicitly when all claims are resolved."
 
