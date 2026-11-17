@@ -7,8 +7,8 @@ when_to_use: "Use when the author finishes drafting and wants claims verified, n
 chain:
   - fact-checker
 metadata:
-  version: "0.2.0"
-  updated: 2026-10-04
+  version: "0.3.0"
+  updated: 2026-11-15
 ---
 
 This skill is the verification front door. It resolves the chapter argument, runs an engine-backed marker inventory via `bin/ns-claims`, states the web gate status, delegates the authoritative verification pass to the `fact-checker` agent, confirms agent writes via Read checks, and formats the three counts from the agent's per-chapter report. The `fact-checker` agent is the sole writer of chapter markers and EV status transitions; the skill orchestrates, confirms, and reports. The skill writes no `<state-dir>/progress.json` - the open-claims total is maintained by the PostToolBatch hook per D-06 (single-writer state discipline).
@@ -117,12 +117,19 @@ Parse the JSON output for the pre-count fields:
 - `totalMarkers`: total claim markers (`[claim: EV-nnnn]` and `[UNVERIFIED]`) in the chapter
 - `resolvedCount`: markers whose referenced EV entry is at `verified` or `interpretation`
 - `coveragePct`: current coverage percentage
+- `chapters[0].unmarked`: `true` when the chapter has no claim markers and at least 200 words of prose, per [ADR-0020 (zero-marker guard)](../../docs/adr/ADR-0020-zero-marker-guard.md). Its `coveragePct` then reads 100 but measures nothing.
 
 Present this pre-count to the author before delegation:
 
 > Chapter `<slug>` pre-count: `<totalMarkers>` claim markers, `<resolvedCount>` resolved, coverage `<coveragePct>%`.
 
-If `bin/ns-claims` exits with a non-zero code (evidence log missing, chapter unreadable, or BibleError), report the exact error message from stderr and halt. Do not proceed to delegation with a failed or incomplete inventory.
+When `unmarked` is `true`, present this instead, and do not quote a coverage percentage:
+
+> Chapter `<slug>` pre-count: no claim markers in `<proseWords>` words of prose. The chapter is unmarked, so coverage has not been measured.
+
+Tell the `fact-checker` agent in Step 4 that the chapter is unmarked, so its pass starts by finding the factual assertions. If the author says the chapter makes no factual claims, point them to the claim-free attestation in `docs/formats/decisions.md` rather than writing it for them: the attestation must come from the author.
+
+If `bin/ns-claims` exits with code 2 (evidence log missing, chapter unreadable, or BibleError), report the exact error message from stderr and halt. Exit code 1 is not an error: it means the chapter has open claims, which is what this skill exists to check, so parse the JSON and continue. Do not proceed to delegation with a failed or incomplete inventory.
 
 The ns-claims count is the deterministic pre-count the skill presents. The `fact-checker` agent performs the authoritative five-step verification pass per its contract; the agent's assessment is the operative one.
 
@@ -200,7 +207,7 @@ Note: the per-chapter `open_claim_count` in `<state-dir>/progress.json` is maint
 
 Suggest next steps based on the counts:
 - Unresolved or source-unverifiable entries remain: run `/nonfiction-studio:nfs-research <slug>` to add source material, or paste source content and re-run `/nonfiction-studio:nfs-fact-check <slug>`.
-- Coverage is 100% and no open claims remain: run the quality gate: `/nonfiction-studio:nfs-check-chapter <slug>`.
+- Coverage is 100%, no open claims remain, and the chapter is not unmarked: run the quality gate: `/nonfiction-studio:nfs-check-chapter <slug>`.
 
 On the chat surface, state that the Stop hook gate does not fire automatically: "On chat the Stop hook gate does not fire automatically. Run `/nonfiction-studio:nfs-check-chapter <slug>` explicitly when all claims are resolved."
 
@@ -212,7 +219,7 @@ On the chat surface, state that the Stop hook gate does not fire automatically: 
 
 **Chapter argument not matched.** Step 1 halts with the supplied value, the registry file name (`structure/chapter-list.md`), and the list of valid slugs when the registry is present but the argument matches no row. No state is written.
 
-**ns-claims failure.** If `bin/ns-claims` exits non-zero (evidence log absent, chapter unreadable, BibleError), the exact stderr message is reported and the skill halts at Step 3. Do not proceed to agent delegation with a failed inventory. The most common cause is a missing `research/evidence-log.md`; run `/nonfiction-studio:nfs-research` to create it.
+**ns-claims failure.** If `bin/ns-claims` exits with code 2 (evidence log absent, chapter unreadable, BibleError), the exact stderr message is reported and the skill halts at Step 3. Do not proceed to agent delegation with a failed inventory. The most common cause is a missing `research/evidence-log.md`; run `/nonfiction-studio:nfs-research` to create it.
 
 **Agent incomplete or report missing.** If the Step 5 Read checks find the chapter file or report absent after the agent ran, report the gap and offer to re-run from Step 4. The re-run is safe: the agent's cache marks known-good entries and skips their re-verification; the agent's status-field writes and marker operations are idempotent against current state.
 

@@ -159,6 +159,20 @@ export function extractGateVerdict(report) {
   return report.verdict;
 }
 
+/**
+ * Whether a parsed per-chapter gate report found the chapter unmarked (ADR-0020, zero-marker
+ * guard): its `claim_coverage` entry carries the `claim_coverage.unmarked` signal token in
+ * `detail`. Read from the gate report, never recomputed here, per the gate-source invariant.
+ *
+ * @param {object|null} report
+ * @returns {boolean}
+ */
+export function extractUnmarked(report) {
+  if (!report || !Array.isArray(report.checks)) return false;
+  const entry = report.checks.find((c) => c && c.check === 'claim_coverage');
+  return !!entry && typeof entry.detail === 'string' && entry.detail.includes('claim_coverage.unmarked');
+}
+
 // Matches the live hooks/lib/gate-engine.mjs pre-ADR-0012 detail-string shape ("drift score
 // 10.86 within threshold 25" / "... exceeds threshold 25; stylometry.drift-threshold") and the
 // underscore-joined shape docs/formats/gate-report.md's own worked example uses ("drift_score 38
@@ -300,7 +314,8 @@ export function isHighlighted(row) {
  * @returns {{
  *   chapters: Array<{slug: string, number: string|null, title: string, status: string|null,
  *                     wordCount: number, openClaimCount: number, drift: number|null,
- *                     threshold: number|null, gate: string|null, reportPath: string|null,
+ *                     threshold: number|null, gate: string|null, unmarked: boolean,
+ *                     reportPath: string|null,
  *                     highlighted: boolean}>,
  *   totals: {wordCount: number, openClaimCount: number, chaptersFinal: number,
  *            chaptersTotal: number|null, chaptersRemaining: number|null},
@@ -337,6 +352,7 @@ export function computeStatusBoard(root, progress, config) {
       drift: extractDriftScore(report),
       threshold: extractDriftThreshold(report),
       gate: extractGateVerdict(report),
+      unmarked: extractUnmarked(report),
       reportPath,
     };
     row.highlighted = isHighlighted(row);
@@ -392,9 +408,11 @@ export function renderBoardMarkdown(board) {
     const drift = typeof row.drift === 'number' ? String(row.drift) : '-';
     const threshold = typeof row.threshold === 'number' ? String(row.threshold) : '-';
     const gate = row.gate || '-';
+    // ADR-0020 (zero-marker guard): a chapter with no markers is unmeasured, not "0 open".
+    const claims = row.unmarked && row.openClaimCount === 0 ? 'unmarked' : String(row.openClaimCount);
     lines.push(
       '| ' + numCell + ' | ' + row.title + ' | ' + (row.status || '-') + ' | ' + row.wordCount +
-      ' | ' + drift + ' | ' + threshold + ' | ' + row.openClaimCount + ' | ' + gate + ' |'
+      ' | ' + drift + ' | ' + threshold + ' | ' + claims + ' | ' + gate + ' |'
     );
   }
 
@@ -488,6 +506,25 @@ export function parseDecisionsLog(text) {
   }
   if (current) entries.push(current);
   return entries;
+}
+
+/**
+ * Reads and parses the book's context/decisions.md. Fails open: a missing or unreadable file
+ * yields zero entries, which every reader treats as "no attestation exists". Used by the
+ * claim-coverage callers (ADR-0020, zero-marker guard); hooks/post-tool-batch.mjs keeps its
+ * own read because it needs to tell a missing log apart in its notices.
+ *
+ * @param {string} root - absolute book root
+ * @returns {ReturnType<typeof parseDecisionsLog>}
+ */
+export function decisionEntriesAt(root) {
+  try {
+    const path = join(root, 'context', 'decisions.md');
+    if (!existsSync(path)) return [];
+    return parseDecisionsLog(readFileSync(path, 'utf8'));
+  } catch {
+    return [];
+  }
 }
 
 /**

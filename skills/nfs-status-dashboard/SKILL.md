@@ -5,8 +5,8 @@ argument-hint: ""
 description: "Fronts the read-only bin/ns-status engine in a single Bash call: renders the per-chapter status board (status, word count, open claims, drift statistic, gate verdict) and whole-book totals directly from its JSON output, marking each row the CLI itself flags as highlighted (a drift statistic above that same row's own calibrated threshold, or a block gate verdict); writes nothing; routes to nfs-new-book when no book root or progress.json is found, and to nfs-doctor on any other engine error. Use when the author asks 'where am I on the book,' wants to 'check my progress,' or needs a quick status check before starting a session."
 when_to_use: "Use when the author asks how their book is going, or wants a project overview before starting a session. Do not invoke to run the quality gate (use nfs-check-chapter), diagnose project structure problems (use nfs-doctor), start a new project (use nfs-new-book), or for unrelated queries."
 metadata:
-  version: "0.1.2"
-  updated: 2026-10-04
+  version: "0.2.0"
+  updated: 2026-11-15
 ---
 
 This skill is the read-only project status dashboard. It fronts `bin/ns-status` in a single Bash call, parses its JSON output, and renders the per-chapter board and whole-book totals directly from that output. The skill performs no arithmetic and parses no number out of prose: every status value, word count, open-claim count, drift statistic, gate verdict, threshold value, and highlight decision in the rendered table is read directly from a field `bin/ns-status` has already computed. The skill writes nothing to any file or state-folder path.
@@ -84,7 +84,7 @@ Parse stdout as the board JSON. Build a Markdown table with columns `#`, `Title`
 - **Words** - the entry's `wordCount` field.
 - **Drift** - the entry's `drift` field; render `-` when it is `null`.
 - **Threshold** - the entry's `threshold` field (that SAME chapter's own newest gate report resolved this from its calibration ladder; ADR-0012, voice verdict scope); render `-` when it is `null`.
-- **Open Claims** - the entry's `openClaimCount` field.
+- **Open Claims** - the entry's `openClaimCount` field, or the word `unmarked` when the entry's `unmarked` field is `true` and `openClaimCount` is 0. An unmarked chapter has no claim markers in its prose, so a 0 there would claim a check that never ran ([ADR-0020 (zero-marker guard)](../../docs/adr/ADR-0020-zero-marker-guard.md)).
 - **Gate** - the entry's `gate` field; render `-` when it is `null`.
 
 Add a totals row from the JSON's `totals` object: Words = `totals.wordCount`, Open Claims = `totals.openClaimCount`, and a "Chapters final" cell reading `totals.chaptersFinal` followed by `of <totals.chaptersTotal> final` when `chaptersTotal` is not `null`, or just `<totals.chaptersFinal> final` when it is. When the JSON's top-level `wholeBookGate` is not `null`, append `(whole-book gate: <wholeBookGate>)` to the totals row.
@@ -96,11 +96,11 @@ If no entry in `chapters` has `highlighted: true`, state "No rows flagged." afte
 **Next actions.** After the table and footer, present a next-actions list:
 
 - For each chapter whose `gate` field is `null` (no gate report on record): suggest `/nonfiction-studio:nfs-check-chapter <slug>`.
-- For each chapter whose `openClaimCount` is greater than 0: suggest `/nonfiction-studio:nfs-fact-check <slug>`.
+- For each chapter whose `openClaimCount` is greater than 0, or whose `unmarked` is `true`: suggest `/nonfiction-studio:nfs-fact-check <slug>`.
 - For each chapter with `highlighted: true` and `gate` equal to `block`: name the chapter and suggest `/nonfiction-studio:nfs-check-chapter <slug>` to inspect the blocking check details, then follow the remediation the gate report prescribes.
 - For each chapter with `highlighted: true` and `gate` not equal to `block`: the highlight reflects a drift statistic `bin/ns-status` has already flagged as above that same chapter's own report threshold. Note that a dedicated revision pass (`revise-pass`) is a Phase 2 skill and is not available in v1; suggest `/nonfiction-studio:nfs-draft <slug>` to revise the chapter directly, then re-run `/nonfiction-studio:nfs-check-chapter <slug>` to confirm the drift statistic has improved.
 - If any chapter has a non-null `gate` paired with a null `drift`: that chapter's latest gate report ran, but its stylometry check did not. `bin/ns-status` reports this by omission rather than a field of its own (most commonly a baseline captured before `marker_set_version` existed, or under an earlier engine version, which the gate treats as a skipped check rather than a passing one). Name every chapter matching this pairing, state plainly that voice drift is not being checked for it even though the gate otherwise reads `pass`, and suggest `/nonfiction-studio:nfs-capture-voice` to recapture the baseline, then re-run `/nonfiction-studio:nfs-check-chapter <slug>` for each named chapter.
-- If every chapter has a non-null `gate`, no chapter has `openClaimCount` greater than 0, no chapter has `highlighted: true`, and no chapter pairs a non-null `gate` with a null `drift`: state that no immediate action is required and name the next un-started chapter from the `chapters` array (the first entry whose `status` is `empty`, `outlined`, or `drafting`).
+- If every chapter has a non-null `gate`, no chapter has `openClaimCount` greater than 0, no chapter has `unmarked: true`, no chapter has `highlighted: true`, and no chapter pairs a non-null `gate` with a null `drift`: state that no immediate action is required and name the next un-started chapter from the `chapters` array (the first entry whose `status` is `empty`, `outlined`, or `drafting`).
 
 ### Exit 2 - error
 

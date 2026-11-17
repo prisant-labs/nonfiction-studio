@@ -32,6 +32,7 @@ import { computeCoverage, scanChapter, scanQuoteAnchors, computeQuoteFindings } 
 import { measureBook, measureChapter, countWords, computeDrift } from './stylometry-engine.mjs';
 import { scrub } from './scrub-engine.mjs';
 import { parseEvidenceLog } from './ledger.mjs';
+import { decisionEntriesAt } from './status-engine.mjs';
 // [TSK-029b (state-coherence gate check) 2026-07-18 per OQ-13 (gate coherence check) decision:
 //  reuses the exported checkWordCountCoherence from doctor-engine.mjs; one implementation,
 //  two callers (runChecks and the gate). No word-count comparison logic is duplicated here.]
@@ -338,6 +339,13 @@ function deriveVerdict(checkConfig, hasFindings) {
   return mode === 'block' ? 'block' : 'warn';
 }
 
+const VERDICT_SEVERITY = { skip: 0, pass: 1, warn: 2, block: 3 };
+
+/** The more severe of two per-check verdicts (block > warn > pass > skip). */
+function moreSevere(a, b) {
+  return VERDICT_SEVERITY[a] >= VERDICT_SEVERITY[b] ? a : b;
+}
+
 /**
  * Main gate orchestrator. Runs the requested checks in-process and returns a
  * gate report matching S-08 section 11 exactly (plus the stylometry entry's
@@ -426,27 +434,56 @@ export function runGate(root, opts = {}) {
           markers: scanChapter(c.text, ledgerEntries),
         }));
 
-        const coverage = computeCoverage(scanned, ledgerEntries);
+        const coverage = computeCoverage(
+          chapters.map((c, i) => Object.assign({ text: c.text }, scanned[i])),
+          ledgerEntries,
+          { decisions: decisionEntriesAt(root) }
+        );
         const hasFindings = coverage.openClaims > 0;
-        const verdict = deriveVerdict(ccConfig, hasFindings);
+        const unmarked = coverage.unmarkedFindings;
 
-        let detail, evidence, next;
-        if (!hasFindings) {
-          detail = 'claim coverage 100%; no open markers';
-          evidence = [];
-          next = null;
-        } else {
+        // ADR-0020 (zero-marker guard), the cap: open markers follow the configured mode as
+        // before, but an unmarked chapter is ALWAYS 'warn', in every mode. The cap is
+        // structural - no config key or settings file reaches it - and the entry's verdict is
+        // the more severe of the two.
+        const openVerdict = deriveVerdict(ccConfig, hasFindings);
+        const unmarkedVerdict = unmarked.length > 0 ? 'warn' : 'pass';
+        const verdict = moreSevere(openVerdict, unmarkedVerdict);
+
+        const parts = [];
+        let evidence = [];
+        const nexts = [];
+        if (hasFindings) {
           const firstType = coverage.findings.length > 0
             ? coverage.findings[0].type
             : 'claim_coverage.unresolved';
-          detail = coverage.openClaims + ' open claim(s); ' + firstType;
+          parts.push(coverage.openClaims + ' open claim(s); ' + firstType);
           evidence = coverage.findings
             .filter(f => f.file && f.line != null)
             .map(f => f.file + '#L' + f.line);
-          next = 'Add a [claim: EV-nnnn] marker or tag the sentence [UNVERIFIED] to resolve each open claim.';
+          nexts.push('Add a [claim: EV-nnnn] marker or tag the sentence [UNVERIFIED] to resolve each open claim.');
+        }
+        if (unmarked.length > 0) {
+          const words = coverage.chapters
+            .filter(c => c.unmarked)
+            .reduce((sum, c) => sum + c.proseWords, 0);
+          parts.push(unmarked.length + ' chapter(s) unmarked: no claim markers in ' + words +
+            ' words of prose; claim_coverage.unmarked');
+          evidence = evidence.concat(coverage.unmarkedChapters);
+          nexts.push('Mark each factual sentence in an unmarked chapter with [claim: EV-nnnn] or [UNVERIFIED], ' +
+            'or record an author attestation in context/decisions.md that the chapter makes no factual claims.');
+        }
+        let detail;
+        if (parts.length > 0) {
+          detail = parts.join('; ');
+        } else if (coverage.totalMarkers === 0) {
+          // No markers anywhere, and every chapter is under the word floor or attested.
+          detail = 'no claim markers to resolve; no unmarked chapters';
+        } else {
+          detail = 'claim coverage 100%; no open markers';
         }
 
-        checkEntries.push(makeEntry(reportName, verdict, detail, evidence, next));
+        checkEntries.push(makeEntry(reportName, verdict, detail, evidence, nexts.length > 0 ? nexts.join(' ') : null));
       } catch (err) {
         checkEntries.push(makeEntry(reportName, 'skip', 'engine error: ' + err.message, [], null));
         hasEngineError = true;

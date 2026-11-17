@@ -44,6 +44,24 @@ Reaching the `final` chapter status - the terminal state on the schema's `status
 
 `hooks/post-tool-batch.mjs` checks this on every relevant write and enforces it in both directions: a chapter set to `final` with no matching entry is reverted before the write ever surfaces to a reader, and a chapter whose file is edited AFTER reaching `final` is demoted regardless of whether a matching entry still exists - editing invalidates the prior attestation, because this grammar carries no content fingerprint to tell "reverted to the exact attested text" apart from "coincidentally identical." Promotion itself is always a human editing `_nonfiction-studio/progress.json` directly; no hook, skill, or CLI in this project ever assigns `final` on a chapter's behalf. Consequently, the attestation entry must be written in a batch that does NOT also write the chapter's own file - a batch that does both is demoted by the edit half before the promotion can stand.
 
+## Claim-free attestation shape
+
+A chapter with no claim markers and at least 200 words of prose is reported as unmarked by the `claim_coverage` check, per [ADR-0020 (zero-marker guard)](../adr/ADR-0020-zero-marker-guard.md). An author clears that warning for a chapter that truly makes no factual claims with an entry meeting all of the following, checked by `hooks/lib/claims-engine.mjs`'s `isAttestedClaimFree`:
+
+- `actor` is exactly `author`, and `decision` and `rationale` are present, as for a promotion attestation.
+- `decision` contains the phrase `no factual claims`, in any case, so that a promotion attestation for the same chapter does not clear the warning by accident.
+- `links` names the chapter's slug, matched the same way as for a promotion attestation.
+
+```markdown
+### 2026-11-15 - no factual claims, chapter 03
+- actor: author
+- decision: Chapter 03 makes no factual claims that need a source.
+- rationale: It is a personal reflection with no figures, quotations or attributions.
+- links: chapters/03-the-signal.md
+```
+
+This attestation does not lapse when the chapter is edited, because the claims engine runs on demand and has no reliable edit signal. The log is append-only and no entry withdraws another, so the attestation stays in force for as long as the chapter has no markers. Adding any claim marker to the chapter takes it out of this rule.
+
 ## Example
 
 A human-final-pass attestation written by the `publish-readiness` skill (Phase 2, not yet shipped):
@@ -70,6 +88,8 @@ An editorial outcome that will be written by the `SubagentStop` hook (Phase 2, n
 
 - `hooks/post-tool-batch.mjs` (shipped): reads and parses this file on every relevant write to decide chapter promotion and automatic demotion; see "Promotion attestation shape" above. The one parser and eligibility predicate it uses live in `hooks/lib/status-engine.mjs` (`parseDecisionsLog`, `validateDecisionEntry`, `isEligibleForFinal`), shared so the hook and the deterministic chapter board cannot drift on what "eligible" means.
 - `SubagentStop` hook (Phase 2, not yet shipped): will append editorial outcome entries when a named agent completes a drafting or editorial turn, once built.
+- `hooks/lib/claims-engine.mjs` (shipped): reads the log through `decisionEntriesAt` in `hooks/lib/status-engine.mjs` to clear the unmarked-chapter warning; see "Claim-free attestation shape" above. `bin/ns-claims` and `bin/ns-gate` both call it.
+
 - `publish-readiness` skill (Phase 2, not yet shipped): appends the human-final-pass attestation entry required by D-10 (compliance layer) before clearing the publish gate; part of the TSK-045 era compliance flow.
 - `disclosure-report` skill (Phase 2, not yet shipped): reads the decision log to include editorial decisions and attestations in the AI disclosure report; part of the TSK-045 era compliance flow.
 - `nfs-interview` flow: the structured author interview that seeds the initial voice profile; any decision entries from this flow are the earliest entries in the log.

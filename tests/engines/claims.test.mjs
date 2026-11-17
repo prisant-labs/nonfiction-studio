@@ -166,10 +166,17 @@ test('claim with status interpretation is counted as resolved', () => {
 
 // ---- Coverage math -----------------------------------------------------------
 
-test('computeCoverage returns 100.0 when there are zero markers', () => {
-  const { coveragePct, openClaims } = computeCoverage([{ file: 'chapters/empty.md', markers: [] }], []);
+// ADR-0020 (zero-marker guard): coveragePct keeps its arithmetic for a zero-marker chapter, and
+// the additive `unmarked` field is what says the chapter was not measured. Without prose text the
+// engine cannot measure words, so it never calls the chapter unmarked.
+test('computeCoverage returns 100.0 when there are zero markers, and flags nothing without prose', () => {
+  const { coveragePct, openClaims, chapters, unmarkedChapters } =
+    computeCoverage([{ file: 'chapters/empty.md', markers: [] }], []);
   assert.equal(coveragePct, 100.0);
   assert.equal(openClaims, 0);
+  assert.equal(chapters[0].unmarked, false);
+  assert.equal(chapters[0].proseWords, null);
+  assert.deepEqual(unmarkedChapters, []);
 });
 
 test('computeCoverage returns 100.0 when all markers are resolved', () => {
