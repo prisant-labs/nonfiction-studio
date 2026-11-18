@@ -2,6 +2,48 @@
 
 Curated, author-facing highlights of each Nonfiction Studio release, newest first: what a release means for someone writing a book with the plugin. For the complete, chronological record of every change, see [CHANGELOG.md](https://github.com/prisant-labs/nonfiction-studio/blob/main/CHANGELOG.md).
 
+## 0.2.2 - 2026-11-17
+
+A fix release about honest reporting. A chapter with no claim markers no longer scores 100 percent, and the documentation now says what the quality gate does and does not check.
+
+### What this means for you
+
+- **A chapter with no claim markers is reported as unmarked.** Before this release, a chapter of factual prose with no `[claim: ...]`, `[UNVERIFIED]` or `[SOURCE-UNVERIFIABLE]` markers passed claim coverage at 100 percent, even in block mode. Now a chapter with no markers and at least 200 words of prose gets an `unmarked` warning from the gate, `ns-claims` and the status board. The warning never blocks, in any gate mode. Open markers still block as before.
+- **You can clear the warning for a chapter that makes no factual claims.** Add an entry to `context/decisions.md` with `actor: author`, a decision that says the chapter makes "no factual claims", and the chapter named in `links`. The [decisions format page](https://github.com/prisant-labs/nonfiction-studio/blob/v0.2.2/docs/formats/decisions.md) shows the shape.
+- **`nfs-fact-check` works on a chapter with open claims.** Its instructions told Claude to halt whenever `ns-claims` exited non-zero, and `ns-claims` exits 1 whenever a chapter has open claims, which is exactly what a fact-check is for. It now halts only on an operational error.
+- **The README says what the gate does not check.** A new section names four limits: claims nobody marked, whether a source actually supports its claim, the default `warn` gate mode, and who wrote an attestation. The check table is corrected, and the README and privacy page now say that Anthropic processes the text Claude reads.
+
+To update an existing install, run `/plugin update nonfiction-studio@prisant-labs`. No book needs a migration step. Scripts that read `ns-claims --json` see new fields (`unmarked`, `proseWords` and `unmarkedChapters`) and can ignore them; the exit code is unchanged.
+
+### Install
+
+```
+/plugin marketplace add prisant-labs/agent-plugins
+/plugin install nonfiction-studio@prisant-labs
+```
+
+The marketplace entry pins to `v0.2.2`.
+
+### Surface support
+
+| Surface | Tested depth |
+|---|---|
+| Claude Code CLI | Full: exercised end to end by keyless Tier A CI on Ubuntu and Windows, plus a live Tier B run on the release candidate |
+| Cowork | Not installable as shipped. Claude's [plugin platform-support page](https://claude.com/docs/plugins/platform-support) says Cowork refuses a plugin that keeps executables in a top-level `bin/` folder, and this plugin keeps its CLIs there. No upload has confirmed it yet |
+| claude.ai chat | Not installable as shipped, for the same `bin/` reason |
+
+### Known limitations
+
+- The unmarked check only notices a chapter with no markers at all. A chapter with one marker and many unmarked claims still reports its coverage over the markers it has. The 200-word floor is a fixed, uncalibrated constant. See [ADR-0020](https://github.com/prisant-labs/nonfiction-studio/blob/v0.2.2/docs/adr/ADR-0020-zero-marker-guard.md) (zero-marker guard).
+- An adopted book still cannot adopt its claims. Until it can, claim coverage, and with it the unmarked check, skips in an adopted book.
+- Cowork and chat cannot install the plugin as shipped, as the table says. Whether to move the CLIs out of the top-level `bin/` folder is an open decision, tracked with [ADR-0002](https://github.com/prisant-labs/nonfiction-studio/blob/v0.2.2/docs/adr/ADR-0002-cowork-hook-execution.md) (Cowork hook execution).
+- Tier B (maintainer-run, model-integration CI) ran live on this release's candidate commit on 2026-11-17, from the maintainer's own Claude Code login rather than a GitHub runner, under the isolated harness of [ADR-0018](https://github.com/prisant-labs/nonfiction-studio/blob/v0.2.2/docs/adr/ADR-0018-tier-b-eval-harness-contract.md) (Tier B eval harness contract). The integration flow passed. The eval dispatch-accuracy step scored 15 of 18 chain cases (83%) against its 70% threshold, down from 18 of 18 for 0.2.1. In two of the three misses the model named the skill instead of the agent the skill hands off to, and in the third it named `drafting-partner` where `line-editor` was expected. No skill description changed in this release, so the drop is model variance on a small sample rather than a routing regression, but one run cannot prove that. [Issue #5](https://github.com/prisant-labs/nonfiction-studio/issues/5) stays open until a run dispatched on GitHub confirms the harness.
+- This is a pre-1.0 release: breaking changes to a book's own schema are possible in a future version. See [MIGRATION.md](https://github.com/prisant-labs/nonfiction-studio/blob/v0.2.2/MIGRATION.md) for what counts as a breaking change and how compatibility is handled.
+
+### Known regressions
+
+None.
+
 ## 0.2.1 - 2026-10-16
 
 A fix release. The plugin's Stop hook no longer sends Claude back to work at the end of every turn. Update now if you run any earlier version.
