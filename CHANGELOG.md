@@ -6,6 +6,20 @@ This file is written from the commit history of the branch it ships from, not fr
 
 ## Unreleased
 
+### Fixed
+
+- **`ns-gate --chapter` naming a chapter that does not exist is an argument error.** It exited 0
+  and wrote a gate report whose verdict was `pass`, even in block mode, because every check saw
+  no chapter to scan. It now exits 2 with `ns-gate: chapter not found: <path>` and writes no
+  report, as `ns-claims`, `ns-stylometry`, `ns-scrub` and `ns-overlap` already did. A whole-book
+  run with no chapters is unchanged, and the Stop hook never passes `--chapter`. Found by the
+  2026-11-17 audit.
+- **The ns-gate reference no longer describes a Stop-hook thesis prompt.** One sentence in
+  `docs/reference/cli/ns-gate.md` still said `thesis_alignment` is the Stop hook's prompt, which
+  ADR-0019 (Stop hook judgment layer) removed in 0.2.1. It now says the key is reserved.
+- **`scripts/ATTRIBUTION.md` lists `lib/claude-isolation.mjs` as repository-authored.** The
+  shared Tier B isolation helper was missing from the files a vendor re-sync must keep.
+
 ## [0.2.2] - 2026-11-17
 
 ### Changed

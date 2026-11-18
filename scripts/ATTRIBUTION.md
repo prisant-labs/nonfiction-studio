@@ -69,6 +69,7 @@ those folders is upstream's.
 - `checks/check-state-folder-stanza.mjs`
 - `checks/check-workspace-refs.mjs`
 - `checks/workspace-refs-manifest.json`
+- `lib/claude-isolation.mjs`
 - `lib/credential-mode.mjs`
 - `lib/dispatch-threshold.mjs`
 
