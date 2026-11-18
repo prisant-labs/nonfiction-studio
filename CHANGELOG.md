@@ -6,6 +6,8 @@ This file is written from the commit history of the branch it ships from, not fr
 
 ## Unreleased
 
+## [0.2.2] - 2026-11-17
+
 ### Changed
 
 - **The README and docs describe what the gate actually checks.** Claim coverage counts claim
