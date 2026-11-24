@@ -2,6 +2,45 @@
 
 Curated, author-facing highlights of each Nonfiction Studio release, newest first: what a release means for someone writing a book with the plugin. For the complete, chronological record of every change, see [CHANGELOG.md](https://github.com/prisant-labs/nonfiction-studio/blob/main/CHANGELOG.md).
 
+## 0.2.3 - 2026-11-24
+
+A small fix release. The quality gate no longer reports a pass for a chapter it could not find.
+
+### What this means for you
+
+- **A mistyped chapter name is an error, not a pass.** `ns-gate --chapter=<name>` with a name that matches no chapter file used to report a pass and save a gate report, even in block mode, because there was nothing to check. It now stops with `chapter not found` and the path it looked for, and saves no report. The other tools that take `--chapter` already behaved this way. Gating the whole book is unchanged, and so is the check that runs at the end of each turn.
+- **The `ns-gate` reference page no longer describes a thesis check that does not run.** That check was removed in 0.2.1, and one sentence still described it.
+
+To update an existing install, run `/plugin update nonfiction-studio@prisant-labs`. No book needs a migration step. A script that called `ns-gate --chapter` with a name that does not exist now sees exit code 2, which the reference page already listed as the code for an argument error.
+
+### Install
+
+```
+/plugin marketplace add prisant-labs/agent-plugins
+/plugin install nonfiction-studio@prisant-labs
+```
+
+The marketplace entry pins to `v0.2.3`.
+
+### Surface support
+
+| Surface | Tested depth |
+|---|---|
+| Claude Code CLI | Full: exercised end to end by keyless Tier A CI on Ubuntu and Windows, plus a live Tier B run on the release candidate |
+| Cowork | Not installable as shipped. Claude's [plugin platform-support page](https://claude.com/docs/plugins/platform-support) says Cowork refuses a plugin that keeps executables in a top-level `bin/` folder, and this plugin keeps its CLIs there. No upload has confirmed it yet |
+| claude.ai chat | Not installable as shipped, for the same `bin/` reason |
+
+### Known limitations
+
+- An adopted book still cannot adopt its claims. Until it can, claim coverage, including the unmarked check from 0.2.2, skips in an adopted book.
+- Cowork and chat cannot install the plugin as shipped, as the table says. Whether to move the CLIs out of the top-level `bin/` folder is an open decision, tracked with [ADR-0002](https://github.com/prisant-labs/nonfiction-studio/blob/v0.2.3/docs/adr/ADR-0002-cowork-hook-execution.md) (Cowork hook execution).
+- Tier B (maintainer-run, model-integration CI) ran live on this release's candidate commit on 2026-11-24, from the maintainer's own Claude Code login rather than a GitHub runner, under the isolated harness of [ADR-0018](https://github.com/prisant-labs/nonfiction-studio/blob/v0.2.3/docs/adr/ADR-0018-tier-b-eval-harness-contract.md) (Tier B eval harness contract). The integration flow passed. The eval dispatch-accuracy step ran twice: 14 of 18 chain cases (78%), then 11 of 18 (61%), against a 70% threshold, so the second run was red. This is the same pattern 0.2.2 disclosed. In 8 of the 11 misses, the model named the component that hands off instead of the one it hands off to. In the other 3, all in the `nfs-draft` to `line-editor` cases, it named `fact-checker` instead. Since 0.2.2, no skill or agent description, eval case or eval script has changed; only `bin/ns-gate` and documentation have. Fixing the eval step's grading of that handoff is open work, and [issue #5](https://github.com/prisant-labs/nonfiction-studio/issues/5) stays open.
+- This is a pre-1.0 release: breaking changes to a book's own schema are possible in a future version. See [MIGRATION.md](https://github.com/prisant-labs/nonfiction-studio/blob/v0.2.3/MIGRATION.md) for what counts as a breaking change and how compatibility is handled.
+
+### Known regressions
+
+None.
+
 ## 0.2.2 - 2026-11-17
 
 A fix release about honest reporting. A chapter with no claim markers no longer scores 100 percent, and the documentation now says what the quality gate does and does not check.
