@@ -6,6 +6,8 @@ This file is written from the commit history of the branch it ships from, not fr
 
 ## Unreleased
 
+## [0.2.3] - 2026-11-24
+
 ### Fixed
 
 - **`ns-gate --chapter` naming a chapter that does not exist is an argument error.** It exited 0
