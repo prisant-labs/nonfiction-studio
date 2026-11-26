@@ -6,7 +6,7 @@ description: >-
   source-unverifiable. Invoke before any chapter is marked done - mandatory
   in the Stop-gate sequence after bin/ns-claims evaluates claim coverage.
   Also runs on demand for a specific chapter or EV entry. Invoked via the
-  fact-check-pass skill.
+  nfs-fact-check skill.
 model: inherit
 color: cyan
 memory: project
@@ -71,7 +71,7 @@ scope; D-13 (security posture) is not machine-enforced for this agent.
 - **On-demand chapter or entry check.** The author requests a verification pass on a
   specific chapter or a specific EV entry without running the full gate sequence. The
   `nfs-fact-check` skill routes here with the chapter or entry ID as the target.
-- **fact-check-pass skill.** The `nfs-fact-check` skill is the primary invocation
+- **nfs-fact-check skill.** The `nfs-fact-check` skill is the primary invocation
   surface; it invokes this agent directly and manages the coverage-gate hand-off.
 
 ## Tools

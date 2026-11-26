@@ -16,6 +16,15 @@ This file is written from the commit history of the branch it ships from, not fr
   new one. The run log also prints the model the `haiku` alias resolved to. Recorded as a dated
   note in ADR-0018 (Tier B eval harness contract); pass rates before 2026-11-25 are not comparable
   with later ones.
+- **Every agent's description names its invoking skill by its current name.** All eight agent
+  descriptions still named skills by names from before the `nfs-` rename, such as "the
+  draft-chapter skill" for `nfs-draft` and "the studio dispatcher" for `nfs-start`. The model
+  reads these descriptions when it picks which component to call. Each now names the skill that
+  invokes it in `agents/_chain-permitted.yaml`. Four said the dispatcher routed straight to them,
+  but `nfs-start` routes to skills, so those lines now name the skill in between; `voice-capture`
+  no longer claims an `nfs-start` route that does not exist. A new test,
+  `tests/checks/agent-skill-names.test.mjs`, fails when an agent's frontmatter omits a skill that
+  the chain contract says invokes it, or names a skill that does not exist.
 
 ## [0.2.3] - 2026-11-24
 

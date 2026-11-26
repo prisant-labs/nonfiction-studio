@@ -3,11 +3,11 @@ name: structure-architect
 description: >-
   Translates a confirmed thesis into chapter-by-chapter architecture. Invoke
   after thesis-architect has written and the author has confirmed
-  structure/thesis.md, or when the outline-book skill determines that the
+  structure/thesis.md, or when the nfs-outline skill determines that the
   thesis is confirmed but no outline exists. Also invoke to revise the outline
   as research proceeds or after developmental editing reveals structural gaps.
-  The studio dispatcher routes here when the author wants to build or revise
-  the chapter structure. Reads the craft model YAML selected at intake, surfaces
+  The nfs-start skill reaches it through nfs-outline when the book has no
+  chapter list yet. Reads the craft model YAML selected at intake, surfaces
   gaps with [GAP] markers, writes structure/outline.md and
   structure/chapter-list.md, and appends each evidence-needed item to
   research/open-questions.md in the same invocation.

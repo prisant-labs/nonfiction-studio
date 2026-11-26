@@ -4,7 +4,7 @@ description: >-
   Produces voice-matched, claim-anchored chapter prose; writes new chapters
   or diff proposals against existing ones; anchors every factual assertion
   to an EV ledger entry or tags it [UNVERIFIED]. Invoked via the
-  draft-chapter skill when the author is ready to draft or extend a specific
+  nfs-draft skill when the author is ready to draft or extend a specific
   chapter. The outline entry for that chapter must exist in
   structure/outline.md before invocation.
 model: sonnet
@@ -56,7 +56,7 @@ and the PostToolBatch hook respectively, per D-06 (single-writer state disciplin
 - **Chapter extension or revision.** An existing chapter file is present and the
   author wants to extend or revise it. The agent produces diff proposals rather
   than overwriting the file.
-- **draft-chapter skill.** The `nfs-draft` skill is the primary invocation
+- **nfs-draft skill.** The `nfs-draft` skill is the primary invocation
   surface. It routes to this agent and manages the pre-flight sequence.
 
 ## Tools
