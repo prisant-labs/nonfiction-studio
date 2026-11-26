@@ -87,7 +87,7 @@ The `nfs-doctor` skill reads these findings to offer its `migrate` fix, or to de
 4. **EV grammar** - every evidence entry has required fields with valid enum values
 5. **SRC grammar** - every source entry has required fields with valid enum values
 6. **Orphan claim markers** - chapter `[claim: EV-nnnn]` markers whose EV ID is absent from the ledger
-7. **Orphan SRC references** - EV entries referencing SRC IDs not in sources.md, and vice versa
+7. **Orphan SRC references** - EV entries referencing SRC IDs not in sources.md, and vice versa. The first half shares its computation with `ns-gate`'s `claim_coverage` check, which warns when a scanned chapter cites such an entry ([ADR-0021 (orphan sources in the gate)](../../adr/ADR-0021-orphan-sources-in-the-gate.md))
 8. **Word-count coherence** - chapter file word counts vs progress.json recorded values; names the chapter and both counts on mismatch
 9. **Config coercion notice** - informational report when thesis_alignment is set to block (D-03 coerces it to warn at gate time); never affects exit code
 10. **Snapshot naming** - `_nonfiction-studio/snapshots/` files must match `<slug>.<YYYYMMDDTHHMMSS[mmm]Z>[-N].md`

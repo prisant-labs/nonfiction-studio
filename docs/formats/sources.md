@@ -67,6 +67,7 @@ Each record is a Markdown bullet list directly under its heading. The parser rea
 - A record is never deleted; the `retrieval-status` field is updated if a source is retracted or becomes unresolvable.
 - When `research-librarian` corrects a prior record (for example, fixing a locator or publication date), it appends `changed: true` and a `change-note: <reason>` field to the affected record. `fact-checker` scans for `changed: true` at the start of each session to invalidate its verified-claims cache for all EV entries whose `source` field references the changed SRC ID.
 - `bin/ns-doctor` reports any SRC ID referenced in `research/evidence-log.md` with no corresponding record here, and any record here that no EV entry references (orphaned source).
+- `bin/ns-gate` warns, through `claim_coverage.orphan-source`, when a claim marker in a scanned chapter resolves to an EV entry whose SRC ID has no record here. The warning never blocks, per [ADR-0021 (orphan sources in the gate)](../adr/ADR-0021-orphan-sources-in-the-gate.md).
 
 ## Example
 
@@ -86,7 +87,8 @@ Each record is a Markdown bullet list directly under its heading. The parser rea
 
 ## Consumed by
 
-- `bin/ns-claims` (TSK-025 (ns-claims engine)): cross-references every `source` field in `research/evidence-log.md` against records here; reports missing or orphaned source IDs.
+- `bin/ns-claims` (TSK-025 (ns-claims engine)): does not read this file. It resolves markers against `research/evidence-log.md` alone, so a missing source does not change its coverage figures.
+- `bin/ns-gate`: the `claim_coverage` check reads records here to find SRC IDs that the scanned chapters' EV entries cite but this file does not define (ADR-0021).
 - `bin/ns-doctor` (TSK-028 (ns-doctor engine)): validates field presence, value constraints, and bidirectional EV-SRC linkage; warns on orphaned SRC records.
 - `citation-manager`: the sole source of all citation data for formatted output and bibliography assembly; never retrieves bibliographic data from any other location.
 - `fact-checker`: reads records and scans for `changed: true` flags to invalidate cached verifications before each pass.

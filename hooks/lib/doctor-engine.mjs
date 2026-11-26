@@ -759,6 +759,33 @@ function checkAiUseLogCoverage(root, findings, notices) {
  * @param {string} root - absolute path to the bible root
  * @returns {{ findings: object[], notices: object[] }}
  */
+/**
+ * The SRC IDs that evidence entries cite but the source registry does not define, each with
+ * the IDs of the entries that cite it. One implementation, two callers: the doctor's orphan
+ * SRC check (section 7 of runChecks) and the gate's claim_coverage check, per ADR-0021
+ * (orphan sources in the gate). Both lists sort by plain code-unit comparison, never
+ * localeCompare, so the output is the same on every platform.
+ *
+ * @param {object[]} evEntries  - parsed EV entries ({ id, source })
+ * @param {object[]} srcEntries - parsed SRC records ({ id })
+ * @returns {{ srcId: string, evIds: string[] }[]}
+ */
+export function missingSourceRefs(evEntries, srcEntries) {
+  const defined = new Set(srcEntries.map(e => e.id));
+  const bySrc = new Map();
+  for (const ev of evEntries) {
+    const src = ev.source;
+    if (!src || src === 'none' || !SRC_ID_RE.test(src) || defined.has(src)) continue;
+    if (!bySrc.has(src)) bySrc.set(src, []);
+    bySrc.get(src).push(ev.id);
+  }
+  const byCodeUnit = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  return [...bySrc.keys()].sort(byCodeUnit).map(srcId => ({
+    srcId,
+    evIds: bySrc.get(srcId).slice().sort(byCodeUnit),
+  }));
+}
+
 export function runChecks(root) {
   const SD = stateDirNameOf(root);
   const findings = [];
@@ -1077,22 +1104,20 @@ export function runChecks(root) {
   }
 
   // ---- 7. Orphan SRC references --------------------------------------------
-  // Check: SRC IDs referenced in EV entries but absent from sources.md
-  const srcIdSet = new Set(srcEntries.map(e => e.id));
+  // Check: SRC IDs referenced in EV entries but absent from sources.md. The computation is
+  // shared with the gate's claim_coverage check (ADR-0021, orphan sources in the gate).
   const referencedSrcIds = new Set();
   for (const ev of evEntries) {
     if (ev.source && ev.source !== 'none' && SRC_ID_RE.test(ev.source)) {
       referencedSrcIds.add(ev.source);
     }
   }
-  for (const srcId of referencedSrcIds) {
-    if (!srcIdSet.has(srcId)) {
-      findings.push({
-        type: 'src-ref.orphan-referenced',
-        path: 'research/sources.md',
-        message: 'SRC ID ' + srcId + ' is referenced in research/evidence-log.md but absent from research/sources.md'
-      });
-    }
+  for (const { srcId } of missingSourceRefs(evEntries, srcEntries)) {
+    findings.push({
+      type: 'src-ref.orphan-referenced',
+      path: 'research/sources.md',
+      message: 'SRC ID ' + srcId + ' is referenced in research/evidence-log.md but absent from research/sources.md'
+    });
   }
   // Check: SRC IDs defined in sources.md but referenced by no EV entry
   for (const src of srcEntries) {

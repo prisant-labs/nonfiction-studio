@@ -6,7 +6,24 @@ This file is written from the commit history of the branch it ships from, not fr
 
 ## Unreleased
 
+### Added
+
+- **The gate warns when a claim's source record is missing.** Deleting a record from
+  `research/sources.md` left every claim that cited it passing the gate, and only `ns-doctor`
+  reported it. `claim_coverage` now adds `claim_coverage.orphan-source` when a claim marker in a
+  scanned chapter resolves to a ledger entry whose SRC ID has no record. It names the missing
+  source, the citing entries, and each marker's line. The finding is capped at `warn` in every
+  mode and does not change coverage. The doctor and the gate share one computation,
+  `missingSourceRefs` in `hooks/lib/doctor-engine.mjs`. Recorded in ADR-0021 (orphan sources in
+  the gate); tested in `tests/engines/orphan-source.test.mjs`.
+
 ### Fixed
+
+- **The README says that a verified claim stays verified after a later edit.** "What the gate
+  does not check" now lists rewording the sentence, editing the ledger claim, and moving the
+  marker, and says that an `nfs-fact-check` re-run skips entries it already verified.
+- **`docs/formats/sources.md` no longer says `ns-claims` reports missing source IDs.** `ns-claims`
+  never reads the source registry. The page now says so and names the gate's new check.
 
 - **The Tier B eval prompt names the component that is already running.** A chain eval tests one
   edge, but the prompt asked which component "would be dispatched in this situation", and the
