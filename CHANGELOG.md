@@ -6,6 +6,8 @@ This file is written from the commit history of the branch it ships from, not fr
 
 ## Unreleased
 
+## [0.2.4] - 2026-11-26
+
 ### Added
 
 - **The gate warns when a claim's source record is missing.** Deleting a record from

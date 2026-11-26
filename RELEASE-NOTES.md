@@ -2,6 +2,50 @@
 
 Curated, author-facing highlights of each Nonfiction Studio release, newest first: what a release means for someone writing a book with the plugin. For the complete, chronological record of every change, see [CHANGELOG.md](https://github.com/prisant-labs/nonfiction-studio/blob/main/CHANGELOG.md).
 
+## 0.2.4 - 2026-11-26
+
+A fix release about claims and their sources. The gate now notices a claim whose source record is gone, a corrected source stops reopening its claims at every session, and the README says plainly what a verified claim does not survive.
+
+### What this means for you
+
+- **A claim whose source record was deleted no longer passes silently.** If a source is removed from `research/sources.md` while claims in a chapter still cite it, the quality gate now warns. The warning names the missing source, the evidence entries that cite it, and the line of each claim marker in the chapter. To clear it, restore the source record or have the research librarian register the source again, then run `nfs-fact-check`. The warning never blocks, even in block mode, and it does not change the coverage figure. `ns-doctor` already reported this case; the gate now uses the same check.
+- **A corrected source reopens its claims once.** When the research librarian corrected a source, the fact-checker reset every claim that cited it at the start of every session, so a claim it had just re-verified was reopened the next time. Now the librarian dates each correction, and the fact-checker remembers which correction it checked each claim against. A claim is reopened once per correction. The fact-check report also lists claims it reopened in other chapters, so you know which chapters to check next.
+- **You can ask for a cached claim to be checked again.** The fact-checker skips a claim it has already verified. After you reword a checked claim, run `nfs-fact-check` on its chapter and name the claim's EV ID, and the agent verifies it again.
+- **The README says what a verified claim does not survive.** A claim stays verified after you reword its sentence, edit its ledger entry, or move its marker. "What the gate does not check" now says so, and says how to have the claim checked again.
+- **Agent descriptions name the skills that actually call them.** All eight still used skill names from before the `nfs-` rename. The model reads these descriptions when it picks a component, so the current names should help it pick the right one, though the evals showed no measurable change.
+
+To update an existing install, run `/plugin update nonfiction-studio@prisant-labs`. No book needs a migration step. A book whose source records carry an older, undated `change-note` keeps working: the fact-checker treats that note's text as the correction until the note is replaced.
+
+### Install
+
+```
+/plugin marketplace add prisant-labs/agent-plugins
+/plugin install nonfiction-studio@prisant-labs
+```
+
+The marketplace entry pins to `v0.2.4`.
+
+### Surface support
+
+| Surface | Tested depth |
+|---|---|
+| Claude Code CLI | Full: exercised end to end by keyless Tier A CI on Ubuntu and Windows, plus a live Tier B run on the release candidate |
+| Cowork | Not installable as shipped. Claude's [plugin platform-support page](https://claude.com/docs/plugins/platform-support) says Cowork refuses a plugin that keeps executables in a top-level `bin/` folder, and this plugin keeps its CLIs there. No upload has confirmed it yet |
+| claude.ai chat | Not installable as shipped, for the same `bin/` reason |
+
+### Known limitations
+
+- The fact-checker and research-librarian changes are agent instructions. No live fact-checking run has shown an agent following them, and no deterministic test can, because the cache is the agent's own memory. [ADR-0022](https://github.com/prisant-labs/nonfiction-studio/blob/v0.2.4/docs/adr/ADR-0022-source-correction-lifecycle.md) (source correction lifecycle) records the design.
+- Nothing detects a reworded claim. The gate still trusts a claim's status in the ledger, so a verified claim stays verified after its sentence changes. Naming the EV ID for a re-check is a manual step.
+- An adopted book still cannot adopt its claims. Until it can, claim coverage, including the unmarked and missing-source checks, skips in an adopted book.
+- Cowork and chat cannot install the plugin as shipped, as the table says. Whether to move the CLIs out of the top-level `bin/` folder is an open decision, tracked with [ADR-0002](https://github.com/prisant-labs/nonfiction-studio/blob/v0.2.4/docs/adr/ADR-0002-cowork-hook-execution.md) (Cowork hook execution).
+- Tier B (maintainer-run, model-integration CI) ran live on this release's candidate commit on 2026-11-26, from the maintainer's own Claude Code login rather than a GitHub runner, under the isolated harness of [ADR-0018](https://github.com/prisant-labs/nonfiction-studio/blob/v0.2.4/docs/adr/ADR-0018-tier-b-eval-harness-contract.md) (Tier B eval harness contract). The integration flow passed. The eval dispatch-accuracy step passed 15 of 18 chain cases (83%) on `claude-haiku-5-5`, against a 70% threshold. The eval prompt changed on 2026-11-25 to name the component that is already running, so this figure is not comparable with the 0.2.2 and 0.2.3 runs. Two of the three misses are `nfs-outline` cases, where the model named the other architect agent. The third is an `nfs-draft` to `line-editor` case, where it named `fact-checker`. [Issue #5](https://github.com/prisant-labs/nonfiction-studio/issues/5) stays open.
+- This is a pre-1.0 release: breaking changes to a book's own schema are possible in a future version. See [MIGRATION.md](https://github.com/prisant-labs/nonfiction-studio/blob/v0.2.4/MIGRATION.md) for what counts as a breaking change and how compatibility is handled.
+
+### Known regressions
+
+None.
+
 ## 0.2.3 - 2026-11-24
 
 A small fix release. The quality gate no longer reports a pass for a chapter it could not find.
