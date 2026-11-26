@@ -189,8 +189,8 @@ export function buildPrompt(given, caller) {
     'session. Do not call any tool; answer from the agents and skills you can see.\n' +
     'Running component: "' + caller + '"\n' +
     'Given: ' + given + '\n\n' +
-    'Task: Name the one agent or skill that "' + caller + '" hands off to next in this ' +
-    'situation, not "' + caller + '" itself. Your first line must be exactly ' +
+    'Task: Name the one agent or skill that "' + caller + '" itself dispatches or invokes in ' +
+    'this situation, not "' + caller + '" itself. Your first line must be exactly ' +
     '"DISPATCH: <component-name>", with nothing else on that line. If you add reasoning, put one ' +
     'sentence on the next line. Say nothing before the DISPATCH: line.'
   );

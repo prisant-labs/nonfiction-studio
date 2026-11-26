@@ -283,7 +283,9 @@ test('the prompt names the running component and asks what it hands off to, not 
   const p = buildPrompt('nfs-fact-check is invoked on a chapter', 'nfs-fact-check');
   const withoutGiven = p.replace('nfs-fact-check is invoked on a chapter', '');
   assert.match(withoutGiven, /"nfs-fact-check"/, 'the caller is named outside the given text');
-  assert.match(p, /hands? off to|dispatches next/i);
+  assert.match(p, /"nfs-fact-check" itself dispatches or invokes/i);
+  const task = p.slice(p.indexOf('Task:'), p.indexOf('Your first line'));
+  assert.doesNotMatch(task, /\bnext\b/i, 'the 2026-11-25 A/B showed "next" draws the following workflow step as the answer');
   assert.match(p, /not "nfs-fact-check" itself/i);
   assert.throws(() => buildPrompt('x', ''), /caller/, 'a chain prompt without its caller is a harness bug');
 });
