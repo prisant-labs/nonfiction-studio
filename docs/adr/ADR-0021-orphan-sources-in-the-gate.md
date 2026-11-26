@@ -2,7 +2,7 @@
 
 **TL;DR:** Before this record, deleting a source record from `research/sources.md` left every claim that cited it passing the gate. Only `ns-doctor` reported the missing source, and the Stop hook does not run `ns-doctor`. This record adds a `claim_coverage.orphan-source` finding to the gate. It fires when a claim marker in a scanned chapter resolves to a ledger entry whose `source` names an SRC ID that the registry does not define. The finding is capped at `warn` in every mode, and it does not change the coverage arithmetic. The doctor and the gate compute the missing set with one shared function.
 
-- Status: Accepted. The maintainer approved the change on 2026-11-26, and the record ships with its implementation.
+- Status: Accepted. The maintainer approved building this fix on 2026-11-26. The design choices below were the implementer's judgment and are open to the maintainer's review. The record shipped with its implementation.
 - Date: 2026-11-26
 - Related: [ADR-0013 (wave 1 exit surfaces)](ADR-0013-wave-1-exit-surfaces.md) sets the gate's precedence and coercion rules. [ADR-0020 (zero-marker guard)](ADR-0020-zero-marker-guard.md) set the pattern this record follows: a warn-capped finding inside `claim_coverage`, reported in `detail` and `evidence` without changing the entry's shape. The registry grammar is in [docs/formats/sources.md](../formats/sources.md).
 - Decision: A CLAIM MARKER WHOSE LEDGER ENTRY CITES A MISSING SOURCE MAKES CLAIM_COVERAGE WARN, NEVER BLOCK; THE DOCTOR AND THE GATE SHARE ONE COMPUTATION.

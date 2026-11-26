@@ -148,6 +148,7 @@ Spawn `fact-checker` via the `nfs-fact-check -> fact-checker` chain edge, passin
 - The ns-claims pre-count from Step 3 (total markers, resolved, coverage)
 - The web gate status from the config read
 - Any pasted source content provided by the author
+- Any EV IDs the author asks to re-check, for example after rewording a checked claim; the agent verifies these even when its cache holds them (ADR-0022, source correction lifecycle)
 
 The `fact-checker` agent runs its authoritative five-step pass per its contract:
 1. Session-start cache protocol: reads `research/sources.md` for `changed: true` flags, invalidates the cache entries checked before each source's current `change-note` and resets them to `pending` (ADR-0022, source correction lifecycle), loads the verified-claims cache from `.claude/agent-memory/nonfiction-studio-fact-checker/` per D-09 (learning checker agents)

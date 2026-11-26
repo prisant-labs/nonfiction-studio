@@ -31,7 +31,9 @@ This file is written from the commit history of the branch it ships from, not fr
   first, and the fact-checker's cache records the `change-note` each entry was checked against.
   A flagged source resets only the entries not yet checked against its current note. The
   per-chapter report names the entries reset in other chapters. The `changed: true` flag on an
-  evidence entry, which nothing read, is retired. `nfs-fact-check` moves to 0.4.0. Recorded in
+  evidence entry, which nothing read, is retired. An author can now name an EV ID when invoking
+  `nfs-fact-check`, and the agent re-checks it even when cached, which the README's new advice
+  on reworded claims relies on. `nfs-fact-check` moves to 0.4.0. Recorded in
   ADR-0022 (source correction lifecycle); these are agent instructions, and no live run proves
   them.
 - **The fact-checker reference page no longer says engines read its report.** It said

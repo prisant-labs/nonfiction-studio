@@ -87,8 +87,8 @@ scope; D-13 (security posture) is not machine-enforced for this agent.
   `[UNVERIFIED]` and `[SOURCE-UNVERIFIABLE]` tags in chapter files; writes the
   per-chapter fact-check report to `<state-dir>/fact-check-reports/NN-report.md`; and
   updates the verified-claims cache in
-  `.claude/agent-memory/nonfiction-studio-fact-checker/` with newly confirmed entries
-  and session timestamps.
+  `.claude/agent-memory/nonfiction-studio-fact-checker/` with a record for each
+  resolved entry, holding the session and the source's `change-note` (ADR-0022).
 - **WebSearch** - issues keyword searches during the optional online pass when
   `research.web_enabled` is the boolean `true` in `<state-dir>/config.json`. If the gate
   is not open, WebSearch is not called and the agent reports that the online pass is
@@ -153,7 +153,9 @@ At the start of every session, before examining any chapter:
 3. Load the verified-claims cache from
    `.claude/agent-memory/nonfiction-studio-fact-checker/`. Any EV entry with a valid
    cache hit and no invalidated SRC dependency is skipped for the verification pass;
-   it does not need re-checking. A cache entry is never treated as valid across a
+   it does not need re-checking. The exception is an entry the author or the invoking
+   skill names for a re-check, for example after the author reworded its sentence or
+   its ledger claim: treat it as a cache miss and verify it again. A cache entry is never treated as valid across a
    schema change to `research/evidence-log.md`.
 
 ### Claim marker resolution

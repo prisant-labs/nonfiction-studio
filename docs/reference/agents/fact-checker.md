@@ -90,7 +90,7 @@ at least one claim is being reviewed.
 | `research/evidence-log.md` | After each EV entry is resolved | `status` field updated to `verified`, `unverified`, `interpretation`, or `source-unverifiable`; reset to `pending` on cache invalidation. Claim text is never changed. |
 | `chapters/NN-*.md` | When an entry is unverified or source-unverifiable; when a previously failed entry advances to `verified` on re-check | `[UNVERIFIED]` or `[SOURCE-UNVERIFIABLE]` inserted adjacent to the claim marker when the entry fails; the stale tag is removed when the entry advances to `verified` on re-check. The original `[claim: EV-NNNN]` marker is never removed. |
 | `_nonfiction-studio/fact-check-reports/NN-report.md` | End of every pass | Per-chapter summary of findings and recommended actions |
-| `.claude/agent-memory/nonfiction-studio-fact-checker/` | End of every pass | Cache updated with newly confirmed entries and session timestamps |
+| `.claude/agent-memory/nonfiction-studio-fact-checker/` | End of every pass | One record per resolved entry: EV ID, SRC ID, session, and the source's `change-note` |
 
 ## The adversarial posture
 
@@ -175,7 +175,8 @@ At the start of every session, the agent follows a three-step protocol:
    `pending`. A correction therefore reopens each citing entry once, not at every
    session, per [ADR-0022 (source correction lifecycle)](../../adr/ADR-0022-source-correction-lifecycle.md).
 3. Load the cache. EV entries with a valid cache hit and no invalidated SRC dependency
-   are skipped for the current pass.
+   are skipped for the current pass, except an entry the author or the invoking skill
+   names for a re-check, which is verified again.
 
 Each cache record holds the EV ID, its SRC ID, the session, and the SRC record's
 `change-note` when the entry was checked, or none. The reset in step 2 is book-wide, but

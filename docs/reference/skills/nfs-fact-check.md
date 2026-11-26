@@ -107,7 +107,7 @@ The `fact-checker` agent maintains a project-scoped verified-claims cache at `.c
 
 A cache entry is invalidated when its source SRC record carries `changed: true` in `research/sources.md` and the record's `change-note` differs from the one the cache recorded when the entry was checked. The agent resets those EV entries to `pending`, book-wide, and re-verifies the ones in the target chapter; the report lists the others. Each correction therefore reopens its claims once, per [ADR-0022 (source correction lifecycle)](../../adr/ADR-0022-source-correction-lifecycle.md). A cache entry is never treated as valid across a schema change to `research/evidence-log.md`.
 
-This cache behavior is the mechanism behind re-run idempotency: a second pass on a chapter where most entries are already verified costs little because the agent skips cache hits and only re-checks entries whose SRC records changed or whose status has not yet been resolved.
+This cache behavior is the mechanism behind re-run idempotency: a second pass on a chapter where most entries are already verified costs little because the agent skips cache hits and only re-checks entries whose SRC records changed or whose status has not yet been resolved. To re-check an entry the cache holds, for example after rewording its sentence or its ledger claim, name its EV ID when you invoke the skill; the skill passes it on, and the agent verifies it again.
 
 ## Failure Behavior
 

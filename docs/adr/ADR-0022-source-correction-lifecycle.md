@@ -2,7 +2,7 @@
 
 **TL;DR:** A corrected source record carries `changed: true` and a `change-note`. The `fact-checker` agent resets every ledger entry that cites a flagged source to `pending` at the start of each session. Before this record, nothing ever cleared or aged the flag. So the reset ran again every session, and a claim re-verified after the correction was reopened the next time the agent started. This record makes each correction reopen its claims once. The `change-note` now begins with the date of the correction. The fact-checker's cache records, for each entry it verifies, the `change-note` of its source at that moment. A flagged source resets only the entries whose cache record does not carry its current `change-note`. The flag on an evidence entry, which nothing read, is retired.
 
-- Status: Accepted. The maintainer approved the change on 2026-11-26, and the record ships with the instruction changes.
+- Status: Accepted. The maintainer approved building this fix on 2026-11-26. The design choices below were the implementer's judgment and are open to the maintainer's review. The record ships with the instruction changes.
 - Date: 2026-11-26
 - Related: [ADR-0021 (orphan sources in the gate)](ADR-0021-orphan-sources-in-the-gate.md) covers the other source-registry case, a record that was deleted. [ADR-0004 (plugin agent memory)](ADR-0004-plugin-agent-memory.md) provides the cache directory. The registry grammar is in [docs/formats/sources.md](../formats/sources.md).
 - Decision: A CORRECTION IS IDENTIFIED BY ITS DATED CHANGE-NOTE; THE FACT-CHECKER'S CACHE RECORDS WHICH CORRECTION EACH ENTRY WAS VERIFIED AGAINST; THE EV-LEVEL CHANGED FLAG IS RETIRED.
@@ -44,7 +44,11 @@ A lost cache therefore errs toward checking again, once.
 
 The reset is book-wide, because every claim that cites a corrected source needs a fresh check. The pass that follows re-verifies only the target chapter's markers. So the per-chapter report now lists the entries the session reset outside the target chapter, so the author knows which chapters to fact-check next.
 
-### 4. The evidence-entry flag is retired
+### 4. The author can name an entry to re-check
+
+The README tells an author who rewords a checked claim to have it checked again. Before this record, no instruction allowed that, because a cached entry is always skipped. Now an entry that the author, or the `nfs-fact-check` skill on the author's behalf, names by EV ID is treated as a cache miss and verified again. This does not detect a reworded claim. It gives the author a way to act on one.
+
+### 5. The evidence-entry flag is retired
 
 The librarian no longer sets `changed: true` on evidence entries. The source flag carries the whole signal. An existing book that already has such a field is unaffected, because the parser keeps unknown fields and no engine reads them.
 
@@ -62,6 +66,6 @@ The librarian no longer sets `changed: true` on evidence entries. The source fla
 
 ## Consequences
 
-- The instruction changes ship with this record: `agents/fact-checker.md`, `agents/research-librarian.md`, their reference pages, `docs/formats/sources.md`, the `nfs-fact-check` reference page, and the `nfs-fact-check` skill.
+- The instruction changes ship with this record: `agents/fact-checker.md`, `agents/research-librarian.md`, their reference pages, `docs/formats/sources.md`, the `nfs-fact-check` reference page, the `nfs-fact-check` skill, the README's advice on reworded claims, and the status line of ADR-0021.
 - The `nfs-fact-check` skill's step list changes, which an author can see, so its version moves under ADR-0017 (per-skill versioning).
 - No engine, hook, or CLI changes. The Tier B evals run against the branch, and their results are reported in the pull request.
