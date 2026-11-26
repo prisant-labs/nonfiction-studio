@@ -173,17 +173,26 @@ export function dispatchCallee(covers) {
 // Prompt
 // ---------------------------------------------------------------------------
 
-/** Builds the prompt for one case. It interpolates the case's "given" text and nothing that
- *  names a callee. It asks for an agent or skill only: the 2026-10-13 live run showed that asking
- *  for a "hook handler" draws a script path as the answer. */
-export function buildPrompt(given) {
+/** Builds the prompt for one case of a chain edge `caller -> callee`. It interpolates the case's
+ *  "given" text and the edge's caller, and nothing that names the callee. It asks for an agent or
+ *  skill only: the 2026-10-13 live run showed that asking for a "hook handler" draws a script
+ *  path as the answer. It names the caller and asks what the caller hands off to: the 2026-11-17
+ *  and 2026-11-24 runs asked which component "would be dispatched in this situation", and 16 of
+ *  20 misses named the caller, which is itself dispatched, so the question had two right answers.
+ *  A reply naming the caller still fails the grader. */
+export function buildPrompt(given, caller) {
+  if (typeof caller !== 'string' || caller === '') {
+    throw new Error('buildPrompt needs the chain edge caller');
+  }
   return (
     'Context: you are being evaluated on the Nonfiction Studio plugin, which is loaded in this ' +
     'session. Do not call any tool; answer from the agents and skills you can see.\n' +
+    'Running component: "' + caller + '"\n' +
     'Given: ' + given + '\n\n' +
-    'Task: Name the one agent or skill that would be dispatched in this situation. Your first ' +
-    'line must be exactly "DISPATCH: <component-name>", with nothing else on that line. If you ' +
-    'add reasoning, put one sentence on the next line. Say nothing before the DISPATCH: line.'
+    'Task: Name the one agent or skill that "' + caller + '" hands off to next in this ' +
+    'situation, not "' + caller + '" itself. Your first line must be exactly ' +
+    '"DISPATCH: <component-name>", with nothing else on that line. If you add reasoning, put one ' +
+    'sentence on the next line. Say nothing before the DISPATCH: line.'
   );
 }
 
@@ -259,6 +268,7 @@ function callOnce(prompt, { repoRoot, cwd, model, env, spawn, timeoutMs }) {
     timedOut: false,
     costUsd,
     text: typeof parsed.result === 'string' ? parsed.result : '',
+    models: resolvedModels(parsed),
     error: parsed.is_error ? (parsed.result || 'model error') : null,
   };
 }
@@ -282,6 +292,13 @@ export function callClaudeWithRetry(prompt, { repoRoot, cwd, model, env, spawn =
   if (!first.timedOut) return { ...first, attempts: 1 };
   const second = callOnce(prompt, opts);
   return { ...second, attempts: 2 };
+}
+
+/** The model IDs a CLI JSON result says it used, sorted. MODEL is an alias, so this is the only
+ *  record of which model a run actually graded; the run log prints it once. */
+export function resolvedModels(parsed) {
+  if (!parsed || typeof parsed.modelUsage !== 'object' || parsed.modelUsage === null) return [];
+  return Object.keys(parsed.modelUsage).sort();
 }
 
 /** The installed claude CLI's version, logged so a CI-only failure can be told apart from CLI
@@ -484,6 +501,7 @@ const results = [];
 let totalCases = 0;
 let passedCases = 0;
 let totalSpendUsd = 0;
+let loggedModels = false;
 
 for (const s of sets) {
   const covers = s.data.covers;
@@ -505,13 +523,17 @@ for (const s of sets) {
       process.exit(3);
     }
 
-    const r = callClaudeWithRetry(buildPrompt(c.given), {
+    const r = callClaudeWithRetry(buildPrompt(c.given, covers.chain[0]), {
       repoRoot: REPO_ROOT,
       cwd: evalCwd,
       model: MODEL,
       env: childEnv,
     });
     totalSpendUsd += r.costUsd;
+    if (!loggedModels && r.ok && r.models && r.models.length > 0) {
+      log('  resolved model: ' + r.models.join(', ') + ' (alias "' + MODEL + '")');
+      loggedModels = true;
+    }
     const grade = r.ok ? gradeResponse(callee, r.text) : false;
     if (grade) passedCases++;
 
