@@ -169,10 +169,18 @@ the platform creates.
 At the start of every session, the agent follows a three-step protocol:
 
 1. Read `research/sources.md` and scan for SRC records carrying `changed: true`.
-2. For each changed SRC record, invalidate all cache entries whose `source_id` matches
-   and reset those EV entries in `research/evidence-log.md` to `pending`.
+2. For each changed SRC record, compare its current `change-note` with the one the
+   cache recorded for each EV entry that cites it. Leave an entry whose record matches.
+   Otherwise invalidate the record and reset the entry in `research/evidence-log.md` to
+   `pending`. A correction therefore reopens each citing entry once, not at every
+   session, per [ADR-0022 (source correction lifecycle)](../../adr/ADR-0022-source-correction-lifecycle.md).
 3. Load the cache. EV entries with a valid cache hit and no invalidated SRC dependency
    are skipped for the current pass.
+
+Each cache record holds the EV ID, its SRC ID, the session, and the SRC record's
+`change-note` when the entry was checked, or none. The reset in step 2 is book-wide, but
+the pass re-verifies only the target chapter, so the per-chapter report lists the entries
+reset outside that chapter.
 
 A cache entry is never treated as valid across a schema change to
 `research/evidence-log.md`. When the ledger schema changes, the entire cache is
@@ -218,10 +226,13 @@ After completing every pass - offline or online - the `fact-checker` writes
 - Count and list of `verified`, `unverified`, `interpretation`, and
   `source-unverifiable` entries.
 - Any claims categorized as opinion-presented-as-fact requiring author decision.
+- Any EV entries the session reset to `pending` that the chapter does not cite, with the
+  corrected SRC ID, so the author knows which other chapters to fact-check next.
 - Recommended actions before re-running the coverage gate.
 
-The report is written even when all entries are verified. `bin/ns-claims` and the Stop
-gate read this report as part of the coverage evaluation.
+The report is written even when all entries are verified. It is for the author: no engine
+reads it. `bin/ns-claims` and the Stop gate read the statuses in
+`research/evidence-log.md`, which this agent updates during the pass.
 
 ## Security posture
 
@@ -251,7 +262,8 @@ gated content.
   identifiers. That role belongs exclusively to `research-librarian`.
 - **Sanctioned backward move only.** The only permitted backward status transition is
   the cache-invalidation reset to `pending` described in S-03 (research and evidence
-  agents) section 1.4. No other backward move is permitted.
+  agents) section 1.4, made once per source correction per ADR-0022 (source correction
+  lifecycle). No other backward move is permitted.
 - **Original marker preserved.** The `[claim: EV-NNNN]` marker in a chapter is never
   removed. Tags are added adjacent to it; they do not replace it.
 - **Web gate is hard.** WebSearch and WebFetch are not called unless `research.web_enabled`

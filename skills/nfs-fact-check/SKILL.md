@@ -7,8 +7,8 @@ when_to_use: "Use when the author finishes drafting and wants claims verified, n
 chain:
   - fact-checker
 metadata:
-  version: "0.3.0"
-  updated: 2026-11-15
+  version: "0.4.0"
+  updated: 2026-11-26
 ---
 
 This skill is the verification front door. It resolves the chapter argument, runs an engine-backed marker inventory via `bin/ns-claims`, states the web gate status, delegates the authoritative verification pass to the `fact-checker` agent, confirms agent writes via Read checks, and formats the three counts from the agent's per-chapter report. The `fact-checker` agent is the sole writer of chapter markers and EV status transitions; the skill orchestrates, confirms, and reports. The skill writes no `<state-dir>/progress.json` - the open-claims total is maintained by the PostToolBatch hook per D-06 (single-writer state discipline).
@@ -150,7 +150,7 @@ Spawn `fact-checker` via the `nfs-fact-check -> fact-checker` chain edge, passin
 - Any pasted source content provided by the author
 
 The `fact-checker` agent runs its authoritative five-step pass per its contract:
-1. Session-start cache protocol: reads `research/sources.md` for `changed: true` flags, invalidates affected cache entries, loads the verified-claims cache from `.claude/agent-memory/nonfiction-studio-fact-checker/` per D-09 (learning checker agents)
+1. Session-start cache protocol: reads `research/sources.md` for `changed: true` flags, invalidates the cache entries checked before each source's current `change-note` and resets them to `pending` (ADR-0022, source correction lifecycle), loads the verified-claims cache from `.claude/agent-memory/nonfiction-studio-fact-checker/` per D-09 (learning checker agents)
 2. Resolves all `[claim: EV-nnnn]` markers against `research/evidence-log.md`
 3. Updates EV entry statuses (`verified`, `unverified`, `interpretation`, or `source-unverifiable`)
 4. Inserts `[UNVERIFIED]` adjacent to unverified markers in `<chapters-dir>/<slug>.md`; removes stale `[UNVERIFIED]` or `[SOURCE-UNVERIFIABLE]` tags when an entry advances to `verified` on a re-check; never removes the original `[claim: EV-nnnn]` marker

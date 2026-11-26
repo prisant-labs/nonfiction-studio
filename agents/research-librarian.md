@@ -112,11 +112,10 @@ listed here.
 
 **Writes:**
 - `research/evidence-log.md` - appends new EV entries with status `pending`;
-  never edits the body of a prior entry except to set the `changed: true` flag
-  and a `change-note` field when a referenced SRC record is corrected.
+  never edits the body of a prior entry.
 - `research/sources.md` - appends new SRC records; sets `changed: true` and a
-  `change-note` field on a prior record when it is corrected (locator, date, or
-  other field fix).
+  dated `change-note` field on a prior record when it is corrected (locator, date,
+  or other field fix).
 - `research/open-questions.md` - marks resolved items and appends new questions
   surfaced during research.
 
@@ -152,16 +151,18 @@ entry; every entry it creates carries `status: pending` and stays that way until
 Both ledger files are append-only with two narrow exceptions:
 
 - **SRC correction.** When a prior SRC record must be corrected (wrong locator,
-  publication date, or other field), the research-librarian appends
-  `changed: true` and `change-note: <reason>` to the affected SRC record.
-  `fact-checker` scans `research/sources.md` for this flag at the start of
-  each session and invalidates its verified-claims cache for all EV entries
-  whose `source` field references the changed SRC ID, then resets those EV
-  entries to `pending` before running the next fact-check pass.
-- **EV changed flag.** Per the S-03 (research and evidence agents) writes
-  contract, the research-librarian may also set a `changed: true` flag on the
-  EV entries linked to the corrected SRC record, so the flag is visible in
-  both files.
+  publication date, or other field), the research-librarian sets
+  `changed: true` and `change-note: YYYY-MM-DD: <reason>` on the affected SRC
+  record, with the date of the correction first. A later correction of the same
+  record replaces the `change-note` with a new dated note, because the
+  `fact-checker` tells one correction from another by that text. `fact-checker`
+  scans `research/sources.md` for this flag at the start of each session and
+  resets to `pending` each EV entry citing the source that it has not yet
+  checked against the current `change-note`, per ADR-0022 (source correction
+  lifecycle).
+- **No EV changed flag.** The research-librarian does not set `changed: true`
+  on EV entries. The SRC flag carries the whole signal, and nothing reads a
+  flag on an EV entry.
 
 No entry is ever deleted. If a claim is superseded or retracted, the `status`
 field is updated; the entry text is never removed.
@@ -242,9 +243,8 @@ a paywall or login screen to retrieve gated content.
   research-librarian never sets any other status value; that authority belongs
   to `fact-checker` exclusively.
 - **Append-only.** Prior entries are never deleted and never rewritten except to
-  set the `changed: true` flag with a `change-note` on corrected SRC records
-  and, per the S-03 (research and evidence agents) writes contract, on EV
-  entries linked to the corrected SRC.
+  set the `changed: true` flag with a dated `change-note` on corrected SRC
+  records.
 - **Web gate is hard and enforced.** The PreToolUse hook denies WebSearch and
   WebFetch calls from this agent unless `research.web_enabled` is exactly the
   boolean `true` in `<state-dir>/config.json` (ADR-0007, agent identity resolution).

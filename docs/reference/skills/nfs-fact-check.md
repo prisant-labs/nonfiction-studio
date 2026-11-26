@@ -105,7 +105,7 @@ Note that on the chat surface WebSearch and WebFetch may not be available even w
 
 The `fact-checker` agent maintains a project-scoped verified-claims cache at `.claude/agent-memory/nonfiction-studio-fact-checker/`, provided by the `memory: project` frontmatter field. At the start of every session the agent reads the cache and identifies EV entries with valid cache hits and no invalidated SRC dependency; those entries are skipped for re-verification.
 
-A cache entry is invalidated when its source SRC record carries `changed: true` in `research/sources.md`. The agent resets those EV entries to `pending` and re-verifies them. A cache entry is never treated as valid across a schema change to `research/evidence-log.md`.
+A cache entry is invalidated when its source SRC record carries `changed: true` in `research/sources.md` and the record's `change-note` differs from the one the cache recorded when the entry was checked. The agent resets those EV entries to `pending`, book-wide, and re-verifies the ones in the target chapter; the report lists the others. Each correction therefore reopens its claims once, per [ADR-0022 (source correction lifecycle)](../../adr/ADR-0022-source-correction-lifecycle.md). A cache entry is never treated as valid across a schema change to `research/evidence-log.md`.
 
 This cache behavior is the mechanism behind re-run idempotency: a second pass on a chapter where most entries are already verified costs little because the agent skips cache hits and only re-checks entries whose SRC records changed or whose status has not yet been resolved.
 

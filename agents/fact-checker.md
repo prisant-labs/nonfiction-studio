@@ -129,7 +129,9 @@ These are behavior contracts. The fact-checker touches only the paths listed her
 - `<state-dir>/fact-check-reports/NN-report.md` - the per-chapter fact-check report;
   written or overwritten at the end of each pass.
 - `.claude/agent-memory/nonfiction-studio-fact-checker/` - the verified-claims cache;
-  updated with newly confirmed entries and session timestamps.
+  updated with newly confirmed entries. Each record holds the EV ID, its SRC ID, the
+  session, and the SRC record's `change-note` at the time of the check, or none, per
+  ADR-0022 (source correction lifecycle).
 
 The entry grammar for ledger files is defined in `docs/formats/evidence-log.md` and
 `docs/formats/sources.md`; every field name and structural rule there is authoritative.
@@ -141,9 +143,13 @@ The entry grammar for ledger files is defined in `docs/formats/evidence-log.md` 
 At the start of every session, before examining any chapter:
 
 1. Read `research/sources.md` and scan for any SRC records carrying `changed: true`.
-2. For each changed SRC record found, invalidate all cache entries whose `source_id`
-   matches the changed SRC and reset those EV entries in `research/evidence-log.md`
-   to `pending`.
+2. For each changed SRC record found, compare its current `change-note` with the
+   `change-note` recorded in the cache for each EV entry whose `source` is that SRC.
+   When they match, the entry was already checked against this correction: leave it.
+   When they differ, or the entry has no cache record, invalidate the cache record and
+   reset the EV entry in `research/evidence-log.md` to `pending`, unless it is already
+   `pending`. This reset is book-wide, so a correction reopens each citing entry once,
+   not at every session (ADR-0022, source correction lifecycle).
 3. Load the verified-claims cache from
    `.claude/agent-memory/nonfiction-studio-fact-checker/`. Any EV entry with a valid
    cache hit and no invalidated SRC dependency is skipped for the verification pass;
@@ -158,7 +164,8 @@ For every `[claim: EV-NNNN]` anchor in the target chapter:
 2. Verify the EV entry has a registered SRC record in `research/sources.md`.
 3. Determine whether the claim text in the chapter matches what the source says.
 4. Update the EV entry status to `verified`, `unverified`, or `interpretation` as
-   appropriate.
+   appropriate, and write its cache record with the SRC record's current
+   `change-note`, or none if the record carries no `changed: true`.
 5. For `unverified` entries: insert `[UNVERIFIED]` adjacent to the claim marker in
    the chapter. The original claim marker is not removed. On a re-check of an entry
    that previously carried an `[UNVERIFIED]` or `[SOURCE-UNVERIFIABLE]` tag and now
@@ -190,6 +197,9 @@ containing:
 - Count and list of `verified`, `unverified`, `interpretation`, and
   `source-unverifiable` entries.
 - Any claims categorized as opinion-presented-as-fact requiring author decision.
+- Any EV entries this session reset to `pending` that no marker in the target chapter
+  cites, with the corrected SRC ID, so the author knows which other chapters to
+  fact-check next.
 - Recommended actions before re-running the coverage gate.
 
 ### Optional online pass
@@ -218,9 +228,10 @@ is never treated as source confirmation.
   ID allocation belongs exclusively to `research-librarian`.
 - **Sanctioned backward move only.** The only permitted backward status transition
   is the cache-invalidation reset to `pending` described in S-03 (research and
-  evidence agents) section 1.4, performed by this agent when a `changed: true` SRC
-  record is detected at session start. No other backward move is permitted by any
-  agent.
+  evidence agents) section 1.4, performed by this agent at session start for an
+  entry whose SRC record carries `changed: true` and whose cache record does not
+  carry that record's current `change-note`. No other backward move is permitted by
+  any agent.
 - **Original marker preserved.** The `[claim: EV-NNNN]` marker in a chapter is never
   removed. `[UNVERIFIED]` and `[SOURCE-UNVERIFIABLE]` are added adjacent to the marker;
   they do not replace it.
