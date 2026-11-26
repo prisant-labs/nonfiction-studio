@@ -80,7 +80,7 @@ floor the check reports pass-with-advice and never blocks, regardless of the agg
 
 ### The claim_coverage entry
 
-Open markers follow the check's configured mode, as for any deterministic check. An unmarked chapter, one with no claim markers and at least 200 words of prose, is always `warn`, in every mode, per [ADR-0020 (zero-marker guard)](../adr/ADR-0020-zero-marker-guard.md); the entry's verdict is the more severe of the two. An unmarked chapter adds the signal token `claim_coverage.unmarked` to `detail` and its chapter path, with no line anchor, to `evidence`. The entry keeps the shape of every other check entry.
+Open markers follow the check's configured mode, as for any deterministic check. An unmarked chapter, one with no claim markers and at least 200 words of prose, is always `warn`, in every mode, per [ADR-0020 (zero-marker guard)](../adr/ADR-0020-zero-marker-guard.md); the entry's verdict is the more severe of the two. An unmarked chapter adds the signal token `claim_coverage.unmarked` to `detail` and its chapter path, with no line anchor, to `evidence`. A claim marker whose EV entry cites an SRC ID missing from `research/sources.md` is also always `warn`, per [ADR-0021 (orphan sources in the gate)](../adr/ADR-0021-orphan-sources-in-the-gate.md). It adds the signal token `claim_coverage.orphan-source` to `detail`, naming each missing SRC ID and the EV entries that cite it, and adds each citing marker as `<chapter>#L<line>`, then `research/sources.md`, to `evidence`. Neither finding changes the coverage arithmetic. The entry keeps the shape of every other check entry.
 
 ### The overlap check entry
 

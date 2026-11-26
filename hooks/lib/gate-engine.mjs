@@ -31,12 +31,12 @@ import { proseOf, proseBoundaryAt } from './prose.mjs';
 import { computeCoverage, scanChapter, scanQuoteAnchors, computeQuoteFindings } from './claims-engine.mjs';
 import { measureBook, measureChapter, countWords, computeDrift } from './stylometry-engine.mjs';
 import { scrub } from './scrub-engine.mjs';
-import { parseEvidenceLog } from './ledger.mjs';
+import { parseEvidenceLog, parseSources } from './ledger.mjs';
 import { decisionEntriesAt } from './status-engine.mjs';
 // [TSK-029b (state-coherence gate check) 2026-07-18 per OQ-13 (gate coherence check) decision:
 //  reuses the exported checkWordCountCoherence from doctor-engine.mjs; one implementation,
 //  two callers (runChecks and the gate). No word-count comparison logic is duplicated here.]
-import { checkWordCountCoherence } from './doctor-engine.mjs';
+import { checkWordCountCoherence, missingSourceRefs } from './doctor-engine.mjs';
 // Wave 1 exit Task 2 (settings engine): per-project studio settings overlay. loadGateConfig is
 // the single choke point -- settings are read here and nowhere else in the gate path.
 import { loadSettings } from './settings.mjs';
@@ -446,9 +446,26 @@ export function runGate(root, opts = {}) {
         // before, but an unmarked chapter is ALWAYS 'warn', in every mode. The cap is
         // structural - no config key or settings file reaches it - and the entry's verdict is
         // the more severe of the two.
+        // ADR-0021 (orphan sources in the gate): a claim marker in a scanned chapter whose
+        // ledger entry cites a source the registry no longer defines. The missing set comes
+        // from missingSourceRefs, the doctor's own computation, restricted to the entries the
+        // scanned chapters cite. Like the unmarked finding it is capped at warn in every mode,
+        // and it does not change coverage: the ledger statuses are what they were.
+        const citedEvIds = new Set();
+        for (const s of scanned) {
+          for (const m of s.markers) {
+            if (m.form === 'claim') citedEvIds.add(m.id);
+          }
+        }
+        const sourcesPath = join(root, 'research', 'sources.md');
+        const srcEntries = existsSync(sourcesPath) ? parseSources(readFileSync(sourcesPath, 'utf8')) : [];
+        const orphans = missingSourceRefs(ledgerEntries.filter(e => citedEvIds.has(e.id)), srcEntries);
+        const orphanEvIds = new Set(orphans.flatMap(o => o.evIds));
+
         const openVerdict = deriveVerdict(ccConfig, hasFindings);
         const unmarkedVerdict = unmarked.length > 0 ? 'warn' : 'pass';
-        const verdict = moreSevere(openVerdict, unmarkedVerdict);
+        const orphanVerdict = orphans.length > 0 ? 'warn' : 'pass';
+        const verdict = moreSevere(moreSevere(openVerdict, unmarkedVerdict), orphanVerdict);
 
         const parts = [];
         let evidence = [];
@@ -472,6 +489,20 @@ export function runGate(root, opts = {}) {
           evidence = evidence.concat(coverage.unmarkedChapters);
           nexts.push('Mark each factual sentence in an unmarked chapter with [claim: EV-nnnn] or [UNVERIFIED], ' +
             'or record an author attestation in context/decisions.md that the chapter makes no factual claims.');
+        }
+        if (orphans.length > 0) {
+          const listed = orphans.map(o => o.srcId + ' (cited by ' + o.evIds.join(', ') + ')').join('; ');
+          parts.push(orphans.length + ' source(s) missing from research/sources.md: ' + listed +
+            '; claim_coverage.orphan-source');
+          const anchors = [];
+          for (const s of scanned) {
+            for (const m of s.markers) {
+              if (m.form === 'claim' && orphanEvIds.has(m.id)) anchors.push(s.file + '#L' + m.line);
+            }
+          }
+          evidence = evidence.concat(anchors.filter(a => !evidence.includes(a)), ['research/sources.md']);
+          nexts.push('Restore each missing SRC record in research/sources.md, or have research-librarian ' +
+            're-register the source, then run nfs-fact-check on the chapter.');
         }
         let detail;
         if (parts.length > 0) {
