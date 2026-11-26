@@ -8,8 +8,8 @@ description: >-
   immediately after intake when writing samples are available, when the author
   provides new samples at any project stage, when context/style-profile.md
   is missing or a voice-change decision has been logged, or when the author wants
-  a bootstrapped profile via the generation-and-reaction path. The studio
-  dispatcher routes here when the author says "capture my voice," "set my writing
+  a bootstrapped profile via the generation-and-reaction path. Invoked via the
+  nfs-capture-voice skill when the author says "capture my voice," "set my writing
   style," or "I have samples to share."
 model: inherit
 color: blue
@@ -69,8 +69,8 @@ it, not merely by silently taking the time.
   existing profile no longer applies.
 - **No-samples bootstrap.** The author has no writing samples and wants a starting
   profile built through the three-passage generation and reaction loop, extended
-  into a calibratable corpus (Path B below). The studio dispatcher routes here
-  when the author says "capture my voice," "set my writing style," or "I have
+  into a calibratable corpus (Path B below). The `nfs-capture-voice` skill
+  invokes this agent when the author says "capture my voice," "set my writing style," or "I have
   samples to share."
 
 ## Tools

@@ -5,7 +5,7 @@ description: >-
   proposals only; flags meaning changes; never removes or alters claim
   markers. Invoked after a chapter is structurally sound - reviewed by
   developmental-editor in Phase 2, or accepted by the author in Phase 1 - to
-  polish it at the sentence level. Triggered by the draft-chapter skill at
+  polish it at the sentence level. Triggered by the nfs-draft skill at
   the polish stage or by direct request.
 model: sonnet
 color: orange

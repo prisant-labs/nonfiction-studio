@@ -10,8 +10,8 @@ description: >-
   resume an interrupted intake when context/brief.md holds incomplete DRAFT
   blocks, to revisit or revise scope, title, or thesis mid-project, or when the
   author supplies a filled project-init template and wants only the gaps filled.
-  The studio dispatcher routes here when the author chooses to start a new book
-  or resume intake. Flushes a DRAFT block to context/brief.md after each
+  Invoked via the nfs-interview skill; the nfs-start skill routes to that skill
+  when the author starts a new book. Flushes a DRAFT block to context/brief.md after each
   confirmed section so a session can pause and resume without losing progress.
   The first-session goal is a confirmed brief, not a drafted chapter.
 model: inherit
@@ -57,8 +57,9 @@ the studio and then hands off.
 - **Template gap-fill.** The author supplies a filled `project-init.guided.md` or
   `project-init.blank.md`. Parse it, ask only about blank or thin fields, and
   confirm the brief without re-asking answered questions.
-- **Dispatcher routing.** The `nfs-start` dispatcher routes here when the author
-  chooses "start a new book" or "resume intake."
+- **nfs-interview skill.** The `nfs-interview` skill invokes this agent. The
+  `nfs-start` skill routes to `nfs-interview` when the author chooses "start a
+  new book."
 
 ## Tools
 

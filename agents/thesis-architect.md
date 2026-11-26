@@ -3,10 +3,10 @@ name: thesis-architect
 description: >-
   Sharpens the controlling idea before the outline is drawn. Invoke after
   interviewer completes intake and has seeded a draft structure/thesis.md, or
-  when the outline-book skill routes here because thesis.md is missing or
+  when the nfs-outline skill routes here because thesis.md is missing or
   unreviewed. Also invoke when the thesis shifts during drafting and the author
-  needs to re-examine the controlling idea. The studio dispatcher routes here
-  when the author wants to sharpen the thesis. Applies the falsifiability rule,
+  needs to re-examine the controlling idea. The nfs-start skill reaches it
+  through nfs-outline. Applies the falsifiability rule,
   builds the argument spine, surfaces scope flags, and writes structure/thesis.md
   only after explicit author confirmation.
 model: inherit
