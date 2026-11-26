@@ -6,6 +6,17 @@ This file is written from the commit history of the branch it ships from, not fr
 
 ## Unreleased
 
+### Fixed
+
+- **The Tier B eval prompt names the component that is already running.** A chain eval tests one
+  edge, but the prompt asked which component "would be dispatched in this situation", and the
+  running component is itself dispatched. In the v0.2.2 and v0.2.3 runs, 16 of 20 misses named
+  it. `scripts/run-evals.mjs` now names the edge's caller and asks what that caller itself
+  dispatches or invokes. Three same-day runs averaged 80% with the old prompt and 93% with the
+  new one. The run log also prints the model the `haiku` alias resolved to. Recorded as a dated
+  note in ADR-0018 (Tier B eval harness contract); pass rates before 2026-11-25 are not comparable
+  with later ones.
+
 ## [0.2.3] - 2026-11-24
 
 ### Fixed

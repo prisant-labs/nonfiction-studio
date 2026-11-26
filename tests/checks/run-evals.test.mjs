@@ -29,6 +29,7 @@ import {
   buildPrompt,
   callClaudeWithRetry,
   dispatchCallee,
+  resolvedModels,
   CALL_TIMEOUT_MS,
 } from '../../scripts/run-evals.mjs';
 
@@ -264,12 +265,54 @@ test('a chain eval is graded against its callee; a hook eval is not graded at al
 });
 
 test('the prompt asks for an agent or skill, never a hook handler, and wants reasoning on the next line', () => {
-  const p = buildPrompt('nfs-outline runs and structure/thesis.md does not exist');
+  const p = buildPrompt('nfs-outline runs and structure/thesis.md does not exist', 'nfs-outline');
   assert.match(p, /nfs-outline runs and structure\/thesis\.md does not exist/);
   assert.doesNotMatch(p, /hook/i, 'the 2026-10-13 run showed "hook handler" invites a script path as the answer');
   assert.match(p, /next line/i);
   assert.match(p, /do not (call|use) any tool/i);
   assert.doesNotMatch(p, /thesis-architect/, 'the construction code must never name a callee');
+});
+
+// The v0.2.2 and v0.2.3 live runs (2026-11-17 and 2026-11-24): 16 of 20 misses named the
+// component already running, such as "DISPATCH: nfs-fact-check" for the nfs-fact-check ->
+// fact-checker edge. The old prompt asked which component "would be dispatched in this
+// situation", and the running component is itself dispatched, so that answer was a fair
+// reading. A chain eval tests one edge, so the prompt now names the edge's caller and asks what
+// the caller hands off to. A reply that names the caller still fails the grader.
+test('the prompt names the running component and asks what it hands off to, not itself', () => {
+  const p = buildPrompt('nfs-fact-check is invoked on a chapter', 'nfs-fact-check');
+  const withoutGiven = p.replace('nfs-fact-check is invoked on a chapter', '');
+  assert.match(withoutGiven, /"nfs-fact-check"/, 'the caller is named outside the given text');
+  assert.match(p, /"nfs-fact-check" itself dispatches or invokes/i);
+  const task = p.slice(p.indexOf('Task:'), p.indexOf('Your first line'));
+  assert.doesNotMatch(task, /\bnext\b/i, 'the 2026-11-25 A/B showed "next" draws the following workflow step as the answer');
+  assert.match(p, /not "nfs-fact-check" itself/i);
+  assert.throws(() => buildPrompt('x', ''), /caller/, 'a chain prompt without its caller is a harness bug');
+});
+
+test('for every chain eval case, the prompt names the caller and nothing outside the given text names the callee', () => {
+  const dir = join(REPO_ROOT, 'evals');
+  let checked = 0;
+  for (const f of readdirSync(dir).filter(n => n.endsWith('.eval.json'))) {
+    const data = JSON.parse(readFileSync(join(dir, f), 'utf8'));
+    const callee = dispatchCallee(data.covers);
+    if (!callee) continue;
+    const caller = data.covers.chain[0];
+    for (const c of data.cases) {
+      const outside = buildPrompt(c.given, caller).replace(c.given, '');
+      assert.ok(outside.includes('"' + caller + '"'), f + ': caller missing from the prompt');
+      assert.equal(outside.includes(callee), false, f + ': the construction code names the callee ' + callee);
+      checked++;
+    }
+  }
+  assert.ok(checked >= 18, 'expected every graded chain case to be checked, got ' + checked);
+});
+
+test('the resolved model is read from the CLI JSON, so a run log shows what an alias meant', () => {
+  assert.deepEqual(resolvedModels({ modelUsage: { 'claude-haiku-5-5': {} } }), ['claude-haiku-5-5']);
+  assert.deepEqual(resolvedModels({ modelUsage: { b: {}, a: {} } }), ['a', 'b']);
+  assert.deepEqual(resolvedModels({}), []);
+  assert.deepEqual(resolvedModels(null), []);
 });
 
 // ---------------------------------------------------------------------------

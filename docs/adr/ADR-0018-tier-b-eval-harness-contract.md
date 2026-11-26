@@ -103,3 +103,25 @@ Three live runs on 2026-10-14, all on the maintainer's login with CLI 2.1.299 an
   - **Note, 2026-10-16:** the follow-up landed for [issue #24 (run-integration.mjs isolation)](https://github.com/prisant-labs/nonfiction-studio/issues/24). Both runners now take `--plugin-dir`, `--setting-sources project`, `--no-session-persistence` and `CLAUDE_CODE_DISABLE_CLAUDE_MDS=1` from one module, `scripts/lib/claude-isolation.mjs`. The integration runner differs in two ways, on purpose. It keeps the plugin's own hooks on, because it tests the plugin as an author runs it, and that became safe once [ADR-0019 (Stop hook judgment layer)](ADR-0019-stop-hook-judgment-layer.md) removed the Stop prompt handler. It also keeps tools allowed, because its prompts ask the model to inspect files. A live integration run then passed for $0.018, and the first eval run after the description fixes for issues #22 and #23 scored 18 of 18 for $0.068. Neither run added a record to the maintainer's session-capture log.
 - The `nfs-capture-voice` description defect, and a softer one in the `interviewer` agent's description (it says the agent will "scaffold the book tree", while its body hands scaffolding to `nfs-new-book`), are product fixes for a separate pull request. Each needs a skill or agent change, and the skill change needs a version bump under ADR-0017 (per-skill versioning).
 - Issue #5 stays open until a dispatched Tier B run on GitHub passes the eval step. That needs the `CLAUDE_CODE_OAUTH_TOKEN` repository secret.
+
+## Note, 2026-11-25: the prompt names the caller
+
+**What changed.** A chain eval tests one edge, `caller -> callee`, but the prompt asked which component "would be dispatched in this situation". The running caller is itself dispatched, so that question had two right answers. In the live runs for v0.2.2 (2026-11-17) and v0.2.3 (2026-11-24), 16 of 20 misses named the caller, such as `DISPATCH: nfs-fact-check` for the `nfs-fact-check -> fact-checker` edge. `buildPrompt` now takes the caller, from `covers.chain[0]`. The prompt names it as the running component and asks which agent or skill that caller "itself dispatches or invokes in this situation, not" the caller itself. A reply that names the caller still fails. Nothing outside the case's own `given` text names the callee, and a test checks that for every chain case. The run log also prints the model the `haiku` alias resolved to, read from the CLI's JSON result.
+
+**Evidence.** All runs used the same commit, on the same day, the maintainer's login, CLI 2.1.329 and `claude-haiku-5-5`, the model the `haiku` alias resolved to:
+
+| Prompt | Runs (of 18) | Mean |
+|---|---|---|
+| Old: "would be dispatched in this situation" | 12, 15, 16 | 80% |
+| First rewrite: "hands off to next" | 13, 14, 15 | 78% |
+| Final: "itself dispatches or invokes" | 17, 17, 16 | 93% |
+
+The first rewrite removed the caller misses but traded them for a new one. "Next" drew the following step in the workflow, such as `nfs-outline` after `nfs-interview`. The final wording drops "next".
+
+**Mutation proof.** In a scratch copy, the frontmatter of `nfs-fact-check` and `nfs-draft` was edited so each named the other's agent: `line-editor` for the first and `fact-checker` for the second. Agent files were untouched. Under the final prompt, the `nfs-draft -> line-editor` cases failed 4 of 4 times over two runs. The `nfs-fact-check -> fact-checker` cases failed 2 of 4. The `fact-checker` agent's own description still claims that edge, and the model can route from the agent's side. Neither run went red overall, and none could. Two broken edges cost four cases, and the 70% threshold absorbs five misses (section 6). The per-case failure list is the signal for one broken edge, as section 6 already says.
+
+**What is still open.**
+- The `nfs-draft -> line-editor` case 1 missed under every prompt. The replies named `fact-checker` or `nfs-fact-check`.
+- Six agent descriptions still name skills by their names from before the `nfs-` rename: "the studio dispatcher", `outline-book`, `draft-chapter` and `fact-check-pass`. `line-editor`'s description says it is triggered by "the draft-chapter skill", which may explain that miss. Fixing the descriptions is a product change for its own pull request.
+- The 18 of 18 run on 2026-10-16 used CLI 2.1.301. Its resolved model was not recorded, so that run cannot be compared to these.
+- Pass rates before 2026-11-25 are not comparable with later ones, because the prompt changed.
