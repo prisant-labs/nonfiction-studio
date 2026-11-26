@@ -24,7 +24,21 @@ This file is written from the commit history of the branch it ships from, not fr
   marker, and says that an `nfs-fact-check` re-run skips entries it already verified.
 - **`docs/formats/sources.md` no longer says `ns-claims` reports missing source IDs.** `ns-claims`
   never reads the source registry. The page now says so and names the gate's new check.
-
+- **A corrected source reopens its claims once, not at every session.** The `fact-checker`
+  reset every entry citing a source flagged `changed: true` at the start of every session, and
+  nothing cleared the flag, so claims it re-verified after a correction were reopened the next
+  time. The `research-librarian` now writes the `change-note` with the date of the correction
+  first, and the fact-checker's cache records the `change-note` each entry was checked against.
+  A flagged source resets only the entries not yet checked against its current note. The
+  per-chapter report names the entries reset in other chapters. The `changed: true` flag on an
+  evidence entry, which nothing read, is retired. An author can now name an EV ID when invoking
+  `nfs-fact-check`, and the agent re-checks it even when cached, which the README's new advice
+  on reworded claims relies on. `nfs-fact-check` moves to 0.4.0. Recorded in
+  ADR-0022 (source correction lifecycle); these are agent instructions, and no live run proves
+  them.
+- **The fact-checker reference page no longer says engines read its report.** It said
+  `ns-claims` and the Stop gate read the per-chapter fact-check report. They read the statuses
+  in `research/evidence-log.md`; no engine reads the report.
 - **The Tier B eval prompt names the component that is already running.** A chain eval tests one
   edge, but the prompt asked which component "would be dispatched in this situation", and the
   running component is itself dispatched. In the v0.2.2 and v0.2.3 runs, 16 of 20 misses named

@@ -65,7 +65,7 @@ Each record is a Markdown bullet list directly under its heading. The parser rea
 - New records are appended at the end of the file.
 - `research-librarian` and `citation-manager` are the only writers.
 - A record is never deleted; the `retrieval-status` field is updated if a source is retracted or becomes unresolvable.
-- When `research-librarian` corrects a prior record (for example, fixing a locator or publication date), it appends `changed: true` and a `change-note: <reason>` field to the affected record. `fact-checker` scans for `changed: true` at the start of each session to invalidate its verified-claims cache for all EV entries whose `source` field references the changed SRC ID.
+- When `research-librarian` corrects a prior record (for example, fixing a locator or publication date), it sets `changed: true` and a `change-note: YYYY-MM-DD: <reason>` field on the affected record, with the date of the correction first. A later correction of the same record replaces the `change-note` with a new dated note; the flag stays set. `fact-checker` scans for `changed: true` at the start of each session and resets each EV entry citing the record that it has not yet checked against the current `change-note`, so each correction reopens its claims once ([ADR-0022 (source correction lifecycle)](../adr/ADR-0022-source-correction-lifecycle.md)). An older `change-note` with no date still works.
 - `bin/ns-doctor` reports any SRC ID referenced in `research/evidence-log.md` with no corresponding record here, and any record here that no EV entry references (orphaned source).
 - `bin/ns-gate` warns, through `claim_coverage.orphan-source`, when a claim marker in a scanned chapter resolves to an EV entry whose SRC ID has no record here. The warning never blocks, per [ADR-0021 (orphan sources in the gate)](../adr/ADR-0021-orphan-sources-in-the-gate.md).
 
@@ -91,4 +91,4 @@ Each record is a Markdown bullet list directly under its heading. The parser rea
 - `bin/ns-gate`: the `claim_coverage` check reads records here to find SRC IDs that the scanned chapters' EV entries cite but this file does not define (ADR-0021).
 - `bin/ns-doctor` (TSK-028 (ns-doctor engine)): validates field presence, value constraints, and bidirectional EV-SRC linkage; warns on orphaned SRC records.
 - `citation-manager`: the sole source of all citation data for formatted output and bibliography assembly; never retrieves bibliographic data from any other location.
-- `fact-checker`: reads records and scans for `changed: true` flags to invalidate cached verifications before each pass.
+- `fact-checker`: reads records and scans for `changed: true` flags, comparing each `change-note` with its cache, to invalidate cached verifications made before a correction.

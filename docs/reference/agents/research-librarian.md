@@ -89,8 +89,8 @@ the author has provided sources or the agent has resolved open questions.
 
 | Path | Written when | Contents |
 |---|---|---|
-| `research/evidence-log.md` | After source is registered and claim is confirmed | Appended EV entry with `status: pending`; `changed: true` and `change-note` set on linked entries when a SRC record is corrected |
-| `research/sources.md` | Before the first EV entry citing a new source | Appended SRC record; `changed: true` and `change-note` on a prior record when corrected |
+| `research/evidence-log.md` | After source is registered and claim is confirmed | Appended EV entry with `status: pending`; prior entries are never edited |
+| `research/sources.md` | Before the first EV entry citing a new source | Appended SRC record; `changed: true` and a dated `change-note` on a prior record when corrected |
 | `research/open-questions.md` | When an item is resolved or a new question arises | Resolved items marked; new questions appended |
 
 ## The ledger ID protocol
@@ -121,16 +121,15 @@ agent uses the existing record's ID for any EV entries that cite that source.
 Both files are append-only with two narrow exceptions.
 
 - **SRC correction.** When a prior SRC record is corrected (wrong locator,
-  publication date, or other field), the `research-librarian` appends
-  `changed: true` and `change-note: <reason>` to the affected record.
+  publication date, or other field), the `research-librarian` sets
+  `changed: true` and `change-note: YYYY-MM-DD: <reason>` on the affected
+  record. A later correction replaces the note with a new dated one.
   `fact-checker` scans `research/sources.md` for this flag at the start of
-  each session, invalidates its verified-claims cache for all EV entries whose
-  `source` field references the corrected SRC ID, and resets those entries to
-  `pending` before running the next fact-check pass.
-- **EV changed flag.** Per the S-03 (research and evidence agents) writes
-  contract, the `research-librarian` may also set `changed: true` on the EV
-  entries linked to the corrected SRC record, so the flag is visible in both
-  files.
+  each session and resets to `pending` each EV entry citing the source that it
+  has not yet checked against the current `change-note`, per
+  [ADR-0022 (source correction lifecycle)](../../adr/ADR-0022-source-correction-lifecycle.md).
+- **No EV changed flag.** The `research-librarian` does not flag EV entries.
+  The SRC flag carries the whole signal.
 
 ## The web research gate
 
